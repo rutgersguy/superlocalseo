@@ -11,13 +11,27 @@ export const patchSchema = z.object({
 
 type PatchBody = z.infer<typeof patchSchema>;
 
-function formatClient(client: Record<string, unknown>, locations: Record<string, unknown>[]) {
+function formatClient(
+  client: Record<string, unknown>,
+  locations: Record<string, unknown>[],
+  email: string,
+  integrations: Record<string, unknown>[],
+) {
+  const brightlocal = integrations.find((i) => i.provider === 'brightlocal');
+  const embedreviews = integrations.find((i) => i.provider === 'embedmyreviews');
   return {
     id: client.id,
+    email,
     businessName: client.business_name,
     industry: client.industry,
-    subscriptionTier: client.subscription_tier,
-    subscriptionStatus: client.subscription_status,
+    billing: {
+      plan: client.subscription_tier ?? 'free',
+      status: client.subscription_status ?? 'inactive',
+    },
+    integrations: {
+      brightlocal: { connected: brightlocal?.status === 'connected' },
+      embedreviews: { connected: embedreviews?.status === 'connected' },
+    },
     onboardingStep: client.onboarding_step,
     locations: locations.map((l) => ({
       id: l.id,
@@ -35,8 +49,12 @@ function formatClient(client: Record<string, unknown>, locations: Record<string,
 
 export async function getClient(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const locations = await db('locations').where({ client_id: req.clientId }).orderBy('is_primary', 'desc').orderBy('created_at', 'asc');
-    ok(res, formatClient(req.client, locations));
+    const [locations, user, integrations] = await Promise.all([
+      db('locations').where({ client_id: req.clientId }).orderBy('is_primary', 'desc').orderBy('created_at', 'asc'),
+      db('users').where({ id: req.client.user_id }).first(),
+      db('integrations').where({ client_id: req.clientId }),
+    ]);
+    ok(res, formatClient(req.client, locations, (user as Record<string, unknown>)?.email as string ?? '', integrations as Record<string, unknown>[]));
   } catch (e) {
     next(e);
   }
@@ -53,8 +71,13 @@ export async function updateClient(req: Request, res: Response, next: NextFuncti
 
     const [updated] = await db('clients').where({ id: req.clientId }).update(updates).returning('*');
 
-    const locations = await db('locations').where({ client_id: req.clientId }).orderBy('is_primary', 'desc').orderBy('created_at', 'asc');
-    ok(res, formatClient(updated as Record<string, unknown>, locations));
+    const [locations, user, integrations] = await Promise.all([
+      db('locations').where({ client_id: req.clientId }).orderBy('is_primary', 'desc').orderBy('created_at', 'asc'),
+      db('users').where({ id: req.client.user_id }).first(),
+      db('integrations').where({ client_id: req.clientId }),
+    ]);
+    ok(res, formatClient(updated as Record<string, unknown>, locations, (user as Record<string, unknown>)?.email as string ?? '', integrations as Record<string, unknown>[]));
+
   } catch (e) {
     next(e);
   }

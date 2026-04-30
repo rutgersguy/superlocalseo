@@ -8,13 +8,13 @@ import { fetcher } from '../services/api';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface RankingRow {
-  id: string;
+  keywordId: string;
   keyword: string;
   locationId: string;
   location: string;
   rank: number;
-  delta: number;
-  lastUpdated: string;
+  delta: number | null;
+  pulledAt: string;
 }
 
 interface RankingsResponse {
@@ -32,7 +32,7 @@ interface TrendResponse {
   data: TrendPoint[];
 }
 
-type SortKey = keyof Pick<RankingRow, 'keyword' | 'location' | 'rank' | 'delta' | 'lastUpdated'>;
+type SortKey = keyof Pick<RankingRow, 'keyword' | 'location' | 'rank' | 'delta' | 'pulledAt'>;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -72,7 +72,7 @@ export default function Rankings() {
 
   // Build SWR key for trend (only after a row is selected)
   const trendKey = selectedRow
-    ? `/rankings/trend?keywordId=${selectedRow.id}&locationId=${selectedRow.locationId}&days=30`
+    ? `/rankings/trend?keywordId=${selectedRow.keywordId}&locationId=${selectedRow.locationId}&days=30`
     : null;
 
   const { data: trendData, isLoading: trendLoading } = useSWR<TrendResponse>(trendKey, fetcher);
@@ -84,8 +84,8 @@ export default function Rankings() {
 
   // Sort rows
   const sorted = [...rows].sort((a, b) => {
-    const av = a[sortKey];
-    const bv = b[sortKey];
+    const av = a[sortKey] ?? 0;
+    const bv = b[sortKey] ?? 0;
     const cmp = typeof av === 'number' && typeof bv === 'number'
       ? av - bv
       : String(av).localeCompare(String(bv));
@@ -113,7 +113,7 @@ export default function Rankings() {
     { key: 'location', label: 'Location' },
     { key: 'rank', label: 'Current Rank', align: 'right' },
     { key: 'delta', label: 'Change', align: 'right' },
-    { key: 'lastUpdated', label: 'Last Updated' },
+    { key: 'pulledAt', label: 'Last Updated' },
   ];
 
   return (
@@ -161,20 +161,20 @@ export default function Rankings() {
               ) : (
                 sorted.map((row) => (
                   <tr
-                    key={row.id}
+                    key={row.keywordId}
                     onClick={() => setSelectedRow(row)}
                     className={`cursor-pointer transition-colors ${
-                      effectiveSelected?.id === row.id ? 'bg-brand-50' : 'hover:bg-gray-50'
+                      effectiveSelected?.keywordId === row.keywordId ? 'bg-brand-50' : 'hover:bg-gray-50'
                     }`}
                   >
                     <td className="px-6 py-3 font-medium text-gray-900">{row.keyword}</td>
-                    <td className="px-6 py-3 text-gray-500">{row.location}</td>
+                    <td className="px-6 py-3 text-gray-500">{row.location ?? '—'}</td>
                     <td className="px-6 py-3 text-right font-semibold text-gray-900">{row.rank}</td>
                     <td className="px-6 py-3 text-right">
-                      <DeltaBadge delta={row.delta} />
+                      {row.delta != null ? <DeltaBadge delta={row.delta} /> : <span className="text-gray-400 text-sm">—</span>}
                     </td>
                     <td className="px-6 py-3 text-gray-500">
-                      {new Date(row.lastUpdated).toLocaleDateString()}
+                      {row.pulledAt ? new Date(row.pulledAt).toLocaleDateString() : '—'}
                     </td>
                   </tr>
                 ))
@@ -207,7 +207,7 @@ export default function Rankings() {
                 <XAxis
                   dataKey="date"
                   tick={{ fontSize: 11, fill: '#9ca3af' }}
-                  tickFormatter={(v: string) => new Date(v).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  tickFormatter={(v: string) => v ? new Date(v).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
                 />
                 <YAxis
                   domain={[yMax, yMin]}
@@ -217,7 +217,7 @@ export default function Rankings() {
                 />
                 <Tooltip
                   formatter={(value: number) => [`Rank ${value}`, 'Rank']}
-                  labelFormatter={(label: string) => new Date(label).toLocaleDateString()}
+                  labelFormatter={(label: string) => label ? new Date(label).toLocaleDateString() : ''}
                 />
                 <Line
                   type="monotone"

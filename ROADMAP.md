@@ -2,6 +2,8 @@
 
 **Target:** 4–6 weeks to first paying client (Phase 1 MVP), 16 weeks to full production.
 
+**Status (as of 2026-04-30):** Phase 0 complete. Phase 1 complete. Phase 2 complete. Phase 3 in progress.
+
 ---
 
 ## Phase 0 — Infrastructure Foundation (Weeks 1–2)
@@ -17,18 +19,18 @@ Get the scaffolding right so every subsequent phase builds cleanly.
 - Health check endpoints for liveness/readiness probes
 
 ### Deliverables
-- [ ] Docker Compose (local dev): postgres, redis, api, web, nginx
-- [ ] Docker Compose (prod): same + TLS via Let's Encrypt / Nginx
-- [ ] PostgreSQL schema — 12 tables (see [Architecture](docs/ARCHITECTURE.md))
-- [ ] Knex.js migrations + seed data for development
-- [ ] Express server: middleware stack (auth, logging, rate limit, error handler)
-- [ ] Zod request validation on all endpoints
-- [ ] JWT auth (access token + refresh token, stored in Redis)
-- [ ] Stripe: products + prices for Tier 1/2/3, webhook handler, subscription lifecycle
-- [ ] `GET /health` liveness and readiness probes
-- [ ] Winston logging (JSON to stdout, structured)
+- [x] Docker Compose (local dev): postgres, redis, api, web, nginx
+- [x] Docker Compose (prod): same + Cloudflare SSL + n8n-nginx reverse proxy
+- [x] PostgreSQL schema — 12 tables (see [Architecture](docs/ARCHITECTURE.md))
+- [x] Knex.js migrations + seed data for development
+- [x] Express server: middleware stack (auth, logging, rate limit, error handler)
+- [x] Zod request validation on all endpoints
+- [x] JWT auth (access token + refresh token, httpOnly cookie)
+- [x] Stripe: products + prices for Tier 1/2/3, webhook handler, subscription lifecycle
+- [x] `GET /health` liveness and readiness probes
+- [x] Winston logging (JSON to stdout, structured)
 - [ ] GitHub Actions: lint (ESLint + Prettier), Jest tests, coverage report
-- [ ] `.env.example` with all required variables documented
+- [x] `.env.example` with all required variables documented
 
 ---
 
@@ -47,65 +49,67 @@ Build everything needed to onboard a real client and collect payment.
 ### Deliverables
 
 #### Landing Page
-- [ ] Hero section (headline, CTA, social proof)
-- [ ] Value proposition cards (rankings, reviews, citations)
-- [ ] Pricing table (Tier 1–3 with per-location pricing)
-- [ ] FAQ (6 questions)
-- [ ] Footer
+- [x] Hero section (headline, CTA, social proof)
+- [x] Value proposition cards (rankings, reviews, citations)
+- [x] Pricing table (Tier 1–3 with per-location pricing)
+- [x] FAQ (6 questions)
+- [x] Footer
 - [ ] SEO: meta tags, Open Graph, JSON-LD schema markup
-- [ ] Mobile responsive (320px–1440px)
+- [x] Mobile responsive (320px–1440px)
 - [ ] Lighthouse > 90 performance, > 95 accessibility
 
 #### Authentication
-- [ ] `POST /auth/register` — email + password + business name
-- [ ] `POST /auth/login` — returns JWT access + refresh tokens
-- [ ] `POST /auth/refresh` — silent token rotation
-- [ ] `POST /auth/logout` — invalidate refresh token in Redis
-- [ ] `POST /auth/password-reset/request` + `/confirm`
-- [ ] Email verification via SendGrid
-- [ ] Role-based access: `admin`, `client`
+- [x] `POST /auth/register` — email + password + business name
+- [x] `POST /auth/login` — returns JWT access + refresh tokens
+- [x] `POST /auth/refresh` — silent token rotation
+- [x] `POST /auth/logout` — invalidate refresh token in Redis
+- [x] `POST /auth/forgot-password` + `POST /auth/reset-password`
+- [x] Email verification via SendGrid
+- [x] Role-based access: `admin`, `client`
+- [ ] Google OAuth (GitHub #64)
 
 #### Stripe Billing (Day One)
-- [ ] Subscription creation on registration (Tier 1 default)
-- [ ] Per-location billing: base price + per-additional-location fee
-- [ ] Webhook handler: `invoice.paid`, `customer.subscription.deleted`, `payment_intent.payment_failed`
+- [x] Subscription creation on registration (Tier 1 default)
+- [x] Per-location billing: base price + per-additional-location fee
+- [x] Webhook handler: `invoice.paid`, `customer.subscription.deleted`, `payment_intent.payment_failed`
 - [ ] Grace period (3-day) on failed payments before access revoked
-- [ ] Billing portal (Stripe Customer Portal)
+- [x] Billing portal (Stripe Customer Portal)
 - [ ] Plan upgrade / downgrade flow
 
 #### Client Onboarding (4-Step Wizard)
-- [ ] Step 1: Business info (name, industry, primary location)
-- [ ] Step 2: Additional locations (address, phone, website per location)
-- [ ] Step 3: Target keywords (add/remove, assign to locations)
-- [ ] Step 4: Connect integrations (BrightLocal API key, EmbedMyReviews API key)
-- [ ] Trigger initial data pull on completion
-- [ ] Webhook registration with EmbedMyReviews
+- [x] Step 1: Business info (name, industry, primary location)
+- [x] Step 2: Additional locations (address, phone, website per location)
+- [x] Step 3: Target keywords (add/remove, assign to locations)
+- [x] Step 4: Connect integrations (BrightLocal API key, EmbedMyReviews API key)
+- [x] Trigger initial data pull on completion
+- [x] Webhook registration with EmbedMyReviews
 
 #### BrightLocal Integration
-- [ ] API service wrapper (rate limiting, error handling, retry)
-- [ ] Daily rankings pull → stored in `ranking_snapshots` table
-- [ ] Daily citations pull → stored in `citation_snapshots` table
-- [ ] Bull queue job: `brightlocal:pull` (cron `0 6 * * *`)
-- [ ] `GET /rankings?clientId=&locationId=&dateRange=`
-- [ ] `GET /rankings/trend?clientId=&keyword=&days=30`
-- [ ] `GET /citations?clientId=&locationId=`
+- [x] API service wrapper (rate limiting, error handling, retry)
+- [x] Daily rankings pull → stored in `ranking_snapshots` table
+- [x] Daily citations pull → stored in `citation_snapshots` table
+- [x] Bull queue job: `brightlocal:pull` (cron `0 6 * * *`)
+- [x] `GET /rankings` with locationId/keywordId/searchEngine filters
+- [x] `GET /rankings/trend?keywordId=&locationId=&days=30`
+- [x] `GET /citations`
 - [ ] Redis cache: rankings 24h TTL, citations 24h TTL
 
 #### EmbedMyReviews Integration
-- [ ] API service wrapper
-- [ ] 6-hour review pull → stored in `reviews` table (dedup by platform + review ID)
-- [ ] Bull queue job: `embedmyreviews:pull` (cron `0 */6 * * *`)
-- [ ] Webhook handler: `POST /reviews/webhook` (real-time inbound)
-- [ ] `GET /reviews?clientId=&platform=&rating=&status=&page=`
-- [ ] `GET /reviews/sentiment?clientId=&dateRange=`
+- [x] API service wrapper
+- [x] 6-hour review pull → stored in `reviews` table (dedup by platform + review ID)
+- [x] Bull queue job: `embedmyreviews:pull` (cron `0 */6 * * *`)
+- [x] Webhook handler: `POST /reviews/webhook` (real-time inbound)
+- [x] `GET /reviews` with platform/rating/status/search filters + pagination
+- [ ] `GET /reviews/sentiment?dateRange=`
 - [ ] Redis cache: reviews 6h TTL
 
 #### Dashboard Pages
-- [ ] **Home** — 4 metric cards (top ranking, reviews this week, citation completeness, reports sent) + keyword summary table
-- [ ] **Rankings** — sortable/filterable keyword table, trend sparklines, date range picker, CSV export
-- [ ] **Reviews** — review cards, filter by platform/rating/status, search, link to source
-- [ ] **Citations** — directory grid, completeness score, NAP accuracy per directory
-- [ ] **Settings** — account info, integrations status, billing (Stripe portal link), locations
+- [x] **Home** — 4 metric cards + keyword summary table
+- [x] **Rankings** — sortable keyword table, trend chart (30d), rank delta badges
+- [x] **Reviews** — review cards, filter by platform/rating/status, search
+- [x] **Citations** — directory grid with completeness score
+- [x] **Reports** — report history, manual generate, download button
+- [x] **Settings** — account info, integrations, billing (Stripe portal link)
 
 ---
 
@@ -119,15 +123,15 @@ Automated PDF reports are a core value prop. Clients need something tangible to 
 - Historical charts showing trend since client joined
 
 ### Deliverables
-- [ ] Report template (HTML → PDF via Puppeteer): branded, multi-section
-- [ ] Sections: executive summary, rankings table (delta vs prior month), reviews breakdown, citation completeness, recommendations
-- [ ] Bull job: `reports:generate-monthly` (cron `0 8 1 * *`)
-- [ ] Reports stored in DB (`reports` table) with S3/local file reference
-- [ ] SendGrid email: HTML email with PDF attachment
-- [ ] `GET /reports?clientId=` — list all reports
-- [ ] `GET /reports/:id/download` — download PDF
-- [ ] Dashboard **Reports** page — report history, manual re-send, download button
-- [ ] Manual trigger endpoint for admin: `POST /reports/generate`
+- [x] Report template (HTML → PDF via Puppeteer): branded, multi-section
+- [x] Sections: executive summary, rankings table (delta vs prior month), reviews breakdown, citation completeness, recommendations
+- [x] Bull job: `reports:generate-monthly` (cron `0 8 1 * *`)
+- [x] Reports stored in DB (`reports` table) with local file reference
+- [x] SendGrid email: HTML email with PDF attachment
+- [x] `GET /reports` — list all reports
+- [x] `GET /reports/:id/download` — download PDF
+- [x] Dashboard **Reports** page — report history, manual re-send, download button
+- [x] Manual trigger endpoint: `POST /reports/generate`
 - [ ] Report preview in-browser (embedded PDF viewer)
 
 ---

@@ -5,9 +5,15 @@ import { fetcher } from '../services/api';
 
 interface Metrics {
   avgRank: number | null;
+  keywordsInTop3: number;
   keywordsInTop10: number;
+  totalKeywords: number | null;
   totalReviews: number;
   avgRating: number | null;
+  newReviewsThisMonth: number;
+  citationScore: number | null;
+  locationCount: number;
+  date: string | null;
 }
 
 interface MetricsResponse {
@@ -16,11 +22,11 @@ interface MetricsResponse {
 }
 
 interface RankingRow {
-  id: string;
+  keywordId: string;
   keyword: string;
   location: string;
   rank: number;
-  delta: number;
+  delta: number | null;
 }
 
 interface RankingsResponse {
@@ -163,12 +169,12 @@ export default function Dashboard() {
                   </tr>
                 ) : (
                   rankings.map((row) => (
-                    <tr key={row.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={row.keywordId} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-3 font-medium text-gray-900">{row.keyword}</td>
-                      <td className="px-6 py-3 text-gray-500">{row.location}</td>
+                      <td className="px-6 py-3 text-gray-500">{row.location ?? '—'}</td>
                       <td className="px-6 py-3 text-right font-semibold text-gray-900">{row.rank}</td>
                       <td className="px-6 py-3 text-right">
-                        <DeltaBadge delta={row.delta} />
+                        {row.delta != null ? <DeltaBadge delta={row.delta} /> : <span className="text-gray-400">—</span>}
                       </td>
                     </tr>
                   ))

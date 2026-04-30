@@ -9,8 +9,8 @@ interface ClientData {
   businessName: string;
   industry: string;
   integrations: {
-    brightlocal: { connected: boolean; apiKey?: string };
-    embedreviews: { connected: boolean; apiKey?: string };
+    brightlocal: { connected: boolean };
+    embedreviews: { connected: boolean };
   };
   billing: {
     plan: string;
@@ -148,7 +148,7 @@ function IntegrationCard({ name, description, connected, onConnect, onDisconnect
 
 export default function Settings() {
   const [activeTab, setActiveTab] = useState<Tab>('account');
-  const { data, isLoading, error, mutate } = useSWR<ClientResponse>('/clients/me', fetcher);
+  const { data, isLoading, error, mutate } = useSWR<ClientResponse>('/clients', fetcher);
   const client = data?.data;
 
   // Account form state

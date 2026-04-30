@@ -9,7 +9,7 @@ interface Review {
   authorName: string;
   rating: number;
   platform: string;
-  date: string;
+  reviewDate: string;
   body: string;
   status: 'new' | 'responded';
 }
@@ -43,12 +43,12 @@ function PlatformBadge({ platform }: { platform: string }) {
 }
 
 function Avatar({ name }: { name: string }) {
-  const initials = name
+  const initials = (name || '?')
     .split(' ')
     .slice(0, 2)
-    .map((s) => s[0])
+    .map((s) => s[0] ?? '')
     .join('')
-    .toUpperCase();
+    .toUpperCase() || '?';
   return (
     <div className="w-9 h-9 rounded-full bg-brand-500 text-white text-sm font-semibold flex items-center justify-center flex-shrink-0">
       {initials}
@@ -171,7 +171,7 @@ export default function Reviews() {
                     <div className="flex items-center gap-2 mt-0.5">
                       <Stars rating={review.rating} />
                       <span className="text-xs text-gray-400">
-                        {new Date(review.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {review.reviewDate ? new Date(review.reviewDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                       </span>
                     </div>
                   </div>
