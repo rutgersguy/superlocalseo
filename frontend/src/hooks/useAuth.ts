@@ -1,9 +1,10 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { apiFetch, setAccessToken } from '../services/api';
 
 interface AuthState {
   userId: string | null;
   isAuthenticated: boolean;
+  loading: boolean;
 }
 
 interface AuthContext extends AuthState {
@@ -13,7 +14,7 @@ interface AuthContext extends AuthState {
 }
 
 export const AuthCtx = createContext<AuthContext>({
-  userId: null, isAuthenticated: false,
+  userId: null, isAuthenticated: false, loading: true,
   login: async () => {}, logout: async () => {}, register: async () => {},
 });
 
@@ -21,8 +22,31 @@ export function useAuth(): AuthContext {
   return useContext(AuthCtx);
 }
 
+function decodeUserId(token: string): string {
+  const payload = JSON.parse(atob(token.split('.')[1]));
+  return payload.userId;
+}
+
 export function useAuthState() {
-  const [state, setState] = useState<AuthState>({ userId: null, isAuthenticated: false });
+  const [state, setState] = useState<AuthState>({ userId: null, isAuthenticated: false, loading: true });
+
+  // On mount, attempt a silent token refresh using the httpOnly refresh cookie.
+  // If it succeeds we restore the session; if it fails (no cookie / expired) we
+  // stay logged-out. Either way, loading flips to false so ProtectedRoute can act.
+  useEffect(() => {
+    apiFetch<{ success: boolean; data?: { accessToken: string } }>('/auth/refresh', { method: 'POST' })
+      .then((res) => {
+        if (res.success && res.data?.accessToken) {
+          setAccessToken(res.data.accessToken);
+          setState({ userId: decodeUserId(res.data.accessToken), isAuthenticated: true, loading: false });
+        } else {
+          setState({ userId: null, isAuthenticated: false, loading: false });
+        }
+      })
+      .catch(() => {
+        setState({ userId: null, isAuthenticated: false, loading: false });
+      });
+  }, []);
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await apiFetch<{ success: boolean; data: { accessToken: string } }>('/auth/login', {
@@ -30,15 +54,13 @@ export function useAuthState() {
     });
     if (!res.success) throw new Error('Login failed');
     setAccessToken(res.data.accessToken);
-    // Decode userId from token (simple base64 parse — no verification needed client-side)
-    const payload = JSON.parse(atob(res.data.accessToken.split('.')[1]));
-    setState({ userId: payload.userId, isAuthenticated: true });
+    setState({ userId: decodeUserId(res.data.accessToken), isAuthenticated: true, loading: false });
   }, []);
 
   const logout = useCallback(async () => {
     await apiFetch('/auth/logout', { method: 'POST' }).catch(() => {});
     setAccessToken(null);
-    setState({ userId: null, isAuthenticated: false });
+    setState({ userId: null, isAuthenticated: false, loading: false });
   }, []);
 
   const register = useCallback(async (email: string, password: string, businessName: string) => {

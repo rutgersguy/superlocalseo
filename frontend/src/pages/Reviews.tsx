@@ -16,7 +16,7 @@ interface Review {
 
 interface ReviewsResponse {
   success: boolean;
-  data: Review[];
+  data: { reviews: Review[]; total: number; page: number; pages: number };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ export default function Reviews() {
 
   const swrKey = `/reviews${queryString ? `?${queryString}` : ''}`;
   const { data, isLoading, error } = useSWR<ReviewsResponse>(swrKey, fetcher);
-  const reviews = data?.data ?? [];
+  const reviews = data?.data?.reviews ?? [];
 
   return (
     <div className="space-y-6">

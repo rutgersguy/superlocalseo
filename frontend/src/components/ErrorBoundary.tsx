@@ -10,6 +10,12 @@ export default class ErrorBoundary extends Component<Props, State> {
     return { error };
   }
 
+  private retry = () => {
+    // Clear error so the subtree re-renders without a full page reload,
+    // which would wipe in-memory auth state and log the user out.
+    this.setState({ error: null });
+  };
+
   render() {
     if (this.state.error) {
       return (
@@ -18,10 +24,10 @@ export default class ErrorBoundary extends Component<Props, State> {
             <h1 className="text-xl font-semibold text-gray-900 mb-2">Something went wrong</h1>
             <p className="text-sm text-gray-500 mb-6">{this.state.error.message}</p>
             <button
-              onClick={() => window.location.reload()}
+              onClick={this.retry}
               className="bg-brand-500 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-brand-600 transition-colors"
             >
-              Reload page
+              Try again
             </button>
           </div>
         </div>
