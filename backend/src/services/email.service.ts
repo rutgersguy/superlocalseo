@@ -7,7 +7,7 @@ const resend = new Resend(config.resend.apiKey);
 const from = `${config.resend.fromName} <${config.resend.fromEmail}>`;
 
 export async function sendVerificationEmail(to: string, token: string): Promise<void> {
-  const url = `${config.appUrl}/auth/verify?token=${token}`;
+  const url = `${config.publicUrl}/auth/verify-email?token=${token}`;
   await resend.emails.send({
     from,
     to,
@@ -18,7 +18,7 @@ export async function sendVerificationEmail(to: string, token: string): Promise<
 }
 
 export async function sendPasswordResetEmail(to: string, token: string): Promise<void> {
-  const url = `${config.appUrl}/auth/reset-password?token=${token}`;
+  const url = `${config.publicUrl}/auth/reset-password?token=${token}`;
   await resend.emails.send({
     from,
     to,
@@ -30,7 +30,7 @@ export async function sendPasswordResetEmail(to: string, token: string): Promise
 }
 
 export async function sendPaymentFailedEmail(to: string, businessName: string): Promise<void> {
-  const url = `${config.appUrl}/settings/billing`;
+  const url = `${config.publicUrl}/settings/billing`;
   await resend.emails.send({
     from,
     to,

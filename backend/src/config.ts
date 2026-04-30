@@ -15,6 +15,7 @@ export const config = {
   env: optional('NODE_ENV', 'development'),
   port: parseInt(optional('PORT', '3000')),
   appUrl: optional('APP_URL', 'http://localhost:5173'),
+  publicUrl: optional('PUBLIC_URL', 'http://localhost:5173'),
   isProd: optional('NODE_ENV') === 'production',
 
   db: {

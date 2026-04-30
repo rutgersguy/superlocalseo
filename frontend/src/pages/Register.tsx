@@ -28,7 +28,7 @@ export default function Register() {
     setApiError('');
     try {
       await registerUser(data.email, data.password, data.businessName);
-      navigate('/login?registered=1');
+      navigate('/registered', { state: { email: data.email } });
     } catch (err) {
       setApiError(err instanceof Error ? err.message : 'Registration failed');
     }
