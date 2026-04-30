@@ -4,10 +4,10 @@ import { fetcher } from '../services/api';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Metrics {
-  avgRank: number;
+  avgRank: number | null;
   keywordsInTop10: number;
   totalReviews: number;
-  avgRating: number;
+  avgRating: number | null;
 }
 
 interface MetricsResponse {
@@ -101,22 +101,22 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           label="Avg Rank"
-          value={metrics ? metrics.avgRank.toFixed(1) : '—'}
+          value={metrics?.avgRank != null ? metrics.avgRank.toFixed(1) : '—'}
           loading={metricsLoading}
         />
         <MetricCard
           label="Keywords in Top 10"
-          value={metrics ? metrics.keywordsInTop10 : '—'}
+          value={metrics?.keywordsInTop10 ?? '—'}
           loading={metricsLoading}
         />
         <MetricCard
           label="Total Reviews"
-          value={metrics ? metrics.totalReviews : '—'}
+          value={metrics?.totalReviews ?? '—'}
           loading={metricsLoading}
         />
         <MetricCard
           label="Avg Rating"
-          value={metrics ? metrics.avgRating.toFixed(1) : '—'}
+          value={metrics?.avgRating != null ? metrics.avgRating.toFixed(1) : '—'}
           loading={metricsLoading}
         />
       </div>

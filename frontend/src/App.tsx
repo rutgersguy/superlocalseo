@@ -16,11 +16,13 @@ import Citations from './pages/Citations';
 import Settings from './pages/Settings';
 import Reports from './pages/Reports';
 import ProtectedRoute from './components/ProtectedRoute';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
   const auth = useAuthState();
 
   return (
+    <ErrorBoundary>
     <AuthCtx.Provider value={auth}>
       <BrowserRouter>
         <Routes>
@@ -51,6 +53,7 @@ function App() {
         </Routes>
       </BrowserRouter>
     </AuthCtx.Provider>
+    </ErrorBoundary>
   );
 }
 
