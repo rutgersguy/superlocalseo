@@ -1,0 +1,71 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: superlocalseo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: superlocalseo
+      POSTGRES_USER: slseo
+      POSTGRES_PASSWORD: slseo
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U slseo -d superlocalseo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: superlocalseo-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+      target: dev
+    container_name: superlocalseo-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend/src:/app/src
+      - reports_data:/app/data/reports
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://slseo:slseo@postgres:5432/superlocalseo
+      - REDIS_URL=redis://redis:6379
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./frontend
+      target: dev
+    container_name: superlocalseo-web
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src
+    environment:
+      - VITE_API_URL=http://localhost:3000
+    depends_on:
+      - api
+
+volumes:
+  pg_data:
+  redis_data:
+  reports_data:
