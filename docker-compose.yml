@@ -38,12 +38,11 @@ services:
     volumes:
       - ./backend/src:/app/src
       - reports_data:/app/data/reports
-    environment:
-      - NODE_ENV=development
-      - DATABASE_URL=postgresql://slseo:slseo@postgres:5432/superlocalseo
-      - REDIS_URL=redis://redis:6379
     env_file:
       - .env
+    environment:
+      - DATABASE_URL=postgresql://slseo:slseo@postgres:5432/superlocalseo
+      - REDIS_URL=redis://redis:6379
     depends_on:
       postgres:
         condition: service_healthy
