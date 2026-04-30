@@ -10,6 +10,7 @@ import citationsRouter from './citations';
 import reviewsRouter from './reviews';
 import metricsRouter from './metrics';
 import billingRouter from './billing';
+import reportsRouter from './reports';
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use('/citations', citationsRouter);
 router.use('/reviews', reviewsRouter);
 router.use('/metrics', metricsRouter);
 router.use('/billing', billingRouter);
+router.use('/reports', reportsRouter);
 
 export default router;

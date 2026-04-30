@@ -39,3 +39,31 @@ export async function sendPaymentFailedEmail(to: string, businessName: string): 
 <p><a href="${url}">Update payment method</a></p>`,
   }).catch((e) => logger.error('Failed to send payment failed email', { error: e, to }));
 }
+
+export async function sendReportEmail(
+  to: string,
+  businessName: string,
+  period: string,
+  pdfPath: string,
+): Promise<void> {
+  const { promises: fsPromises } = await import('fs');
+  const pdfBuffer = await fsPromises.readFile(pdfPath);
+  const pdfBase64 = pdfBuffer.toString('base64');
+
+  await resend.emails.send({
+    from,
+    to,
+    subject: `Your ${period} SEO Report — ${businessName}`,
+    html: `<p>Hi there,</p>
+<p>Your <strong>${period}</strong> SEO performance report for <strong>${businessName}</strong> is ready.</p>
+<p>Please find your monthly SEO report attached. It includes keyword rankings, review activity, citation health, and personalised recommendations to improve your local search visibility.</p>
+<p>If you have any questions, reply to this email and our team will be happy to help.</p>
+<p>Best regards,<br/>The SuperLocalSEO Team</p>`,
+    attachments: [
+      {
+        filename: `${businessName} SEO Report - ${period}.pdf`,
+        content: pdfBase64,
+      },
+    ],
+  }).catch((e) => logger.error('Failed to send report email', { error: e, to }));
+}
