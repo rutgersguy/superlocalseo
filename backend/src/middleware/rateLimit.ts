@@ -1,8 +1,8 @@
 import rateLimit from 'express-rate-limit';
-import { RedisStore } from 'rate-limit-redis';
-import { redis } from '../db/redis';
+import { Request } from 'express';
 
-const skip = () => process.env.NODE_ENV === 'test';
+const skip = (req: Request) =>
+  process.env.NODE_ENV === 'test' || req.path.startsWith('/health');
 
 export const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -10,7 +10,7 @@ export const generalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip,
-  store: new RedisStore({ sendCommand: ((...args: string[]) => redis.call(...args as [string, ...string[]])) as any }),
+  validate: false,
   message: { success: false, error: { message: 'Too many requests', code: 'RATE_LIMITED' } },
 });
 
@@ -19,7 +19,7 @@ export const authLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  skip,
-  store: new RedisStore({ sendCommand: ((...args: string[]) => redis.call(...args as [string, ...string[]])) as any }),
+  skip: () => process.env.NODE_ENV === 'test',
+  validate: false,
   message: { success: false, error: { message: 'Too many auth attempts', code: 'RATE_LIMITED' } },
 });

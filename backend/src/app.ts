@@ -15,8 +15,14 @@ const app = express();
 app.use('/webhooks', express.raw({ type: 'application/json' }), webhookRouter);
 
 app.use(helmet());
+const allowedOrigins = new Set([
+  config.appUrl,
+  'http://localhost:5173',
+  'https://superlocalseo.com',
+  'https://www.superlocalseo.com',
+]);
 app.use(cors({
-  origin: config.appUrl,
+  origin: (origin, cb) => cb(null, !origin || allowedOrigins.has(origin)),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 }));

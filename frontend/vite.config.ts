@@ -6,6 +6,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
+    allowedHosts: ['superlocalseo.com', 'www.superlocalseo.com'],
     proxy: {
       '/api': { target: 'http://api:3000', changeOrigin: true },
       '/webhooks': { target: 'http://api:3000', changeOrigin: true },

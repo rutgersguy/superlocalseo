@@ -5,6 +5,18 @@ import { db } from './db/connection';
 import { redis } from './db/redis';
 import { startWorkers } from './jobs/queue';
 
+process.on('unhandledRejection', (reason, promise) => {
+  process.stderr.write(`UNHANDLED REJECTION at ${String(promise)}: ${String(reason)}\n`);
+  if (reason instanceof Error) process.stderr.write(reason.stack + '\n');
+  process.exit(1);
+});
+
+process.on('uncaughtException', (err) => {
+  process.stderr.write(`UNCAUGHT EXCEPTION: ${err.message}\n${err.stack}\n`);
+  process.exit(1);
+});
+
+
 async function start() {
   // Connect Redis
   await redis.connect().catch((e) => logger.warn('Redis connect warning', { error: e.message }));
@@ -18,16 +30,23 @@ async function start() {
     process.exit(1);
   }
 
-  app.listen(config.port, () => {
+  const server = app.listen(config.port, () => {
     logger.info(`SuperLocalSEO API running`, { port: config.port, env: config.env });
   });
 
-  // Start BullMQ workers
-  try {
-    await startWorkers();
-    logger.info('Background workers started');
-  } catch (e) {
-    logger.warn('Failed to start background workers', { error: (e as Error).message });
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    logger.error('Server failed to start', { error: err.message, code: err.code });
+    process.exit(1);
+  });
+
+  // Start BullMQ workers (skip in test env or if DISABLE_WORKERS is set)
+  if (process.env.NODE_ENV !== 'test' && !process.env.DISABLE_WORKERS) {
+    try {
+      await startWorkers();
+      logger.info('Background workers started');
+    } catch (e) {
+      logger.warn('Failed to start background workers', { error: (e as Error).message });
+    }
   }
 }
 

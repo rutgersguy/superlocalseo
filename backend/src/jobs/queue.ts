@@ -1,11 +1,19 @@
 import { Queue, Worker, Job } from 'bullmq';
-import { redis } from '../db/redis';
+import { config } from '../config';
 import { logger } from '../utils/logger';
 import { processRankings } from './rankings.job';
 import { processCitations } from './citations.job';
 import { processReviews } from './reviews.job';
 
-const connection = redis;
+// BullMQ v5 needs plain connection options — it creates its own ioredis instances internally.
+// maxRetriesPerRequest: null is required for blocking commands (BLPOP).
+const redisUrl = new URL(config.redis.url);
+const connection = {
+  host: redisUrl.hostname,
+  port: parseInt(redisUrl.port || '6379'),
+  password: redisUrl.password || undefined,
+  maxRetriesPerRequest: null as null,
+};
 
 export const rankingsQueue = new Queue('rankings', { connection });
 export const citationsQueue = new Queue('citations', { connection });
