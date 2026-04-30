@@ -7,6 +7,7 @@ export const db = knex({
   connection: config.db.url,
   pool: { min: 2, max: 10 },
   acquireConnectionTimeout: 10000,
+  migrations: { directory: __dirname + '/migrations', extension: 'ts' },
 });
 
 export async function checkDbConnection(): Promise<boolean> {

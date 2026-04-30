@@ -7,6 +7,8 @@ services:
       POSTGRES_DB: superlocalseo
       POSTGRES_USER: slseo
       POSTGRES_PASSWORD: slseo
+    ports:
+      - "5433:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
@@ -19,6 +21,8 @@ services:
     image: redis:7-alpine
     container_name: superlocalseo-redis
     restart: unless-stopped
+    ports:
+      - "6399:6379"
     volumes:
       - redis_data:/data
     healthcheck:
