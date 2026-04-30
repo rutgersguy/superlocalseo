@@ -1,0 +1,108 @@
+import { config } from '../config';
+import { logger } from '../utils/logger';
+
+const BASE_URL = 'https://tools.brightlocal.com/seo-tools/api';
+
+export interface BLRankingResult {
+  keyword: string;
+  rank: number | null;
+  url: string | null;
+  searchEngine: 'google' | 'bing';
+}
+
+export interface BLCitationResult {
+  directory: string;
+  listed: boolean;
+  napMatch: boolean;
+  listingUrl: string | null;
+}
+
+async function blFetch(path: string, apiKey: string, options: RequestInit = {}): Promise<Response> {
+  const url = `${BASE_URL}${path}`;
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> | undefined),
+  };
+
+  let attempts = 0;
+  const maxAttempts = 3;
+
+  while (attempts < maxAttempts) {
+    const res = await fetch(url, { ...options, headers });
+
+    if (res.status === 429) {
+      const retryAfter = parseInt(res.headers.get('retry-after') ?? '10', 10);
+      logger.warn('BrightLocal rate limited, backing off', { retryAfter });
+      await new Promise((r) => setTimeout(r, retryAfter * 1000));
+      attempts++;
+      continue;
+    }
+
+    return res;
+  }
+
+  throw new Error('BrightLocal: max retry attempts exceeded after rate limiting');
+}
+
+function assertApiKey(key: string): void {
+  if (!key) {
+    const err = new Error('BrightLocal API key is not configured') as Error & { code: string };
+    err.code = 'BRIGHTLOCAL_NOT_CONFIGURED';
+    throw err;
+  }
+}
+
+export async function fetchRankings(campaignId: string): Promise<BLRankingResult[]> {
+  const apiKey = config.brightlocal.apiKey;
+  assertApiKey(apiKey);
+
+  const res = await blFetch(`/v4/rankings/get-latest?campaign_id=${encodeURIComponent(campaignId)}`, apiKey);
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`BrightLocal fetchRankings failed: ${res.status} ${body}`);
+  }
+
+  const data = (await res.json()) as { response?: { results?: Array<{ keyword: string; rank: number | null; url: string | null; search_engine: string }> } };
+  const results = data?.response?.results ?? [];
+
+  return results.map((r) => ({
+    keyword: r.keyword,
+    rank: r.rank,
+    url: r.url,
+    searchEngine: r.search_engine === 'bing' ? 'bing' : 'google',
+  }));
+}
+
+export async function fetchCitations(campaignId: string): Promise<BLCitationResult[]> {
+  const apiKey = config.brightlocal.apiKey;
+  assertApiKey(apiKey);
+
+  const res = await blFetch(`/v4/citations/get-latest?campaign_id=${encodeURIComponent(campaignId)}`, apiKey);
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`BrightLocal fetchCitations failed: ${res.status} ${body}`);
+  }
+
+  const data = (await res.json()) as { response?: { citations?: Array<{ directory: string; listed: boolean; nap_match: boolean; listing_url: string | null }> } };
+  const citations = data?.response?.citations ?? [];
+
+  return citations.map((c) => ({
+    directory: c.directory,
+    listed: c.listed,
+    napMatch: c.nap_match,
+    listingUrl: c.listing_url,
+  }));
+}
+
+export async function validateApiKey(apiKey: string): Promise<boolean> {
+  try {
+    const res = await blFetch('/v4/clients/search', apiKey);
+    return res.status === 200;
+  } catch (e) {
+    logger.warn('BrightLocal validateApiKey error', { error: (e as Error).message });
+    return false;
+  }
+}

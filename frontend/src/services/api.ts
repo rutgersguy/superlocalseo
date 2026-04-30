@@ -33,5 +33,6 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   return res.json();
 }
 
-// SWR fetcher
-export const fetcher = (path: string) => apiFetch(path);
+// SWR fetcher — typed as returning Promise<T> so useSWR<T> inference works
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const fetcher = <T = any>(path: string): Promise<T> => apiFetch<T>(path);

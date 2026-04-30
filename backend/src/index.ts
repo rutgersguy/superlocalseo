@@ -3,6 +3,7 @@ import { config } from './config';
 import { logger } from './utils/logger';
 import { db } from './db/connection';
 import { redis } from './db/redis';
+import { startWorkers } from './jobs/queue';
 
 async function start() {
   // Connect Redis
@@ -20,6 +21,14 @@ async function start() {
   app.listen(config.port, () => {
     logger.info(`SuperLocalSEO API running`, { port: config.port, env: config.env });
   });
+
+  // Start BullMQ workers
+  try {
+    await startWorkers();
+    logger.info('Background workers started');
+  } catch (e) {
+    logger.warn('Failed to start background workers', { error: (e as Error).message });
+  }
 }
 
 start().catch((e) => {

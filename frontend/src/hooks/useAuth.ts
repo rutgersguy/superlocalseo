@@ -9,11 +9,12 @@ interface AuthState {
 interface AuthContext extends AuthState {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  register: (email: string, password: string, businessName: string) => Promise<void>;
 }
 
 export const AuthCtx = createContext<AuthContext>({
   userId: null, isAuthenticated: false,
-  login: async () => {}, logout: async () => {},
+  login: async () => {}, logout: async () => {}, register: async () => {},
 });
 
 export function useAuth(): AuthContext {
@@ -40,5 +41,12 @@ export function useAuthState() {
     setState({ userId: null, isAuthenticated: false });
   }, []);
 
-  return { ...state, login, logout };
+  const register = useCallback(async (email: string, password: string, businessName: string) => {
+    const res = await apiFetch<{ success: boolean; message?: string }>('/auth/register', {
+      method: 'POST', body: JSON.stringify({ email, password, businessName }),
+    });
+    if (!res.success) throw new Error(res.message ?? 'Registration failed');
+  }, []);
+
+  return { ...state, login, logout, register };
 }
