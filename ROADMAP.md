@@ -2,7 +2,7 @@
 
 **Target:** 4–6 weeks to first paying client (Phase 1 MVP), 16 weeks to full production.
 
-**Status (as of 2026-05-01):** Phase 0 ✅ · Phase 1 ✅ · Phase 2 (Reports) ✅ · Phase 3 (Analytics) ✅ · Phase 2+ Quick Wins ✅ (#65 pending email) · Revenue Multipliers ✅ (#72–76 all done) · Phase 4 (Hardening) pending.
+**Status (as of 2026-05-01):** Phase 0 ✅ · Phase 1 ✅ · Phase 2 (Reports) ✅ · Phase 3 (Analytics) ✅ · Phase 2+ Quick Wins ✅ (#65 pending email/Crisp install) · Revenue Multipliers ✅ · Phase 4 (Hardening) ✅ · GBP/Facebook sync ✅ · Admin analytics ✅ · Gap report ✅ · CI pipeline ✅
 
 ---
 
@@ -19,7 +19,7 @@
 - [x] Stripe: products + prices for Tier 1/2/3, webhook handler, subscription lifecycle
 - [x] `GET /health` liveness and readiness probes
 - [x] Winston logging (JSON to stdout, structured)
-- [ ] GitHub Actions: lint (ESLint + Prettier), Jest tests, coverage report
+- [x] GitHub Actions: TypeScript check + Jest (backend) + Vite build (frontend) on every push/PR
 - [x] `.env.example` with all required variables documented
 
 ---
@@ -41,8 +41,8 @@
 - [x] Per-location billing: base price + per-additional-location fee
 - [x] Webhook handler: `invoice.paid`, `customer.subscription.deleted`, `payment_intent.payment_failed`
 - [x] Billing portal (Stripe Customer Portal)
-- [ ] Grace period (3-day) on failed payments before access revoked
-- [ ] Plan upgrade / downgrade flow
+- [x] Grace period (3-day) on failed payments before access revoked
+- [x] Plan upgrade / downgrade flow
 
 #### Client Onboarding (4-Step Wizard)
 - [x] Step 1: Business info (name, industry)
@@ -69,9 +69,9 @@
 
 #### Client-Facing Integrations
 - [x] Google Business Profile OAuth connect/disconnect (Settings + Onboarding)
-- [ ] Google Business Profile data sync (reviews, Q&A, info)
-- [ ] Yelp OAuth (coming soon)
-- [ ] Facebook OAuth (coming soon)
+- [x] Google Business Profile data sync (reviews via GBP API v4, token auto-refresh)
+- [x] Yelp — via BrightLocal reputation monitoring (Yelp removed direct API access 2018)
+- [x] Facebook OAuth + page review sync (Graph API v19.0 ratings endpoint)
 
 #### Dashboard Pages
 - [x] **Home** — 4 metric cards + keyword summary table
@@ -95,7 +95,7 @@
 - [x] `GET /reports/:id/download` — download PDF
 - [x] Dashboard **Reports** page with history + download
 - [x] Manual trigger endpoint: `POST /reports/generate`
-- [ ] Report preview in-browser (embedded PDF viewer)
+- [x] Report preview in-browser (authenticated blob → object URL → iframe modal)
 
 ---
 
@@ -109,8 +109,8 @@
 - [x] Rankings page: position delta badges (▲3 / ▼1) vs prior snapshot
 - [x] Reviews page: volume by platform stacked bar chart (30d/90d/180d toggle)
 - [x] Reviews page: average rating trend line chart
-- [ ] Citation completeness over time chart
-- [ ] Admin dashboard: cross-client analytics view
+- [x] Citation completeness over time chart (new /citations/history endpoint + LineChart)
+- [x] Admin dashboard: cross-client analytics (signup/churn by month + tier breakdown charts)
 
 ---
 
@@ -122,7 +122,7 @@ Features designed to increase ARPU from $780 → $1,025+ and reduce churn. See [
 - [x] **#68 Audit Report Lead Magnet** — free public `/audit` page, Google Places scan, 5-category score, email gate, register CTA
 - [x] **#69 Team Members & RBAC** — invite admin/viewer users by email, 48hr token flow, instant login on accept, owner-only Team tab in Settings
 - [x] **#70 Review Widgets** — embeddable `<script>` carousel with light/dark theme, per-widget config, live preview in Settings
-- [ ] **#71 Lead Attribution & ROI** — monthly search volume per keyword, CTR-based revenue estimates, ROI config in Settings, Est. Revenue column in Rankings
+- [x] **#71 Lead Attribution & ROI** — search volume per keyword, CTR-based revenue estimates, ROI config in Settings, Est. Revenue column in Rankings
 - [ ] **#65 Crisp chat widget** — in-app support
 
 ### Revenue Multipliers (Phase 3+)
