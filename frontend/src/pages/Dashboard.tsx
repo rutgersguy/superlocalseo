@@ -144,7 +144,41 @@ interface ClientResponse {
 
 interface BillingStatusResponse {
   success: boolean;
-  data: { status: string | null; graceDaysRemaining: number | null };
+  data: { status: string | null; graceDaysRemaining: number | null; trialDaysRemaining: number | null };
+}
+
+function TrialBanner() {
+  const { data } = useSWR<BillingStatusResponse>('/billing', fetcher);
+  const billing = data?.data;
+  if (!billing || billing.status !== 'trialing') return null;
+
+  const days = billing.trialDaysRemaining;
+  const expired = days !== null && days <= 0;
+  const urgent = days !== null && days <= 3 && !expired;
+
+  if (days === null || days > 5) return null;
+
+  return (
+    <div className={`flex items-center justify-between p-4 rounded-lg text-sm border ${
+      expired
+        ? 'bg-red-50 border-red-200 text-red-800'
+        : urgent
+        ? 'bg-amber-50 border-amber-200 text-amber-800'
+        : 'bg-blue-50 border-blue-200 text-blue-800'
+    }`}>
+      <span>
+        {expired
+          ? <><strong>Your free trial has ended.</strong> Subscribe to keep access to your data.</>
+          : <><strong>{days} day{days !== 1 ? 's' : ''} left in your trial.</strong> Subscribe to keep your rankings, reviews, and citation data after the trial.</>}
+      </span>
+      <a
+        href="/dashboard/settings?tab=billing"
+        className="ml-4 shrink-0 font-semibold underline hover:no-underline"
+      >
+        {expired ? 'Subscribe now' : 'Choose a plan'}
+      </a>
+    </div>
+  );
 }
 
 function PastDueBanner() {
@@ -234,6 +268,7 @@ export default function Dashboard() {
       </div>
 
       <EMRProvisionBanner />
+      <TrialBanner />
       <PastDueBanner />
 
       {/* Error state */}

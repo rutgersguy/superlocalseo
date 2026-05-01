@@ -115,11 +115,10 @@ export default function Onboarding() {
     setError('');
     try {
       await apiFetch('/clients/complete-onboarding', { method: 'POST' });
-      navigate('/dashboard');
+      navigate('/dashboard/settings?tab=billing');
     } catch {
       // Non-fatal: onboarding step was saved server-side even if provisioning timed out.
-      // Navigate to dashboard — a retry banner will appear there.
-      navigate('/dashboard');
+      navigate('/dashboard/settings?tab=billing');
     } finally {
       setSaving(false);
       setProvisioning(false);

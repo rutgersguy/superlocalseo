@@ -15,6 +15,16 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
 
+  // Hard gate: trial expired or subscription canceled/overdue — redirect to billing
+  if (res.status === 402) {
+    const body = await res.json() as { code?: string };
+    if (body.code === 'TRIAL_EXPIRED' || body.code === 'SUBSCRIPTION_CANCELED' || body.code === 'PAYMENT_OVERDUE') {
+      window.location.href = '/dashboard/settings?tab=billing';
+      return body as T;
+    }
+    return body as T;
+  }
+
   // Silent token refresh on 401
   if (res.status === 401 && path !== '/auth/refresh') {
     const refreshed = await fetch(`${API_BASE}/auth/refresh`, { method: 'POST', credentials: 'include' });

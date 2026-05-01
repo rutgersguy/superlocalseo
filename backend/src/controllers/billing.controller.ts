@@ -52,6 +52,14 @@ export async function status(req: Request, res: Response, next: NextFunction): P
       graceDaysRemaining = Math.max(0, Math.ceil(GRACE_PERIOD_DAYS - elapsedDays));
     }
 
+    let trialEndsAt: string | null = null;
+    let trialDaysRemaining: number | null = null;
+    if (client.subscription_status === 'trialing' && client.trial_ends_at) {
+      trialEndsAt = new Date(client.trial_ends_at as string).toISOString();
+      const msLeft = new Date(trialEndsAt).getTime() - Date.now();
+      trialDaysRemaining = Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60 * 24)));
+    }
+
     ok(res, {
       tier: client.subscription_tier,
       status: client.subscription_status,
@@ -60,6 +68,8 @@ export async function status(req: Request, res: Response, next: NextFunction): P
       hasPaymentMethod,
       paymentFailedAt: client.payment_failed_at ?? null,
       graceDaysRemaining,
+      trialEndsAt,
+      trialDaysRemaining,
     });
   } catch (e) {
     next(e);

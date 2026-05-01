@@ -23,6 +23,14 @@ function checkBillingAccess(req: Request, res: Response, client: Record<string, 
 
   const status = client.subscription_status as string | undefined;
 
+  if (status === 'trialing') {
+    const trialEndsAt = client.trial_ends_at ? new Date(client.trial_ends_at as string) : null;
+    if (trialEndsAt && trialEndsAt < new Date()) {
+      res.status(402).json({ success: false, error: 'Your free trial has ended. Subscribe to continue.', code: 'TRIAL_EXPIRED' });
+      return false;
+    }
+  }
+
   if (status === 'canceled') {
     res.status(402).json({ success: false, error: 'Your subscription has been canceled. Resubscribe to continue.', code: 'SUBSCRIPTION_CANCELED' });
     return false;

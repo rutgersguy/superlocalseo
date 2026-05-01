@@ -8,6 +8,7 @@ import { processCompetitors } from './competitors.job';
 import { processAudits } from './audits.job';
 import { processGeoGrid } from './geogrid.job';
 import { processCitationBuilder } from './citations_builder.job';
+import { processTrialReminder } from './trial_reminder.job';
 import { sendJobFailureAlert } from '../services/email.service';
 
 // BullMQ v5 needs plain connection options — it creates its own ioredis instances internally.
@@ -28,6 +29,7 @@ export const competitorsQueue = new Queue('competitors', { connection });
 export const auditsQueue = new Queue('audits', { connection });
 export const geoGridQueue = new Queue('geo-grid', { connection });
 export const citationBuilderQueue = new Queue('citation-builder', { connection });
+export const trialReminderQueue = new Queue('trial-reminder', { connection });
 
 export async function startWorkers(): Promise<void> {
   const rankingsWorker = new Worker(
@@ -149,6 +151,9 @@ export async function startWorkers(): Promise<void> {
   geoGridWorker.on('failed', alertOnFail('geo-grid'));
   citationBuilderWorker.on('failed', alertOnFail('citation-builder'));
 
+  const trialReminderWorker = new Worker('trial-reminder', processTrialReminder, { connection });
+  trialReminderWorker.on('failed', alertOnFail('trial-reminder'));
+
   // Schedule repeatable daily jobs
   await rankingsQueue.add(
     'daily-pull',
@@ -191,6 +196,9 @@ export async function startWorkers(): Promise<void> {
 
   // Citation builder status poll every 4 hours
   await citationBuilderQueue.add('poll-status', {}, { repeat: { pattern: '0 */4 * * *' } });
+
+  // Trial ending soon — daily at 10:00 UTC
+  await trialReminderQueue.add('daily-check', {}, { repeat: { pattern: '0 10 * * *' } });
 
   logger.info('BullMQ workers started');
 }

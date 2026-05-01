@@ -49,6 +49,21 @@ export async function sendWelcomeEmail(to: string, businessName: string): Promis
   }).catch((e) => logger.error('Failed to send welcome email', { error: e, to }));
 }
 
+export async function sendTrialEndingSoonEmail(to: string, businessName: string, daysLeft: number): Promise<void> {
+  const billingUrl = `${config.publicUrl}/dashboard/settings?tab=billing`;
+  await resend.emails.send({
+    from,
+    to,
+    subject: `Your SuperLocalSEO trial ends in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
+    html: `<p>Hi there,</p>
+<p>Your free trial for <strong>${businessName}</strong> on SuperLocalSEO ends in <strong>${daysLeft} day${daysLeft !== 1 ? 's' : ''}</strong>.</p>
+<p>To keep your rankings, reviews, and citation data — and stay ahead of local competitors — subscribe before your trial expires.</p>
+<p><a href="${billingUrl}">Choose your plan →</a></p>
+<p>Have questions? Just reply to this email.</p>
+<p>The SuperLocalSEO Team</p>`,
+  }).catch((e) => logger.error('Failed to send trial ending soon email', { error: e, to }));
+}
+
 export async function sendPaymentFailedEmail(to: string, businessName: string): Promise<void> {
   const url = `${config.publicUrl}/settings/billing`;
   await resend.emails.send({
