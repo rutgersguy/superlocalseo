@@ -193,6 +193,9 @@ export default function Dashboard() {
   const { data: visData } = useSWR<{ success: boolean; data: { current: number | null; delta: number | null; series: Array<{ date: string; score: number }> } }>('/metrics/visibility', fetcher);
   const vis = visData?.data;
 
+  const { data: auditData } = useSWR<{ success: boolean; data: { audits: Array<{ locationId: string; status: string; compositeScore: number | null }> } }>('/audits/bl', fetcher);
+  const latestAuditScore = (auditData?.data?.audits ?? []).find((a) => a.status === 'complete')?.compositeScore ?? null;
+
   const metrics = metricsData?.data;
   const rankings = rankingsData?.data ?? [];
   const roi = roiData?.data;
@@ -220,6 +223,7 @@ export default function Dashboard() {
         <MetricCard label="Keywords in Top 10" value={metrics?.keywordsInTop10 ?? '—'} loading={metricsLoading} />
         <MetricCard label="Total Reviews" value={metrics?.totalReviews ?? '—'} loading={metricsLoading} />
         <MetricCard label="Avg Rating" value={metrics?.avgRating != null ? metrics.avgRating.toFixed(1) : '—'} loading={metricsLoading} />
+        <MetricCard label="Local SEO Score" value={latestAuditScore != null ? `${latestAuditScore.toFixed(0)}/100` : '—'} loading={!auditData} />
         <VisibilityCard vis={vis} loading={!visData} />
       </div>
 

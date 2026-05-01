@@ -5,6 +5,9 @@ import { processRankings } from './rankings.job';
 import { processCitations } from './citations.job';
 import { processReviews } from './reviews.job';
 import { processCompetitors } from './competitors.job';
+import { processAudits } from './audits.job';
+import { processGeoGrid } from './geogrid.job';
+import { processCitationBuilder } from './citations_builder.job';
 import { sendJobFailureAlert } from '../services/email.service';
 
 // BullMQ v5 needs plain connection options — it creates its own ioredis instances internally.
@@ -22,6 +25,9 @@ export const citationsQueue = new Queue('citations', { connection });
 export const reviewsQueue = new Queue('reviews', { connection });
 export const reportsQueue = new Queue('reports', { connection });
 export const competitorsQueue = new Queue('competitors', { connection });
+export const auditsQueue = new Queue('audits', { connection });
+export const geoGridQueue = new Queue('geo-grid', { connection });
+export const citationBuilderQueue = new Queue('citation-builder', { connection });
 
 export async function startWorkers(): Promise<void> {
   const rankingsWorker = new Worker(
@@ -100,6 +106,33 @@ export async function startWorkers(): Promise<void> {
     { connection },
   );
 
+  const auditsWorker = new Worker(
+    'audits',
+    async (job: Job) => {
+      logger.info('Processing audits job', { jobId: job.id, name: job.name });
+      await processAudits(job);
+    },
+    { connection },
+  );
+
+  const geoGridWorker = new Worker(
+    'geo-grid',
+    async (job: Job) => {
+      logger.info('Processing geo-grid poll job', { jobId: job.id });
+      await processGeoGrid(job);
+    },
+    { connection },
+  );
+
+  const citationBuilderWorker = new Worker(
+    'citation-builder',
+    async (job: Job) => {
+      logger.info('Processing citation builder poll job', { jobId: job.id });
+      await processCitationBuilder(job);
+    },
+    { connection },
+  );
+
   function alertOnFail(name: string) {
     return (job: { id?: string } | undefined, err: Error) => {
       logger.error(`${name} job failed`, { jobId: job?.id, error: err.message });
@@ -112,6 +145,9 @@ export async function startWorkers(): Promise<void> {
   reviewsWorker.on('failed', alertOnFail('reviews'));
   reportsWorker.on('failed', alertOnFail('reports'));
   competitorsWorker.on('failed', alertOnFail('competitors'));
+  auditsWorker.on('failed', alertOnFail('audits'));
+  geoGridWorker.on('failed', alertOnFail('geo-grid'));
+  citationBuilderWorker.on('failed', alertOnFail('citation-builder'));
 
   // Schedule repeatable daily jobs
   await rankingsQueue.add(
@@ -145,6 +181,16 @@ export async function startWorkers(): Promise<void> {
     {},
     { repeat: { pattern: '0 5 * * *' } },
   );
+
+  // Monthly audit fan-out (1st of month, 9am UTC) + poll pending every 5 min
+  await auditsQueue.add('monthly-fan-out', {}, { repeat: { pattern: '0 9 1 * *' } });
+  await auditsQueue.add('poll-pending', {}, { repeat: { pattern: '*/5 * * * *' } });
+
+  // Geo-grid poll every 5 min
+  await geoGridQueue.add('poll-pending', {}, { repeat: { pattern: '*/5 * * * *' } });
+
+  // Citation builder status poll every 4 hours
+  await citationBuilderQueue.add('poll-status', {}, { repeat: { pattern: '0 */4 * * *' } });
 
   logger.info('BullMQ workers started');
 }

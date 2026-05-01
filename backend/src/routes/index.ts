@@ -18,6 +18,9 @@ import widgetRouter from './widget';
 import campaignsRouter from './campaigns';
 import competitorsRouter from './competitors';
 import qrRouter from './qr';
+import auditsBlRouter from './audits_bl';
+import reputationRouter from './reputation';
+import geoGridRouter from './geogrid';
 
 const router = Router();
 
@@ -40,5 +43,8 @@ router.use('/widget', widgetRouter);
 router.use('/campaigns', campaignsRouter);
 router.use('/competitors', competitorsRouter);
 router.use('/qr', qrRouter);
+router.use('/audits/bl', auditsBlRouter);
+router.use('/reputation', reputationRouter);
+router.use('/geo-grid', geoGridRouter);
 
 export default router;

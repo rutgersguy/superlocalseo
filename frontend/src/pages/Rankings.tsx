@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
+import { MapContainer, CircleMarker, Popup, TileLayer } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 import { apiFetch, fetcher } from '../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -44,6 +46,15 @@ interface RoiData {
 type SortKey = keyof Pick<RankingRow, 'keyword' | 'location' | 'rank' | 'delta' | 'pulledAt'>;
 type TrendRange = 30 | 90 | 0;
 type RankTypeFilter = 'all' | 'organic' | 'local_pack' | 'paid';
+type MainTab = 'table' | 'map';
+
+// ─── Geo-Grid types ────────────────────────────────────────────────────────────
+
+interface GridPoint { lat: number; lng: number; rank: number | null; url: string | null; }
+interface GeoReport { id: string; locationId: string; keywordId: string; status: string; centerLat: number; centerLng: number; gridData: GridPoint[] | null; completedAt: string | null; createdAt: string; }
+interface GeoReportsResponse { success: boolean; data: { reports: GeoReport[] }; }
+interface LocationOption { id: string; name: string; }
+interface LocationsResponse { success: boolean; data: LocationOption[]; }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -207,8 +218,165 @@ function RoiConfigPanel({ config, onSave }: { config: { avgCustomerValue: number
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+// ─── Geo-Grid panel ────────────────────────────────────────────────────────────
+
+function rankColor(rank: number | null): string {
+  if (rank == null) return '#6b7280';
+  if (rank <= 3) return '#16a34a';
+  if (rank <= 10) return '#ca8a04';
+  if (rank <= 20) return '#ea580c';
+  return '#dc2626';
+}
+
+function GeoGridPanel({ allKeywords }: { allKeywords: RankingRow[] }) {
+  const [selectedLocationId, setSelectedLocationId] = useState('');
+  const [selectedKeywordId, setSelectedKeywordId] = useState('');
+  const [triggering, setTriggering] = useState(false);
+  const [triggerError, setTriggerError] = useState<string | null>(null);
+  const [pollingId, setPollingId] = useState<string | null>(null);
+
+  const { data: locData } = useSWR<LocationsResponse>('/locations', fetcher);
+  const locations = locData?.data ?? [];
+
+  const reportsKey = selectedLocationId && selectedKeywordId
+    ? `/geo-grid?locationId=${selectedLocationId}&keywordId=${selectedKeywordId}`
+    : null;
+  const { data: reportsData, mutate: mutateReports } = useSWR<GeoReportsResponse>(reportsKey, fetcher);
+  const reports = reportsData?.data?.reports ?? [];
+  const latestReport = reports[0] ?? null;
+
+  useEffect(() => {
+    if (!pollingId) return;
+    const interval = setInterval(() => {
+      void mutateReports();
+      const updated = reports.find((r) => r.id === pollingId);
+      if (updated && updated.status !== 'processing') {
+        setPollingId(null);
+        clearInterval(interval);
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [pollingId, reports, mutateReports]);
+
+  const keywords = Array.from(new Map(allKeywords.map((k) => [k.keywordId, k])).values());
+
+  const handleTrigger = async () => {
+    if (!selectedLocationId || !selectedKeywordId) return;
+    setTriggering(true);
+    setTriggerError(null);
+    try {
+      const res = await apiFetch('/geo-grid', {
+        method: 'POST',
+        body: JSON.stringify({ locationId: selectedLocationId, keywordId: selectedKeywordId }),
+      }) as { data?: { report?: GeoReport } };
+      if (res.data?.report) setPollingId(res.data.report.id);
+      await mutateReports();
+    } catch (e) {
+      setTriggerError((e as Error).message ?? 'Failed to start scan');
+    } finally {
+      setTriggering(false);
+    }
+  };
+
+  const effectiveLat = latestReport?.centerLat ?? 40.7128;
+  const effectiveLng = latestReport?.centerLng ?? -74.006;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-3 items-end">
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Location</label>
+          <select value={selectedLocationId} onChange={(e) => setSelectedLocationId(e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <option value="">Select location…</option>
+            {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Keyword</label>
+          <select value={selectedKeywordId} onChange={(e) => setSelectedKeywordId(e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <option value="">Select keyword…</option>
+            {keywords.map((k) => <option key={k.keywordId} value={k.keywordId}>{k.keyword}</option>)}
+          </select>
+        </div>
+        <button onClick={() => void handleTrigger()} disabled={triggering || !selectedLocationId || !selectedKeywordId}
+          className="px-4 py-2 text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">
+          {triggering ? 'Starting…' : 'Run Scan'}
+        </button>
+      </div>
+
+      {triggerError && <p className="text-sm text-red-600">{triggerError}</p>}
+
+      {latestReport?.status === 'processing' && (
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="h-4 w-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+          Generating visibility map… (can take up to 10 minutes)
+        </div>
+      )}
+
+      {latestReport?.status === 'complete' && latestReport.gridData && (
+        <>
+          <div className="h-96 rounded-xl overflow-hidden border border-gray-200">
+            <MapContainer center={[effectiveLat, effectiveLng]} zoom={12} style={{ height: '100%', width: '100%' }} scrollWheelZoom={false}>
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' />
+              {latestReport.gridData.map((point, i) => (
+                <CircleMarker key={i} center={[point.lat, point.lng]} radius={16}
+                  fillColor={rankColor(point.rank)} color={rankColor(point.rank)} fillOpacity={0.7} weight={1}>
+                  <Popup>
+                    {point.rank != null ? `Rank #${point.rank}` : 'Not ranked'}
+                    {point.url && <><br /><a href={point.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 break-all">{point.url}</a></>}
+                  </Popup>
+                </CircleMarker>
+              ))}
+            </MapContainer>
+          </div>
+          {(() => {
+            const cells = latestReport.gridData;
+            const ranked = cells.filter((c) => c.rank != null);
+            const top3 = cells.filter((c) => c.rank != null && c.rank <= 3).length;
+            const top10 = cells.filter((c) => c.rank != null && c.rank <= 10).length;
+            const avgRank = ranked.length > 0 ? (ranked.reduce((s, c) => s + (c.rank ?? 0), 0) / ranked.length).toFixed(1) : '—';
+            return (
+              <div className="grid grid-cols-3 gap-4">
+                {[
+                  { label: 'Avg Grid Rank', value: avgRank },
+                  { label: '% in Top 3', value: `${cells.length > 0 ? Math.round(top3 / cells.length * 100) : 0}%` },
+                  { label: '% in Top 10', value: `${cells.length > 0 ? Math.round(top10 / cells.length * 100) : 0}%` },
+                ].map((s) => (
+                  <div key={s.label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center">
+                    <p className="text-xs text-gray-500 mb-1">{s.label}</p>
+                    <p className="text-xl font-bold text-gray-900">{s.value}</p>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </>
+      )}
+
+      {!latestReport && selectedLocationId && selectedKeywordId && (
+        <div className="py-12 text-center text-gray-400 text-sm">No scan yet. Click "Run Scan" to generate a visibility map.</div>
+      )}
+
+      <div className="flex gap-4 text-xs text-gray-500 flex-wrap">
+        {[{ color: '#16a34a', label: '#1–3' }, { color: '#ca8a04', label: '#4–10' }, { color: '#ea580c', label: '#11–20' }, { color: '#dc2626', label: '#21+' }, { color: '#6b7280', label: 'Not ranked' }].map((l) => (
+          <span key={l.label} className="flex items-center gap-1">
+            <span className="inline-block w-3 h-3 rounded-full" style={{ background: l.color }} />
+            {l.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main component ────────────────────────────────────────────────────────────
+
 export default function Rankings() {
   const [sortKey, setSortKey] = useState<SortKey>('rank');
+  const [mainTab, setMainTab] = useState<MainTab>('table');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [selectedRow, setSelectedRow] = useState<RankingRow | null>(null);
   const [trendRange, setTrendRange] = useState<TrendRange>(30);
@@ -299,7 +467,23 @@ export default function Rankings() {
         </div>
       )}
 
-      {/* Table */}
+      {/* Main tab switcher */}
+      <div className="flex gap-1 border-b border-gray-200">
+        <button onClick={() => setMainTab('table')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${mainTab === 'table' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+          Rankings Table
+        </button>
+        <button onClick={() => setMainTab('map')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${mainTab === 'map' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+          📍 Visibility Map
+        </button>
+      </div>
+
+      {mainTab === 'map' && (
+        <GeoGridPanel allKeywords={rows} />
+      )}
+
+      {mainTab === 'table' && (<>
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-x-auto">
         {isLoading ? (
           <div className="p-8 text-center text-sm text-gray-400">Loading rankings...</div>
@@ -432,6 +616,7 @@ export default function Rankings() {
           )}
         </div>
       )}
+      </>)}
     </div>
   );
 }

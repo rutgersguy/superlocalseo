@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
-import { ok } from '../utils/response';
+import { ok, err } from '../utils/response';
+import { submitCitations, getCitationSubmissions } from '../services/brightlocal.service';
+import { logger } from '../utils/logger';
 
 export const listQuerySchema = z.object({
   locationId: z.string().uuid().optional(),
@@ -108,5 +110,110 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
     ok(res, result);
   } catch (e) {
     next(e);
+  }
+}
+
+// ─── BL-4: Citation Builder ───────────────────────────────────────────────────
+
+const submitSchema = z.object({
+  locationId: z.string().uuid(),
+  directories: z.array(z.string().min(1)).optional(),
+});
+
+export async function submit(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const parsed = submitSchema.safeParse(req.body);
+    if (!parsed.success) { err(res, parsed.error.errors[0]?.message ?? 'Validation error', 400, 'VALIDATION_ERROR'); return; }
+
+    const { locationId, directories } = parsed.data;
+    const location = await db('locations')
+      .where({ id: locationId, client_id: req.clientId })
+      .first() as { id: string; bl_campaign_id?: string } | undefined;
+    if (!location) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
+    if (!location.bl_campaign_id) { err(res, 'Location has no BrightLocal campaign configured', 422, 'NO_BL_CAMPAIGN'); return; }
+
+    let targetDirs: string[];
+    if (directories && directories.length > 0) {
+      targetDirs = directories;
+    } else {
+      const unlistedRows = await db('citation_snapshots')
+        .where({ location_id: locationId, listed: false })
+        .select('directory')
+        .groupBy('directory') as Array<{ directory: string }>;
+      targetDirs = unlistedRows.map((r) => r.directory);
+    }
+
+    if (targetDirs.length === 0) { ok(res, { submitted: 0, message: 'No unlisted directories found' }); return; }
+
+    const { jobId } = await submitCitations(location.bl_campaign_id, targetDirs);
+
+    const rows = targetDirs.map((dir) => ({
+      client_id: req.clientId,
+      location_id: locationId,
+      directory: dir,
+      status: 'pending',
+      bl_submission_id: jobId,
+      submitted_at: new Date(),
+    }));
+
+    await db('citation_submissions')
+      .insert(rows)
+      .onConflict(['location_id', 'directory'])
+      .merge(['status', 'bl_submission_id', 'submitted_at']);
+
+    ok(res, { submitted: targetDirs.length, jobId }, 202);
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function listSubmissions(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { locationId } = req.query as Record<string, string>;
+    let q = db('citation_submissions')
+      .where({ client_id: req.clientId })
+      .orderBy('submitted_at', 'desc');
+    if (locationId) q = q.where({ location_id: locationId });
+    const rows = await q as Array<Record<string, unknown>>;
+    ok(res, {
+      submissions: rows.map((r) => ({
+        id: r.id,
+        locationId: r.location_id,
+        directory: r.directory,
+        status: r.status,
+        listingUrl: r.listing_url,
+        rejectionReason: r.rejection_reason,
+        submittedAt: r.submitted_at,
+        liveAt: r.live_at,
+      })),
+    });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function pollSubmissions(): Promise<void> {
+  const pending = await db('citation_submissions')
+    .whereIn('status', ['pending', 'submitted'])
+    .whereNotNull('bl_submission_id')
+    .select('bl_submission_id', 'location_id', 'client_id')
+    .groupBy('bl_submission_id', 'location_id', 'client_id') as Array<{ bl_submission_id: string; location_id: string; client_id: string }>;
+
+  for (const row of pending) {
+    try {
+      const statuses = await getCitationSubmissions(row.bl_submission_id);
+      for (const s of statuses) {
+        await db('citation_submissions')
+          .where({ location_id: row.location_id, directory: s.directory, bl_submission_id: row.bl_submission_id })
+          .update({
+            status: s.status,
+            listing_url: s.listingUrl ?? null,
+            rejection_reason: s.rejectionReason ?? null,
+            live_at: s.status === 'live' ? new Date() : null,
+          });
+      }
+    } catch (e) {
+      logger.warn('Citation submission poll failed', { jobId: row.bl_submission_id, error: (e as Error).message });
+    }
   }
 }

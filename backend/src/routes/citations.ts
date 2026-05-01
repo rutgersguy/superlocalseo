@@ -7,5 +7,7 @@ import * as ctrl from '../controllers/citation.controller';
 const router = Router();
 
 router.get('/', requireAuth, requireClient, validateQuery(ctrl.listQuerySchema), ctrl.list);
+router.post('/submit', requireAuth, requireClient, ctrl.submit);
+router.get('/submissions', requireAuth, requireClient, ctrl.listSubmissions);
 
 export default router;

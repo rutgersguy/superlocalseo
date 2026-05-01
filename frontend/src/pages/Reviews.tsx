@@ -16,6 +16,9 @@ interface Review {
   reviewDate: string;
   body: string;
   status: 'new' | 'responded';
+  blReviewId?: string | null;
+  blReplyStatus?: string | null;
+  blReplyPostedAt?: string | null;
 }
 
 interface ReviewResponse {
@@ -223,13 +226,111 @@ function ResponsePanel({ reviewId, reviewBody }: { reviewId: string; reviewBody:
   );
 }
 
+// ─── Sync BL button ───────────────────────────────────────────────────────────
+
+function SyncBLButton({ onSynced }: { onSynced: () => void }) {
+  const [syncing, setSyncing] = useState(false);
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await apiFetch('/reputation/sync', { method: 'POST' });
+      onSynced();
+    } catch {
+      // non-fatal
+    } finally {
+      setSyncing(false);
+    }
+  };
+  return (
+    <button onClick={() => void handleSync()} disabled={syncing}
+      className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+      {syncing ? 'Syncing…' : 'Sync BL Reviews'}
+    </button>
+  );
+}
+
+// ─── BL Reply Modal ───────────────────────────────────────────────────────────
+
+function PostReplyModal({ review, onClose, onPosted }: { review: Review; onClose: () => void; onPosted: () => void }) {
+  const { data: responseData } = useSWR<{ success: boolean; data: ReviewResponse | null }>(
+    `/reviews/${review.id}/response`, fetcher,
+  );
+  const aiDraft = responseData?.data?.finalBody ?? responseData?.data?.draftBody ?? '';
+  const [text, setText] = useState('');
+  const [posting, setPosting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Pre-fill with AI draft once loaded
+  const effectiveText = text || aiDraft;
+
+  const handlePost = async () => {
+    setPosting(true);
+    setError(null);
+    try {
+      await apiFetch(`/reputation/reviews/${review.id}/reply`, {
+        method: 'POST',
+        body: JSON.stringify({ replyText: effectiveText }),
+      });
+      onPosted();
+    } catch (e) {
+      setError((e as Error).message ?? 'Failed to post reply');
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg flex flex-col">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-gray-900">Post Reply to Google</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 font-bold text-xl">×</button>
+        </div>
+        <div className="px-6 py-4 space-y-3">
+          <p className="text-sm text-gray-500">
+            Replying to <span className="font-medium text-gray-700">{review.authorName}</span>
+          </p>
+          <textarea
+            value={text || aiDraft}
+            onChange={(e) => setText(e.target.value)}
+            rows={5}
+            maxLength={4000}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+            placeholder="Write your reply…"
+          />
+          <p className="text-xs text-gray-400 text-right">{effectiveText.length}/4000</p>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+        </div>
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
+          <button onClick={() => void handlePost()} disabled={posting || !effectiveText.trim()}
+            className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+            {posting ? 'Posting…' : 'Post to Google'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Review card ──────────────────────────────────────────────────────────────
 
-function ReviewCard({ review }: { review: Review }) {
+function ReviewCard({ review, onReplyPosted }: { review: Review; onReplyPosted: () => void }) {
   const [showResponse, setShowResponse] = useState(false);
+  const [showReplyModal, setShowReplyModal] = useState(false);
+
+  const canPostBL = !!review.blReviewId && review.blReplyStatus !== 'posted';
+  const alreadyPosted = review.blReplyStatus === 'posted';
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+      {showReplyModal && (
+        <PostReplyModal
+          review={review}
+          onClose={() => setShowReplyModal(false)}
+          onPosted={() => { setShowReplyModal(false); onReplyPosted(); }}
+        />
+      )}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 flex-1 min-w-0">
           <Avatar name={review.authorName} />
@@ -240,6 +341,11 @@ function ReviewCard({ review }: { review: Review }) {
               {review.status === 'new' && (
                 <span className="text-xs bg-yellow-100 text-yellow-700 font-medium px-2 py-0.5 rounded-full">New</span>
               )}
+              {alreadyPosted && (
+                <span className="text-xs bg-green-100 text-green-700 font-medium px-2 py-0.5 rounded-full">
+                  ✓ Replied {review.blReplyPostedAt ? new Date(review.blReplyPostedAt).toLocaleDateString() : ''}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2 mt-0.5">
               <Stars rating={review.rating} />
@@ -249,14 +355,24 @@ function ReviewCard({ review }: { review: Review }) {
             </div>
           </div>
         </div>
-        <button
-          onClick={() => setShowResponse((v) => !v)}
-          className={`flex-shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-            showResponse ? 'bg-brand-50 text-brand-600 border-brand-200' : 'text-gray-500 border-gray-200 hover:bg-gray-50'
-          }`}
-        >
-          {showResponse ? 'Hide' : 'Respond'}
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {canPostBL && (
+            <button
+              onClick={() => setShowReplyModal(true)}
+              className="px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50"
+            >
+              Post to Google
+            </button>
+          )}
+          <button
+            onClick={() => setShowResponse((v) => !v)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+              showResponse ? 'bg-brand-50 text-brand-600 border-brand-200' : 'text-gray-500 border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            {showResponse ? 'Hide' : 'Respond'}
+          </button>
+        </div>
       </div>
       <p className="mt-3 text-sm text-gray-700 leading-relaxed line-clamp-3">{review.body}</p>
       {showResponse && <ResponsePanel reviewId={review.id} reviewBody={review.body} />}
@@ -332,7 +448,7 @@ export default function Reviews() {
   if (search) params.set('q', search);
   const queryString = params.toString();
 
-  const { data, isLoading, error } = useSWR<{ success: boolean; data: { reviews: Review[]; total: number; page: number; pages: number } }>(
+  const { data, isLoading, error, mutate: mutateReviews } = useSWR<{ success: boolean; data: { reviews: Review[]; total: number; page: number; pages: number } }>(
     `/reviews${queryString ? `?${queryString}` : ''}`, fetcher,
   );
   const reviews = data?.data?.reviews ?? [];
@@ -355,10 +471,13 @@ export default function Reviews() {
           <h1 className="text-2xl font-bold text-gray-900">Reviews</h1>
           <p className="text-sm text-gray-500 mt-1">Manage and monitor customer reviews across platforms</p>
         </div>
-        <button onClick={() => { window.location.href = '/api/analytics/export?type=reviews'; }}
-          className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
-          Export CSV
-        </button>
+        <div className="flex gap-2">
+          <SyncBLButton onSynced={() => void mutateReviews()} />
+          <button onClick={() => { window.location.href = '/api/analytics/export?type=reviews'; }}
+            className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+            Export CSV
+          </button>
+        </div>
       </div>
 
       {/* Charts */}
@@ -473,7 +592,7 @@ export default function Reviews() {
             </div>
           ) : (
             <div className="grid gap-4">
-              {reviews.map((review) => <ReviewCard key={review.id} review={review} />)}
+              {reviews.map((review) => <ReviewCard key={review.id} review={review} onReplyPosted={() => void mutateReviews()} />)}
             </div>
           )}
         </>

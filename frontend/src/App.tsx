@@ -20,6 +20,7 @@ import Settings from './pages/Settings';
 import Reports from './pages/Reports';
 import Campaigns from './pages/Campaigns';
 import Competitors from './pages/Competitors';
+import AuditHistory from './pages/AuditHistory';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -54,6 +55,7 @@ function App() {
               <Route path="reports" element={<Reports />} />
               <Route path="campaigns" element={<Campaigns />} />
               <Route path="competitors" element={<Competitors />} />
+              <Route path="audit" element={<AuditHistory />} />
               <Route path="settings" element={<Settings />} />
             </Route>
           </Route>
