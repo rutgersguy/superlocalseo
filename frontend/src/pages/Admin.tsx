@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import useSWR from 'swr';
-import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
 import { fetcher } from '../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -54,6 +54,13 @@ interface ClientsData {
   pages: number;
 }
 
+interface AnalyticsData {
+  mrr: Array<{ month: string; mrr: number; activeClients: number }>;
+  churn: Array<{ month: string; newClients: number; canceled: number }>;
+  tierBreakdown: Array<{ tier: number; count: number }>;
+  statusBreakdown: Array<{ status: string; count: number }>;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const TIER_NAMES: Record<number, string> = { 1: 'Starter', 2: 'Growth', 3: 'Pro' };
@@ -100,13 +107,14 @@ function HealthDot({ ok, label, detail }: { ok: boolean; label: string; detail?:
 
 // ─── Tab bar ──────────────────────────────────────────────────────────────────
 
-type Tab = 'overview' | 'clients' | 'queues';
+type Tab = 'overview' | 'clients' | 'queues' | 'analytics';
 
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'overview', label: 'Overview' },
     { key: 'clients', label: 'Clients' },
     { key: 'queues', label: 'Job Queues' },
+    { key: 'analytics', label: 'Analytics' },
   ];
   return (
     <div className="flex gap-1 border-b border-gray-200 mb-6">
@@ -429,6 +437,113 @@ function QueuesTab() {
   );
 }
 
+// ─── Analytics tab ────────────────────────────────────────────────────────────
+
+const TIER_NAMES_CHART: Record<number, string> = { 1: 'Starter', 2: 'Growth', 3: 'Pro' };
+
+function fmtMonth(monthStr: string): string {
+  // DATE_TRUNC returns e.g. "2026-01-01T00:00:00.000Z" or "2026-01"
+  // Append day to ensure correct parsing regardless of format
+  const normalized = monthStr.length === 7 ? `${monthStr}-01` : monthStr;
+  return new Date(normalized).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+}
+
+function AnalyticsTab() {
+  const { data, isLoading } = useSWR<{ success: boolean; data: AnalyticsData }>(
+    '/admin/analytics',
+    fetcher,
+  );
+  const d = data?.data;
+
+  if (isLoading || !d) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="h-64 bg-gray-100 rounded-xl" />
+          <div className="h-64 bg-gray-100 rounded-xl" />
+        </div>
+        <div className="h-16 bg-gray-100 rounded-xl" />
+      </div>
+    );
+  }
+
+  const churnData = d.churn.map((r) => ({ ...r, month: fmtMonth(r.month) }));
+  const tierData = d.tierBreakdown.map((r) => ({
+    name: TIER_NAMES_CHART[r.tier] ?? `Tier ${r.tier}`,
+    count: r.count,
+  }));
+
+  const TIER_COLORS: Record<string, string> = {
+    Starter: '#60a5fa',
+    Growth: '#34d399',
+    Pro: '#f59e0b',
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Charts row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Signups vs Cancellations */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">New Signups vs Cancellations (last 12 months)</h3>
+          {churnData.length === 0 ? (
+            <p className="text-sm text-gray-400">No data available.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={churnData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="newClients" name="New Signups" fill="#22c55e" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="canceled" name="Canceled" fill="#ef4444" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Tier breakdown */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">Clients by Tier (current)</h3>
+          {tierData.length === 0 ? (
+            <p className="text-sm text-gray-400">No data available.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={tierData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(v: number) => [v, 'Clients']} />
+                <Bar
+                  dataKey="count"
+                  radius={[3, 3, 0, 0]}
+                  label={{ position: 'top', fontSize: 11, fill: '#6b7280' }}
+                >
+                  {tierData.map((entry) => (
+                    <Cell key={entry.name} fill={TIER_COLORS[entry.name] ?? '#94a3b8'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      {/* Status breakdown */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <h3 className="text-sm font-semibold text-gray-900 mb-4">Status Breakdown (current)</h3>
+        <div className="flex flex-wrap gap-3">
+          {d.statusBreakdown.map((s) => (
+            <div key={s.status} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 border border-gray-100">
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${STATUS_STYLES[s.status] ?? 'bg-gray-100 text-gray-500'}`}>
+                {s.status.replace('_', ' ')}
+              </span>
+              <span className="text-sm font-bold text-gray-900">{s.count}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Admin() {
@@ -449,6 +564,7 @@ export default function Admin() {
         {tab === 'overview' && <OverviewTab />}
         {tab === 'clients' && <ClientsTab />}
         {tab === 'queues' && <QueuesTab />}
+        {tab === 'analytics' && <AnalyticsTab />}
       </div>
     </div>
   );

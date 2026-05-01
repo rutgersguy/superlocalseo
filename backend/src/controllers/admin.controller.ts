@@ -171,6 +171,88 @@ export async function clients(req: Request, res: Response, next: NextFunction): 
   }
 }
 
+export async function analytics(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    // New signups per month (last 12)
+    const newClientsRows = await db('clients')
+      .select(db.raw("DATE_TRUNC('month', created_at) as month"), db.raw('COUNT(*) as new_clients'))
+      .where('created_at', '>=', db.raw("NOW() - INTERVAL '12 months'"))
+      .groupByRaw("DATE_TRUNC('month', created_at)")
+      .orderBy('month', 'asc') as Array<{ month: Date; new_clients: string }>;
+
+    // Cancellations per month (last 12, by updated_at)
+    const canceledRows = await db('clients')
+      .select(db.raw("DATE_TRUNC('month', updated_at) as month"), db.raw('COUNT(*) as canceled'))
+      .where('subscription_status', 'canceled')
+      .where('updated_at', '>=', db.raw("NOW() - INTERVAL '12 months'"))
+      .groupByRaw("DATE_TRUNC('month', updated_at)")
+      .orderBy('month', 'asc') as Array<{ month: Date; canceled: string }>;
+
+    // Merge new + canceled into unified month map
+    const monthMap = new Map<string, { month: string; newClients: number; canceled: number }>();
+    for (const r of newClientsRows) {
+      const key = new Date(r.month).toISOString().slice(0, 7);
+      monthMap.set(key, { month: key, newClients: parseInt(r.new_clients, 10), canceled: 0 });
+    }
+    for (const r of canceledRows) {
+      const key = new Date(r.month).toISOString().slice(0, 7);
+      const existing = monthMap.get(key);
+      if (existing) {
+        existing.canceled = parseInt(r.canceled, 10);
+      } else {
+        monthMap.set(key, { month: key, newClients: 0, canceled: parseInt(r.canceled, 10) });
+      }
+    }
+    const churn = Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month));
+
+    // MRR by month — active clients created in each month * tier price (approximation)
+    const mrrRows = await db('clients')
+      .select(
+        db.raw("DATE_TRUNC('month', created_at) as month"),
+        'subscription_tier',
+        db.raw('COUNT(*) as count'),
+      )
+      .where('subscription_status', 'active')
+      .where('created_at', '>=', db.raw("NOW() - INTERVAL '12 months'"))
+      .groupByRaw("DATE_TRUNC('month', created_at), subscription_tier")
+      .orderBy('month', 'asc') as Array<{ month: Date; subscription_tier: number; count: string }>;
+
+    const mrrMap = new Map<string, { month: string; mrr: number; activeClients: number }>();
+    for (const r of mrrRows) {
+      const key = new Date(r.month).toISOString().slice(0, 7);
+      const cnt = parseInt(r.count, 10);
+      const price = TIER_PRICES[r.subscription_tier] ?? 0;
+      const existing = mrrMap.get(key);
+      if (existing) {
+        existing.mrr += cnt * price;
+        existing.activeClients += cnt;
+      } else {
+        mrrMap.set(key, { month: key, mrr: cnt * price, activeClients: cnt });
+      }
+    }
+    const mrr = Array.from(mrrMap.values()).sort((a, b) => a.month.localeCompare(b.month));
+
+    // Tier breakdown (current state)
+    const tierRows = await db('clients')
+      .select('subscription_tier as tier')
+      .count('id as count')
+      .groupBy('subscription_tier')
+      .orderBy('subscription_tier', 'asc') as Array<{ tier: number; count: string }>;
+    const tierBreakdown = tierRows.map((r) => ({ tier: r.tier, count: parseInt(r.count, 10) }));
+
+    // Status breakdown (current state)
+    const statusRows = await db('clients')
+      .select('subscription_status as status')
+      .count('id as count')
+      .groupBy('subscription_status') as Array<{ status: string; count: string }>;
+    const statusBreakdown = statusRows.map((r) => ({ status: r.status, count: parseInt(r.count, 10) }));
+
+    ok(res, { mrr, churn, tierBreakdown, statusBreakdown });
+  } catch (e) {
+    next(e);
+  }
+}
+
 export async function queues(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const results = await Promise.all(
