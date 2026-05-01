@@ -151,7 +151,7 @@ Features designed to increase ARPU from $780 → $1,025+ and reduce churn. See [
 - [x] Regression test suite — access-control scoping, webhook HMAC security, rate-limiting, auth (10 tests passing)
 - [x] Full Cypress E2E suite: `tests/cypress/e2e/critical-paths.cy.ts` — register → login → dashboard → reports → settings
 - [x] Database backup automation — `scripts/backup-db.sh` (pg_dump, gzip, 30-day retention via cron)
-- [ ] Disaster recovery runbook
+- [x] Disaster recovery runbook — `docs/DISASTER_RECOVERY.md`
 - [x] Go-live checklist: `docs/DEPLOY.md` — DNS, TLS, Stripe live mode, Resend domain auth, full smoke test steps
 
 ---
