@@ -3,6 +3,7 @@ import { config } from '../config';
 import { db } from '../db/connection';
 import { logger } from '../utils/logger';
 import { deprovisionClient } from './emr_provisioning';
+import { sendPaymentFailedEmail } from './email.service';
 
 export const stripe = new Stripe(config.stripe.secretKey);
 
@@ -64,9 +65,44 @@ export async function getBillingPortalUrl(customerId: string, returnUrl: string)
   return session.url;
 }
 
+export async function createCheckoutSession(
+  customerId: string,
+  tier: 1 | 2 | 3,
+  successUrl: string,
+  cancelUrl: string,
+): Promise<Stripe.Checkout.Session> {
+  const priceId = { 1: config.stripe.prices.tier1, 2: config.stripe.prices.tier2, 3: config.stripe.prices.tier3 }[tier];
+  if (!priceId) throw new Error(`No price ID configured for tier ${tier}`);
+
+  return stripe.checkout.sessions.create({
+    mode: 'subscription',
+    customer: customerId,
+    line_items: [{ price: priceId, quantity: 1 }],
+    subscription_data: { trial_period_days: 14, metadata: { tier: String(tier) } },
+    metadata: { tier: String(tier) },
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+  });
+}
+
 // Handle key webhook events
 export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
   switch (event.type) {
+    case 'checkout.session.completed': {
+      const session = event.data.object as Stripe.Checkout.Session;
+      if (session.mode === 'subscription' && session.subscription && session.customer) {
+        const tier = session.metadata?.tier ? parseInt(session.metadata.tier, 10) : null;
+        await db('clients')
+          .where({ stripe_customer_id: session.customer as string })
+          .update({
+            stripe_subscription_id: session.subscription as string,
+            ...(tier ? { subscription_tier: tier } : {}),
+            subscription_status: 'active',
+            updated_at: new Date(),
+          });
+      }
+      break;
+    }
     case 'customer.subscription.updated':
     case 'customer.subscription.created': {
       const sub = event.data.object as Stripe.Subscription;
@@ -104,6 +140,13 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
         await db('clients').where({ stripe_subscription_id: inv.subscription }).update({
           subscription_status: 'past_due', payment_failed_at: new Date(), updated_at: new Date(),
         });
+        const failedClient = await db('clients').where({ stripe_subscription_id: inv.subscription }).first();
+        if (failedClient) {
+          const failedUser = await db('users').where({ id: failedClient.user_id }).first();
+          if (failedUser) {
+            void sendPaymentFailedEmail(failedUser.email as string, failedClient.business_name as string);
+          }
+        }
         logger.warn('Payment failed for subscription', { subscriptionId: inv.subscription });
       }
       break;

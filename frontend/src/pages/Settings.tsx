@@ -1022,12 +1022,131 @@ const PLANS = [
   { tier: 3 as const, name: 'Pro', price: '$1,200', features: ['Unlimited locations', 'Everything in Growth', 'White-label reports', 'Priority support'] },
 ];
 
+// ─── White-label settings ─────────────────────────────────────────────────────
+
+interface WhiteLabelData {
+  companyName: string | null;
+  logoUrl: string | null;
+  color: string | null;
+}
+
+function WhiteLabelSection() {
+  const { data, mutate } = useSWR<{ success: boolean; data: { whiteLabel: WhiteLabelData } }>('/clients', fetcher);
+  const saved = data?.data?.whiteLabel;
+
+  const [companyName, setCompanyName] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [color, setColor] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
+  const resolvedName = companyName !== '' ? companyName : (saved?.companyName ?? '');
+  const resolvedLogo = logoUrl !== '' ? logoUrl : (saved?.logoUrl ?? '');
+  const resolvedColor = color !== '' ? color : (saved?.color ?? '#0052CC');
+
+  const save = async () => {
+    setSaving(true);
+    setSaveError('');
+    setSavedOk(false);
+    try {
+      const res = await apiFetch<{ success: boolean; error?: { message: string } }>('/clients', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          whiteLabelCompanyName: resolvedName || null,
+          whiteLabelLogoUrl: resolvedLogo || null,
+          whiteLabelColor: resolvedColor,
+        }),
+      });
+      if (!res.success) {
+        setSaveError((res as { error?: { message: string } }).error?.message ?? 'Failed to save');
+      } else {
+        await mutate();
+        setCompanyName('');
+        setLogoUrl('');
+        setColor('');
+        setSavedOk(true);
+        setTimeout(() => setSavedOk(false), 3000);
+      }
+    } catch {
+      setSaveError('Network error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="border-t pt-5">
+      <h3 className="text-sm font-semibold text-gray-900 mb-1">White-Label Reports</h3>
+      <p className="text-xs text-gray-500 mb-4">Customize the branding on your monthly PDF reports. Leave blank to use SuperLocalSEO defaults.</p>
+      <div className="space-y-3">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Company Name</label>
+          <input
+            type="text"
+            value={resolvedName}
+            onChange={(e) => setCompanyName(e.target.value)}
+            placeholder="Your Agency Name"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Logo URL</label>
+          <input
+            type="url"
+            value={resolvedLogo}
+            onChange={(e) => setLogoUrl(e.target.value)}
+            placeholder="https://yoursite.com/logo.png"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+          <p className="text-xs text-gray-400 mt-1">PNG or SVG, publicly accessible. Will appear in the report header.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Brand Color</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={resolvedColor}
+                onChange={(e) => setColor(e.target.value)}
+                className="h-9 w-14 border border-gray-300 rounded-lg cursor-pointer p-0.5"
+              />
+              <input
+                type="text"
+                value={resolvedColor}
+                onChange={(e) => setColor(e.target.value)}
+                placeholder="#0052CC"
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+          </div>
+        </div>
+        {saveError && <p className="text-xs text-red-600">{saveError}</p>}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => void save()}
+            disabled={saving}
+            className="px-4 py-2 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Save branding'}
+          </button>
+          {savedOk && <span className="text-xs text-green-600 font-medium">Saved!</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BillingTab() {
   const { data, isLoading, mutate: mutateBilling } = useSWR<BillingResponse>('/billing', fetcher);
   const billing = data?.data;
   const [changing, setChanging] = useState<number | null>(null);
   const [changeError, setChangeError] = useState('');
   const [portalLoading, setPortalLoading] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState<number | null>(null);
+
+  // Handle post-checkout return
+  const [checkoutSuccess] = useState(() => new URLSearchParams(window.location.search).get('checkout') === 'success');
 
   const openBillingPortal = async () => {
     setPortalLoading(true);
@@ -1036,6 +1155,25 @@ function BillingTab() {
       if (res.success && res.data?.url) window.location.href = res.data.url;
     } finally {
       setPortalLoading(false);
+    }
+  };
+
+  const startCheckout = async (tier: 1 | 2 | 3) => {
+    setCheckoutLoading(tier);
+    try {
+      const res = await apiFetch<{ success: boolean; data: { url: string }; error?: { message: string } }>('/billing/checkout', {
+        method: 'POST',
+        body: JSON.stringify({ tier }),
+      });
+      if (res.success && res.data?.url) {
+        window.location.href = res.data.url;
+      } else {
+        setChangeError((res as { error?: { message: string } }).error?.message ?? 'Failed to start checkout');
+      }
+    } catch {
+      setChangeError('Network error');
+    } finally {
+      setCheckoutLoading(null);
     }
   };
 
@@ -1077,6 +1215,13 @@ function BillingTab() {
 
   return (
     <div className="space-y-5">
+      {/* Post-checkout success */}
+      {checkoutSuccess && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
+          <strong>Subscription activated!</strong> Welcome aboard. Your plan is now active.
+        </div>
+      )}
+
       {/* Past due warning */}
       {isPastDue && (
         <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
@@ -1139,10 +1284,11 @@ function BillingTab() {
               )}
               {!isCurrent && !hasSub && (
                 <button
-                  onClick={() => void openBillingPortal()}
-                  className="w-full py-2 px-3 rounded-lg text-sm font-medium bg-brand-500 text-white hover:bg-brand-600 transition-colors"
+                  onClick={() => void startCheckout(plan.tier)}
+                  disabled={checkoutLoading !== null}
+                  className="w-full py-2 px-3 rounded-lg text-sm font-medium bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
                 >
-                  Subscribe
+                  {checkoutLoading === plan.tier ? 'Redirecting…' : 'Subscribe'}
                 </button>
               )}
             </div>
@@ -1165,6 +1311,9 @@ function BillingTab() {
           </p>
         )}
       </div>
+
+      {/* White-label report branding — Pro only */}
+      {currentTier === 3 && <WhiteLabelSection />}
     </div>
   );
 }

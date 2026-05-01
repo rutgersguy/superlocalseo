@@ -8,8 +8,14 @@ import { sendReportEmail } from './email.service';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
+export interface WhiteLabel {
+  companyName?: string;
+  logoUrl?: string;
+  color?: string;
+}
+
 export interface ReportData {
-  client: { businessName: string; email: string };
+  client: { businessName: string; email: string; whiteLabel?: WhiteLabel };
   period: { month: number; year: number; label: string };
   locations: Array<{ id: string; name: string }>;
   rankings: {
@@ -64,12 +70,26 @@ export async function gatherReportData(
   month: number,
   year: number,
 ): Promise<ReportData> {
-  // Client + user email
+  // Client + user email + white-label settings
   const client = await db('clients')
     .join('users', 'clients.user_id', 'users.id')
     .where('clients.id', clientId)
-    .select('clients.business_name', 'users.email')
-    .first() as { business_name: string; email: string } | undefined;
+    .select(
+      'clients.business_name',
+      'clients.subscription_tier',
+      'clients.white_label_company_name',
+      'clients.white_label_logo_url',
+      'clients.white_label_color',
+      'users.email',
+    )
+    .first() as {
+      business_name: string;
+      email: string;
+      subscription_tier: number;
+      white_label_company_name: string | null;
+      white_label_logo_url: string | null;
+      white_label_color: string | null;
+    } | undefined;
 
   if (!client) throw new Error(`Client not found: ${clientId}`);
 
@@ -218,10 +238,21 @@ export async function gatherReportData(
   const citationScore =
     citationTotal > 0 ? Math.round((citationListed / citationTotal) * 100) : 0;
 
+  const whiteLabel: WhiteLabel | undefined =
+    client.subscription_tier >= 3 &&
+    (client.white_label_company_name || client.white_label_logo_url || client.white_label_color)
+      ? {
+          companyName: client.white_label_company_name ?? undefined,
+          logoUrl: client.white_label_logo_url ?? undefined,
+          color: client.white_label_color ?? undefined,
+        }
+      : undefined;
+
   return {
     client: {
       businessName: client.business_name,
       email: client.email,
+      whiteLabel,
     },
     period: {
       month,
@@ -258,6 +289,9 @@ export async function gatherReportData(
 
 export function renderReportHtml(data: ReportData): string {
   const { client, period, rankings, reviews, citations } = data;
+  const brandColor = client.whiteLabel?.color ?? '#0052CC';
+  const brandName = client.whiteLabel?.companyName ?? 'SuperLocalSEO';
+  const brandLogoUrl = client.whiteLabel?.logoUrl ?? null;
 
   // Auto recommendations
   const recommendations: string[] = [];
@@ -375,31 +409,33 @@ export function renderReportHtml(data: ReportData): string {
 <div class="page">
 
   <!-- Header -->
-  <div style="background:#0052CC;color:#ffffff;padding:36px 40px 28px">
-    <div style="font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;opacity:0.7;margin-bottom:4px">SuperLocalSEO</div>
+  <div style="background:${brandColor};color:#ffffff;padding:36px 40px 28px">
+    ${brandLogoUrl
+      ? `<img src="${brandLogoUrl}" alt="${escHtml(brandName)}" style="height:32px;margin-bottom:12px;object-fit:contain;display:block" />`
+      : `<div style="font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;opacity:0.7;margin-bottom:4px">${escHtml(brandName)}</div>`}
     <h1 style="font-size:26px;font-weight:700;margin-bottom:6px">${escHtml(client.businessName)}</h1>
     <div style="font-size:15px;opacity:0.85">Monthly SEO Performance Report &mdash; ${escHtml(period.label)}</div>
   </div>
 
   <!-- Executive Summary -->
   <div style="padding:32px 40px 24px">
-    <h2 style="font-size:16px;font-weight:700;color:#0052CC;margin-bottom:20px;text-transform:uppercase;letter-spacing:0.05em">Executive Summary</h2>
+    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:20px;text-transform:uppercase;letter-spacing:0.05em">Executive Summary</h2>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
-      ${statBox('Avg. Rank', rankings.avgRank != null ? String(rankings.avgRank) : 'N/A', '#0052CC')}
-      ${statBox('Keywords in Top 10', String(rankings.keywordsInTop10), '#0052CC')}
-      ${statBox('New Reviews', String(reviews.newThisMonth), '#0052CC')}
+      ${statBox('Avg. Rank', rankings.avgRank != null ? String(rankings.avgRank) : 'N/A', brandColor)}
+      ${statBox('Keywords in Top 10', String(rankings.keywordsInTop10), brandColor)}
+      ${statBox('New Reviews', String(reviews.newThisMonth), brandColor)}
       ${statBox('Citation Score', `${citations.score}%`, citationScoreColor(citations.score))}
     </div>
   </div>
 
   <!-- Rankings -->
   <div style="padding:0 40px 32px">
-    <h2 style="font-size:16px;font-weight:700;color:#0052CC;margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Keyword Rankings</h2>
+    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Keyword Rankings</h2>
     <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
       <div style="padding:14px 16px;background:#f0f4ff;border-bottom:1px solid #e5e7eb;display:flex;gap:32px">
-        <span style="font-size:13px;color:#374151"><strong style="color:#0052CC">${rankings.keywordsInTop3}</strong> in Top 3</span>
-        <span style="font-size:13px;color:#374151"><strong style="color:#0052CC">${rankings.keywordsInTop10}</strong> in Top 10</span>
-        <span style="font-size:13px;color:#374151">Avg. Position: <strong style="color:#0052CC">${rankings.avgRank ?? 'N/A'}</strong></span>
+        <span style="font-size:13px;color:#374151"><strong style="color:${brandColor}">${rankings.keywordsInTop3}</strong> in Top 3</span>
+        <span style="font-size:13px;color:#374151"><strong style="color:${brandColor}">${rankings.keywordsInTop10}</strong> in Top 10</span>
+        <span style="font-size:13px;color:#374151">Avg. Position: <strong style="color:${brandColor}">${rankings.avgRank ?? 'N/A'}</strong></span>
       </div>
       ${rankings.topKeywords.length > 0 ? `
       <table>
@@ -419,11 +455,11 @@ export function renderReportHtml(data: ReportData): string {
 
   <!-- Reviews -->
   <div style="padding:0 40px 32px">
-    <h2 style="font-size:16px;font-weight:700;color:#0052CC;margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Reviews</h2>
+    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Reviews</h2>
     <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
       <div style="padding:14px 16px;background:#f0f4ff;border-bottom:1px solid #e5e7eb;display:flex;gap:32px">
-        <span style="font-size:13px;color:#374151">Total: <strong style="color:#0052CC">${reviews.total}</strong></span>
-        <span style="font-size:13px;color:#374151">New this month: <strong style="color:#0052CC">${reviews.newThisMonth}</strong></span>
+        <span style="font-size:13px;color:#374151">Total: <strong style="color:${brandColor}">${reviews.total}</strong></span>
+        <span style="font-size:13px;color:#374151">New this month: <strong style="color:${brandColor}">${reviews.newThisMonth}</strong></span>
         <span style="font-size:13px;color:#374151">Avg. Rating: <strong style="color:#f59e0b">${reviews.avgRating != null ? reviews.avgRating.toFixed(1) + ' ★' : 'N/A'}</strong></span>
       </div>
       ${reviews.byPlatform.length > 0 ? `
@@ -442,7 +478,7 @@ export function renderReportHtml(data: ReportData): string {
 
   <!-- Citations -->
   <div style="padding:0 40px 32px">
-    <h2 style="font-size:16px;font-weight:700;color:#0052CC;margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Citation Health</h2>
+    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Citation Health</h2>
     <div style="border:1px solid #e5e7eb;border-radius:8px;padding:20px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <span style="font-size:14px;font-weight:600;color:#111827">Citation Score</span>
@@ -454,7 +490,7 @@ export function renderReportHtml(data: ReportData): string {
       <div style="display:flex;gap:24px;flex-wrap:wrap">
         ${citationStatPill('Listed', citations.listed, '#16a34a')}
         ${citationStatPill('Not Listed', citations.total - citations.listed, '#dc2626')}
-        ${citationStatPill('NAP Accurate', citations.napAccurate, '#0052CC')}
+        ${citationStatPill('NAP Accurate', citations.napAccurate, brandColor)}
         ${citationStatPill('Total Directories', citations.total, '#6b7280')}
       </div>
     </div>
@@ -462,7 +498,7 @@ export function renderReportHtml(data: ReportData): string {
 
   <!-- Recommendations -->
   <div style="padding:0 40px 40px">
-    <h2 style="font-size:16px;font-weight:700;color:#0052CC;margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Recommendations</h2>
+    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Recommendations</h2>
     <div style="background:#f0f4ff;border:1px solid #dbeafe;border-radius:8px;padding:20px">
       <ul style="padding-left:18px">
         ${recommendationItems}
@@ -471,8 +507,8 @@ export function renderReportHtml(data: ReportData): string {
   </div>
 
   <!-- Footer -->
-  <div style="background:#0052CC;padding:18px 40px;text-align:center">
-    <span style="font-size:12px;color:rgba(255,255,255,0.7)">Generated by SuperLocalSEO &middot; superlocalseo.com</span>
+  <div style="background:${brandColor};padding:18px 40px;text-align:center">
+    <span style="font-size:12px;color:rgba(255,255,255,0.7)">Generated by ${escHtml(brandName)}</span>
   </div>
 
 </div>

@@ -29,6 +29,26 @@ export async function sendPasswordResetEmail(to: string, token: string): Promise
   }).catch((e) => logger.error('Failed to send password reset email', { error: e, to }));
 }
 
+export async function sendWelcomeEmail(to: string, businessName: string): Promise<void> {
+  const dashboardUrl = `${config.publicUrl}/dashboard`;
+  await resend.emails.send({
+    from,
+    to,
+    subject: `Welcome to SuperLocalSEO, ${businessName}!`,
+    html: `<p>Hi there,</p>
+<p>Welcome to <strong>SuperLocalSEO</strong>! Your account for <strong>${businessName}</strong> is ready.</p>
+<p>Here's what to do next:</p>
+<ol>
+  <li>Add your first business location</li>
+  <li>Set up keyword tracking for your top services</li>
+  <li>Connect your Google Business Profile to start syncing reviews</li>
+</ol>
+<p><a href="${dashboardUrl}">Go to your dashboard →</a></p>
+<p>If you have any questions, just reply to this email — we're here to help.</p>
+<p>Best,<br/>The SuperLocalSEO Team</p>`,
+  }).catch((e) => logger.error('Failed to send welcome email', { error: e, to }));
+}
+
 export async function sendPaymentFailedEmail(to: string, businessName: string): Promise<void> {
   const url = `${config.publicUrl}/settings/billing`;
   await resend.emails.send({

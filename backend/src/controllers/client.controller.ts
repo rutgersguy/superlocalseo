@@ -9,6 +9,9 @@ export const patchSchema = z.object({
   businessName: z.string().min(2).max(255).optional(),
   industry: z.string().optional(),
   onboardingStep: z.number().int().min(0).max(4).optional(),
+  whiteLabelCompanyName: z.string().max(255).nullable().optional(),
+  whiteLabelLogoUrl: z.string().url().max(2048).nullable().optional(),
+  whiteLabelColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
 });
 
 type PatchBody = z.infer<typeof patchSchema>;
@@ -34,6 +37,11 @@ function formatClient(
     },
     onboardingStep: client.onboarding_step,
     emrProvisioningStatus: client.emr_provisioning_status,
+    whiteLabel: {
+      companyName: client.white_label_company_name ?? null,
+      logoUrl: client.white_label_logo_url ?? null,
+      color: client.white_label_color ?? null,
+    },
     locations: locations.map((l) => ({
       id: l.id,
       name: l.name,
@@ -69,6 +77,9 @@ export async function updateClient(req: Request, res: Response, next: NextFuncti
     if (body.businessName !== undefined) updates.business_name = body.businessName;
     if (body.industry !== undefined) updates.industry = body.industry;
     if (body.onboardingStep !== undefined) updates.onboarding_step = body.onboardingStep;
+    if (body.whiteLabelCompanyName !== undefined) updates.white_label_company_name = body.whiteLabelCompanyName;
+    if (body.whiteLabelLogoUrl !== undefined) updates.white_label_logo_url = body.whiteLabelLogoUrl;
+    if (body.whiteLabelColor !== undefined) updates.white_label_color = body.whiteLabelColor;
 
     const [updated] = await db('clients').where({ id: req.clientId }).update(updates).returning('*');
 

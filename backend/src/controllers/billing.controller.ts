@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
-import { getBillingPortalUrl, createSubscription, changeSubscriptionTier, stripe } from '../services/stripe.service';
+import { getBillingPortalUrl, createSubscription, changeSubscriptionTier, createCheckoutSession, stripe } from '../services/stripe.service';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
@@ -11,6 +11,10 @@ export const subscribeSchema = z.object({
 });
 
 export const changePlanSchema = z.object({
+  tier: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+});
+
+export const checkoutSchema = z.object({
   tier: z.union([z.literal(1), z.literal(2), z.literal(3)]),
 });
 
@@ -144,6 +148,37 @@ export async function changePlan(req: Request, res: Response, next: NextFunction
     await db('clients').where({ id: req.clientId }).update({ subscription_tier: tier, updated_at: new Date() });
 
     ok(res, { tier, changed: true });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function checkout(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const parsed = checkoutSchema.safeParse(req.body);
+    if (!parsed.success) {
+      err(res, parsed.error.errors[0]?.message ?? 'Validation error', 400, 'VALIDATION_ERROR');
+      return;
+    }
+    const { tier } = parsed.data;
+    const client = req.client;
+
+    if (client.stripe_subscription_id) {
+      err(res, 'Already subscribed. Use change-plan to switch tiers.', 400, 'ALREADY_SUBSCRIBED');
+      return;
+    }
+
+    const user = await db('users').where({ id: req.userId }).first();
+    if (!user?.stripe_customer_id) {
+      err(res, 'No Stripe customer found. Please contact support.', 400, 'NO_STRIPE_CUSTOMER');
+      return;
+    }
+
+    const successUrl = `${config.appUrl}/dashboard/settings?tab=billing&checkout=success`;
+    const cancelUrl = `${config.appUrl}/dashboard/settings?tab=billing`;
+    const session = await createCheckoutSession(user.stripe_customer_id as string, tier, successUrl, cancelUrl);
+
+    ok(res, { url: session.url });
   } catch (e) {
     next(e);
   }

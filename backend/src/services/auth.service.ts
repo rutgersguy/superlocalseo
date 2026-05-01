@@ -4,7 +4,7 @@ import { db } from '../db/connection';
 import { redis, storeRefreshToken, validateRefreshToken, revokeRefreshToken, revokeAllRefreshTokens } from '../db/redis';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt';
 import { createCustomer, createSubscription } from './stripe.service';
-import { sendVerificationEmail, sendPasswordResetEmail } from './email.service';
+import { sendVerificationEmail, sendPasswordResetEmail, sendWelcomeEmail } from './email.service';
 import { logger } from '../utils/logger';
 
 const SALT_ROUNDS = 12;
@@ -21,10 +21,11 @@ export async function register(email: string, password: string, businessName: st
   const [user] = await db('users').insert({ email, password_hash: passwordHash, role: 'client', stripe_customer_id: stripeCustomerId }).returning('*');
   const [client] = await db('clients').insert({ user_id: user.id, business_name: businessName, subscription_tier: 1, subscription_status: 'trialing' }).returning('*');
 
-  // Send verification email
+  // Send verification + welcome emails
   const verifyToken = uuidv4();
   await redis.setex(`verify:${verifyToken}`, VERIFY_TTL, user.id);
   await sendVerificationEmail(email, verifyToken).catch(() => {});
+  void sendWelcomeEmail(email, businessName);
 
   logger.info('User registered', { userId: user.id, clientId: client.id });
   return { user, client };
