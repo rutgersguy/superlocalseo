@@ -1,0 +1,541 @@
+# SuperLocalSEO — Product Reference
+
+**Audience:** Marketing, sales, copywriters, AI content tools  
+**Purpose:** Authoritative source of truth for all features, capabilities, pricing, and positioning. Use this document to generate website copy, ad creative, sales decks, feature announcements, and comparison pages.
+
+---
+
+## Elevator Pitch
+
+SuperLocalSEO is a white-label local SEO platform built for agencies and multi-location businesses. It automates rank tracking, review management, citation monitoring, and monthly reporting — powered by BrightLocal and EmbedMyReviews data — and wraps it all in a clean client-facing dashboard with AI-powered features that justify a recurring retainer.
+
+**Core value proposition:** Replace 5 separate tools (rank tracker, review aggregator, citation monitor, report builder, review request tool) with one platform. Clients see results. Agencies stop doing manual work.
+
+---
+
+## Target Customer
+
+### Primary: Local SEO Agencies
+- Manage SEO for 5–200 local business clients
+- Currently stitching together BrightLocal, Whitespark, Grade.us, Raven Tools
+- Spend 4–8 hrs/month per client on manual reporting
+- Need a white-labelable client portal
+
+### Secondary: Multi-Location Businesses (Direct)
+- 2–20 locations (plumbing, HVAC, dental, legal, home services)
+- Owner or marketing manager wants visibility without hiring an agency
+- Currently checking Google manually or not checking at all
+
+---
+
+## Pricing
+
+| Tier | Monthly Price | Included Locations | Extra Locations |
+|---|---|---|---|
+| **Starter** (Tier 1) | **$350/mo** | 1 | +$150/mo each |
+| **Growth** (Tier 2) | **$700/mo** | 3 | +$100/mo each |
+| **Scale** (Tier 3) | **$1,200/mo** | 5 | +$75/mo each |
+
+- 14-day free trial, no credit card required at signup
+- All tiers include every feature — no feature gating
+- Per-location billing is prorated; add or remove locations mid-month
+
+### Unit Economics (for agency positioning)
+- 10 clients at Tier 1 → **$3,500/mo revenue, ~$354/mo data costs → 90% gross margin**
+- 50 mixed clients (avg 2 locations) → **$25,000/mo revenue, ~$2,244/mo data costs → 91% gross margin**
+
+---
+
+## Feature Set
+
+### 1. Keyword Rank Tracking
+
+**What it does:** Automatically tracks where each client's locations rank on Google (and Bing) for their target keywords, every single day. Results are stored historically so clients can see progress over time.
+
+**Key capabilities:**
+- Daily automated keyword rank pulls via BrightLocal
+- Tracks rank for organic, local pack, and mobile results
+- Stores complete history — every snapshot, forever
+- Trend charts with 30-day, 90-day, and all-time toggles
+- Position delta badges (▲3 green / ▼1 red) vs. previous snapshot
+- Top 3 / Top 10 keyword count summary cards
+- Keywords per location — each location tracks its own set
+- CSV export of all ranking data
+- Auto-creates keywords from BrightLocal campaign if not already in the system
+
+**Dashboard view:** Sortable keyword table with current rank, previous rank, delta, URL ranked, and trend sparklines.
+
+---
+
+### 2. Review Management & Aggregation
+
+**What it does:** Pulls in reviews from Google, Yelp, Facebook, Trustpilot, and 100+ platforms via EmbedMyReviews — every 6 hours, plus real-time via webhook. All reviews in one inbox.
+
+**Key capabilities:**
+- Reviews pulled every 6 hours; real-time updates via HMAC-verified webhook
+- Filters: platform, star rating (1–5), status (new/responded), keyword search
+- Stores: author name, rating, review body, platform, review date, reply status, avatar
+- Tracks whether a review has been replied to, the reply text, and reply date
+- `hidden` flag synced from EMR (controls widget visibility)
+- Volume-by-platform stacked bar chart (30d / 90d / 180d)
+- Average rating trend line chart
+- CSV export with full review history
+- Webhook handler processes both `review.created` and `review.updated` events
+- HMAC-SHA256 signature validation on all incoming webhooks
+
+---
+
+### 3. AI-Powered Review Responses
+
+**What it does:** One click generates a polished, contextual review response drafted by Claude AI (Anthropic). The client edits, approves, and copies it to the platform.
+
+**Key capabilities:**
+- Powered by Claude Haiku — fast, cost-efficient, high quality
+- Tone-adaptive: warm and appreciative for 4–5★ reviews; empathetic and solution-focused for 1–3★
+- Responses are specific: references the reviewer's name and details from their review
+- 2–4 sentences, under 150 words — right length for Google/Yelp
+- No filler phrases, no hashtags, no emojis — reads like a real owner wrote it
+- Full draft lifecycle: draft → client edits → approve → copy to platform
+- Approved responses stored permanently in the database
+- Rate-limited to prevent abuse (20 drafts per 10 minutes per user)
+
+**Why it matters:** Most businesses never respond to reviews. A single thoughtful response can improve conversion rate and local ranking signal. This feature alone justifies the subscription for many clients.
+
+---
+
+### 4. Review Request Campaigns
+
+**What it does:** Send personalized review request emails and SMS messages to customers via EmbedMyReviews campaigns. The EMR platform automatically routes happy customers to Google and routes unhappy customers to a private feedback form — protecting your client's public reputation.
+
+**Key capabilities:**
+- Single invite: enter first name, last name (optional), email or phone number
+- Bulk import: upload a CSV or paste contact data (up to 500 contacts per batch)
+- Client-side CSV parser — previews first 5 contacts before sending
+- Per-batch result: shows sent count and any failed invites with error details
+- **Smart gating by EMR:** 4–5★ experience → directed to Google review page; 1–3★ experience → directed to private feedback form
+- Funnel metrics per campaign: Invited → Opened → Clicked → Reviewed (public) + Private Feedback + Unsubscribed
+- Visual funnel bars showing conversion rate at each stage
+- Review rate KPI headline (reviewed ÷ invited)
+- Team admin-only access — viewers cannot send invites
+- Campaigns created in EmbedMyReviews dashboard, synced to SuperLocalSEO automatically
+
+**Why it matters:** The average business that asks for reviews gets 4x more reviews than one that doesn't. Smart gating ensures negative experiences never become public 1-star reviews.
+
+---
+
+### 5. Citation Monitoring
+
+**What it does:** Monitors whether a business is listed (and listed correctly) across major online directories — Google, Yelp, Yellow Pages, BBB, Bing, Apple Maps, and dozens more.
+
+**Key capabilities:**
+- Daily automated citation pull via BrightLocal
+- Per-directory status: Listed / Not Listed
+- NAP match: flags directories where Name, Address, or Phone doesn't exactly match
+- Listing URL stored for each found citation
+- Overall citation completeness score (% of directories with accurate listing)
+- Directory grid view in dashboard
+
+**Why it matters:** Inconsistent NAP data across directories is one of the top local ranking factors. Citations can take months to fix manually; knowing which ones are wrong is the first step.
+
+---
+
+### 6. Automated Monthly Reports
+
+**What it does:** Generates and emails a branded PDF report to each client on the 1st of every month, summarizing the previous month's performance.
+
+**Key capabilities:**
+- Fully automated — zero manual work per client per month
+- Generated via Puppeteer (HTML → PDF)
+- Report sections:
+  - Executive summary (key metrics and highlights)
+  - Rankings table with delta vs. prior month
+  - Reviews breakdown (count, average rating, sentiment)
+  - Citation completeness score
+  - Recommendations section
+- Emailed via Resend with PDF attachment
+- Report stored in database + filesystem for re-download
+- Manual trigger available any time (`Generate Report` button)
+- Download any historical report from the Reports page
+- Per-client report history with timestamps
+
+**Why it matters:** Monthly reports are the primary way agencies demonstrate value. Automating them turns a 4-hour task into a zero-hour task.
+
+---
+
+### 7. Historical Analytics & Trends
+
+**What it does:** Every data point is stored permanently. Clients can query any date range for rankings, reviews, and sentiment trends.
+
+**Key capabilities:**
+- **Ranking history:** arbitrary `from`/`to` date range; filter by keyword, location, search engine
+- **Review trend:** volume by platform (stacked bar), average rating over time (line chart)
+- 30d / 90d / 180d quick-range toggles
+- All charts built with Recharts — composable, responsive
+- **CSV export** of all rankings or all reviews — full historical dump
+- SWR caching for instant chart render on revisit
+
+---
+
+### 8. Competitor Benchmarking
+
+**What it does:** Track named local competitors' Google ratings and review counts. See exactly where you stand in a ranked leaderboard vs. the competition.
+
+**Key capabilities:**
+- Add competitors by name — includes a built-in Google Places search so you can find the exact listing
+- Auto-fills Google Place ID when you select from search results
+- Tracked per competitor: Google rating (e.g. 4.6), total Google review count
+- Your business stats always shown at the top for comparison: avg rating across all platforms + per-platform breakdown
+- Rating bar visualizations make relative position immediately obvious
+- **Google rating leaderboard:** sorted by rating, with rank #1 highlighted
+- Manual sync button to pull fresh Places data on demand
+- Daily automated sync job at 05:00 UTC for all competitors with a Place ID
+- Admin-only access to add/remove competitors
+
+**Why it matters:** "You're ranked #2 in your area with 4.7 stars vs. your top competitor's 4.2" is the kind of concrete win that renews contracts.
+
+---
+
+### 9. QR Code Review Capture
+
+**What it does:** Generate printable QR codes that link directly to a Google review page. Every scan is tracked. Download as PNG for in-store signage, receipts, business cards, or NFC tags.
+
+**Key capabilities:**
+- Create named QR codes with any target URL (Google review links, Yelp, etc.)
+- Optional location assignment (e.g., "Downtown Location" QR)
+- When a location has a Google Place ID stored, the review URL is pre-filled automatically
+- 8-character short code URL (e.g., `superlocalseo.com/api/qr/r/ab3x9k2m`) — scan tracking without exposing the target URL directly
+- Scan count tracked per code with last-scanned timestamp
+- Download PNG (400×400px, clean margins) for printing
+- URL validation: only http/https targets accepted (security)
+- Multiple QR codes per account — one per location, per campaign, or per use case
+
+**Why it matters:** QR codes turn every physical touchpoint (receipts, service trucks, storefronts, business cards) into a review generation opportunity.
+
+---
+
+### 10. Embeddable Review Widget
+
+**What it does:** A JavaScript snippet clients embed on their website that displays their best reviews in a responsive carousel. No iframes. Self-contained and fast.
+
+**Key capabilities:**
+- Single `<script>` tag embed — no framework required, works on any website
+- Carousel layout with horizontal scroll on mobile
+- Configurable appearance:
+  - **Theme:** Light or dark
+  - **Min rating:** Show only reviews above a threshold (e.g., 4★ and up)
+  - **Max count:** 1–20 reviews displayed
+  - **Platform badge:** Toggle platform icon (Google, Yelp, etc.) on/off
+- Live preview in Settings — see exactly how it'll look before embedding
+- Unique widget key per client (UUID); regenerate key without changing the embed tag
+- Stars, platform badge, author name, time-ago, truncated review body
+- CORS-open public API endpoint — works from any domain
+- Admin-only access to update config and regenerate key
+
+---
+
+### 11. Free SEO Audit Tool (Lead Magnet)
+
+**What it does:** A public, no-login-required audit tool at `/audit` that scans a business's local presence and returns a scored report. Used to capture leads and convert them to paid accounts.
+
+**Key capabilities:**
+- Business lookup via Google Places API (name + city input)
+- 5-category scoring system (A–F grade per category):
+  1. Google Business Profile completeness
+  2. Review volume and average rating
+  3. Citation presence
+  4. Website performance indicators
+  5. Local search visibility
+- Overall composite score
+- **Email gate:** Captures email before showing full results — stored as an audit lead
+- Convert button → `/register` with pre-filled business data
+- Rate-limited (5 scans/hour per IP) to prevent abuse
+- All leads stored in database with their audit results for follow-up
+
+---
+
+### 12. Team Members & Role-Based Access
+
+**What it does:** Invite team members to a client account with different permission levels. Perfect for agencies managing accounts alongside clients, or businesses with marketing staff.
+
+**Key capabilities:**
+- Three roles: **Owner** (full control), **Admin** (can edit and configure), **Viewer** (read-only)
+- Email-based invite with 48-hour expiry link
+- New users created automatically on invite acceptance — no pre-registration required
+- Instant login after accepting invite
+- Owner-only access to: Team management tab, billing
+- Admin-only access to: Send review invites, add competitors, manage QR codes, update widget config
+- Viewer access to: All dashboard data (rankings, reviews, citations, analytics, reports)
+- Team list shows: role, accepted/pending/expired status
+
+---
+
+### 13. Multi-Location Management
+
+**What it does:** A single account can manage unlimited locations. Each location gets its own keywords, rankings, citations, and QR codes — all visible in one dashboard.
+
+**Key capabilities:**
+- Add unlimited locations per account (billed per location beyond tier included count)
+- Per-location fields: name, address, city, state, zip, phone, website, Google Place ID
+- Primary location flag
+- Per-location keyword sets — different locations can track different keywords
+- All data (rankings, citations, reviews) filterable by location
+- Locations tied to BrightLocal campaign IDs for automated data pull
+
+---
+
+### 14. Security & Compliance
+
+**What it does:** Enterprise-grade security built in from day one. Not bolted on.
+
+**Key capabilities:**
+- JWT authentication: 15-minute access tokens + 7-day refresh tokens in httpOnly cookies
+- Google OAuth 2.0 sign-in support
+- All third-party API keys stored AES-256 encrypted in the database
+- Passwords hashed with bcrypt (no plain-text storage anywhere)
+- HMAC-SHA256 webhook signature validation (Stripe + EmbedMyReviews)
+- Rate limiting on auth (10/15min), general API (100/15min), AI (20/10min), audit (5/hr)
+- CORS origin whitelist in production
+- Open redirect protection on QR codes (http/https only)
+- Timing-safe signature comparison (prevents timing attacks)
+- Zod schema validation on all inputs
+- Helmet.js security headers
+- OWASP Top 10 audit completed
+
+---
+
+### 15. Monitoring & Infrastructure
+
+**Uptime & Reliability:**
+- Health check endpoints: `/api/health/live` (liveness) + `/api/health/ready` (DB + Redis check)
+- Docker Compose orchestration with health-check-based startup dependencies
+- `restart: unless-stopped` on all services
+- Redis-backed job queue (BullMQ) with cron scheduling and retry logic
+
+**Observability:**
+- Prometheus metrics at `/api/prom-metrics` (admin token): request duration histogram, request counter, Node.js runtime metrics
+- Sentry error tracking: backend (`@sentry/node`) + frontend (`@sentry/react`)
+- Structured JSON logging via Winston (all requests, job events, errors)
+- Job failure alerting: email sent to operator inbox on any BullMQ worker failure
+
+**Data Protection:**
+- Nightly database backups (pg_dump + gzip, 30-day retention)
+- Disaster recovery runbook covering 12 failure scenarios with step-by-step commands
+- Go-live checklist for production deployment
+
+---
+
+## Integrations
+
+| Integration | Role | What It Powers |
+|---|---|---|
+| **BrightLocal** | Operator-level | Rank tracking, citation monitoring |
+| **EmbedMyReviews** | Operator + client-facing | Review aggregation, review request campaigns |
+| **Google OAuth 2.0** | Client sign-in | Sign in with Google; Business Profile connect |
+| **Google Places API** | Operator | Audit tool, competitor lookup |
+| **Stripe** | Billing | Subscriptions, per-location billing, customer portal |
+| **Resend** | Transactional email | Email verification, password reset, team invites, monthly reports, job alerts |
+| **Anthropic Claude** | AI features | Review response drafting |
+| **Sentry** | Error monitoring | Frontend + backend error tracking |
+| **Prometheus** | Metrics | Request latency, error rates, queue depth |
+
+---
+
+## Background Jobs (Automated, Always Running)
+
+| Job | Frequency | What It Does |
+|---|---|---|
+| Rankings pull | Daily at 06:00 UTC | Fetches keyword rankings for all client locations from BrightLocal |
+| Citations pull | Daily at 07:00 UTC | Fetches citation directory status for all client locations |
+| Reviews pull | Every 6 hours | Fetches new/updated reviews from EmbedMyReviews for all clients |
+| Competitor sync | Daily at 05:00 UTC | Pulls Google rating + review count for all tracked competitors |
+| Monthly reports | 1st of each month, 08:00 UTC | Generates and emails PDF reports for all active clients |
+
+---
+
+## Tech Stack
+
+| Layer | Technology | Why |
+|---|---|---|
+| Frontend | React 18, TypeScript, Vite | Type-safe, fast HMR, modern toolchain |
+| State | SWR + React Context | Cache-first data fetching; no Redux complexity |
+| Charts | Recharts | Composable, TypeScript-native |
+| Backend | Node.js, Express, TypeScript | Familiar, well-supported, fast enough |
+| Database | PostgreSQL 15 | Relational, reliable, 18 tables |
+| Migrations | Knex.js | Type-safe queries + schema versioning |
+| Queue | BullMQ + Redis | Cron + retry + priority queues |
+| PDF | Puppeteer | Server-side HTML → PDF |
+| Auth | JWT + bcrypt + Google OAuth | Stateless + secure |
+| Email | Resend | Deliverability + API simplicity |
+| Billing | Stripe | Industry standard, per-seat billing support |
+| AI | Anthropic Claude Haiku | Fast, affordable, high quality |
+| QR | qrcode (npm) | Server-side PNG generation |
+| Security | Helmet, Zod, HMAC | Headers, validation, webhook auth |
+| Monitoring | Sentry, prom-client, Winston | Full observability stack |
+| Deployment | Docker Compose + Cloudflare | Simple, reproducible, SSL-handled |
+
+---
+
+## Data Model (18 Tables)
+
+| Table | Purpose |
+|---|---|
+| `users` | Accounts (email/password + Google OAuth) |
+| `clients` | Business profile, subscription state, widget config, ROI config |
+| `locations` | Per-location NAP data, BL campaign ID, Google Place ID |
+| `integrations` | Connected platforms (Google, EMR, BrightLocal) with encrypted keys |
+| `keywords` | Target keywords per location with optional monthly search volume |
+| `ranking_snapshots` | Full rank history: keyword × location × engine × timestamp |
+| `citation_snapshots` | Full citation history: location × directory × timestamp |
+| `reviews` | All reviews from all platforms; 18 fields including reply status |
+| `review_responses` | AI draft + final approved response per review |
+| `reports` | Monthly PDF report metadata and status |
+| `metrics_daily` | Pre-aggregated daily metrics (avg rank, review count, citation score) |
+| `team_members` | Team invites and membership with roles |
+| `emr_campaigns` | Campaign funnel snapshots (invited → reviewed conversion) |
+| `competitors` | Competitor profiles with Google rating + review count |
+| `qr_codes` | QR codes with short_code, target URL, scan count |
+| `audit_leads` | Lead magnet captures with full audit data |
+| `audit_logs` | Action audit trail |
+
+---
+
+## Complete API Reference (56 Endpoints)
+
+### Auth
+| Method | Endpoint | Auth |
+|---|---|---|
+| POST | `/api/auth/register` | — |
+| POST | `/api/auth/login` | — |
+| POST | `/api/auth/refresh` | cookie |
+| POST | `/api/auth/logout` | jwt |
+| GET | `/api/auth/verify-email` | — |
+| POST | `/api/auth/forgot-password` | — |
+| POST | `/api/auth/reset-password` | — |
+| GET | `/api/auth/google` | — |
+| GET | `/api/auth/google/callback` | — |
+
+### Client, Locations, Keywords
+| Method | Endpoint | Auth |
+|---|---|---|
+| GET | `/api/clients` | jwt |
+| PATCH | `/api/clients` | jwt |
+| GET | `/api/locations` | jwt |
+| POST | `/api/locations` | jwt |
+| PATCH | `/api/locations/:id` | jwt |
+| DELETE | `/api/locations/:id` | jwt |
+| GET | `/api/keywords` | jwt |
+| POST | `/api/keywords` | jwt |
+| PATCH | `/api/keywords/:id/volume` | jwt |
+| DELETE | `/api/keywords/:id` | jwt |
+
+### Rankings, Citations, Reviews
+| Method | Endpoint | Auth |
+|---|---|---|
+| GET | `/api/rankings` | jwt |
+| GET | `/api/rankings/trend` | jwt |
+| GET | `/api/citations` | jwt |
+| GET | `/api/reviews` | jwt |
+| POST | `/api/reviews/webhook` | hmac |
+| GET | `/api/reviews/:id/response` | jwt |
+| POST | `/api/reviews/:id/response/draft` | jwt |
+| PATCH | `/api/reviews/:id/response` | jwt |
+
+### Analytics, Metrics, Reports
+| Method | Endpoint | Auth |
+|---|---|---|
+| GET | `/api/analytics/rankings/history` | jwt |
+| GET | `/api/analytics/reviews/trend` | jwt |
+| GET | `/api/analytics/export` | jwt |
+| GET | `/api/analytics/roi` | jwt |
+| PATCH | `/api/analytics/roi-config` | jwt |
+| GET | `/api/metrics` | jwt |
+| GET | `/api/reports` | jwt |
+| POST | `/api/reports/generate` | jwt |
+| GET | `/api/reports/:id/download` | jwt |
+
+### Campaigns, Competitors, QR
+| Method | Endpoint | Auth |
+|---|---|---|
+| GET | `/api/campaigns` | jwt |
+| POST | `/api/campaigns/:id/invite` | jwt+admin |
+| POST | `/api/campaigns/:id/invite/bulk` | jwt+admin |
+| GET | `/api/competitors` | jwt |
+| GET | `/api/competitors/search` | jwt |
+| POST | `/api/competitors` | jwt+admin |
+| DELETE | `/api/competitors/:id` | jwt+admin |
+| POST | `/api/competitors/:id/sync` | jwt+admin |
+| GET | `/api/qr` | jwt |
+| POST | `/api/qr` | jwt+admin |
+| DELETE | `/api/qr/:id` | jwt+admin |
+| GET | `/api/qr/:id/image.png` | jwt |
+| GET | `/api/qr/r/:code` | — (public) |
+
+### Team, Billing, Widget, Integrations
+| Method | Endpoint | Auth |
+|---|---|---|
+| GET | `/api/team` | jwt |
+| POST | `/api/team/invite` | jwt+admin |
+| DELETE | `/api/team/:id` | jwt+admin |
+| GET | `/api/team/accept` | — |
+| POST | `/api/team/accept` | — |
+| GET | `/api/billing` | jwt |
+| POST | `/api/billing/portal` | jwt |
+| GET | `/api/widget` | jwt |
+| GET | `/api/widget/:key` | — (public) |
+| PATCH | `/api/widget` | jwt+admin |
+| POST | `/api/widget/regenerate` | jwt+admin |
+| GET | `/api/integrations` | jwt |
+| GET | `/api/integrations/google/auth-url` | jwt |
+| DELETE | `/api/integrations/:provider` | jwt |
+
+### Public & Ops
+| Method | Endpoint | Auth |
+|---|---|---|
+| POST | `/api/audit/scan` | — (rate-limited) |
+| POST | `/api/audit/capture` | — |
+| GET | `/api/health/live` | — |
+| GET | `/api/health/ready` | — |
+| GET | `/api/prom-metrics` | admin token |
+| POST | `/webhooks/stripe` | hmac |
+| POST | `/api/reviews/webhook` | hmac |
+
+---
+
+## Feature Status Summary
+
+### Production-Ready ✅
+- Email/password + Google OAuth authentication
+- Stripe billing (3 tiers, per-location, webhooks, portal)
+- 4-step onboarding wizard
+- Multi-location management
+- Daily keyword rank tracking (BrightLocal)
+- Daily citation monitoring (BrightLocal)
+- Review aggregation + 6-hour pull + real-time webhook (EMR)
+- AI review response drafting (Claude Haiku)
+- Review request campaigns with smart gating (EMR)
+- Automated monthly PDF reports via email
+- Historical analytics (rankings + reviews, any date range)
+- CSV data export
+- Team members + RBAC (owner / admin / viewer)
+- Free SEO audit lead magnet
+- Embeddable review widget (JS carousel)
+- Competitor benchmarking (Google Places)
+- QR code generation + scan tracking
+- Prometheus metrics + Sentry error tracking
+- OWASP-audited security posture
+- Nightly DB backup + disaster recovery runbook
+
+### In Progress / Partial ⚠️
+- ROI estimation (data model + backend done; full UI dashboard pending)
+- Citation completeness over time chart (data stored; chart not built)
+
+### Planned ❌
+- Grace period automation for failed payments
+- Plan upgrade / downgrade flow UI
+- Yelp OAuth integration
+- Facebook OAuth integration
+- Google Business Profile data sync (Q&A, automated review pull via GBP API)
+- Admin cross-client analytics dashboard
+- White-label reseller program
+- Mobile app (iOS / Android)
+- In-app support chat (Crisp — blocked on email verification)

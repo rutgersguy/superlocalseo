@@ -8,5 +8,7 @@ const router = Router();
 
 router.get('/', requireAuth, requireClient, ctrl.getClient);
 router.patch('/', requireAuth, requireClient, validate(ctrl.patchSchema), ctrl.updateClient);
+router.post('/complete-onboarding', requireAuth, requireClient, ctrl.completeOnboarding);
+router.post('/retry-emr-provision', requireAuth, requireClient, ctrl.retryProvision);
 
 export default router;

@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok } from '../utils/response';
+import { provisionClient } from '../services/emr_provisioning';
+import { logger } from '../utils/logger';
 
 export const patchSchema = z.object({
   businessName: z.string().min(2).max(255).optional(),
@@ -31,6 +33,7 @@ function formatClient(
       google: { connected: google?.status === 'connected' },
     },
     onboardingStep: client.onboarding_step,
+    emrProvisioningStatus: client.emr_provisioning_status,
     locations: locations.map((l) => ({
       id: l.id,
       name: l.name,
@@ -76,6 +79,54 @@ export async function updateClient(req: Request, res: Response, next: NextFuncti
     ]);
     ok(res, formatClient(updated as Record<string, unknown>, locations, (user as Record<string, unknown>)?.email as string ?? '', integrations as Record<string, unknown>[]));
 
+  } catch (e) {
+    next(e);
+  }
+}
+
+const ONBOARDING_TOTAL_STEPS = 4;
+
+export async function completeOnboarding(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    await db('clients').where({ id: req.clientId }).update({
+      onboarding_step: ONBOARDING_TOTAL_STEPS,
+      updated_at: new Date(),
+    });
+
+    // Provision EMR sub-account with a 12-second timeout.
+    // Failure is non-fatal — user proceeds to dashboard; provisioning retried on next login.
+    let provisioned = false;
+    try {
+      const race = Promise.race([
+        provisionClient(req.clientId),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 12_000)),
+      ]);
+      await race;
+      provisioned = true;
+    } catch (e) {
+      logger.warn('EMR provisioning failed or timed out during onboarding', {
+        clientId: req.clientId,
+        error: (e as Error).message,
+      });
+      await db('clients').where({ id: req.clientId }).update({ emr_provisioning_status: 'failed' });
+    }
+
+    ok(res, { provisioned });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function retryProvision(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const client = await db('clients').where({ id: req.clientId }).first();
+    if (client?.emr_provisioning_status === 'provisioned') {
+      ok(res, { provisioned: true, message: 'Already provisioned' });
+      return;
+    }
+
+    await provisionClient(req.clientId);
+    ok(res, { provisioned: true });
   } catch (e) {
     next(e);
   }

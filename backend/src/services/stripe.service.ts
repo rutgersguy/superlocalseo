@@ -2,6 +2,7 @@ import Stripe from 'stripe';
 import { config } from '../config';
 import { db } from '../db/connection';
 import { logger } from '../utils/logger';
+import { deprovisionClient } from './emr_provisioning';
 
 export const stripe = new Stripe(config.stripe.secretKey);
 
@@ -61,6 +62,10 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
     case 'customer.subscription.deleted': {
       const sub = event.data.object as Stripe.Subscription;
       await db('clients').where({ stripe_subscription_id: sub.id }).update({ subscription_status: 'canceled', updated_at: new Date() });
+      const canceledClient = await db('clients').where({ stripe_subscription_id: sub.id }).first();
+      if (canceledClient) {
+        void deprovisionClient(canceledClient.id as string);
+      }
       break;
     }
     case 'invoice.paid': {

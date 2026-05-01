@@ -1,3 +1,4 @@
+import { config } from '../config';
 import { logger } from '../utils/logger';
 
 const BASE_URL = 'https://api.embedmyreviews.com/v1';
@@ -211,5 +212,72 @@ export async function registerWebhook(apiKey: string, webhookUrl: string): Promi
   } catch (e) {
     logger.warn('EmbedMyReviews registerWebhook error', { error: (e as Error).message });
     return false;
+  }
+}
+
+// ─── Agency customer lifecycle (EMR-1) ────────────────────────────────────────
+
+export interface EMRCustomer {
+  id: string;
+  email: string;
+  businessName: string;
+  plan: string;
+  status: string;
+  apiKey: string;
+}
+
+export async function createCustomer(
+  businessName: string,
+  email: string,
+): Promise<{ customerId: string; apiKey: string }> {
+  const operatorKey = config.embedmyreviews.apiKey;
+  if (!operatorKey) throw new Error('EMBEDMYREVIEWS_API_KEY not configured');
+
+  const res = await emrFetch('/agency/customers', operatorKey, {
+    method: 'POST',
+    body: JSON.stringify({ business_name: businessName, email }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`EMR createCustomer failed: ${res.status} ${body}`);
+  }
+
+  const data = await res.json() as { id?: string; api_key?: string; customer?: { id: string; api_key: string } };
+  const customerId = data.id ?? data.customer?.id;
+  const apiKey = data.api_key ?? data.customer?.api_key;
+
+  if (!customerId || !apiKey) {
+    throw new Error('EMR createCustomer: unexpected response shape');
+  }
+
+  return { customerId, apiKey };
+}
+
+export async function deleteCustomer(customerId: string): Promise<void> {
+  const operatorKey = config.embedmyreviews.apiKey;
+  if (!operatorKey) return;
+
+  const res = await emrFetch(`/agency/customers/${encodeURIComponent(customerId)}`, operatorKey, {
+    method: 'DELETE',
+  });
+
+  if (!res.ok && res.status !== 404) {
+    const body = await res.text();
+    throw new Error(`EMR deleteCustomer failed: ${res.status} ${body}`);
+  }
+}
+
+export async function suspendCustomer(customerId: string): Promise<void> {
+  const operatorKey = config.embedmyreviews.apiKey;
+  if (!operatorKey) return;
+
+  const res = await emrFetch(`/agency/customers/${encodeURIComponent(customerId)}/suspend`, operatorKey, {
+    method: 'POST',
+  });
+
+  if (!res.ok && res.status !== 404) {
+    const body = await res.text();
+    logger.warn('EMR suspendCustomer failed (non-fatal)', { customerId, status: res.status, body });
   }
 }

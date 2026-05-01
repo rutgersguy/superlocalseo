@@ -87,7 +87,8 @@ describe('Access control — client data isolation', () => {
     ] as const;
 
     for (const [method, path] of endpoints) {
-      const res = await (request(app) as Record<string, (p: string) => request.Test>)[method.toLowerCase()](path);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const res = await (request(app) as any)[method.toLowerCase()](path) as request.Response;
       expect(res.status).toBe(401);
     }
   });

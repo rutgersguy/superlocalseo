@@ -78,6 +78,7 @@ export default function Onboarding() {
 
   // Step 4 state
   const [googleConnecting, setGoogleConnecting] = useState(false);
+  const [provisioning, setProvisioning] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -110,17 +111,18 @@ export default function Onboarding() {
 
   const handleFinish = async () => {
     setSaving(true);
+    setProvisioning(true);
     setError('');
     try {
-      await apiFetch('/clients', {
-        method: 'PATCH',
-        body: JSON.stringify({ onboardingStep: TOTAL_STEPS, onboardingComplete: true }),
-      });
+      await apiFetch('/clients/complete-onboarding', { method: 'POST' });
       navigate('/dashboard');
     } catch {
-      setError('Failed to complete onboarding. Please try again.');
+      // Non-fatal: onboarding step was saved server-side even if provisioning timed out.
+      // Navigate to dashboard — a retry banner will appear there.
+      navigate('/dashboard');
     } finally {
       setSaving(false);
+      setProvisioning(false);
     }
   };
 
@@ -400,7 +402,7 @@ export default function Onboarding() {
                 disabled={saving}
                 className="bg-brand-500 text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-brand-600 disabled:opacity-50"
               >
-                {saving ? 'Finishing...' : 'Finish'}
+                {provisioning ? 'Setting up your review account…' : saving ? 'Finishing…' : 'Finish'}
               </button>
             )}
           </div>

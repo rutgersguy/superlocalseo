@@ -2,8 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
-import { decrypt } from '../utils/crypto';
 import { sendInvite } from '../services/embedmyreviews.service';
+import { getClientEMRKey } from '../services/emr_provisioning';
 import { logger } from '../utils/logger';
 
 export async function list(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -125,11 +125,4 @@ export async function bulkInvite(req: Request, res: Response, next: NextFunction
   }
 }
 
-async function getApiKey(clientId: string): Promise<string | null> {
-  const integration = await db('integrations')
-    .where({ client_id: clientId, provider: 'embedmyreviews', status: 'connected' })
-    .whereNotNull('api_key_encrypted')
-    .first();
-  if (!integration) return null;
-  return decrypt(integration.api_key_encrypted as string);
-}
+const getApiKey = getClientEMRKey;
