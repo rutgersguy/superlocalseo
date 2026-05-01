@@ -16,6 +16,7 @@
     "seed": "knex --knexfile knexfile.ts seed:run"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.92.0",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.76.4",
     "cookie-parser": "^1.4.6",

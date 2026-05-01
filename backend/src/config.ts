@@ -73,6 +73,10 @@ export const config = {
 
   googlePlacesApiKey: optional('GOOGLE_PLACES_API_KEY'),
 
+  anthropic: {
+    apiKey: optional('ANTHROPIC_API_KEY'),
+  },
+
   reports: {
     dir: optional('REPORTS_DIR', '/tmp/reports'),
   },

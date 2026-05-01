@@ -2,7 +2,7 @@
 
 **Target:** 4–6 weeks to first paying client (Phase 1 MVP), 16 weeks to full production.
 
-**Status (as of 2026-05-01):** Phase 0 ✅ · Phase 1 ✅ · Phase 2 (Reports) ✅ · Phase 3 (Analytics) ✅ · Phase 2+ Advanced Features in progress (#71, #65 remaining) · Phase 4 (Hardening) pending.
+**Status (as of 2026-05-01):** Phase 0 ✅ · Phase 1 ✅ · Phase 2 (Reports) ✅ · Phase 3 (Analytics) ✅ · Phase 2+ Quick Wins ✅ (#65 pending email) · Revenue Multipliers in progress (#72–75) · Phase 4 (Hardening) pending.
 
 ---
 
@@ -126,10 +126,10 @@ Features designed to increase ARPU from $780 → $1,025+ and reduce churn. See [
 - [ ] **#65 Crisp chat widget** — in-app support
 
 ### Revenue Multipliers (Phase 3+)
-- [ ] Review request campaigns (SMS/email automation) — $150–300/mo upsell
-- [ ] AI review responses (Claude-powered, client approves) — $200–300/mo upsell
-- [ ] Competitor benchmarking dashboard — $200–400/mo upsell
-- [ ] QR codes & NFC for offline review capture — $150–250/mo upsell
+- [ ] **#72 AI Review Responses** — Claude drafts a response per review, client edits + approves, copies to platform (auto-post via Google API later)
+- [ ] **#73 Review Request Campaigns** — email/SMS drip to customers asking for a review; contact list upload, template editor, send history
+- [ ] **#74 Competitor Benchmarking** — track named competitors' rankings/reviews, side-by-side comparison dashboard
+- [ ] **#75 QR Codes & NFC Review Capture** — printable/embeddable QR → Google review deep-link, scan analytics
 
 ### Scale Plays (Phase 4+)
 - [ ] White-label reseller program — agencies resell to clients
