@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import useSWR, { mutate } from 'swr';
-import { Plus, RefreshCw, Trash2, Star, MessageSquare, ExternalLink, Search, AlertCircle, X } from 'lucide-react';
+import { Plus, RefreshCw, Trash2, Star, MessageSquare, ExternalLink, Search, AlertCircle, X, TrendingDown, TrendingUp, Minus, Target } from 'lucide-react';
 import { fetcher, apiFetch } from '../services/api';
 
 interface Competitor {
@@ -28,6 +28,27 @@ interface ClientStats {
 interface CompetitorsResponse {
   success: boolean;
   data: { competitors: Competitor[]; clientStats: ClientStats };
+}
+
+interface GapKeyword {
+  keyword: string;
+  location: string;
+  yourRank: number | null;
+  status: 'winning' | 'competing' | 'vulnerable' | 'absent';
+  lastChecked: string;
+}
+
+interface GapCompetitor {
+  id: string;
+  name: string;
+  website: string | null;
+  googleRating: number | null;
+  googleReviewCount: number | null;
+}
+
+interface GapResponse {
+  success: boolean;
+  data: { keywords: GapKeyword[]; opportunities: number; competitors: GapCompetitor[] };
 }
 
 interface PlaceResult {
@@ -307,6 +328,118 @@ function CompetitorRow({ c, onDelete, onSync }: { c: Competitor; onDelete: () =>
   );
 }
 
+const STATUS_CONFIG = {
+  winning:    { label: 'Top 3',      color: 'text-green-700 bg-green-50',  icon: TrendingUp },
+  competing:  { label: 'Top 10',     color: 'text-blue-700 bg-blue-50',    icon: Minus },
+  vulnerable: { label: 'Rank 11+',   color: 'text-amber-700 bg-amber-50',  icon: TrendingDown },
+  absent:     { label: 'Not ranked', color: 'text-red-700 bg-red-50',      icon: TrendingDown },
+};
+
+function GapReport() {
+  const { data, isLoading } = useSWR<GapResponse>('/competitors/gap', fetcher);
+  const [filter, setFilter] = useState<'all' | 'opportunities'>('all');
+
+  const gapData = data?.data;
+  const keywords = gapData?.keywords ?? [];
+  const visible = filter === 'opportunities'
+    ? keywords.filter((k) => k.status === 'vulnerable' || k.status === 'absent')
+    : keywords;
+
+  if (isLoading) {
+    return (
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+        <div className="h-4 bg-gray-200 rounded animate-pulse w-40 mb-4" />
+        <div className="space-y-2">
+          {[1, 2, 3].map((n) => <div key={n} className="h-10 bg-gray-100 rounded animate-pulse" />)}
+        </div>
+      </div>
+    );
+  }
+
+  if (!gapData || keywords.length === 0) {
+    return (
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 text-center">
+        <Target size={32} className="mx-auto text-gray-300 mb-3" />
+        <h3 className="font-semibold text-gray-700 mb-1">No ranking data yet</h3>
+        <p className="text-sm text-gray-400">Connect BrightLocal to start tracking keyword rankings and see gap opportunities.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">Keyword Gap Report</h3>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {gapData.opportunities > 0
+              ? `${gapData.opportunities} keyword${gapData.opportunities !== 1 ? 's' : ''} need attention`
+              : 'All tracked keywords are in the top 10'}
+          </p>
+        </div>
+        <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-medium">
+          <button
+            onClick={() => setFilter('all')}
+            className={`px-3 py-1.5 transition-colors ${filter === 'all' ? 'bg-brand-500 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            All ({keywords.length})
+          </button>
+          <button
+            onClick={() => setFilter('opportunities')}
+            className={`px-3 py-1.5 transition-colors ${filter === 'opportunities' ? 'bg-brand-500 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            Opportunities ({gapData.opportunities})
+          </button>
+        </div>
+      </div>
+
+      {visible.length === 0 ? (
+        <div className="py-8 text-center text-sm text-gray-400">No keywords match this filter.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50">
+                <th className="text-left px-5 py-2.5">Keyword</th>
+                <th className="text-left px-3 py-2.5">Location</th>
+                <th className="text-center px-3 py-2.5">Your rank</th>
+                <th className="text-left px-3 py-2.5">Status</th>
+                <th className="text-left px-3 py-2.5">Last checked</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {visible.map((k, i) => {
+                const cfg = STATUS_CONFIG[k.status];
+                const Icon = cfg.icon;
+                return (
+                  <tr key={i} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-5 py-3 font-medium text-gray-800">{k.keyword}</td>
+                    <td className="px-3 py-3 text-gray-500 text-xs">{k.location}</td>
+                    <td className="px-3 py-3 text-center">
+                      {k.yourRank !== null
+                        ? <span className="font-bold text-gray-800">#{k.yourRank}</span>
+                        : <span className="text-gray-400">—</span>}
+                    </td>
+                    <td className="px-3 py-3">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>
+                        <Icon size={11} />
+                        {cfg.label}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-xs text-gray-400">
+                      {new Date(k.lastChecked).toLocaleDateString()}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Competitors() {
   const [showAdd, setShowAdd] = useState(false);
   const { data, isLoading, error } = useSWR<CompetitorsResponse>('/competitors', fetcher);
@@ -436,6 +569,9 @@ export default function Competitors() {
           </div>
         </div>
       )}
+
+      {/* Keyword gap report */}
+      <GapReport />
 
       {showAdd && (
         <AddCompetitorModal onClose={() => setShowAdd(false)} onAdded={refresh} />

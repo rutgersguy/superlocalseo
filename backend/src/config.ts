@@ -73,6 +73,11 @@ export const config = {
 
   googlePlacesApiKey: optional('GOOGLE_PLACES_API_KEY'),
 
+  facebook: {
+    appId: optional('FACEBOOK_APP_ID'),
+    appSecret: optional('FACEBOOK_APP_SECRET'),
+  },
+
   anthropic: {
     apiKey: optional('ANTHROPIC_API_KEY'),
   },

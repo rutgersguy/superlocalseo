@@ -23,6 +23,7 @@ function formatClient(
   integrations: Record<string, unknown>[],
 ) {
   const google = integrations.find((i) => i.provider === 'google');
+  const facebook = integrations.find((i) => i.provider === 'facebook');
   return {
     id: client.id,
     email,
@@ -34,6 +35,10 @@ function formatClient(
     },
     integrations: {
       google: { connected: google?.status === 'connected' },
+      facebook: {
+        connected: facebook?.status === 'connected',
+        pageName: facebook?.external_account_name ?? null,
+      },
     },
     onboardingStep: client.onboarding_step,
     emrProvisioningStatus: client.emr_provisioning_status,

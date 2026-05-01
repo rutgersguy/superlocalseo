@@ -110,6 +110,26 @@ ${context ? `<pre>${JSON.stringify(context, null, 2)}</pre>` : ''}
   }).catch((e) => logger.error('Failed to send job failure alert', { error: e }));
 }
 
+export async function sendAuditLeadEmail(
+  to: string,
+  businessName: string,
+  overallScore: number,
+  overallGrade: string,
+): Promise<void> {
+  const registerUrl = `${config.publicUrl}/register`;
+  await resend.emails.send({
+    from,
+    to,
+    subject: `Your free SEO audit for ${businessName} is ready`,
+    html: `<p>Hi there,</p>
+<p>Your free local SEO audit for <strong>${businessName}</strong> is complete.</p>
+<p>Overall score: <strong>${overallScore}/100 (Grade ${overallGrade})</strong></p>
+<p>Your audit identified opportunities in keyword rankings, citations, and competitor benchmarking. Sign up for a free trial to start tracking all of them automatically.</p>
+<p><a href="${registerUrl}">Start your free 14-day trial →</a></p>
+<p>The SuperLocalSEO Team</p>`,
+  }).catch((e) => logger.error('Failed to send audit lead email', { error: e, to }));
+}
+
 export async function sendReportEmail(
   to: string,
   businessName: string,

@@ -15,6 +15,7 @@ interface OverviewData {
     newThisWeek: number;
     mrr: number;
   };
+  auditLeads: { total: number; thisWeek: number };
   health: {
     db: { ok: boolean; latencyMs: number };
     redis: { ok: boolean; latencyMs: number };
@@ -151,6 +152,7 @@ function OverviewTab() {
         <StatCard label="Trialing" value={d.clients.trialing} />
         <StatCard label="Past Due" value={d.clients.pastDue} />
         <StatCard label="Canceled" value={d.clients.canceled} />
+        <StatCard label="Audit Leads" value={d.auditLeads?.total ?? 0} sub={`${d.auditLeads?.thisWeek ?? 0} this week`} />
       </div>
 
       {/* Health + Signups side by side */}

@@ -50,6 +50,11 @@ export async function overview(req: Request, res: Response, next: NextFunction):
     const [newThisWeekRow] = await db('clients').where('created_at', '>=', weekAgo).count('id as count');
     const newThisWeek = parseInt(String((newThisWeekRow as { count: string }).count), 10);
 
+    const [auditLeadsRow] = await db('audit_leads').whereNotNull('email').count('id as count');
+    const auditLeads = parseInt(String((auditLeadsRow as { count: string }).count), 10);
+    const [auditLeadsWeekRow] = await db('audit_leads').whereNotNull('email').where('created_at', '>=', weekAgo).count('id as count');
+    const auditLeadsThisWeek = parseInt(String((auditLeadsWeekRow as { count: string }).count), 10);
+
     // 14-day signup sparkline
     const signupRows = await db('clients')
       .where('created_at', '>=', new Date(Date.now() - 14 * 24 * 60 * 60 * 1000))
@@ -88,6 +93,7 @@ export async function overview(req: Request, res: Response, next: NextFunction):
 
     ok(res, {
       clients: { total, active, trialing, pastDue, canceled, newThisWeek, mrr },
+      auditLeads: { total: auditLeads, thisWeek: auditLeadsThisWeek },
       health: {
         db: { ok: dbLatencyMs >= 0, latencyMs: dbLatencyMs },
         redis: { ok: redisLatencyMs >= 0, latencyMs: redisLatencyMs },

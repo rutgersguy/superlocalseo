@@ -13,6 +13,7 @@ interface ClientData {
   industry: string;
   integrations: {
     google: { connected: boolean };
+    facebook: { connected: boolean; pageName: string | null };
   };
   billing: {
     plan: string;
@@ -1365,6 +1366,16 @@ export default function Settings() {
     await mutate();
   };
 
+  const connectFacebook = async () => {
+    const res = await apiFetch<{ success: boolean; data: { url: string } }>('/integrations/facebook/auth-url');
+    if (res.success && res.data?.url) window.location.href = res.data.url;
+  };
+
+  const disconnectFacebook = async () => {
+    await apiFetch('/integrations/facebook', { method: 'DELETE' });
+    await mutate();
+  };
+
   if (error) {
     return (
       <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
@@ -1451,21 +1462,28 @@ export default function Settings() {
               onDisconnect={disconnectGoogle}
             />
             <OAuthCard
-              name="Yelp"
-              description="Monitor and respond to Yelp reviews"
-              connected={false}
-              comingSoon
-              onConnect={async () => {}}
-              onDisconnect={async () => {}}
-            />
-            <OAuthCard
               name="Facebook"
-              description="Sync Facebook reviews and business updates"
-              connected={false}
-              comingSoon
-              onConnect={async () => {}}
-              onDisconnect={async () => {}}
+              description={
+                client?.integrations?.facebook?.pageName
+                  ? `Connected to page: ${client.integrations.facebook.pageName}`
+                  : 'Sync Facebook page ratings and reviews'
+              }
+              connected={client?.integrations?.facebook?.connected ?? false}
+              onConnect={connectFacebook}
+              onDisconnect={disconnectFacebook}
             />
+            <div className="border border-gray-200 rounded-xl p-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">Yelp</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Yelp review monitoring via reputation tracking</p>
+                </div>
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">Via BrightLocal</span>
+              </div>
+              <p className="mt-3 text-xs text-gray-500 leading-relaxed">
+                Yelp reviews are monitored automatically through your BrightLocal reputation campaign. Yelp removed direct API access in 2018 — BrightLocal&apos;s reputation monitoring is the reliable way to track them.
+              </p>
+            </div>
           </div>
         )}
 

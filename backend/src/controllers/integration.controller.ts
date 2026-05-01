@@ -11,6 +11,8 @@ function formatIntegration(integration: Record<string, unknown>) {
     status: integration.status,
     lastPullAt: integration.last_pull_at,
     errorMessage: integration.error_message,
+    externalAccountId: integration.external_account_id ?? null,
+    externalAccountName: integration.external_account_name ?? null,
     createdAt: integration.created_at,
   };
 }
@@ -117,6 +119,119 @@ export async function googleCallback(req: Request, res: Response, next: NextFunc
     }
 
     res.redirect(`${config.appUrl}/settings?tab=integrations&connected=google`);
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function getFacebookAuthUrl(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const appId = config.facebook?.appId;
+    if (!appId) {
+      err(res, 'Facebook OAuth not configured', 503, 'NOT_CONFIGURED');
+      return;
+    }
+
+    const redirectUri = `${config.appUrl}/api/integrations/facebook/callback`;
+    const params = new URLSearchParams({
+      client_id: appId,
+      redirect_uri: redirectUri,
+      scope: 'pages_read_engagement,pages_read_user_content,pages_show_list',
+      response_type: 'code',
+      state: String(req.clientId),
+    });
+
+    ok(res, { url: `https://www.facebook.com/dialog/oauth?${params.toString()}` });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function facebookCallback(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { code, state } = req.query as { code?: string; state?: string };
+    if (!code || !state) {
+      err(res, 'Missing OAuth parameters', 400, 'INVALID_CALLBACK');
+      return;
+    }
+
+    const clientId = Number(state);
+    const appId = config.facebook?.appId;
+    const appSecret = config.facebook?.appSecret;
+    if (!appId || !appSecret) {
+      err(res, 'Facebook OAuth not configured', 503, 'NOT_CONFIGURED');
+      return;
+    }
+
+    const redirectUri = `${config.appUrl}/api/integrations/facebook/callback`;
+    const tokenRes = await fetch(
+      `https://graph.facebook.com/v19.0/oauth/access_token?` +
+      new URLSearchParams({ client_id: appId, client_secret: appSecret, redirect_uri: redirectUri, code }).toString(),
+    );
+
+    if (!tokenRes.ok) {
+      logger.error('Facebook OAuth token exchange failed', { status: tokenRes.status });
+      err(res, 'OAuth token exchange failed', 502, 'OAUTH_ERROR');
+      return;
+    }
+
+    const tokens = await tokenRes.json() as { access_token: string; expires_in?: number };
+
+    // Exchange short-lived token for long-lived token
+    const llRes = await fetch(
+      `https://graph.facebook.com/v19.0/oauth/access_token?` +
+      new URLSearchParams({
+        grant_type: 'fb_exchange_token',
+        client_id: appId,
+        client_secret: appSecret,
+        fb_exchange_token: tokens.access_token,
+      }).toString(),
+    );
+    const llTokens = llRes.ok ? await llRes.json() as { access_token: string; expires_in?: number } : tokens;
+    const accessToken = llTokens.access_token;
+
+    // Fetch user's pages to find the primary page
+    const pagesRes = await fetch(
+      `https://graph.facebook.com/v19.0/me/accounts?access_token=${encodeURIComponent(accessToken)}`,
+    );
+    const pagesData = pagesRes.ok
+      ? await pagesRes.json() as { data?: Array<{ id: string; name: string; access_token: string }> }
+      : { data: [] };
+
+    const page = pagesData.data?.[0];
+    const pageAccessToken = page?.access_token ?? accessToken;
+    const pageId = page?.id ?? null;
+    const pageName = page?.name ?? null;
+
+    const now = new Date();
+    const expiresAt = llTokens.expires_in ? new Date(now.getTime() + llTokens.expires_in * 1000) : null;
+
+    const existing = await db('integrations').where({ client_id: clientId, provider: 'facebook' }).first();
+    if (existing) {
+      await db('integrations').where({ id: existing.id }).update({
+        oauth_access_token: pageAccessToken,
+        oauth_expires_at: expiresAt,
+        external_account_id: pageId,
+        external_account_name: pageName,
+        status: 'connected',
+        error_message: null,
+        updated_at: now,
+      });
+    } else {
+      await db('integrations').insert({
+        client_id: clientId,
+        provider: 'facebook',
+        oauth_access_token: pageAccessToken,
+        oauth_expires_at: expiresAt,
+        external_account_id: pageId,
+        external_account_name: pageName,
+        status: 'connected',
+        created_at: now,
+        updated_at: now,
+      });
+    }
+
+    res.redirect(`${config.appUrl}/dashboard/settings?tab=integrations&connected=facebook`);
   } catch (e) {
     next(e);
   }

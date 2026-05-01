@@ -174,6 +174,69 @@ export async function search(req: Request, res: Response, next: NextFunction): P
   }
 }
 
+export async function gap(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const locationIds = (
+      await db('locations').where({ client_id: req.clientId }).select('id', 'name')
+    ) as Array<{ id: string; name: string }>;
+
+    if (locationIds.length === 0) {
+      ok(res, { keywords: [], opportunities: 0, competitors: [] });
+      return;
+    }
+
+    const locIdList = locationIds.map((l) => l.id);
+    const locNameMap = new Map(locationIds.map((l) => [l.id, l.name]));
+
+    // Latest snapshot per keyword+location using DISTINCT ON
+    const latestSnapshots = await db.raw<{ rows: Array<{ keyword: string; location_id: string; rank: number | null; pulled_at: string }> }>(
+      `SELECT DISTINCT ON (rs.keyword_id, rs.location_id)
+         k.keyword, rs.location_id, rs.rank, rs.pulled_at
+       FROM ranking_snapshots rs
+       JOIN keywords k ON rs.keyword_id = k.id
+       WHERE rs.location_id = ANY(?)
+       ORDER BY rs.keyword_id, rs.location_id, rs.pulled_at DESC`,
+      [locIdList],
+    ).then((r) => r.rows);
+
+    const keywords = latestSnapshots.map((s) => {
+      const rank = s.rank;
+      const status =
+        rank === null ? 'absent'
+        : rank <= 3 ? 'winning'
+        : rank <= 10 ? 'competing'
+        : 'vulnerable';
+      return {
+        keyword: s.keyword,
+        location: locNameMap.get(s.location_id) ?? s.location_id,
+        yourRank: rank,
+        status,
+        lastChecked: s.pulled_at,
+      };
+    });
+
+    const opportunities = keywords.filter((k) => k.status === 'vulnerable' || k.status === 'absent').length;
+
+    const competitors = await db('competitors')
+      .where({ client_id: req.clientId })
+      .orderBy('name', 'asc');
+
+    ok(res, {
+      keywords,
+      opportunities,
+      competitors: competitors.map((c) => ({
+        id: c.id,
+        name: c.name,
+        website: c.website,
+        googleRating: c.google_rating ? parseFloat(String(c.google_rating)) : null,
+        googleReviewCount: c.google_review_count,
+      })),
+    });
+  } catch (e) {
+    next(e);
+  }
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 export async function syncCompetitorPlaces(competitorId: string, placeId: string): Promise<void> {

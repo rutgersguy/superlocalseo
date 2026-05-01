@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
 import { findBusiness, PlaceResult } from '../services/places.service';
+import { sendAuditLeadEmail } from '../services/email.service';
 
 export const scanSchema = z.object({
   businessName: z.string().min(1).max(255),
@@ -172,6 +173,13 @@ export async function capture(req: Request, res: Response, next: NextFunction): 
         ? ['Sign up to start tracking this — we monitor daily']
         : c.details,
     }));
+
+    void sendAuditLeadEmail(
+      email,
+      lead.business_name as string,
+      auditData.overallScore,
+      auditData.overallGrade,
+    );
 
     ok(res, { audit: auditData });
   } catch (e) {
