@@ -142,6 +142,31 @@ interface ClientResponse {
   data: { emrProvisioningStatus?: string };
 }
 
+interface BillingStatusResponse {
+  success: boolean;
+  data: { status: string | null; graceDaysRemaining: number | null };
+}
+
+function PastDueBanner() {
+  const { data } = useSWR<BillingStatusResponse>('/billing', fetcher);
+  const billing = data?.data;
+  if (!billing || billing.status !== 'past_due') return null;
+  const days = billing.graceDaysRemaining;
+  return (
+    <div className="flex items-center justify-between p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+      <span>
+        <strong>Payment overdue.</strong>{' '}
+        {days != null && days > 0
+          ? `Access will be restricted in ${days} day${days !== 1 ? 's' : ''} if payment isn't resolved.`
+          : 'Please update your payment method to avoid losing access.'}
+      </span>
+      <a href="/dashboard/settings?tab=billing" className="ml-4 shrink-0 font-medium underline hover:no-underline">
+        Update payment
+      </a>
+    </div>
+  );
+}
+
 function EMRProvisionBanner() {
   const { data: clientData, isLoading } = useSWR<ClientResponse>('/clients', fetcher);
   const [retrying, setRetrying] = useState(false);
@@ -209,6 +234,7 @@ export default function Dashboard() {
       </div>
 
       <EMRProvisionBanner />
+      <PastDueBanner />
 
       {/* Error state */}
       {metricsError && (

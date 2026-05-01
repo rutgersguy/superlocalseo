@@ -13,6 +13,40 @@ declare global {
   }
 }
 
+const GRACE_PERIOD_DAYS = 3;
+
+// Routes always accessible regardless of payment status
+const BILLING_EXEMPT_PREFIXES = ['/billing', '/auth', '/health', '/clients'];
+
+function checkBillingAccess(req: Request, res: Response, client: Record<string, unknown>): boolean {
+  if (BILLING_EXEMPT_PREFIXES.some((p) => req.path.startsWith(p))) return true;
+
+  const status = client.subscription_status as string | undefined;
+
+  if (status === 'canceled') {
+    res.status(402).json({ success: false, error: 'Your subscription has been canceled. Resubscribe to continue.', code: 'SUBSCRIPTION_CANCELED' });
+    return false;
+  }
+
+  if (status === 'past_due') {
+    const failedAt = client.payment_failed_at ? new Date(client.payment_failed_at as string) : null;
+    if (failedAt) {
+      const elapsedDays = (Date.now() - failedAt.getTime()) / (1000 * 60 * 60 * 24);
+      if (elapsedDays > GRACE_PERIOD_DAYS) {
+        res.status(402).json({
+          success: false,
+          error: 'Payment overdue. Please update your payment method to restore access.',
+          code: 'PAYMENT_OVERDUE',
+          daysOverdue: Math.floor(elapsedDays),
+        });
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 export async function requireClient(req: Request, res: Response, next: NextFunction): Promise<void> {
   // First ensure authenticated
   await new Promise<void>((resolve) => requireAuth(req, res, () => resolve()));
@@ -26,6 +60,7 @@ export async function requireClient(req: Request, res: Response, next: NextFunct
       req.clientId = client.id as string;
       req.client = client as Record<string, unknown>;
       req.teamRole = 'owner';
+      if (!checkBillingAccess(req, res, req.client)) return;
       next();
       return;
     }
@@ -50,6 +85,7 @@ export async function requireClient(req: Request, res: Response, next: NextFunct
     req.clientId = client.id as string;
     req.client = client as Record<string, unknown>;
     req.teamRole = member.role as string;
+    if (!checkBillingAccess(req, res, req.client)) return;
     next();
   } catch (e) {
     next(e);

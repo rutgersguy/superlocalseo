@@ -38,6 +38,27 @@ export async function removeLocationFromSubscription(subscriptionId: string, tie
   if (item) await stripe.subscriptionItems.del(item.id, { proration_behavior: 'create_prorations' });
 }
 
+export async function changeSubscriptionTier(subscriptionId: string, newTier: 1 | 2 | 3): Promise<void> {
+  const newPriceId = { 1: config.stripe.prices.tier1, 2: config.stripe.prices.tier2, 3: config.stripe.prices.tier3 }[newTier];
+  if (!newPriceId) throw new Error(`No price ID configured for tier ${newTier}`);
+
+  const sub = await stripe.subscriptions.retrieve(subscriptionId, { expand: ['items'] });
+
+  // Find the base plan item (not extra-location add-ons)
+  const extraPriceIds = [
+    config.stripe.prices.tier1Extra,
+    config.stripe.prices.tier2Extra,
+    config.stripe.prices.tier3Extra,
+  ].filter(Boolean);
+  const baseItem = sub.items.data.find((i) => !extraPriceIds.includes(i.price.id));
+  if (!baseItem) throw new Error('No base subscription item found');
+
+  await stripe.subscriptions.update(subscriptionId, {
+    items: [{ id: baseItem.id, price: newPriceId }],
+    proration_behavior: 'create_prorations',
+  });
+}
+
 export async function getBillingPortalUrl(customerId: string, returnUrl: string): Promise<string> {
   const session = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: returnUrl });
   return session.url;

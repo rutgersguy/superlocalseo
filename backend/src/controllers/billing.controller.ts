@@ -2,11 +2,15 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
-import { getBillingPortalUrl, createSubscription, stripe } from '../services/stripe.service';
+import { getBillingPortalUrl, createSubscription, changeSubscriptionTier, stripe } from '../services/stripe.service';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
 export const subscribeSchema = z.object({
+  tier: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+});
+
+export const changePlanSchema = z.object({
   tier: z.union([z.literal(1), z.literal(2), z.literal(3)]),
 });
 
@@ -36,12 +40,22 @@ export async function status(req: Request, res: Response, next: NextFunction): P
       }
     }
 
+    const GRACE_PERIOD_DAYS = 3;
+    let graceDaysRemaining: number | null = null;
+    if (client.subscription_status === 'past_due' && client.payment_failed_at) {
+      const failedAt = new Date(client.payment_failed_at as string);
+      const elapsedDays = (Date.now() - failedAt.getTime()) / (1000 * 60 * 60 * 24);
+      graceDaysRemaining = Math.max(0, Math.ceil(GRACE_PERIOD_DAYS - elapsedDays));
+    }
+
     ok(res, {
       tier: client.subscription_tier,
       status: client.subscription_status,
       currentPeriodEnd: client.subscription_current_period_end,
       locationCount,
       hasPaymentMethod,
+      paymentFailedAt: client.payment_failed_at ?? null,
+      graceDaysRemaining,
     });
   } catch (e) {
     next(e);
@@ -101,6 +115,35 @@ export async function portal(req: Request, res: Response, next: NextFunction): P
     const url = await getBillingPortalUrl(user.stripe_customer_id as string, returnUrl);
 
     ok(res, { url });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function changePlan(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const parsed = changePlanSchema.safeParse(req.body);
+    if (!parsed.success) {
+      err(res, parsed.error.errors[0]?.message ?? 'Validation error', 400, 'VALIDATION_ERROR');
+      return;
+    }
+
+    const { tier } = parsed.data;
+    const client = req.client;
+
+    if (!client.stripe_subscription_id) {
+      err(res, 'No active subscription found', 400, 'NO_SUBSCRIPTION');
+      return;
+    }
+    if (client.subscription_tier === tier) {
+      err(res, 'Already on this plan', 400, 'SAME_PLAN');
+      return;
+    }
+
+    await changeSubscriptionTier(client.stripe_subscription_id as string, tier);
+    await db('clients').where({ id: req.clientId }).update({ subscription_tier: tier, updated_at: new Date() });
+
+    ok(res, { tier, changed: true });
   } catch (e) {
     next(e);
   }

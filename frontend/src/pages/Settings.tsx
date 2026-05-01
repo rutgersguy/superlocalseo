@@ -999,6 +999,176 @@ function RoiSettingsSection() {
   );
 }
 
+// ─── Billing tab ─────────────────────────────────────────────────────────────
+
+interface BillingStatus {
+  tier: number | null;
+  status: string | null;
+  currentPeriodEnd: string | null;
+  locationCount: number;
+  hasPaymentMethod: boolean;
+  paymentFailedAt: string | null;
+  graceDaysRemaining: number | null;
+}
+
+interface BillingResponse {
+  success: boolean;
+  data: BillingStatus;
+}
+
+const PLANS = [
+  { tier: 1 as const, name: 'Starter', price: '$350', features: ['1 location', 'Rank tracking', 'Review management', 'Citation builder'] },
+  { tier: 2 as const, name: 'Growth', price: '$700', features: ['Up to 3 locations', 'Everything in Starter', 'Geo-grid reports', 'Competitor tracking'] },
+  { tier: 3 as const, name: 'Pro', price: '$1,200', features: ['Unlimited locations', 'Everything in Growth', 'White-label reports', 'Priority support'] },
+];
+
+function BillingTab() {
+  const { data, isLoading, mutate: mutateBilling } = useSWR<BillingResponse>('/billing', fetcher);
+  const billing = data?.data;
+  const [changing, setChanging] = useState<number | null>(null);
+  const [changeError, setChangeError] = useState('');
+  const [portalLoading, setPortalLoading] = useState(false);
+
+  const openBillingPortal = async () => {
+    setPortalLoading(true);
+    try {
+      const res = await apiFetch<{ success: boolean; data: { url: string } }>('/billing/portal', { method: 'POST' });
+      if (res.success && res.data?.url) window.location.href = res.data.url;
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
+  const changePlan = async (tier: 1 | 2 | 3) => {
+    setChanging(tier);
+    setChangeError('');
+    try {
+      const res = await apiFetch<{ success: boolean; error?: { message: string } }>('/billing/change-plan', {
+        method: 'POST',
+        body: JSON.stringify({ tier }),
+      });
+      if (!res.success) {
+        setChangeError((res as { error?: { message: string } }).error?.message ?? 'Failed to change plan');
+      } else {
+        await mutateBilling();
+      }
+    } catch {
+      setChangeError('Network error');
+    } finally {
+      setChanging(null);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4 animate-pulse">
+        <div className="h-5 bg-gray-200 rounded w-40" />
+        <div className="grid grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => <div key={i} className="h-48 bg-gray-100 rounded-xl" />)}
+        </div>
+      </div>
+    );
+  }
+
+  const currentTier = billing?.tier;
+  const isActive = billing?.status === 'active';
+  const isPastDue = billing?.status === 'past_due';
+  const hasSub = !!(billing?.status && billing.status !== 'canceled' && currentTier);
+
+  return (
+    <div className="space-y-5">
+      {/* Past due warning */}
+      {isPastDue && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+          <strong>Payment overdue.</strong>{' '}
+          {billing?.graceDaysRemaining != null && billing.graceDaysRemaining > 0
+            ? `You have ${billing.graceDaysRemaining} day${billing.graceDaysRemaining !== 1 ? 's' : ''} remaining before access is restricted.`
+            : 'Access will be restricted until payment is resolved.'}
+          {' '}
+          <button onClick={() => void openBillingPortal()} className="underline font-medium">Update payment method</button>
+        </div>
+      )}
+
+      {changeError && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{changeError}</div>
+      )}
+
+      {/* Plan cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {PLANS.map((plan) => {
+          const isCurrent = currentTier === plan.tier;
+          const isUpgrade = hasSub && currentTier != null && plan.tier > currentTier;
+          const isDowngrade = hasSub && currentTier != null && plan.tier < currentTier;
+          return (
+            <div
+              key={plan.tier}
+              className={`border rounded-xl p-5 flex flex-col gap-3 transition-colors ${
+                isCurrent ? 'border-brand-500 bg-brand-50' : 'border-gray-200 bg-white'
+              }`}
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="font-semibold text-gray-900">{plan.name}</p>
+                  <p className="text-xl font-bold text-gray-900 mt-0.5">{plan.price}<span className="text-sm font-normal text-gray-500">/mo</span></p>
+                </div>
+                {isCurrent && (
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isActive ? 'bg-green-100 text-green-700' : isPastDue ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+                    {isActive ? 'Current' : isPastDue ? 'Past due' : billing?.status ?? 'Current'}
+                  </span>
+                )}
+              </div>
+              <ul className="space-y-1.5 flex-1">
+                {plan.features.map((f) => (
+                  <li key={f} className="flex items-start gap-1.5 text-xs text-gray-600">
+                    <span className="text-green-500 mt-0.5">✓</span> {f}
+                  </li>
+                ))}
+              </ul>
+              {!isCurrent && hasSub && (
+                <button
+                  onClick={() => void changePlan(plan.tier)}
+                  disabled={changing !== null}
+                  className={`w-full py-2 px-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+                    isUpgrade
+                      ? 'bg-brand-500 text-white hover:bg-brand-600'
+                      : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  {changing === plan.tier ? 'Changing…' : isUpgrade ? 'Upgrade' : isDowngrade ? 'Downgrade' : 'Switch'}
+                </button>
+              )}
+              {!isCurrent && !hasSub && (
+                <button
+                  onClick={() => void openBillingPortal()}
+                  className="w-full py-2 px-3 rounded-lg text-sm font-medium bg-brand-500 text-white hover:bg-brand-600 transition-colors"
+                >
+                  Subscribe
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Portal link for payment / invoice management */}
+      <div className="pt-1 border-t">
+        <button
+          onClick={() => void openBillingPortal()}
+          disabled={portalLoading}
+          className="text-sm font-medium text-brand-500 hover:text-brand-700 disabled:opacity-50"
+        >
+          {portalLoading ? 'Redirecting…' : 'Manage payment method & invoices →'}
+        </button>
+        {billing?.currentPeriodEnd && (
+          <p className="text-xs text-gray-400 mt-1">
+            Current period ends {new Date(billing.currentPeriodEnd).toLocaleDateString()}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Settings() {
@@ -1044,13 +1214,6 @@ export default function Settings() {
   const disconnectGoogle = async () => {
     await apiFetch('/integrations/google', { method: 'DELETE' });
     await mutate();
-  };
-
-  const openBillingPortal = async () => {
-    const res = await apiFetch<{ success: boolean; data: { url: string } }>('/billing/portal', {
-      method: 'POST',
-    });
-    if (res.success && res.data?.url) window.location.href = res.data.url;
   };
 
   if (error) {
@@ -1167,42 +1330,7 @@ export default function Settings() {
         {activeTab === 'team' && <TeamTab />}
 
         {/* Billing tab */}
-        {activeTab === 'billing' && (
-          <div className="space-y-5">
-            {isLoading ? (
-              <div className="space-y-3 animate-pulse">
-                <div className="h-5 bg-gray-200 rounded w-40" />
-                <div className="h-4 bg-gray-200 rounded w-28" />
-              </div>
-            ) : (
-              <div className="border border-gray-200 rounded-xl p-5">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">Current Plan</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1 capitalize">
-                      {client?.billing?.plan ?? 'Free'}
-                    </p>
-                  </div>
-                  <span
-                    className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${
-                      client?.billing?.status === 'active'
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}
-                  >
-                    {client?.billing?.status ?? 'inactive'}
-                  </span>
-                </div>
-              </div>
-            )}
-            <button
-              onClick={() => void openBillingPortal()}
-              className="bg-brand-500 text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-brand-600"
-            >
-              Manage billing
-            </button>
-          </div>
-        )}
+        {activeTab === 'billing' && <BillingTab />}
       </div>
     </div>
   );

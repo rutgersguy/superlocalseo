@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc --noEmit *)",
+      "Bash(docker compose logs *)",
+      "Bash(journalctl *)",
+      "mcp__brave-search__brave_web_search"
+    ]
+  }
+}
