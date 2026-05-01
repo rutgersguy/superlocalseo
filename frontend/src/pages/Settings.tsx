@@ -161,6 +161,119 @@ interface WidgetData {
   config: WidgetConfig;
 }
 
+interface WidgetReview {
+  authorName: string;
+  rating: number;
+  body: string;
+  platform: string;
+  reviewDate: string;
+  platformUrl: string | null;
+}
+
+interface WidgetApiData {
+  businessName: string;
+  config: WidgetConfig;
+  reviews: WidgetReview[];
+}
+
+const PLATFORM_COLORS: Record<string, string> = {
+  google: '#4285F4',
+  yelp: '#D32323',
+  facebook: '#1877F2',
+};
+
+function StarRow({ rating }: { rating: number }) {
+  return (
+    <div style={{ display: 'flex', gap: 2 }}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <svg key={i} viewBox="0 0 20 20" style={{ width: 13, height: 13, color: i <= rating ? '#f59e0b' : '#d1d5db' }} fill="currentColor">
+          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.956a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.37 2.449a1 1 0 00-.364 1.118l1.286 3.956c.3.921-.755 1.688-1.54 1.118L10 15.347l-3.37 2.449c-.784.57-1.838-.197-1.539-1.118l1.286-3.956a1 1 0 00-.364-1.118L2.643 9.383c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.286-3.956z" />
+        </svg>
+      ))}
+    </div>
+  );
+}
+
+function timeAgo(dateStr: string) {
+  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 86400 * 30) return `${Math.floor(diff / 86400)}d ago`;
+  if (diff < 86400 * 365) return `${Math.floor(diff / 86400 / 30)}mo ago`;
+  return `${Math.floor(diff / 86400 / 365)}y ago`;
+}
+
+function WidgetPreview({ widgetKey, cfg }: { widgetKey: string; cfg: WidgetConfig }) {
+  const { data } = useSWR<{ success: boolean; data: WidgetApiData }>(
+    widgetKey ? `/widget/${widgetKey}` : null,
+    fetcher,
+  );
+
+  const isDark = cfg.theme === 'dark';
+  const bg = isDark ? '#1a1a2e' : '#ffffff';
+  const cardBg = isDark ? '#16213e' : '#f9fafb';
+  const textMain = isDark ? '#f1f5f9' : '#111827';
+  const textMuted = isDark ? '#94a3b8' : '#6b7280';
+  const border = isDark ? '#334155' : '#e5e7eb';
+
+  if (!data) {
+    return (
+      <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 12, padding: 20, textAlign: 'center', color: textMuted, fontSize: 13 }}>
+        Loading preview…
+      </div>
+    );
+  }
+
+  const { businessName, reviews } = data.data;
+  // Apply current (unsaved) config filters client-side for instant feedback
+  const visible = reviews.filter((r) => r.rating >= cfg.minRating).slice(0, cfg.maxCount);
+
+  return (
+    <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background: bg, border: `1px solid ${border}`, borderRadius: 12, overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ padding: '10px 14px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${border}` }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: textMain }}>{businessName} Reviews</span>
+        <span style={{ fontSize: 11, color: textMuted }}>{visible.length} reviews</span>
+      </div>
+      {/* Cards */}
+      <div style={{ overflowX: 'auto', padding: '10px 14px 12px' }}>
+        {visible.length === 0 ? (
+          <p style={{ fontSize: 12, color: textMuted, margin: 0 }}>No reviews match the current filter.</p>
+        ) : (
+          <div style={{ display: 'flex', gap: 10, width: 'max-content' }}>
+            {visible.map((r, i) => {
+              const platformColor = PLATFORM_COLORS[r.platform] || '#6b7280';
+              const platformLabel = r.platform ? r.platform.charAt(0).toUpperCase() + r.platform.slice(1) : '';
+              return (
+                <div key={i} style={{ minWidth: 210, maxWidth: 250, flexShrink: 0, background: cardBg, border: `1px solid ${border}`, borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>{r.authorName || 'Anonymous'}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                      <span style={{ fontSize: 10, color: textMuted }}>{timeAgo(r.reviewDate)}</span>
+                      {cfg.showPlatformBadge && r.platform && (
+                        <span style={{ fontSize: 10, fontWeight: 600, color: '#fff', background: platformColor, padding: '1px 6px', borderRadius: 10 }}>{platformLabel}</span>
+                      )}
+                    </div>
+                  </div>
+                  <StarRow rating={r.rating || 0} />
+                  <p style={{ fontSize: 12, lineHeight: 1.5, color: textMuted, margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' } as React.CSSProperties}>
+                    {r.body || ''}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      {/* Footer */}
+      <div style={{ padding: '4px 14px 8px', textAlign: 'right' }}>
+        <span style={{ fontSize: 10, color: textMuted, opacity: 0.6 }}>powered by SuperLocalSEO</span>
+      </div>
+    </div>
+  );
+}
+
 function WidgetTab() {
   const { data, mutate } = useSWR<{ success: boolean; data: WidgetData }>('/widget', fetcher);
   const widget = data?.data;
@@ -169,6 +282,7 @@ function WidgetTab() {
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState<Partial<WidgetConfig>>({});
   const [regenerating, setRegenerating] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const cfg: WidgetConfig = { ...widget?.config, ...config } as WidgetConfig;
   const key = widget?.widgetKey ?? '';
@@ -276,7 +390,7 @@ function WidgetTab() {
             <label htmlFor="showPlatformBadge" className="text-sm text-gray-700">Show platform badge</label>
           </div>
         </div>
-        <div className="mt-4">
+        <div className="mt-4 flex items-center gap-3">
           <button
             onClick={() => void saveConfig()}
             disabled={saving}
@@ -284,8 +398,23 @@ function WidgetTab() {
           >
             {saving ? 'Saving...' : 'Save appearance'}
           </button>
+          <button
+            onClick={() => setShowPreview((v) => !v)}
+            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50"
+          >
+            {showPreview ? 'Hide preview' : 'Preview widget'}
+          </button>
         </div>
       </div>
+
+      {/* Live preview */}
+      {showPreview && (
+        <div className="border-t pt-5">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">Live preview</h3>
+          <p className="text-xs text-gray-500 mb-3">Reflects your current settings before saving.</p>
+          <WidgetPreview widgetKey={key} cfg={cfg} />
+        </div>
+      )}
 
       {/* Danger zone */}
       <div className="border-t pt-5">
