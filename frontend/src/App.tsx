@@ -9,6 +9,7 @@ import ResetPassword from './pages/ResetPassword';
 import VerifyEmail from './pages/VerifyEmail';
 import AuthGoogleSuccess from './pages/AuthGoogleSuccess';
 import Audit from './pages/Audit';
+import TeamAccept from './pages/TeamAccept';
 import Onboarding from './pages/Onboarding';
 import DashboardLayout from './layouts/DashboardLayout';
 import Dashboard from './pages/Dashboard';
@@ -38,6 +39,7 @@ function App() {
           <Route path="/auth/reset-password" element={<ResetPassword />} />
           <Route path="/auth/google/success" element={<AuthGoogleSuccess />} />
           <Route path="/audit" element={<Audit />} />
+          <Route path="/team/accept" element={<TeamAccept />} />
 
           {/* Protected routes */}
           <Route element={<ProtectedRoute />}>

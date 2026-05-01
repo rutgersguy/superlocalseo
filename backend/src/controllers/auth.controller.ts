@@ -147,7 +147,7 @@ export async function googleCallback(req: Request, res: Response, next: NextFunc
   }
 }
 
-function setRefreshCookie(res: Response, token: string): void {
+export function setRefreshCookie(res: Response, token: string): void {
   res.cookie('refreshToken', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',

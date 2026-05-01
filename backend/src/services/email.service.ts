@@ -40,6 +40,24 @@ export async function sendPaymentFailedEmail(to: string, businessName: string): 
   }).catch((e) => logger.error('Failed to send payment failed email', { error: e, to }));
 }
 
+export async function sendTeamInviteEmail(
+  to: string,
+  token: string,
+  businessName: string,
+  role: string,
+): Promise<void> {
+  const url = `${config.publicUrl}/team/accept?token=${token}`;
+  await resend.emails.send({
+    from,
+    to,
+    subject: `You've been invited to join ${businessName} on SuperLocalSEO`,
+    html: `<p>You've been invited to join <strong>${businessName}</strong> on SuperLocalSEO as a <strong>${role}</strong>.</p>
+<p>Click the link below to accept the invitation. This link expires in 48 hours.</p>
+<p><a href="${url}">Accept invitation</a></p>
+<p>If you weren't expecting this, you can safely ignore this email.</p>`,
+  }).catch((e) => logger.error('Failed to send team invite email', { error: e, to }));
+}
+
 export async function sendReportEmail(
   to: string,
   businessName: string,

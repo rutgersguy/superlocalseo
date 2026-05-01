@@ -114,7 +114,7 @@ export async function googleSignIn(googleId: string, email: string, displayName:
   return issueTokens(user.id, user.role);
 }
 
-async function issueTokens(userId: string, role: string) {
+export async function issueTokens(userId: string, role: string) {
   const tokenId = uuidv4();
   const accessToken = signAccessToken({ userId, role });
   const refreshToken = signRefreshToken({ userId, tokenId });

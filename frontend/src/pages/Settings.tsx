@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import { apiFetch, fetcher } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,15 +25,39 @@ interface ClientResponse {
 }
 
 const INDUSTRIES = ['Plumbing', 'HVAC', 'Electrical', 'Landscaping', 'Cleaning', 'Other'];
-type Tab = 'account' | 'integrations' | 'billing';
+type Tab = 'account' | 'integrations' | 'billing' | 'team';
+
+// ─── Team types ───────────────────────────────────────────────────────────────
+
+interface TeamOwner {
+  userId: string;
+  email: string;
+  role: 'owner';
+}
+
+interface TeamMember {
+  id: string;
+  email: string;
+  role: string;
+  userId: string | null;
+  accepted: boolean;
+  pending: boolean;
+  expired: boolean;
+}
+
+interface TeamData {
+  owner: TeamOwner | null;
+  members: TeamMember[];
+}
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
-function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
+function TabBar({ active, onChange, isOwner }: { active: Tab; onChange: (t: Tab) => void; isOwner: boolean }) {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'account', label: 'Account' },
     { key: 'integrations', label: 'Integrations' },
     { key: 'billing', label: 'Billing' },
+    ...(isOwner ? [{ key: 'team' as Tab, label: 'Team' }] : []),
   ];
   return (
     <div className="flex gap-1 border-b border-gray-200 mb-6">
@@ -121,6 +146,122 @@ function OAuthCard({ name, description, connected, comingSoon, onConnect, onDisc
   );
 }
 
+// ─── Team tab ─────────────────────────────────────────────────────────────────
+
+function TeamTab() {
+  const { data, isLoading, mutate } = useSWR<{ success: boolean; data: TeamData }>('/team', fetcher);
+  const team = data?.data;
+
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'admin' | 'viewer'>('viewer');
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState('');
+  const [inviteSuccess, setInviteSuccess] = useState('');
+
+  const sendInvite = async () => {
+    setInviting(true);
+    setInviteError('');
+    setInviteSuccess('');
+    try {
+      const res = await apiFetch<{ success: boolean; error?: { message: string } }>('/team/invite', {
+        method: 'POST',
+        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
+      });
+      if (!res.success) {
+        setInviteError((res as { error?: { message: string } }).error?.message ?? 'Failed to send invite');
+      } else {
+        setInviteSuccess(`Invitation sent to ${inviteEmail}`);
+        setInviteEmail('');
+        await mutate();
+      }
+    } catch {
+      setInviteError('Failed to send invite');
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const removeMember = async (memberId: string) => {
+    await apiFetch(`/team/${memberId}`, { method: 'DELETE' });
+    await mutate();
+  };
+
+  if (isLoading) {
+    return <div className="space-y-3 animate-pulse">{[...Array(3)].map((_, i) => <div key={i} className="h-12 bg-gray-100 rounded-lg" />)}</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Member list */}
+      <div className="space-y-2">
+        {team?.owner && (
+          <div className="flex items-center justify-between py-3 px-4 bg-gray-50 rounded-lg">
+            <div>
+              <p className="text-sm font-medium text-gray-900">{team.owner.email}</p>
+              <p className="text-xs text-gray-400">Account owner</p>
+            </div>
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-brand-100 text-brand-700">Owner</span>
+          </div>
+        )}
+        {team?.members.map((m) => (
+          <div key={m.id} className="flex items-center justify-between py-3 px-4 border border-gray-200 rounded-lg">
+            <div>
+              <p className="text-sm font-medium text-gray-900">{m.email}</p>
+              <p className="text-xs text-gray-400">
+                {m.accepted ? 'Active' : m.expired ? 'Invite expired' : 'Invite pending'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 capitalize">{m.role}</span>
+              <button
+                onClick={() => void removeMember(m.id)}
+                className="text-xs text-red-500 hover:text-red-700 font-medium"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        ))}
+        {!team?.members.length && (
+          <p className="text-sm text-gray-400 text-center py-4">No team members yet.</p>
+        )}
+      </div>
+
+      {/* Invite form */}
+      <div className="border-t pt-5">
+        <h3 className="text-sm font-semibold text-gray-900 mb-3">Invite team member</h3>
+        <div className="flex gap-2">
+          <input
+            type="email"
+            placeholder="email@example.com"
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+          <select
+            value={inviteRole}
+            onChange={(e) => setInviteRole(e.target.value as 'admin' | 'viewer')}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          >
+            <option value="viewer">Viewer</option>
+            <option value="admin">Admin</option>
+          </select>
+          <button
+            onClick={() => void sendInvite()}
+            disabled={inviting || !inviteEmail}
+            className="px-4 py-2 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50"
+          >
+            {inviting ? 'Sending...' : 'Invite'}
+          </button>
+        </div>
+        {inviteError && <p className="mt-2 text-sm text-red-600">{inviteError}</p>}
+        {inviteSuccess && <p className="mt-2 text-sm text-green-600">{inviteSuccess}</p>}
+        <p className="mt-2 text-xs text-gray-400">Admins can manage locations and keywords. Viewers have read-only access.</p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Settings() {
@@ -129,6 +270,9 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
   const { data, isLoading, error, mutate } = useSWR<ClientResponse>('/clients', fetcher);
   const client = data?.data;
+  const { data: teamData } = useSWR<{ success: boolean; data: { owner: { userId: string } | null } }>('/team', fetcher);
+  const { userId } = useAuth();
+  const isOwner = !!(teamData?.data?.owner?.userId && teamData.data.owner.userId === userId);
 
   // Account form state
   const [businessName, setBusinessName] = useState('');
@@ -188,7 +332,7 @@ export default function Settings() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <TabBar active={activeTab} onChange={setActiveTab} />
+        <TabBar active={activeTab} onChange={setActiveTab} isOwner={isOwner} />
 
         {/* Account tab */}
         {activeTab === 'account' && (
@@ -274,6 +418,9 @@ export default function Settings() {
             />
           </div>
         )}
+
+        {/* Team tab */}
+        {activeTab === 'team' && <TeamTab />}
 
         {/* Billing tab */}
         {activeTab === 'billing' && (

@@ -13,6 +13,7 @@ import billingRouter from './billing';
 import reportsRouter from './reports';
 import analyticsRouter from './analytics';
 import auditRouter from './audit';
+import teamRouter from './team';
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use('/billing', billingRouter);
 router.use('/reports', reportsRouter);
 router.use('/analytics', analyticsRouter);
 router.use('/audit', auditRouter);
+router.use('/team', teamRouter);
 
 export default router;
