@@ -83,6 +83,37 @@ export async function confirmPasswordReset(token: string, newPassword: string): 
   await revokeAllRefreshTokens(userId);
 }
 
+export async function googleSignIn(googleId: string, email: string, displayName: string) {
+  let user = await db('users').where({ google_id: googleId }).first();
+
+  if (!user) {
+    user = await db('users').where({ email }).first();
+    if (user) {
+      await db('users').where({ id: user.id }).update({ google_id: googleId });
+    } else {
+      const stripeCustomerId = await createCustomer(email, displayName);
+      const [newUser] = await db('users').insert({
+        email,
+        google_id: googleId,
+        password_hash: null,
+        role: 'client',
+        stripe_customer_id: stripeCustomerId,
+        email_verified: true,
+      }).returning('*');
+      await db('clients').insert({
+        user_id: newUser.id,
+        business_name: displayName,
+        subscription_tier: 1,
+        subscription_status: 'trialing',
+      });
+      user = newUser;
+      logger.info('User registered via Google OAuth', { userId: newUser.id });
+    }
+  }
+
+  return issueTokens(user.id, user.role);
+}
+
 async function issueTokens(userId: string, role: string) {
   const tokenId = uuidv4();
   const accessToken = signAccessToken({ userId, role });

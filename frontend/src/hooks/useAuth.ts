@@ -11,11 +11,12 @@ interface AuthContext extends AuthState {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   register: (email: string, password: string, businessName: string) => Promise<void>;
+  setToken: (token: string) => void;
 }
 
 export const AuthCtx = createContext<AuthContext>({
   userId: null, isAuthenticated: false, loading: true,
-  login: async () => {}, logout: async () => {}, register: async () => {},
+  login: async () => {}, logout: async () => {}, register: async () => {}, setToken: () => {},
 });
 
 export function useAuth(): AuthContext {
@@ -31,8 +32,6 @@ export function useAuthState() {
   const [state, setState] = useState<AuthState>({ userId: null, isAuthenticated: false, loading: true });
 
   // On mount, attempt a silent token refresh using the httpOnly refresh cookie.
-  // If it succeeds we restore the session; if it fails (no cookie / expired) we
-  // stay logged-out. Either way, loading flips to false so ProtectedRoute can act.
   useEffect(() => {
     apiFetch<{ success: boolean; data?: { accessToken: string } }>('/auth/refresh', { method: 'POST' })
       .then((res) => {
@@ -70,5 +69,10 @@ export function useAuthState() {
     if (!res.success) throw new Error(res.message ?? 'Registration failed');
   }, []);
 
-  return { ...state, login, logout, register };
+  const setToken = useCallback((token: string) => {
+    setAccessToken(token);
+    setState({ userId: decodeUserId(token), isAuthenticated: true, loading: false });
+  }, []);
+
+  return { ...state, login, logout, register, setToken };
 }

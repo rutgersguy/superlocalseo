@@ -1,8 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import * as authService from '../services/auth.service';
-import { ok, created, noContent } from '../utils/response';
+import { ok, created, noContent, err } from '../utils/response';
 import { verifyRefreshToken } from '../utils/jwt';
+import { config } from '../config';
+import { logger } from '../utils/logger';
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -81,6 +83,68 @@ export async function passwordResetConfirm(req: Request, res: Response, next: Ne
     await authService.confirmPasswordReset(token, password);
     ok(res, { message: 'Password updated' });
   } catch (e) { next(e); }
+}
+
+export function googleAuthUrl(_req: Request, res: Response): void {
+  const clientId = config.google?.clientId;
+  if (!clientId) {
+    err(res, 'Google OAuth not configured', 503, 'NOT_CONFIGURED');
+    return;
+  }
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: `${config.publicUrl}/api/auth/google/callback`,
+    response_type: 'code',
+    scope: 'openid email profile',
+    access_type: 'offline',
+    prompt: 'select_account',
+  });
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+}
+
+export async function googleCallback(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { code, error } = req.query as { code?: string; error?: string };
+    if (error || !code) {
+      res.redirect(`${config.appUrl}/login?error=google_cancelled`);
+      return;
+    }
+
+    const clientId = config.google?.clientId;
+    const clientSecret = config.google?.clientSecret;
+    if (!clientId || !clientSecret) {
+      res.redirect(`${config.appUrl}/login?error=not_configured`);
+      return;
+    }
+
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: `${config.publicUrl}/api/auth/google/callback`,
+        grant_type: 'authorization_code',
+      }),
+    });
+
+    if (!tokenRes.ok) {
+      logger.error('Google auth token exchange failed', { status: tokenRes.status });
+      res.redirect(`${config.appUrl}/login?error=google_failed`);
+      return;
+    }
+
+    const tokens = await tokenRes.json() as { id_token: string };
+    const profilePayload = JSON.parse(Buffer.from(tokens.id_token.split('.')[1], 'base64url').toString());
+    const { sub: googleId, email, name } = profilePayload as { sub: string; email: string; name: string };
+
+    const { accessToken, refreshToken } = await authService.googleSignIn(googleId, email, name);
+    setRefreshCookie(res, refreshToken);
+    res.redirect(`${config.appUrl}/auth/google/success?token=${encodeURIComponent(accessToken)}`);
+  } catch (e) {
+    next(e);
+  }
 }
 
 function setRefreshCookie(res: Response, token: string): void {

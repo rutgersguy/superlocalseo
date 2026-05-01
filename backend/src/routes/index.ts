@@ -11,6 +11,7 @@ import reviewsRouter from './reviews';
 import metricsRouter from './metrics';
 import billingRouter from './billing';
 import reportsRouter from './reports';
+import analyticsRouter from './analytics';
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use('/reviews', reviewsRouter);
 router.use('/metrics', metricsRouter);
 router.use('/billing', billingRouter);
 router.use('/reports', reportsRouter);
+router.use('/analytics', analyticsRouter);
 
 export default router;

@@ -11,5 +11,7 @@ router.post('/logout', ctrl.logout);
 router.get('/verify', ctrl.verifyEmail);
 router.post('/password-reset/request', authLimiter, ctrl.passwordResetRequest);
 router.post('/password-reset/confirm', authLimiter, ctrl.passwordResetConfirm);
+router.get('/google', ctrl.googleAuthUrl);
+router.get('/google/callback', ctrl.googleCallback);
 
 export default router;

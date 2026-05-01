@@ -7,6 +7,7 @@ import RegisterSuccess from './pages/RegisterSuccess';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import VerifyEmail from './pages/VerifyEmail';
+import AuthGoogleSuccess from './pages/AuthGoogleSuccess';
 import Onboarding from './pages/Onboarding';
 import DashboardLayout from './layouts/DashboardLayout';
 import Dashboard from './pages/Dashboard';
@@ -34,6 +35,7 @@ function App() {
           <Route path="/auth/verify-email" element={<VerifyEmail />} />
           <Route path="/auth/forgot-password" element={<ForgotPassword />} />
           <Route path="/auth/reset-password" element={<ResetPassword />} />
+          <Route path="/auth/google/success" element={<AuthGoogleSuccess />} />
 
           {/* Protected routes */}
           <Route element={<ProtectedRoute />}>

@@ -33,6 +33,7 @@ interface TrendResponse {
 }
 
 type SortKey = keyof Pick<RankingRow, 'keyword' | 'location' | 'rank' | 'delta' | 'pulledAt'>;
+type TrendRange = 30 | 90 | 365;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -40,11 +41,11 @@ function DeltaBadge({ delta }: { delta: number }) {
   if (delta === 0) {
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
-        No change
+        —
       </span>
     );
   }
-  const improved = delta < 0;
+  const improved = delta > 0;
   return (
     <span
       className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -61,28 +62,31 @@ function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
   return <span className="text-brand-500 ml-1">{dir === 'asc' ? '↑' : '↓'}</span>;
 }
 
+const TREND_RANGES: { label: string; value: TrendRange }[] = [
+  { label: '30d', value: 30 },
+  { label: '90d', value: 90 },
+  { label: 'All', value: 365 },
+];
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Rankings() {
   const [sortKey, setSortKey] = useState<SortKey>('rank');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [selectedRow, setSelectedRow] = useState<RankingRow | null>(null);
+  const [trendRange, setTrendRange] = useState<TrendRange>(30);
 
   const { data: rankingsData, isLoading, error } = useSWR<RankingsResponse>('/rankings', fetcher);
 
-  // Build SWR key for trend (only after a row is selected)
   const trendKey = selectedRow
-    ? `/rankings/trend?keywordId=${selectedRow.keywordId}&locationId=${selectedRow.locationId}&days=30`
+    ? `/rankings/trend?keywordId=${selectedRow.keywordId}&locationId=${selectedRow.locationId}&days=${trendRange}`
     : null;
 
   const { data: trendData, isLoading: trendLoading } = useSWR<TrendResponse>(trendKey, fetcher);
 
   const rows = rankingsData?.data ?? [];
-
-  // Determine default selected row
   const effectiveSelected = selectedRow ?? (rows[0] ?? null);
 
-  // Sort rows
   const sorted = [...rows].sort((a, b) => {
     const av = a[sortKey] ?? 0;
     const bv = b[sortKey] ?? 0;
@@ -102,11 +106,13 @@ export default function Rankings() {
   };
 
   const trendPoints = trendData?.data ?? [];
-
-  // Y-axis domain: reversed so lower rank (better) is at top
   const ranks = trendPoints.map((p) => p.rank);
   const yMin = ranks.length ? Math.min(...ranks) - 2 : 1;
   const yMax = ranks.length ? Math.max(...ranks) + 2 : 20;
+
+  const handleExport = () => {
+    window.location.href = '/api/analytics/export?type=rankings';
+  };
 
   const cols: { key: SortKey; label: string; align?: string }[] = [
     { key: 'keyword', label: 'Keyword' },
@@ -118,9 +124,17 @@ export default function Rankings() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Rankings</h1>
-        <p className="text-sm text-gray-500 mt-1">Keyword ranking performance across all locations</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Rankings</h1>
+          <p className="text-sm text-gray-500 mt-1">Keyword ranking performance across all locations</p>
+        </div>
+        <button
+          onClick={handleExport}
+          className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+        >
+          Export CSV
+        </button>
       </div>
 
       {error && (
@@ -187,10 +201,29 @@ export default function Rankings() {
       {/* Trend chart */}
       {effectiveSelected && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <h2 className="text-base font-semibold text-gray-900 mb-1">
-            Rank Trend — {effectiveSelected.keyword}
-          </h2>
-          <p className="text-xs text-gray-500 mb-4">{effectiveSelected.location} · Last 30 days</p>
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">
+                Rank Trend — {effectiveSelected.keyword}
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">{effectiveSelected.location}</p>
+            </div>
+            <div className="flex gap-1">
+              {TREND_RANGES.map((r) => (
+                <button
+                  key={r.value}
+                  onClick={() => setTrendRange(r.value)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                    trendRange === r.value
+                      ? 'bg-brand-500 text-white'
+                      : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {trendLoading ? (
             <div className="h-48 flex items-center justify-center text-sm text-gray-400">
@@ -198,7 +231,7 @@ export default function Rankings() {
             </div>
           ) : trendPoints.length === 0 ? (
             <div className="h-48 flex items-center justify-center text-sm text-gray-400">
-              No trend data available.
+              No trend data available for this period.
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={220}>

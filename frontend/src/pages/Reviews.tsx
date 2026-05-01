@@ -1,5 +1,9 @@
 import { useState } from 'react';
 import useSWR from 'swr';
+import {
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer,
+} from 'recharts';
 import { fetcher } from '../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -17,6 +21,14 @@ interface Review {
 interface ReviewsResponse {
   success: boolean;
   data: { reviews: Review[]; total: number; page: number; pages: number };
+}
+
+interface TrendData {
+  success: boolean;
+  data: {
+    volume: Array<{ date: string; [platform: string]: string | number }>;
+    sentiment: Array<{ date: string; avgRating: number | null }>;
+  };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -56,6 +68,19 @@ function Avatar({ name }: { name: string }) {
   );
 }
 
+const PLATFORM_COLORS: Record<string, string> = {
+  Google: '#4285F4',
+  Yelp: '#FF1A1A',
+  Facebook: '#1877F2',
+};
+
+type TrendRange = 30 | 90 | 180;
+const TREND_RANGES: { label: string; value: TrendRange }[] = [
+  { label: '30d', value: 30 },
+  { label: '90d', value: 90 },
+  { label: '180d', value: 180 },
+];
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 const PLATFORMS = ['All', 'Google', 'Yelp', 'Facebook'];
@@ -67,8 +92,8 @@ export default function Reviews() {
   const [rating, setRating] = useState('All');
   const [status, setStatus] = useState('All');
   const [search, setSearch] = useState('');
+  const [trendRange, setTrendRange] = useState<TrendRange>(30);
 
-  // Build query string
   const params = new URLSearchParams();
   if (platform !== 'All') params.set('platform', platform);
   if (rating !== 'All') params.set('rating', rating);
@@ -80,11 +105,117 @@ export default function Reviews() {
   const { data, isLoading, error } = useSWR<ReviewsResponse>(swrKey, fetcher);
   const reviews = data?.data?.reviews ?? [];
 
+  const { data: trendData } = useSWR<TrendData>(
+    `/analytics/reviews/trend?days=${trendRange}`,
+    fetcher,
+  );
+
+  const volumeData = trendData?.data?.volume ?? [];
+  const sentimentData = trendData?.data?.sentiment ?? [];
+
+  // Collect all platforms present in volume data
+  const presentPlatforms = Array.from(
+    new Set(volumeData.flatMap((d) => Object.keys(d).filter((k) => k !== 'date'))),
+  );
+
+  const handleExport = () => {
+    window.location.href = '/api/analytics/export?type=reviews';
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Reviews</h1>
-        <p className="text-sm text-gray-500 mt-1">Manage and monitor customer reviews across platforms</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Reviews</h1>
+          <p className="text-sm text-gray-500 mt-1">Manage and monitor customer reviews across platforms</p>
+        </div>
+        <button
+          onClick={handleExport}
+          className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+        >
+          Export CSV
+        </button>
+      </div>
+
+      {/* Analytics charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Volume by platform */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-gray-900">Review Volume by Platform</h2>
+            <div className="flex gap-1">
+              {TREND_RANGES.map((r) => (
+                <button
+                  key={r.value}
+                  onClick={() => setTrendRange(r.value)}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${
+                    trendRange === r.value
+                      ? 'bg-brand-500 text-white'
+                      : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {volumeData.length === 0 ? (
+            <div className="h-40 flex items-center justify-center text-sm text-gray-400">No data yet</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={volumeData} margin={{ top: 2, right: 8, bottom: 2, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 10, fill: '#9ca3af' }}
+                  tickFormatter={(v: string) => new Date(v).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                />
+                <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} width={24} allowDecimals={false} />
+                <Tooltip
+                  labelFormatter={(label: string) => new Date(label).toLocaleDateString()}
+                />
+                <Legend iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+                {presentPlatforms.map((p) => (
+                  <Bar key={p} dataKey={p} stackId="a" fill={PLATFORM_COLORS[p] ?? '#94a3b8'} />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Sentiment trend */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <h2 className="text-sm font-semibold text-gray-900 mb-4">Average Rating Over Time</h2>
+          {sentimentData.length === 0 ? (
+            <div className="h-40 flex items-center justify-center text-sm text-gray-400">No data yet</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart data={sentimentData} margin={{ top: 2, right: 8, bottom: 2, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 10, fill: '#9ca3af' }}
+                  tickFormatter={(v: string) => new Date(v).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                />
+                <YAxis domain={[1, 5]} tick={{ fontSize: 10, fill: '#9ca3af' }} width={24} />
+                <Tooltip
+                  formatter={(value: number) => [`${value} ★`, 'Avg Rating']}
+                  labelFormatter={(label: string) => new Date(label).toLocaleDateString()}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="avgRating"
+                  name="Avg Rating"
+                  stroke="#F59E0B"
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: '#F59E0B' }}
+                  activeDot={{ r: 5 }}
+                  connectNulls
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </div>
       </div>
 
       {/* Filter bar */}
