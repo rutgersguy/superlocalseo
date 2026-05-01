@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import useSWR from 'swr';
-import { Mail, Upload, Send, ChevronDown, ChevronUp, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Mail, Upload, Send, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, UserX } from 'lucide-react';
 import { fetcher, apiFetch } from '../services/api';
 
 interface Campaign {
@@ -19,6 +19,17 @@ interface Campaign {
 interface CampaignsResponse {
   success: boolean;
   data: { campaigns: Campaign[] };
+}
+
+interface Unsubscribe {
+  contact: string;
+  type: 'email' | 'sms';
+  unsubscribedAt: string;
+}
+
+interface UnsubscribesResponse {
+  success: boolean;
+  data: { unsubscribes: Unsubscribe[]; total: number; hasMore: boolean };
 }
 
 // ── Funnel bar ─────────────────────────────────────────────────────────────
@@ -378,6 +389,76 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
   );
 }
 
+// ── Unsubscribed section ────────────────────────────────────────────────────
+
+function UnsubscribedSection() {
+  const [expanded, setExpanded] = useState(false);
+  const { data, isLoading } = useSWR<UnsubscribesResponse>('/campaigns/unsubscribes', fetcher);
+
+  const unsubscribes = data?.data?.unsubscribes ?? [];
+  const total = data?.data?.total ?? 0;
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+      <div
+        className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-gray-50 transition-colors"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <div className="flex items-center gap-2">
+          <UserX size={16} className="text-gray-400" />
+          <span className="font-semibold text-gray-900">
+            Unsubscribed {total > 0 ? `(${total.toLocaleString()})` : ''}
+          </span>
+        </div>
+        {expanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+      </div>
+
+      {expanded && (
+        <div className="border-t border-gray-100">
+          <div className="px-5 py-3 bg-blue-50 border-b border-blue-100 text-xs text-blue-800">
+            These contacts have opted out of review request emails and will be automatically skipped in bulk uploads.
+          </div>
+
+          {isLoading && (
+            <div className="px-5 py-6 space-y-2">
+              {[1, 2, 3].map((n) => (
+                <div key={n} className="h-4 bg-gray-100 rounded animate-pulse" />
+              ))}
+            </div>
+          )}
+
+          {!isLoading && unsubscribes.length === 0 && (
+            <div className="px-5 py-8 text-center text-sm text-gray-400">
+              No unsubscribes yet — great engagement!
+            </div>
+          )}
+
+          {!isLoading && unsubscribes.length > 0 && (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-left">
+                  <th className="px-5 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Contact</th>
+                  <th className="px-5 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Date Unsubscribed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {unsubscribes.map((u, i) => (
+                  <tr key={i} className="border-b border-gray-50 last:border-0">
+                    <td className="px-5 py-2.5 text-gray-700 font-mono text-xs">{u.contact}</td>
+                    <td className="px-5 py-2.5 text-gray-500 text-xs">
+                      {new Date(u.unsubscribedAt).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Page ────────────────────────────────────────────────────────────────────
 
 export default function Campaigns() {
@@ -423,6 +504,8 @@ export default function Campaigns() {
       {campaigns.map((c) => (
         <CampaignCard key={c.id} campaign={c} />
       ))}
+
+      <UnsubscribedSection />
     </div>
   );
 }

@@ -337,3 +337,38 @@ export async function fetchFeedback(
     hasMore: meta ? meta.current_page < meta.last_page : false,
   };
 }
+
+export interface EMRUnsubscribe {
+  contact: string;
+  type: 'email' | 'sms';
+  unsubscribedAt: string;
+}
+
+export async function fetchUnsubscribes(
+  apiKey: string,
+  opts: { page?: number } = {},
+): Promise<{ unsubscribes: EMRUnsubscribe[]; total: number; hasMore: boolean }> {
+  const params = new URLSearchParams();
+  if (opts.page && opts.page > 1) params.set('page', String(opts.page));
+  const query = params.toString() ? `?${params.toString()}` : '';
+  const res = await emrFetch(`/request-reviews/unsubscribes${query}`, apiKey);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`EMR fetchUnsubscribes failed: ${res.status} ${body}`);
+  }
+  const data = await res.json() as {
+    data?: Array<{ contact: string; type?: string; created_at?: string; unsubscribed_at?: string }>;
+    meta?: { current_page: number; last_page: number; total?: number };
+  };
+  const items = data?.data ?? [];
+  const meta = data?.meta;
+  return {
+    unsubscribes: items.map((u) => ({
+      contact: u.contact,
+      type: u.type === 'sms' ? 'sms' : 'email',
+      unsubscribedAt: u.unsubscribed_at ?? u.created_at ?? new Date().toISOString(),
+    })),
+    total: meta?.total ?? items.length,
+    hasMore: meta ? meta.current_page < meta.last_page : false,
+  };
+}
