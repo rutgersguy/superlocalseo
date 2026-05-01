@@ -2,7 +2,7 @@
 
 **Target:** 4–6 weeks to first paying client (Phase 1 MVP), 16 weeks to full production.
 
-**Status (as of 2026-05-01):** Phase 0 ✅ · Phase 1 ✅ · Phase 2 (Reports) ✅ · Phase 3 (Analytics) ✅ · Phase 2+ Quick Wins ✅ (#65 pending email) · Revenue Multipliers in progress (#72 ✅ #73 ✅ #76 ✅ #74–75 pending) · Phase 4 (Hardening) pending.
+**Status (as of 2026-05-01):** Phase 0 ✅ · Phase 1 ✅ · Phase 2 (Reports) ✅ · Phase 3 (Analytics) ✅ · Phase 2+ Quick Wins ✅ (#65 pending email) · Revenue Multipliers ✅ (#72–76 all done) · Phase 4 (Hardening) pending.
 
 ---
 
@@ -128,8 +128,8 @@ Features designed to increase ARPU from $780 → $1,025+ and reduce churn. See [
 ### Revenue Multipliers (Phase 3+)
 - [x] **#72 AI Review Responses** — Claude Haiku drafts per-review, client edits + approves + copies to platform; draft persists in DB
 - [x] **#73 Review Request Campaigns** — built on EMR campaign API: contact upload → `POST /campaigns/{id}/invite` triggers EMR gating (4-5★→Google, 1-3★→private feedback); funnel metrics dashboard
-- [ ] **#74 Competitor Benchmarking** — track named competitors' rankings/reviews, side-by-side comparison dashboard
-- [ ] **#75 QR Codes & NFC Review Capture** — printable/embeddable QR → Google review deep-link, scan analytics
+- [x] **#74 Competitor Benchmarking** — track named competitors' Google ratings/review counts via Places API; leaderboard + side-by-side comparison dashboard; daily sync job
+- [x] **#75 QR Codes & NFC Review Capture** — printable QR codes → Google review deep-link, scan count tracking, PNG download; QR Codes tab in Settings
 
 ### EMR Integration Foundation (prerequisite for #73)
 - [x] **#76 EMR data model fixes** — add `replied`, `reply_date`, `emr_reply_text`, `hidden`, `avatar_url`, `verified` to reviews table; fix webhook to sync reply status on `review-updated`; expand `fetchReviews()` with pagination + filters; add `fetchCampaigns()` + `sendInvite()` to service

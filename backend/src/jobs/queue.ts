@@ -4,6 +4,7 @@ import { logger } from '../utils/logger';
 import { processRankings } from './rankings.job';
 import { processCitations } from './citations.job';
 import { processReviews } from './reviews.job';
+import { processCompetitors } from './competitors.job';
 
 // BullMQ v5 needs plain connection options — it creates its own ioredis instances internally.
 // maxRetriesPerRequest: null is required for blocking commands (BLPOP).
@@ -19,6 +20,7 @@ export const rankingsQueue = new Queue('rankings', { connection });
 export const citationsQueue = new Queue('citations', { connection });
 export const reviewsQueue = new Queue('reviews', { connection });
 export const reportsQueue = new Queue('reports', { connection });
+export const competitorsQueue = new Queue('competitors', { connection });
 
 export async function startWorkers(): Promise<void> {
   const rankingsWorker = new Worker(
@@ -100,8 +102,21 @@ export async function startWorkers(): Promise<void> {
     logger.error('Reviews job failed', { jobId: job?.id, error: err.message });
   });
 
+  const competitorsWorker = new Worker(
+    'competitors',
+    async (job: Job) => {
+      logger.info('Processing competitors sync job', { jobId: job.id });
+      await processCompetitors(job);
+    },
+    { connection },
+  );
+
   reportsWorker.on('failed', (job, err) => {
     logger.error('Reports job failed', { jobId: job?.id, error: err.message });
+  });
+
+  competitorsWorker.on('failed', (job, err) => {
+    logger.error('Competitors job failed', { jobId: job?.id, error: err.message });
   });
 
   // Schedule repeatable daily jobs
@@ -128,6 +143,13 @@ export async function startWorkers(): Promise<void> {
     'monthly-reports',
     {},
     { repeat: { pattern: '0 8 1 * *' } },
+  );
+
+  // Competitor sync: daily at 05:00 UTC (before rankings pull)
+  await competitorsQueue.add(
+    'daily-sync',
+    {},
+    { repeat: { pattern: '0 5 * * *' } },
   );
 
   logger.info('BullMQ workers started');

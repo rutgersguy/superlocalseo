@@ -16,6 +16,8 @@ import auditRouter from './audit';
 import teamRouter from './team';
 import widgetRouter from './widget';
 import campaignsRouter from './campaigns';
+import competitorsRouter from './competitors';
+import qrRouter from './qr';
 
 const router = Router();
 
@@ -36,5 +38,7 @@ router.use('/audit', auditRouter);
 router.use('/team', teamRouter);
 router.use('/widget', widgetRouter);
 router.use('/campaigns', campaignsRouter);
+router.use('/competitors', competitorsRouter);
+router.use('/qr', qrRouter);
 
 export default router;

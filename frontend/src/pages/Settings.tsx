@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import useSWR from 'swr';
+import useSWR, { mutate as swrMutate } from 'swr';
+import { QrCode, Download, Trash2, Plus, AlertCircle, CheckCircle2, ExternalLink } from 'lucide-react';
 import { apiFetch, fetcher } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 
@@ -25,7 +26,7 @@ interface ClientResponse {
 }
 
 const INDUSTRIES = ['Plumbing', 'HVAC', 'Electrical', 'Landscaping', 'Cleaning', 'Other'];
-type Tab = 'account' | 'integrations' | 'billing' | 'team' | 'widgets';
+type Tab = 'account' | 'integrations' | 'billing' | 'team' | 'widgets' | 'qrcodes';
 
 // ─── Team types ───────────────────────────────────────────────────────────────
 
@@ -59,6 +60,7 @@ function TabBar({ active, onChange, isOwner }: { active: Tab; onChange: (t: Tab)
     { key: 'billing', label: 'Billing' },
     ...(isOwner ? [{ key: 'team' as Tab, label: 'Team' }] : []),
     { key: 'widgets' as Tab, label: 'Widgets' },
+    { key: 'qrcodes' as Tab, label: 'QR Codes' },
   ];
   return (
     <div className="flex gap-1 border-b border-gray-200 mb-6">
@@ -432,6 +434,222 @@ function WidgetTab() {
   );
 }
 
+// ─── QR Codes tab ────────────────────────────────────────────────────────────
+
+interface QRCodeEntry {
+  id: string;
+  name: string;
+  targetUrl: string;
+  shortCode: string;
+  scanCount: number;
+  lastScannedAt: string | null;
+  createdAt: string;
+  locationName: string | null;
+  qrUrl: string;
+}
+
+interface Location {
+  id: string;
+  name: string;
+  google_place_id: string | null;
+}
+
+function QRTab() {
+  const { data, isLoading } = useSWR<{ success: boolean; data: { qrCodes: QRCodeEntry[] } }>('/qr', fetcher);
+  const { data: locsData } = useSWR<{ success: boolean; data: { locations: Location[] } }>('/locations', fetcher);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ name: '', targetUrl: '', locationId: '' });
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [formOk, setFormOk] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  const qrCodes = data?.data?.qrCodes ?? [];
+  const locations = locsData?.data?.locations ?? [];
+
+  function getReviewUrl(loc: Location) {
+    if (!loc.google_place_id) return '';
+    return `https://search.google.com/local/writereview?placeid=${loc.google_place_id}`;
+  }
+
+  function handleLocationChange(locId: string) {
+    setForm((p) => {
+      const loc = locations.find((l) => l.id === locId);
+      const reviewUrl = loc ? getReviewUrl(loc) : '';
+      return { ...p, locationId: locId, targetUrl: reviewUrl || p.targetUrl };
+    });
+  }
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setFormError(null);
+    setFormOk(false);
+    try {
+      const res = await apiFetch<{ success: boolean; error?: { message: string } }>('/qr', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: form.name,
+          targetUrl: form.targetUrl,
+          locationId: form.locationId || undefined,
+        }),
+      });
+      if (!res.success) {
+        setFormError((res as { error?: { message: string } }).error?.message ?? 'Failed');
+        return;
+      }
+      setFormOk(true);
+      setForm({ name: '', targetUrl: '', locationId: '' });
+      setShowForm(false);
+      void swrMutate('/qr');
+    } catch {
+      setFormError('Network error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id: string, name: string) {
+    if (!confirm(`Delete QR code "${name}"?`)) return;
+    await apiFetch(`/qr/${id}`, { method: 'DELETE' });
+    void swrMutate('/qr');
+  }
+
+  function downloadImage(id: string, name: string) {
+    const a = document.createElement('a');
+    a.href = `/api/qr/${id}/image.png`;
+    a.download = `qr-${name.replace(/\s+/g, '-').toLowerCase()}.png`;
+    a.click();
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">Generate printable QR codes that link customers directly to your Google review page. Scans are tracked automatically.</p>
+        <button
+          onClick={() => setShowForm((v) => !v)}
+          className="flex items-center gap-2 px-3 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors"
+        >
+          <Plus size={14} /> New QR code
+        </button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={(e) => void handleCreate(e)} className="border border-gray-200 rounded-xl p-5 bg-gray-50 space-y-4">
+          <h4 className="font-medium text-gray-800">Create QR code</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Name *</label>
+              <input
+                required
+                value={form.name}
+                onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                placeholder="Front desk card"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Location (optional)</label>
+              <select
+                value={form.locationId}
+                onChange={(e) => handleLocationChange(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+              >
+                <option value="">— None —</option>
+                {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Target URL (Google review link) *</label>
+            <input
+              required
+              type="url"
+              value={form.targetUrl}
+              onChange={(e) => setForm((p) => ({ ...p, targetUrl: e.target.value }))}
+              placeholder="https://search.google.com/local/writereview?placeid=…"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Get your Google review link from{' '}
+              <a href="https://business.google.com" target="_blank" rel="noopener noreferrer" className="text-brand-500 hover:underline">Google Business Profile</a>.
+              {form.locationId && locations.find((l) => l.id === form.locationId)?.google_place_id && (
+                <span className="text-green-600 ml-1">Auto-filled from location.</span>
+              )}
+            </p>
+          </div>
+          {formError && <div className="flex items-center gap-2 text-red-600 text-sm"><AlertCircle size={13} /> {formError}</div>}
+          {formOk && <div className="flex items-center gap-2 text-green-700 text-sm"><CheckCircle2 size={13} /> Created!</div>}
+          <div className="flex justify-end gap-3">
+            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancel</button>
+            <button type="submit" disabled={saving} className="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 disabled:opacity-50 transition-colors">
+              {saving ? 'Creating…' : 'Create'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {isLoading && (
+        <div className="space-y-3">
+          {[1, 2].map((n) => <div key={n} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}
+        </div>
+      )}
+
+      {!isLoading && qrCodes.length === 0 && !showForm && (
+        <div className="border-2 border-dashed border-gray-200 rounded-xl py-12 text-center">
+          <QrCode size={36} className="mx-auto text-gray-300 mb-3" />
+          <p className="text-sm text-gray-500 font-medium">No QR codes yet</p>
+          <p className="text-xs text-gray-400 mt-1">Create one to start directing customers to your review page</p>
+        </div>
+      )}
+
+      {qrCodes.length > 0 && (
+        <div className="space-y-3">
+          {qrCodes.map((qr) => (
+            <div key={qr.id} className="flex items-center gap-4 border border-gray-200 rounded-xl px-5 py-4 bg-white">
+              <img
+                ref={imgRef}
+                src={`/api/qr/${qr.id}/image.png`}
+                alt={`QR code for ${qr.name}`}
+                className="w-14 h-14 rounded border border-gray-100"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-gray-800">{qr.name}</span>
+                  {qr.locationName && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{qr.locationName}</span>}
+                </div>
+                <a href={qr.targetUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-brand-500 hover:underline flex items-center gap-1 mt-0.5 truncate">
+                  <ExternalLink size={10} /> {qr.targetUrl.length > 50 ? `${qr.targetUrl.slice(0, 50)}…` : qr.targetUrl}
+                </a>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {qr.scanCount.toLocaleString()} scan{qr.scanCount !== 1 ? 's' : ''}
+                  {qr.lastScannedAt && ` · last ${new Date(qr.lastScannedAt).toLocaleDateString()}`}
+                </p>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => downloadImage(qr.id, qr.name)}
+                  title="Download PNG"
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-brand-500 hover:bg-gray-100 transition-colors"
+                >
+                  <Download size={15} />
+                </button>
+                <button
+                  onClick={() => void handleDelete(qr.id, qr.name)}
+                  title="Delete"
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Team tab ─────────────────────────────────────────────────────────────────
 
 function TeamTab() {
@@ -707,6 +925,9 @@ export default function Settings() {
 
         {/* Widgets tab */}
         {activeTab === 'widgets' && <WidgetTab />}
+
+        {/* QR Codes tab */}
+        {activeTab === 'qrcodes' && <QRTab />}
 
         {/* Team tab */}
         {activeTab === 'team' && <TeamTab />}
