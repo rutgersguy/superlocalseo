@@ -27,8 +27,8 @@ QA_PASSWORD="QaSmoke!$(date +%s)"
 QA_BIZ="QA Smoke Test $$"
 
 # Admin credentials (optional — admin checks skipped if not provided)
-ADMIN_EMAIL="${ADMIN_EMAIL:-}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
+ADMIN_EMAIL="${ADMIN_EMAIL:-admin@superlocalseo.com}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-Admin1234!}"
 
 # ── Colour output ─────────────────────────────────────────────────────────────
 GREEN='\033[0;32m'

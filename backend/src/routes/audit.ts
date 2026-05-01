@@ -7,6 +7,7 @@ const auditLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => process.env.NODE_ENV !== 'production',
   validate: false,
   message: { success: false, error: { message: 'Too many audit requests — try again later', code: 'RATE_LIMITED' } },
 });

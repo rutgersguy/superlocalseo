@@ -1,8 +1,10 @@
 import rateLimit from 'express-rate-limit';
 import { Request } from 'express';
 
+const isDev = process.env.NODE_ENV !== 'production';
+
 const skip = (req: Request) =>
-  process.env.NODE_ENV === 'test' || req.path.startsWith('/health');
+  isDev || process.env.NODE_ENV === 'test' || req.path.startsWith('/health');
 
 export const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -19,7 +21,7 @@ export const authLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: () => process.env.NODE_ENV === 'test',
+  skip: () => isDev || process.env.NODE_ENV === 'test',
   validate: false,
   message: { success: false, error: { message: 'Too many auth attempts', code: 'RATE_LIMITED' } },
 });
@@ -30,7 +32,7 @@ export const aiLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: () => process.env.NODE_ENV === 'test',
+  skip: () => isDev || process.env.NODE_ENV === 'test',
   validate: false,
   keyGenerator: (req) => (req as Request).ip ?? 'unknown',
   message: { success: false, error: { message: 'Too many AI requests, please wait', code: 'RATE_LIMITED' } },
