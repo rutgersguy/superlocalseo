@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import { apiFetch, fetcher } from '../services/api';
 
@@ -9,8 +10,7 @@ interface ClientData {
   businessName: string;
   industry: string;
   integrations: {
-    brightlocal: { connected: boolean };
-    embedreviews: { connected: boolean };
+    google: { connected: boolean };
   };
   billing: {
     plan: string;
@@ -53,93 +53,70 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
   );
 }
 
-// ─── Integration card ──────────────────────────────────────────────────────────
+// ─── OAuth card ────────────────────────────────────────────────────────────────
 
-interface IntegrationCardProps {
+interface OAuthCardProps {
   name: string;
   description: string;
   connected: boolean;
-  onConnect: (key: string) => Promise<void>;
+  comingSoon?: boolean;
+  onConnect: () => Promise<void>;
   onDisconnect: () => Promise<void>;
 }
 
-function IntegrationCard({ name, description, connected, onConnect, onDisconnect }: IntegrationCardProps) {
-  const [apiKey, setApiKey] = useState('');
-  const [masked, setMasked] = useState(true);
+function OAuthCard({ name, description, connected, comingSoon, onConnect, onDisconnect }: OAuthCardProps) {
   const [loading, setLoading] = useState(false);
-  const [localConnected, setLocalConnected] = useState(connected);
 
   const handleConnect = async () => {
     setLoading(true);
-    try {
-      await onConnect(apiKey);
-      setLocalConnected(true);
-      setApiKey('');
-    } finally {
-      setLoading(false);
-    }
+    try { await onConnect(); } finally { setLoading(false); }
   };
 
   const handleDisconnect = async () => {
     setLoading(true);
-    try {
-      await onDisconnect();
-      setLocalConnected(false);
-    } finally {
-      setLoading(false);
-    }
+    try { await onDisconnect(); } finally { setLoading(false); }
   };
 
   return (
     <div className="border border-gray-200 rounded-xl p-5">
-      <div className="flex items-start justify-between mb-4">
+      <div className="flex items-start justify-between">
         <div>
           <h3 className="text-sm font-semibold text-gray-900">{name}</h3>
           <p className="text-xs text-gray-500 mt-0.5">{description}</p>
         </div>
-        <span
-          className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-            localConnected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-          }`}
-        >
-          {localConnected ? 'Connected' : 'Not connected'}
-        </span>
-      </div>
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <input
-            type={masked ? 'password' : 'text'}
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="Enter API key"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 pr-16"
-          />
-          <button
-            type="button"
-            onClick={() => setMasked((m) => !m)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-700"
-          >
-            {masked ? 'Show' : 'Hide'}
-          </button>
-        </div>
-        {localConnected ? (
-          <button
-            onClick={() => void handleDisconnect()}
-            disabled={loading}
-            className="px-4 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50"
-          >
-            {loading ? 'Loading...' : 'Disconnect'}
-          </button>
+        {comingSoon ? (
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">Coming soon</span>
         ) : (
-          <button
-            onClick={() => void handleConnect()}
-            disabled={loading || !apiKey}
-            className="px-4 py-2 text-sm font-medium bg-brand-500 text-white rounded-lg hover:bg-brand-600 disabled:opacity-50"
+          <span
+            className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+              connected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+            }`}
           >
-            {loading ? 'Connecting...' : 'Connect'}
-          </button>
+            {connected ? 'Connected' : 'Not connected'}
+          </span>
         )}
       </div>
+      {!comingSoon && (
+        <div className="mt-4">
+          {connected ? (
+            <button
+              onClick={() => void handleDisconnect()}
+              disabled={loading}
+              className="px-4 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50"
+            >
+              {loading ? 'Disconnecting...' : 'Disconnect'}
+            </button>
+          ) : (
+            <button
+              onClick={() => void handleConnect()}
+              disabled={loading}
+              className="px-4 py-2 text-sm font-medium bg-brand-500 text-white rounded-lg hover:bg-brand-600 disabled:opacity-50"
+            >
+              {loading ? 'Redirecting...' : `Connect ${name}`}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -147,7 +124,9 @@ function IntegrationCard({ name, description, connected, onConnect, onDisconnect
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Settings() {
-  const [activeTab, setActiveTab] = useState<Tab>('account');
+  const [searchParams] = useSearchParams();
+  const defaultTab = (searchParams.get('tab') as Tab | null) ?? 'account';
+  const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
   const { data, isLoading, error, mutate } = useSWR<ClientResponse>('/clients', fetcher);
   const client = data?.data;
 
@@ -157,7 +136,6 @@ export default function Settings() {
   const [accountSaving, setAccountSaving] = useState(false);
   const [accountSuccess, setAccountSuccess] = useState(false);
 
-  // Populate form when data loads
   const resolvedBusinessName = businessName || client?.businessName || '';
   const resolvedIndustry = industry || client?.industry || '';
 
@@ -177,16 +155,13 @@ export default function Settings() {
     }
   };
 
-  const connectIntegration = async (type: string, apiKey: string) => {
-    await apiFetch(`/integrations/${type}/connect`, {
-      method: 'POST',
-      body: JSON.stringify({ apiKey }),
-    });
-    await mutate();
+  const connectGoogle = async () => {
+    const res = await apiFetch<{ success: boolean; data: { url: string } }>('/integrations/google/auth-url');
+    if (res.success && res.data?.url) window.location.href = res.data.url;
   };
 
-  const disconnectIntegration = async (type: string) => {
-    await apiFetch(`/integrations/${type}/disconnect`, { method: 'POST' });
+  const disconnectGoogle = async () => {
+    await apiFetch('/integrations/google', { method: 'DELETE' });
     await mutate();
   };
 
@@ -274,19 +249,28 @@ export default function Settings() {
         {/* Integrations tab */}
         {activeTab === 'integrations' && (
           <div className="space-y-4">
-            <IntegrationCard
-              name="BrightLocal"
-              description="Rank tracking and citation monitoring"
-              connected={client?.integrations?.brightlocal?.connected ?? false}
-              onConnect={(key) => connectIntegration('brightlocal', key)}
-              onDisconnect={() => disconnectIntegration('brightlocal')}
+            <OAuthCard
+              name="Google Business Profile"
+              description="Sync reviews, Q&A, and business info from Google"
+              connected={client?.integrations?.google?.connected ?? false}
+              onConnect={connectGoogle}
+              onDisconnect={disconnectGoogle}
             />
-            <IntegrationCard
-              name="EmbedMyReviews"
-              description="Review aggregation and display widgets"
-              connected={client?.integrations?.embedreviews?.connected ?? false}
-              onConnect={(key) => connectIntegration('embedreviews', key)}
-              onDisconnect={() => disconnectIntegration('embedreviews')}
+            <OAuthCard
+              name="Yelp"
+              description="Monitor and respond to Yelp reviews"
+              connected={false}
+              comingSoon
+              onConnect={async () => {}}
+              onDisconnect={async () => {}}
+            />
+            <OAuthCard
+              name="Facebook"
+              description="Sync Facebook reviews and business updates"
+              connected={false}
+              comingSoon
+              onConnect={async () => {}}
+              onDisconnect={async () => {}}
             />
           </div>
         )}

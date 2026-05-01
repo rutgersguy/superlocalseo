@@ -1,36 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
-import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, noContent, notFound, err } from '../utils/response';
-import { encrypt, decrypt } from '../utils/crypto';
-import { validateApiKey as blValidate } from '../services/brightlocal.service';
-import { validateApiKey as emrValidate, registerWebhook } from '../services/embedmyreviews.service';
 import { config } from '../config';
-import { rankingsQueue, citationsQueue } from '../jobs/queue';
 import { logger } from '../utils/logger';
 
-export const brightlocalSchema = z.object({
-  apiKey: z.string().min(1),
-});
-
-export const embedmyreviewsSchema = z.object({
-  apiKey: z.string().min(1),
-});
-
-type BrightLocalBody = z.infer<typeof brightlocalSchema>;
-type EmbedMyReviewsBody = z.infer<typeof embedmyreviewsSchema>;
-
-function maskApiKey(decrypted: string): string {
-  if (decrypted.length <= 4) return '****';
-  return `****${decrypted.slice(-4)}`;
-}
-
-function formatIntegration(integration: Record<string, unknown>, maskedKey: string) {
+function formatIntegration(integration: Record<string, unknown>) {
   return {
     id: integration.id,
     provider: integration.provider,
     status: integration.status,
-    maskedApiKey: maskedKey,
     lastPullAt: integration.last_pull_at,
     errorMessage: integration.error_message,
     createdAt: integration.created_at,
@@ -40,115 +18,105 @@ function formatIntegration(integration: Record<string, unknown>, maskedKey: stri
 export async function list(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const integrations = await db('integrations').where({ client_id: req.clientId });
+    ok(res, integrations.map((i) => formatIntegration(i as Record<string, unknown>)));
+  } catch (e) {
+    next(e);
+  }
+}
 
-    const formatted = integrations.map((integration) => {
-      let maskedKey = '****';
-      if (integration.api_key_encrypted) {
-        try {
-          const decrypted = decrypt(integration.api_key_encrypted as string);
-          maskedKey = maskApiKey(decrypted);
-        } catch {
-          maskedKey = '****';
-        }
-      }
-      return formatIntegration(integration as Record<string, unknown>, maskedKey);
+export async function getGoogleAuthUrl(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const clientId = config.google?.clientId;
+    if (!clientId) {
+      err(res, 'Google OAuth not configured', 503, 'NOT_CONFIGURED');
+      return;
+    }
+
+    const redirectUri = `${config.appUrl}/api/integrations/google/callback`;
+    const scopes = [
+      'https://www.googleapis.com/auth/business.manage',
+    ].join(' ');
+
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      scope: scopes,
+      access_type: 'offline',
+      prompt: 'consent',
+      state: String(req.clientId),
     });
 
-    ok(res, formatted);
+    ok(res, { url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}` });
   } catch (e) {
     next(e);
   }
 }
 
-export async function connectBrightLocal(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function googleCallback(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { apiKey } = req.body as BrightLocalBody;
-
-    const valid = await blValidate(apiKey);
-    if (!valid) {
-      err(res, 'Invalid BrightLocal API key', 400, 'INVALID_API_KEY');
+    const { code, state } = req.query as { code?: string; state?: string };
+    if (!code || !state) {
+      err(res, 'Missing OAuth parameters', 400, 'INVALID_CALLBACK');
       return;
     }
 
-    const encrypted = encrypt(apiKey);
-    const now = new Date();
-
-    const existing = await db('integrations').where({ client_id: req.clientId, provider: 'brightlocal' }).first();
-
-    let integration: Record<string, unknown>;
-    if (existing) {
-      const [updated] = await db('integrations')
-        .where({ id: existing.id })
-        .update({ api_key_encrypted: encrypted, status: 'connected', error_message: null, updated_at: now })
-        .returning('*');
-      integration = updated as Record<string, unknown>;
-    } else {
-      const [inserted] = await db('integrations').insert({
-        client_id: req.clientId,
-        provider: 'brightlocal',
-        api_key_encrypted: encrypted,
-        status: 'connected',
-        created_at: now,
-        updated_at: now,
-      }).returning('*');
-      integration = inserted as Record<string, unknown>;
-    }
-
-    // Trigger initial data pull
-    rankingsQueue.add('initial-pull', { clientId: req.clientId }).catch((e) =>
-      logger.error('Failed to queue initial rankings pull', { error: (e as Error).message }),
-    );
-    citationsQueue.add('initial-pull', { clientId: req.clientId }).catch((e) =>
-      logger.error('Failed to queue initial citations pull', { error: (e as Error).message }),
-    );
-
-    ok(res, formatIntegration(integration, maskApiKey(apiKey)));
-  } catch (e) {
-    next(e);
-  }
-}
-
-export async function connectEmbedMyReviews(req: Request, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const { apiKey } = req.body as EmbedMyReviewsBody;
-
-    const valid = await emrValidate(apiKey);
-    if (!valid) {
-      err(res, 'Invalid EmbedMyReviews API key', 400, 'INVALID_API_KEY');
+    const clientId = Number(state);
+    const clientSecret = config.google?.clientSecret;
+    const googleClientId = config.google?.clientId;
+    if (!googleClientId || !clientSecret) {
+      err(res, 'Google OAuth not configured', 503, 'NOT_CONFIGURED');
       return;
     }
 
-    const encrypted = encrypt(apiKey);
+    const redirectUri = `${config.appUrl}/api/integrations/google/callback`;
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: googleClientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+      }),
+    });
+
+    if (!tokenRes.ok) {
+      logger.error('Google OAuth token exchange failed', { status: tokenRes.status });
+      err(res, 'OAuth token exchange failed', 502, 'OAUTH_ERROR');
+      return;
+    }
+
+    const tokens = await tokenRes.json() as { access_token: string; refresh_token?: string; expires_in: number };
     const now = new Date();
+    const expiresAt = new Date(now.getTime() + tokens.expires_in * 1000);
 
-    // Register webhook
-    const webhookUrl = `${config.appUrl}/api/reviews/webhook`;
-    await registerWebhook(apiKey, webhookUrl).catch((e) =>
-      logger.warn('Failed to register EmbedMyReviews webhook', { error: (e as Error).message }),
-    );
+    const existing = await db('integrations').where({ client_id: clientId, provider: 'google' }).first();
 
-    const existing = await db('integrations').where({ client_id: req.clientId, provider: 'embedmyreviews' }).first();
-
-    let integration: Record<string, unknown>;
     if (existing) {
-      const [updated] = await db('integrations')
-        .where({ id: existing.id })
-        .update({ api_key_encrypted: encrypted, status: 'connected', error_message: null, updated_at: now })
-        .returning('*');
-      integration = updated as Record<string, unknown>;
+      await db('integrations').where({ id: existing.id }).update({
+        oauth_access_token: tokens.access_token,
+        oauth_refresh_token: tokens.refresh_token ?? existing.oauth_refresh_token,
+        oauth_expires_at: expiresAt,
+        status: 'connected',
+        error_message: null,
+        updated_at: now,
+      });
     } else {
-      const [inserted] = await db('integrations').insert({
-        client_id: req.clientId,
-        provider: 'embedmyreviews',
-        api_key_encrypted: encrypted,
+      await db('integrations').insert({
+        client_id: clientId,
+        provider: 'google',
+        oauth_access_token: tokens.access_token,
+        oauth_refresh_token: tokens.refresh_token,
+        oauth_expires_at: expiresAt,
         status: 'connected',
         created_at: now,
         updated_at: now,
-      }).returning('*');
-      integration = inserted as Record<string, unknown>;
+      });
     }
 
-    ok(res, formatIntegration(integration, maskApiKey(apiKey)));
+    res.redirect(`${config.appUrl}/settings?tab=integrations&connected=google`);
   } catch (e) {
     next(e);
   }
@@ -166,7 +134,7 @@ export async function disconnect(req: Request, res: Response, next: NextFunction
 
     await db('integrations')
       .where({ id: integration.id })
-      .update({ status: 'disconnected', api_key_encrypted: null, updated_at: new Date() });
+      .update({ status: 'disconnected', oauth_access_token: null, oauth_refresh_token: null, updated_at: new Date() });
 
     noContent(res);
   } catch (e) {

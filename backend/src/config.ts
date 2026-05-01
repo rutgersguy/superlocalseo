@@ -66,6 +66,11 @@ export const config = {
     webhookSecret: optional('EMBEDMYREVIEWS_WEBHOOK_SECRET'),
   },
 
+  google: {
+    clientId: optional('GOOGLE_CLIENT_ID'),
+    clientSecret: optional('GOOGLE_CLIENT_SECRET'),
+  },
+
   reports: {
     dir: optional('REPORTS_DIR', '/tmp/reports'),
   },

@@ -18,12 +18,6 @@ interface LocationKeywords {
   [locationIndex: number]: string[];
 }
 
-interface Integration {
-  apiKey: string;
-  connected: boolean;
-  connecting: boolean;
-}
-
 // ─── Step indicator ───────────────────────────────────────────────────────────
 
 function StepIndicator({ current, total }: { current: number; total: number }) {
@@ -83,8 +77,7 @@ export default function Onboarding() {
   const [kwInput, setKwInput] = useState<{ [idx: number]: string }>({});
 
   // Step 4 state
-  const [brightlocal, setBrightlocal] = useState<Integration>({ apiKey: '', connected: false, connecting: false });
-  const [embedReviews, setEmbedReviews] = useState<Integration>({ apiKey: '', connected: false, connecting: false });
+  const [googleConnecting, setGoogleConnecting] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -165,20 +158,13 @@ export default function Onboarding() {
 
   // ── Step 4 helpers ──────────────────────────────────────────────────────────
 
-  const connectIntegration = async (
-    type: 'brightlocal' | 'embedreviews',
-    apiKey: string,
-    setter: React.Dispatch<React.SetStateAction<Integration>>,
-  ) => {
-    setter((p) => ({ ...p, connecting: true }));
+  const connectGoogle = async () => {
+    setGoogleConnecting(true);
     try {
-      const res = await apiFetch<{ success: boolean }>(`/integrations/${type}/connect`, {
-        method: 'POST',
-        body: JSON.stringify({ apiKey }),
-      });
-      setter((p) => ({ ...p, connecting: false, connected: res.success }));
-    } catch {
-      setter((p) => ({ ...p, connecting: false }));
+      const res = await apiFetch<{ success: boolean; data: { url: string } }>('/integrations/google/auth-url');
+      if (res.success && res.data?.url) window.location.href = res.data.url;
+    } finally {
+      setGoogleConnecting(false);
     }
   };
 
@@ -343,65 +329,51 @@ export default function Onboarding() {
           {/* Step 4 — Integrations */}
           {step === 4 && (
             <div className="space-y-6">
-              <h2 className="text-lg font-semibold text-gray-900">Connect Integrations</h2>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Connect your platforms</h2>
+                <p className="text-sm text-gray-500 mt-1">Link your review profiles so we can monitor and manage them for you.</p>
+              </div>
 
-              {/* BrightLocal */}
+              {/* Google Business Profile */}
               <div className="border border-gray-200 rounded-xl p-5">
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-900">BrightLocal</h3>
-                    <p className="text-xs text-gray-500">Rank tracking & citation data</p>
+                    <h3 className="text-sm font-semibold text-gray-900">Google Business Profile</h3>
+                    <p className="text-xs text-gray-500">Sync reviews, Q&A, and business info from Google</p>
                   </div>
-                  {brightlocal.connected && (
-                    <span className="text-xs bg-green-100 text-green-700 font-medium px-2 py-1 rounded-full">Connected</span>
-                  )}
                 </div>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={brightlocal.apiKey}
-                    onChange={(e) => setBrightlocal((p) => ({ ...p, apiKey: e.target.value }))}
-                    placeholder="Enter API key"
-                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
-                  <button
-                    onClick={() => void connectIntegration('brightlocal', brightlocal.apiKey, setBrightlocal)}
-                    disabled={brightlocal.connecting || !brightlocal.apiKey}
+                <button
+                    onClick={() => void connectGoogle()}
+                    disabled={googleConnecting}
                     className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50"
                   >
-                    {brightlocal.connecting ? 'Connecting...' : 'Connect'}
+                    {googleConnecting ? 'Redirecting...' : 'Connect Google'}
                   </button>
+              </div>
+
+              {/* Yelp */}
+              <div className="border border-gray-200 rounded-xl p-5 opacity-60">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900">Yelp</h3>
+                    <p className="text-xs text-gray-500">Monitor and respond to Yelp reviews</p>
+                  </div>
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">Coming soon</span>
                 </div>
               </div>
 
-              {/* EmbedMyReviews */}
-              <div className="border border-gray-200 rounded-xl p-5">
-                <div className="flex items-center justify-between mb-3">
+              {/* Facebook */}
+              <div className="border border-gray-200 rounded-xl p-5 opacity-60">
+                <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-900">EmbedMyReviews</h3>
-                    <p className="text-xs text-gray-500">Review aggregation & widgets</p>
+                    <h3 className="text-sm font-semibold text-gray-900">Facebook</h3>
+                    <p className="text-xs text-gray-500">Sync Facebook reviews and business updates</p>
                   </div>
-                  {embedReviews.connected && (
-                    <span className="text-xs bg-green-100 text-green-700 font-medium px-2 py-1 rounded-full">Connected</span>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={embedReviews.apiKey}
-                    onChange={(e) => setEmbedReviews((p) => ({ ...p, apiKey: e.target.value }))}
-                    placeholder="Enter API key"
-                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
-                  <button
-                    onClick={() => void connectIntegration('embedreviews', embedReviews.apiKey, setEmbedReviews)}
-                    disabled={embedReviews.connecting || !embedReviews.apiKey}
-                    className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50"
-                  >
-                    {embedReviews.connecting ? 'Connecting...' : 'Connect'}
-                  </button>
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">Coming soon</span>
                 </div>
               </div>
+
+              <p className="text-xs text-gray-400">You can also connect platforms later in Settings.</p>
             </div>
           )}
 

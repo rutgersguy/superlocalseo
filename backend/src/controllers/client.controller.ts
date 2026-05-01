@@ -17,8 +17,7 @@ function formatClient(
   email: string,
   integrations: Record<string, unknown>[],
 ) {
-  const brightlocal = integrations.find((i) => i.provider === 'brightlocal');
-  const embedreviews = integrations.find((i) => i.provider === 'embedmyreviews');
+  const google = integrations.find((i) => i.provider === 'google');
   return {
     id: client.id,
     email,
@@ -29,8 +28,7 @@ function formatClient(
       status: client.subscription_status ?? 'inactive',
     },
     integrations: {
-      brightlocal: { connected: brightlocal?.status === 'connected' },
-      embedreviews: { connected: embedreviews?.status === 'connected' },
+      google: { connected: google?.status === 'connected' },
     },
     onboardingStep: client.onboarding_step,
     locations: locations.map((l) => ({
