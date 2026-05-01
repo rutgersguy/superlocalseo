@@ -192,6 +192,72 @@ export async function listSubmissions(req: Request, res: Response, next: NextFun
   }
 }
 
+// ─── Citation History ─────────────────────────────────────────────────────────
+
+export const historyQuerySchema = z.object({
+  locationId: z.string().uuid().optional(),
+  days: z.coerce.number().int().min(1).max(365).default(90),
+});
+
+type HistoryQuery = z.infer<typeof historyQuerySchema>;
+
+interface HistoryPoint {
+  date: string;
+  listedCount: number;
+  totalCount: number;
+  completeness: number;
+}
+
+export async function history(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const parsed = historyQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      err(res, parsed.error.errors[0]?.message ?? 'Validation error', 400, 'VALIDATION_ERROR');
+      return;
+    }
+    const { locationId, days } = parsed.data as HistoryQuery;
+
+    // Get all location IDs for this client (or filter to specific location)
+    let locationQuery = db('locations').where({ client_id: req.clientId }).select('id');
+    if (locationId) {
+      locationQuery = locationQuery.where({ id: locationId });
+    }
+    const locationRows = await locationQuery as Array<{ id: string }>;
+    const locationIds = locationRows.map((r) => r.id);
+
+    if (locationIds.length === 0) {
+      ok(res, { history: [] });
+      return;
+    }
+
+    const rows = await db.raw<{ rows: Array<{ date: string; listed_count: string; total_count: string }> }>(`
+      SELECT DATE(pulled_at) AS date,
+             COUNT(CASE WHEN listed = true THEN 1 END) AS listed_count,
+             COUNT(*) AS total_count
+      FROM citation_snapshots
+      WHERE location_id = ANY(?)
+        AND pulled_at >= NOW() - INTERVAL '${days} days'
+      GROUP BY DATE(pulled_at)
+      ORDER BY date ASC
+    `, [locationIds]);
+
+    const historyData: HistoryPoint[] = rows.rows.map((r) => {
+      const listed = parseInt(r.listed_count, 10);
+      const total = parseInt(r.total_count, 10);
+      return {
+        date: typeof r.date === 'string' ? r.date : (r.date as Date).toISOString().split('T')[0]!,
+        listedCount: listed,
+        totalCount: total,
+        completeness: total > 0 ? Math.round((listed / total) * 100) : 0,
+      };
+    });
+
+    ok(res, { history: historyData });
+  } catch (e) {
+    next(e);
+  }
+}
+
 export async function pollSubmissions(): Promise<void> {
   const pending = await db('citation_submissions')
     .whereIn('status', ['pending', 'submitted'])

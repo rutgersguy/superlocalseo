@@ -36,24 +36,24 @@ interface CitationsResponse {
 
 interface TrendPoint {
   date: string;
+  listedCount: number;
+  totalCount: number;
   completeness: number;
 }
 
 interface TrendResponse {
   success: boolean;
   data: {
-    series: TrendPoint[];
-    days: number;
+    history: TrendPoint[];
   };
 }
 
-type TrendDays = 30 | 90 | 180;
+type TrendDays = 30 | 90;
 type CitationsTab = 'directories' | 'submissions';
 
 const TREND_RANGES: { label: string; value: TrendDays }[] = [
   { label: '30d', value: 30 },
   { label: '90d', value: 90 },
-  { label: '180d', value: 180 },
 ];
 
 interface SubmissionRow {
@@ -197,14 +197,14 @@ export default function Citations() {
 
   const { data, isLoading, error } = useSWR<CitationsResponse>('/citations', fetcher);
   const { data: trendData, isLoading: trendLoading } = useSWR<TrendResponse>(
-    `/analytics/citations/trend?days=${trendDays}`,
+    `/citations/history?days=${trendDays}`,
     fetcher,
   );
   const { data: submissionsData } = useSWR<SubmissionsResponse>('/citations/submissions', fetcher);
 
   const summary = data?.data;
   const directories = summary?.directories ?? [];
-  const trendSeries = trendData?.data?.series ?? [];
+  const trendSeries = trendData?.data?.history ?? [];
   const submissions = submissionsData?.data?.submissions ?? [];
 
   const napErrorCount = directories.filter(hasNapError).length;
@@ -337,7 +337,7 @@ export default function Citations() {
       ) : null}
 
       {/* Completeness over time */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-gray-900">Completeness over time</h2>
           <div className="flex gap-1">
@@ -358,7 +358,7 @@ export default function Citations() {
           <div className="h-48 bg-gray-50 rounded-lg animate-pulse" />
         ) : trendSeries.length === 0 ? (
           <div className="h-48 flex items-center justify-center text-gray-400 text-sm">
-            No trend data available yet.
+            No citation history yet.
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={200}>
