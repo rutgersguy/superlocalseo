@@ -3,6 +3,7 @@ import { apiFetch, setAccessToken } from '../services/api';
 
 interface AuthState {
   userId: string | null;
+  role: string | null;
   isAuthenticated: boolean;
   loading: boolean;
 }
@@ -15,7 +16,7 @@ interface AuthContext extends AuthState {
 }
 
 export const AuthCtx = createContext<AuthContext>({
-  userId: null, isAuthenticated: false, loading: true,
+  userId: null, role: null, isAuthenticated: false, loading: true,
   login: async () => {}, logout: async () => {}, register: async () => {}, setToken: () => {},
 });
 
@@ -23,13 +24,13 @@ export function useAuth(): AuthContext {
   return useContext(AuthCtx);
 }
 
-function decodeUserId(token: string): string {
+function decodeJwt(token: string): { userId: string; role: string } {
   const payload = JSON.parse(atob(token.split('.')[1]));
-  return payload.userId;
+  return { userId: payload.userId, role: payload.role ?? 'client' };
 }
 
 export function useAuthState() {
-  const [state, setState] = useState<AuthState>({ userId: null, isAuthenticated: false, loading: true });
+  const [state, setState] = useState<AuthState>({ userId: null, role: null, isAuthenticated: false, loading: true });
 
   // On mount, attempt a silent token refresh using the httpOnly refresh cookie.
   useEffect(() => {
@@ -37,13 +38,14 @@ export function useAuthState() {
       .then((res) => {
         if (res.success && res.data?.accessToken) {
           setAccessToken(res.data.accessToken);
-          setState({ userId: decodeUserId(res.data.accessToken), isAuthenticated: true, loading: false });
+          const { userId, role } = decodeJwt(res.data.accessToken);
+          setState({ userId, role, isAuthenticated: true, loading: false });
         } else {
-          setState({ userId: null, isAuthenticated: false, loading: false });
+          setState({ userId: null, role: null, isAuthenticated: false, loading: false });
         }
       })
       .catch(() => {
-        setState({ userId: null, isAuthenticated: false, loading: false });
+        setState({ userId: null, role: null, isAuthenticated: false, loading: false });
       });
   }, []);
 
@@ -53,13 +55,14 @@ export function useAuthState() {
     });
     if (!res.success) throw new Error('Login failed');
     setAccessToken(res.data.accessToken);
-    setState({ userId: decodeUserId(res.data.accessToken), isAuthenticated: true, loading: false });
+    const { userId, role } = decodeJwt(res.data.accessToken);
+    setState({ userId, role, isAuthenticated: true, loading: false });
   }, []);
 
   const logout = useCallback(async () => {
     await apiFetch('/auth/logout', { method: 'POST' }).catch(() => {});
     setAccessToken(null);
-    setState({ userId: null, isAuthenticated: false, loading: false });
+    setState({ userId: null, role: null, isAuthenticated: false, loading: false });
   }, []);
 
   const register = useCallback(async (email: string, password: string, businessName: string) => {
@@ -71,7 +74,8 @@ export function useAuthState() {
 
   const setToken = useCallback((token: string) => {
     setAccessToken(token);
-    setState({ userId: decodeUserId(token), isAuthenticated: true, loading: false });
+    const { userId, role } = decodeJwt(token);
+    setState({ userId, role, isAuthenticated: true, loading: false });
   }, []);
 
   return { ...state, login, logout, register, setToken };

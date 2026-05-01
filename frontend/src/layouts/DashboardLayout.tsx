@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Home, BarChart2, Star, Link2, Settings, LogOut, Menu, X, FileText, Megaphone, Users2, ClipboardList } from 'lucide-react';
+import { Home, BarChart2, Star, Link2, Settings, LogOut, Menu, X, FileText, Megaphone, Users2, ClipboardList, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
 interface NavItem {
@@ -22,7 +22,7 @@ const navItems: NavItem[] = [
 ];
 
 function SidebarNav({ onNav }: { onNav?: () => void }) {
-  const { logout } = useAuth();
+  const { logout, role } = useAuth();
   return (
     <>
       <nav className="flex-1 px-3 py-4 space-y-1" aria-label="Dashboard navigation">
@@ -45,6 +45,23 @@ function SidebarNav({ onNav }: { onNav?: () => void }) {
           </NavLink>
         ))}
       </nav>
+
+      {role === 'admin' && (
+        <div className="px-3 pb-2">
+          <NavLink
+            to="/admin"
+            onClick={onNav}
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                isActive ? 'bg-red-500 text-white' : 'text-red-600 hover:bg-red-50 hover:text-red-700'
+              }`
+            }
+          >
+            <ShieldAlert size={18} aria-hidden="true" />
+            Admin
+          </NavLink>
+        </div>
+      )}
 
       <div className="px-3 py-4 border-t border-gray-100">
         <button

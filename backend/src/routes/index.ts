@@ -21,6 +21,7 @@ import qrRouter from './qr';
 import auditsBlRouter from './audits_bl';
 import reputationRouter from './reputation';
 import geoGridRouter from './geogrid';
+import adminRouter from './admin';
 
 const router = Router();
 
@@ -46,5 +47,6 @@ router.use('/qr', qrRouter);
 router.use('/audits/bl', auditsBlRouter);
 router.use('/reputation', reputationRouter);
 router.use('/geo-grid', geoGridRouter);
+router.use('/admin', adminRouter);
 
 export default router;

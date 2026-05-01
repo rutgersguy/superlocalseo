@@ -21,6 +21,7 @@ import Reports from './pages/Reports';
 import Campaigns from './pages/Campaigns';
 import Competitors from './pages/Competitors';
 import AuditHistory from './pages/AuditHistory';
+import Admin from './pages/Admin';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -47,6 +48,9 @@ function App() {
           {/* Protected routes */}
           <Route element={<ProtectedRoute />}>
             <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="/admin" element={<DashboardLayout />}>
+              <Route index element={<Admin />} />
+            </Route>
             <Route path="/dashboard" element={<DashboardLayout />}>
               <Route index element={<Dashboard />} />
               <Route path="rankings" element={<Rankings />} />
