@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Home, BarChart2, Star, Link2, Settings, LogOut, Menu, X, FileText } from 'lucide-react';
+import { Home, BarChart2, Star, Link2, Settings, LogOut, Menu, X, FileText, Megaphone } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
 interface NavItem {
@@ -13,6 +13,7 @@ const navItems: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: <Home size={18} aria-hidden="true" /> },
   { to: '/dashboard/rankings', label: 'Rankings', icon: <BarChart2 size={18} aria-hidden="true" /> },
   { to: '/dashboard/reviews', label: 'Reviews', icon: <Star size={18} aria-hidden="true" /> },
+  { to: '/dashboard/campaigns', label: 'Campaigns', icon: <Megaphone size={18} aria-hidden="true" /> },
   { to: '/dashboard/citations', label: 'Citations', icon: <Link2 size={18} aria-hidden="true" /> },
   { to: '/dashboard/reports', label: 'Reports', icon: <FileText size={18} aria-hidden="true" /> },
   { to: '/dashboard/settings', label: 'Settings', icon: <Settings size={18} aria-hidden="true" /> },

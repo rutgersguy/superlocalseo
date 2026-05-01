@@ -18,6 +18,7 @@ import Reviews from './pages/Reviews';
 import Citations from './pages/Citations';
 import Settings from './pages/Settings';
 import Reports from './pages/Reports';
+import Campaigns from './pages/Campaigns';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -50,6 +51,7 @@ function App() {
               <Route path="reviews" element={<Reviews />} />
               <Route path="citations" element={<Citations />} />
               <Route path="reports" element={<Reports />} />
+              <Route path="campaigns" element={<Campaigns />} />
               <Route path="settings" element={<Settings />} />
             </Route>
           </Route>

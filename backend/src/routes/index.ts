@@ -15,6 +15,7 @@ import analyticsRouter from './analytics';
 import auditRouter from './audit';
 import teamRouter from './team';
 import widgetRouter from './widget';
+import campaignsRouter from './campaigns';
 
 const router = Router();
 
@@ -34,5 +35,6 @@ router.use('/analytics', analyticsRouter);
 router.use('/audit', auditRouter);
 router.use('/team', teamRouter);
 router.use('/widget', widgetRouter);
+router.use('/campaigns', campaignsRouter);
 
 export default router;
