@@ -106,13 +106,21 @@ export default function Landing() {
             Rankings, reviews, and citations in one dashboard. Automated monthly PDF reports
             delivered to your inbox. Built for plumbers, HVAC, and electricians.
           </p>
-          <Link
-            to="/register"
-            className="inline-block bg-brand-500 text-white text-lg px-8 py-4 rounded-xl font-semibold hover:bg-brand-600 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
-          >
-            Start free 14-day trial
-          </Link>
-          <p className="mt-4 text-sm text-gray-500">No credit card required to start.</p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Link
+              to="/audit"
+              className="inline-block bg-brand-500 text-white text-lg px-8 py-4 rounded-xl font-semibold hover:bg-brand-600 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+            >
+              Get your free SEO audit
+            </Link>
+            <Link
+              to="/register"
+              className="inline-block border border-gray-300 text-gray-700 text-lg px-8 py-4 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
+            >
+              Start free trial
+            </Link>
+          </div>
+          <p className="mt-4 text-sm text-gray-500">Free audit — no account needed. Trial requires no credit card.</p>
         </section>
 
         {/* Value props */}

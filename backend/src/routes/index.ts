@@ -12,6 +12,7 @@ import metricsRouter from './metrics';
 import billingRouter from './billing';
 import reportsRouter from './reports';
 import analyticsRouter from './analytics';
+import auditRouter from './audit';
 
 const router = Router();
 
@@ -28,5 +29,6 @@ router.use('/metrics', metricsRouter);
 router.use('/billing', billingRouter);
 router.use('/reports', reportsRouter);
 router.use('/analytics', analyticsRouter);
+router.use('/audit', auditRouter);
 
 export default router;

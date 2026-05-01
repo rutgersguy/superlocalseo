@@ -71,6 +71,8 @@ export const config = {
     clientSecret: optional('GOOGLE_CLIENT_SECRET'),
   },
 
+  googlePlacesApiKey: optional('GOOGLE_PLACES_API_KEY'),
+
   reports: {
     dir: optional('REPORTS_DIR', '/tmp/reports'),
   },
