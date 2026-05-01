@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
-import { sendInvite, fetchUnsubscribes } from '../services/embedmyreviews.service';
+import { sendInvite, fetchUnsubscribes, fetchCredits, fetchCampaignTemplates } from '../services/embedmyreviews.service';
 import { getClientEMRKey } from '../services/emr_provisioning';
 import { logger } from '../utils/logger';
 
@@ -173,3 +173,31 @@ function maskContact(contact: string, type: 'email' | 'sms'): string {
 }
 
 const getApiKey = getClientEMRKey;
+
+export async function getCredits(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const apiKey = await getApiKey(req.clientId);
+    if (!apiKey) {
+      ok(res, { email: 0, sms: 0, total: 0, available: false });
+      return;
+    }
+    const credits = await fetchCredits(apiKey);
+    ok(res, { ...credits, available: true });
+  } catch (e) {
+    ok(res, { email: 0, sms: 0, total: 0, available: false });
+  }
+}
+
+export async function listTemplates(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const apiKey = await getApiKey(req.clientId);
+    if (!apiKey) {
+      ok(res, { templates: [] });
+      return;
+    }
+    const templates = await fetchCampaignTemplates(apiKey);
+    ok(res, { templates });
+  } catch (e) {
+    ok(res, { templates: [] });
+  }
+}

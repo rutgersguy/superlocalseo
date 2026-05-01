@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useSWR, { mutate as swrMutate } from 'swr';
-import { QrCode, Download, Trash2, Plus, AlertCircle, CheckCircle2, ExternalLink } from 'lucide-react';
+import { QrCode, Download, Trash2, Plus, AlertCircle, CheckCircle2, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 import { apiFetch, fetcher } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 
@@ -158,7 +158,17 @@ interface WidgetConfig {
   showPlatformBadge: boolean;
 }
 
+interface WidgetAdvancedConfig {
+  minRating?: number;
+  platforms?: string[];
+  keywordFilter?: string;
+  sortBy?: 'newest' | 'highest' | 'lowest';
+  reviewCount?: number;
+  customCss?: string;
+}
+
 interface WidgetData {
+  id: string;
   widgetKey: string;
   config: WidgetConfig;
 }
@@ -272,6 +282,140 @@ function WidgetPreview({ widgetKey, cfg }: { widgetKey: string; cfg: WidgetConfi
       <div style={{ padding: '4px 14px 8px', textAlign: 'right' }}>
         <span style={{ fontSize: 10, color: textMuted, opacity: 0.6 }}>powered by SuperLocalSEO</span>
       </div>
+    </div>
+  );
+}
+
+const ALL_PLATFORMS = ['Google', 'Yelp', 'Facebook', 'TripAdvisor'];
+
+function WidgetAdvancedPanel({ widgetId }: { widgetId: string }) {
+  const { data, mutate } = useSWR<{ success: boolean; data: { config: WidgetAdvancedConfig } }>(
+    widgetId ? `/widget/${widgetId}/config` : null,
+    fetcher,
+  );
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<WidgetAdvancedConfig>({});
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const cfg: WidgetAdvancedConfig = { ...data?.data?.config, ...draft };
+
+  const togglePlatform = (p: string) => {
+    const current = cfg.platforms ?? ALL_PLATFORMS.map((x) => x.toLowerCase());
+    const lower = p.toLowerCase();
+    const next = current.includes(lower) ? current.filter((x) => x !== lower) : [...current, lower];
+    setDraft((d) => ({ ...d, platforms: next }));
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await apiFetch(`/widget/${widgetId}/config`, {
+        method: 'PUT',
+        body: JSON.stringify(cfg),
+      });
+      await mutate();
+      setDraft({});
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const activePlatforms = cfg.platforms ?? ALL_PLATFORMS.map((x) => x.toLowerCase());
+
+  return (
+    <div className="border-t pt-4 mt-4">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+      >
+        {open ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+        Advanced settings
+      </button>
+      {open && (
+        <div className="mt-4 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Only show reviews rated ★ or higher</label>
+              <select
+                value={cfg.minRating ?? 1}
+                onChange={(e) => setDraft((d) => ({ ...d, minRating: Number(e.target.value) }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                <option value={1}>1★ (all)</option>
+                <option value={2}>2★</option>
+                <option value={3}>3★</option>
+                <option value={4}>4★</option>
+                <option value={5}>5★ only</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Sort By</label>
+              <select
+                value={cfg.sortBy ?? 'newest'}
+                onChange={(e) => setDraft((d) => ({ ...d, sortBy: e.target.value as WidgetAdvancedConfig['sortBy'] }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                <option value="newest">Newest</option>
+                <option value="highest">Highest rated</option>
+                <option value="lowest">Lowest rated</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Max Reviews</label>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={cfg.reviewCount ?? 10}
+                onChange={(e) => setDraft((d) => ({ ...d, reviewCount: Number(e.target.value) }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">Platform Filter</label>
+            <div className="flex flex-wrap gap-3">
+              {ALL_PLATFORMS.map((p) => (
+                <label key={p} className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={activePlatforms.includes(p.toLowerCase())}
+                    onChange={() => togglePlatform(p)}
+                    className="rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+                  />
+                  {p}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Custom CSS</label>
+            <textarea
+              value={cfg.customCss ?? ''}
+              onChange={(e) => setDraft((d) => ({ ...d, customCss: e.target.value }))}
+              placeholder=".emr-widget { ... }"
+              rows={4}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+              style={{ height: 120 }}
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={saving}
+              className="px-4 py-2 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            {saved && <span className="text-xs text-green-600 font-medium">Saved!</span>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -417,6 +561,9 @@ function WidgetTab() {
           <WidgetPreview widgetKey={key} cfg={cfg} />
         </div>
       )}
+
+      {/* Advanced settings */}
+      {widget.id && <WidgetAdvancedPanel widgetId={widget.id} />}
 
       {/* Danger zone */}
       <div className="border-t pt-5">
@@ -766,6 +913,92 @@ function TeamTab() {
   );
 }
 
+// ─── ROI Settings section ─────────────────────────────────────────────────────
+
+interface RoiConfig {
+  avgCustomerValue: number;
+  conversionRate: number;
+}
+
+function RoiSettingsSection() {
+  const { data, mutate } = useSWR<{ success: boolean; data: { roiConfig: RoiConfig } }>('/analytics/roi', fetcher);
+  const roiConfig = data?.data?.roiConfig;
+
+  const [acv, setAcv] = useState('');
+  const [conv, setConv] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const resolvedAcv = acv !== '' ? acv : String(roiConfig?.avgCustomerValue ?? '');
+  const resolvedConv = conv !== '' ? conv : String(roiConfig?.conversionRate ?? '');
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await apiFetch('/analytics/roi-config', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          avgCustomerValue: parseFloat(resolvedAcv) || 0,
+          conversionRate: parseFloat(resolvedConv) || 2.5,
+        }),
+      });
+      await mutate();
+      setAcv('');
+      setConv('');
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="border-t pt-5">
+      <h3 className="text-sm font-semibold text-gray-900 mb-1">ROI Settings</h3>
+      <p className="text-xs text-gray-500 mb-4">Used to estimate monthly revenue value from your keyword rankings.</p>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Average Customer Value ($)</label>
+          <input
+            type="number"
+            min={0}
+            value={resolvedAcv}
+            onChange={(e) => setAcv(e.target.value)}
+            placeholder="500"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Conversion Rate (%)</label>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={0.1}
+            value={resolvedConv}
+            onChange={(e) => setConv(e.target.value)}
+            placeholder="3"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+      </div>
+      <p className="mt-3 text-xs text-gray-400">
+        Est. monthly revenue = keyword impressions × CTR × {resolvedConv || '3'}% × ${resolvedAcv || '500'}
+      </p>
+      <div className="mt-3 flex items-center gap-3">
+        <button
+          onClick={() => void save()}
+          disabled={saving}
+          className="px-4 py-2 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50"
+        >
+          {saving ? 'Saving…' : 'Save ROI Settings'}
+        </button>
+        {saved && <span className="text-sm text-green-600 font-medium">ROI settings saved</span>}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Settings() {
@@ -891,6 +1124,7 @@ export default function Settings() {
                 <span className="text-sm text-green-600 font-medium">Saved!</span>
               )}
             </div>
+            <RoiSettingsSection />
           </div>
         )}
 

@@ -250,6 +250,7 @@ export default function Rankings() {
 
   const totals = roiData?.data?.totals;
   const roiConfig = roiData?.data?.roiConfig;
+  const roiConfigured = (roiConfig?.avgCustomerValue ?? 0) > 0;
 
   return (
     <div className="space-y-6">
@@ -316,17 +317,20 @@ export default function Rankings() {
                   );
                 })}
                 {showRoi && (
-                  <>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-right">Search Vol.</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-right">Est. Revenue</th>
-                  </>
+                  <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-right">Search Vol.</th>
                 )}
+                <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-right">
+                  <span className="flex items-center justify-end gap-1">
+                    Est. Revenue / mo
+                    <span title="Based on your ROI settings" className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 text-[10px] font-bold cursor-help leading-none">i</span>
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {sorted.length === 0 ? (
                 <tr>
-                  <td colSpan={showRoi ? 7 : 5} className="px-6 py-10 text-center text-gray-400">
+                  <td colSpan={showRoi ? 7 : 6} className="px-6 py-10 text-center text-gray-400">
                     No ranking data available.
                   </td>
                 </tr>
@@ -350,22 +354,23 @@ export default function Rankings() {
                         {row.pulledAt ? new Date(row.pulledAt).toLocaleDateString() : '—'}
                       </td>
                       {showRoi && (
-                        <>
-                          <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                            <VolumeCell
-                              keywordId={row.keywordId}
-                              value={localVol}
-                              onSave={(v) => {
-                                setLocalVolumes((prev) => ({ ...prev, [row.keywordId]: v }));
-                                void roiMutate();
-                              }}
-                            />
-                          </td>
-                          <td className="px-4 py-3 text-right font-medium text-gray-700 tabular-nums">
-                            {roi?.estRevenue != null ? fmt$(roi.estRevenue) : <span className="text-gray-300 text-xs">—</span>}
-                          </td>
-                        </>
+                        <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                          <VolumeCell
+                            keywordId={row.keywordId}
+                            value={localVol}
+                            onSave={(v) => {
+                              setLocalVolumes((prev) => ({ ...prev, [row.keywordId]: v }));
+                              void roiMutate();
+                            }}
+                          />
+                        </td>
                       )}
+                      <td className="px-4 py-3 text-right font-medium text-gray-700 tabular-nums">
+                        {roiConfigured
+                          ? (roi?.estRevenue != null ? fmt$(roi.estRevenue) : <span className="text-gray-300 text-xs">—</span>)
+                          : <span className="text-gray-300 text-xs">—</span>
+                        }
+                      </td>
                     </tr>
                   );
                 })

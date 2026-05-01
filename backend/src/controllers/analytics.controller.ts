@@ -303,6 +303,36 @@ export async function exportCsv(req: Request, res: Response, next: NextFunction)
   }
 }
 
+export async function citationTrend(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const days = Math.min(180, Math.max(7, parseInt(String(req.query.days ?? '90'), 10)));
+    const locationId = req.query.locationId as string | undefined;
+
+    let query = db('citation_snapshots')
+      .where({ 'locations.client_id': req.clientId })
+      .join('locations', 'citation_snapshots.location_id', 'locations.id')
+      .whereRaw(`citation_snapshots.pulled_at >= NOW() - INTERVAL '${days} days'`);
+
+    if (locationId) query = query.where('citation_snapshots.location_id', locationId);
+
+    const rows = await query
+      .select(
+        db.raw(`DATE(citation_snapshots.pulled_at) AS date`),
+        db.raw(`COUNT(*) AS total`),
+        db.raw(`SUM(CASE WHEN citation_snapshots.listed THEN 1 ELSE 0 END) AS listed`)
+      )
+      .groupByRaw(`DATE(citation_snapshots.pulled_at)`)
+      .orderBy('date', 'asc') as Array<{ date: string; total: string; listed: string }>;
+
+    const series = rows.map((r) => ({
+      date: r.date,
+      completeness: Math.round((parseInt(r.listed) / Math.max(1, parseInt(r.total))) * 100),
+    }));
+
+    ok(res, { series, days });
+  } catch (e) { next(e); }
+}
+
 function csvEscape(v: unknown): string {
   if (v == null) return '';
   const s = String(v);

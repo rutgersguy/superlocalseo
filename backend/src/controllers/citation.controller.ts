@@ -15,6 +15,12 @@ interface CitationRow {
   listed: boolean;
   nap_match: boolean;
   listing_url: string | null;
+  nap_name_match: boolean | null;
+  nap_address_match: boolean | null;
+  nap_phone_match: boolean | null;
+  listed_name: string | null;
+  listed_address: string | null;
+  listed_phone: string | null;
 }
 
 interface LocationCitationSummary {
@@ -28,6 +34,14 @@ interface LocationCitationSummary {
     listed: boolean;
     napMatch: boolean;
     listingUrl: string | null;
+    napDetail: {
+      nameMatch: boolean | null;
+      addressMatch: boolean | null;
+      phoneMatch: boolean | null;
+      listedName: string | null;
+      listedAddress: string | null;
+      listedPhone: string | null;
+    };
   }>;
 }
 
@@ -79,6 +93,14 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
           listed: c.listed,
           napMatch: c.nap_match,
           listingUrl: c.listing_url,
+          napDetail: {
+            nameMatch: c.nap_name_match,
+            addressMatch: c.nap_address_match,
+            phoneMatch: c.nap_phone_match,
+            listedName: c.listed_name,
+            listedAddress: c.listed_address,
+            listedPhone: c.listed_phone,
+          },
         })),
       });
     }

@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import useSWR from 'swr';
-import { Mail, Upload, Send, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, UserX } from 'lucide-react';
+import { Mail, Upload, Send, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, UserX, Plus, X } from 'lucide-react';
 import { fetcher, apiFetch } from '../services/api';
 
 interface Campaign {
@@ -30,6 +30,139 @@ interface Unsubscribe {
 interface UnsubscribesResponse {
   success: boolean;
   data: { unsubscribes: Unsubscribe[]; total: number; hasMore: boolean };
+}
+
+interface CreditsResponse {
+  success: boolean;
+  data: { email: number; sms: number; total: number; available: boolean };
+}
+
+interface TemplatesResponse {
+  success: boolean;
+  data: { templates: Array<{ id: string; name: string; description: string; type: string }> };
+}
+
+// ── Credit badge ────────────────────────────────────────────────────────────
+
+function CreditBadge() {
+  const { data } = useSWR<CreditsResponse>('/campaigns/credits', fetcher, { refreshInterval: 60_000 });
+  const credits = data?.data;
+  if (!credits?.available) return null;
+
+  const isLow = credits.total < 50;
+  const isCritical = credits.total < 20;
+
+  return (
+    <div className={`flex items-center gap-3 text-sm px-3 py-1.5 rounded-lg border ${
+      isCritical ? 'bg-red-50 border-red-200 text-red-700' :
+      isLow ? 'bg-amber-50 border-amber-200 text-amber-700' :
+      'bg-gray-50 border-gray-200 text-gray-600'
+    }`}>
+      <span>📧 {credits.email}</span>
+      <span>📱 {credits.sms}</span>
+      {isLow && <span className="font-medium">{isCritical ? '⚠ Critical' : '⚠ Low'}</span>}
+    </div>
+  );
+}
+
+// ── Template picker ─────────────────────────────────────────────────────────
+
+function TemplatePicker({ onSelect }: { onSelect: (name: string) => void }) {
+  const { data, isLoading } = useSWR<TemplatesResponse>('/campaigns/templates', fetcher);
+  const templates = data?.data?.templates ?? [];
+
+  if (isLoading) return <div className="text-sm text-gray-400">Loading templates...</div>;
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm font-medium text-gray-700">Start from a template</p>
+      <div className="grid grid-cols-2 gap-3">
+        {templates.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => onSelect(t.name)}
+            className="text-left p-3 border border-gray-200 rounded-lg hover:border-brand-400 hover:bg-brand-50 transition-colors"
+          >
+            <p className="text-sm font-medium text-gray-900">{t.name}</p>
+            {t.description && <p className="text-xs text-gray-500 mt-0.5">{t.description}</p>}
+          </button>
+        ))}
+        <button
+          onClick={() => onSelect('')}
+          className="text-left p-3 border border-dashed border-gray-300 rounded-lg hover:border-brand-400 text-sm text-gray-500 hover:text-brand-600"
+        >
+          Start from scratch
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── New campaign modal ──────────────────────────────────────────────────────
+
+function NewCampaignModal({ onClose }: { onClose: () => void }) {
+  const { data: templatesData, isLoading: templatesLoading } = useSWR<TemplatesResponse>('/campaigns/templates', fetcher);
+  const templates = templatesData?.data?.templates ?? [];
+  const [step, setStep] = useState<'pick' | 'name'>('pick');
+  const [name, setName] = useState('');
+
+  const showPicker = step === 'pick' && (templatesLoading || templates.length > 0);
+
+  function handleTemplateSelect(templateName: string) {
+    setName(templateName);
+    setStep('name');
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h2 className="font-semibold text-gray-900">New Campaign</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="px-5 py-5 space-y-4">
+          {showPicker && (
+            <TemplatePicker onSelect={handleTemplateSelect} />
+          )}
+          {!showPicker && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Campaign name</label>
+                <input
+                  autoFocus
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  placeholder="e.g. Post-visit review request"
+                />
+              </div>
+              <p className="text-xs text-gray-400">
+                Campaigns are created in your EmbedMyReviews dashboard. Use this name as a reference when setting up your campaign there.
+              </p>
+              <div className="flex gap-3">
+                {templates.length > 0 && step === 'name' && (
+                  <button
+                    onClick={() => setStep('pick')}
+                    className="px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Back
+                  </button>
+                )}
+                <button
+                  onClick={onClose}
+                  className="flex-1 px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 disabled:opacity-50 transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── Funnel bar ─────────────────────────────────────────────────────────────
@@ -463,8 +596,11 @@ function UnsubscribedSection() {
 
 export default function Campaigns() {
   const { data, error, isLoading } = useSWR<CampaignsResponse>('/campaigns', fetcher);
+  const { data: creditsData } = useSWR<CreditsResponse>('/campaigns/credits', fetcher, { refreshInterval: 60_000 });
+  const [showNewCampaign, setShowNewCampaign] = useState(false);
 
   const campaigns = data?.data?.campaigns ?? [];
+  const credits = creditsData?.data;
 
   if (error) {
     return (
@@ -476,11 +612,27 @@ export default function Campaigns() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">Review Campaigns</h1>
-        <p className="text-sm text-gray-500 mt-1">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-bold text-gray-900">Review Campaigns</h1>
+            <CreditBadge />
+          </div>
+          <button
+            onClick={() => setShowNewCampaign(true)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors"
+          >
+            <Plus size={14} /> New Campaign
+          </button>
+        </div>
+        <p className="text-sm text-gray-500">
           Send review requests via EmbedMyReviews. Happy customers are routed to Google; others to a private feedback form.
         </p>
+        {credits?.available && credits.total < 50 && (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+            You're running low on review request credits ({credits.total} remaining). Contact support to top up.
+          </div>
+        )}
       </div>
 
       {isLoading && (
@@ -506,6 +658,8 @@ export default function Campaigns() {
       ))}
 
       <UnsubscribedSection />
+
+      {showNewCampaign && <NewCampaignModal onClose={() => setShowNewCampaign(false)} />}
     </div>
   );
 }

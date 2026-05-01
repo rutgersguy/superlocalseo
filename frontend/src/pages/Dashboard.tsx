@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import useSWR, { mutate } from 'swr';
+import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { fetcher, apiFetch } from '../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -58,6 +59,42 @@ function MetricCard({ label, value, loading }: MetricCardProps) {
         <Skeleton className="h-8 w-20 mt-1" />
       ) : (
         <p className="text-3xl font-bold text-gray-900">{value}</p>
+      )}
+    </div>
+  );
+}
+
+// ─── Visibility card ──────────────────────────────────────────────────────────
+
+function VisibilityCard({ vis, loading }: { vis?: { current: number | null; delta: number | null; series: Array<{ date: string; score: number }> }; loading: boolean }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 col-span-2 lg:col-span-1">
+      <p className="text-sm text-gray-500 mb-1">Visibility Score</p>
+      {loading ? (
+        <div className="animate-pulse bg-gray-200 rounded h-8 w-20 mt-1" />
+      ) : vis?.current != null ? (
+        <>
+          <div className="flex items-end gap-2">
+            <p className="text-3xl font-bold text-gray-900">{vis.current}</p>
+            <span className="text-sm text-gray-400 mb-1">/ 100</span>
+            {vis.delta !== null && (
+              <span className={`text-sm font-medium mb-1 ${vis.delta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                {vis.delta >= 0 ? '▲' : '▼'}{Math.abs(vis.delta)} vs 30d ago
+              </span>
+            )}
+          </div>
+          {vis.series.length > 1 && (
+            <div className="mt-3 h-12">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={vis.series}>
+                  <Line type="monotone" dataKey="score" stroke="#6366f1" dot={false} strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </>
+      ) : (
+        <p className="text-sm text-gray-400 mt-2">Collecting data…</p>
       )}
     </div>
   );
@@ -153,6 +190,9 @@ export default function Dashboard() {
 
   const { data: roiData } = useSWR<RoiResponse>('/analytics/roi', fetcher);
 
+  const { data: visData } = useSWR<{ success: boolean; data: { current: number | null; delta: number | null; series: Array<{ date: string; score: number }> } }>('/metrics/visibility', fetcher);
+  const vis = visData?.data;
+
   const metrics = metricsData?.data;
   const rankings = rankingsData?.data ?? [];
   const roi = roiData?.data;
@@ -180,6 +220,7 @@ export default function Dashboard() {
         <MetricCard label="Keywords in Top 10" value={metrics?.keywordsInTop10 ?? '—'} loading={metricsLoading} />
         <MetricCard label="Total Reviews" value={metrics?.totalReviews ?? '—'} loading={metricsLoading} />
         <MetricCard label="Avg Rating" value={metrics?.avgRating != null ? metrics.avgRating.toFixed(1) : '—'} loading={metricsLoading} />
+        <VisibilityCard vis={vis} loading={!visData} />
       </div>
 
       {/* ROI banner — only shown once avgCustomerValue is configured */}

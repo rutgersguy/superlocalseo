@@ -344,6 +344,49 @@ export interface EMRUnsubscribe {
   unsubscribedAt: string;
 }
 
+export async function fetchCredits(
+  apiKey: string,
+): Promise<{ email: number; sms: number; total: number }> {
+  const res = await emrFetch('/account/credits', apiKey);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`EMR fetchCredits failed: ${res.status} ${body}`);
+  }
+  const data = await res.json() as {
+    email?: number; email_credits?: number;
+    sms?: number; sms_credits?: number;
+    total?: number;
+  };
+  const email = data.email ?? data.email_credits ?? 0;
+  const sms = data.sms ?? data.sms_credits ?? 0;
+  return { email, sms, total: email + sms };
+}
+
+export interface EMRTemplate {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  defaultMessage?: string;
+}
+
+export async function fetchCampaignTemplates(apiKey: string): Promise<EMRTemplate[]> {
+  const res = await emrFetch('/request-reviews/campaign-templates', apiKey);
+  if (!res.ok) {
+    return [];
+  }
+  const data = await res.json() as {
+    data?: Array<{ id: string; name: string; description?: string; type?: string; message?: string }>;
+  };
+  return (data?.data ?? []).map((t) => ({
+    id: t.id,
+    name: t.name,
+    description: t.description ?? '',
+    type: t.type ?? 'general',
+    defaultMessage: t.message,
+  }));
+}
+
 export async function fetchUnsubscribes(
   apiKey: string,
   opts: { page?: number } = {},

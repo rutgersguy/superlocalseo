@@ -16,6 +16,14 @@ export interface BLCitationResult {
   listed: boolean;
   napMatch: boolean;
   listingUrl: string | null;
+  napDetail?: {
+    nameMatch: boolean;
+    addressMatch: boolean;
+    phoneMatch: boolean;
+    listedName?: string;
+    listedAddress?: string;
+    listedPhone?: string;
+  };
 }
 
 async function blFetch(path: string, apiKey: string, options: RequestInit = {}): Promise<Response> {
@@ -88,7 +96,7 @@ export async function fetchCitations(campaignId: string): Promise<BLCitationResu
     throw new Error(`BrightLocal fetchCitations failed: ${res.status} ${body}`);
   }
 
-  const data = (await res.json()) as { response?: { citations?: Array<{ directory: string; listed: boolean; nap_match: boolean; listing_url: string | null }> } };
+  const data = (await res.json()) as { response?: { citations?: Array<{ directory: string; listed: boolean; nap_match: boolean; listing_url: string | null; nap_detail?: { name_match?: boolean; address_match?: boolean; phone_match?: boolean; listed_name?: string; listed_address?: string; listed_phone?: string } }> } };
   const citations = data?.response?.citations ?? [];
 
   return citations.map((c) => ({
@@ -96,6 +104,14 @@ export async function fetchCitations(campaignId: string): Promise<BLCitationResu
     listed: c.listed,
     napMatch: c.nap_match,
     listingUrl: c.listing_url,
+    napDetail: c.nap_detail ? {
+      nameMatch: c.nap_detail.name_match ?? true,
+      addressMatch: c.nap_detail.address_match ?? true,
+      phoneMatch: c.nap_detail.phone_match ?? true,
+      listedName: c.nap_detail.listed_name,
+      listedAddress: c.nap_detail.listed_address,
+      listedPhone: c.nap_detail.listed_phone,
+    } : undefined,
   }));
 }
 

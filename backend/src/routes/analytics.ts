@@ -6,6 +6,7 @@ import * as ctrl from '../controllers/analytics.controller';
 
 const router = Router();
 
+router.get('/citations/trend', requireAuth, requireClient, ctrl.citationTrend);
 router.get('/rankings/history', requireAuth, requireClient, validateQuery(ctrl.rankingsHistorySchema), ctrl.rankingsHistory);
 router.get('/reviews/trend', requireAuth, requireClient, validateQuery(ctrl.reviewsTrendSchema), ctrl.reviewsTrend);
 router.get('/export', requireAuth, requireClient, ctrl.exportCsv);

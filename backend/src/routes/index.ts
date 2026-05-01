@@ -18,7 +18,6 @@ import widgetRouter from './widget';
 import campaignsRouter from './campaigns';
 import competitorsRouter from './competitors';
 import qrRouter from './qr';
-import prometheusRouter from './metrics';
 
 const router = Router();
 
@@ -41,6 +40,5 @@ router.use('/widget', widgetRouter);
 router.use('/campaigns', campaignsRouter);
 router.use('/competitors', competitorsRouter);
 router.use('/qr', qrRouter);
-router.use('/prom-metrics', prometheusRouter);
 
 export default router;

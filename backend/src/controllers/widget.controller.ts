@@ -72,7 +72,16 @@ export async function getWidget(req: Request, res: Response, next: NextFunction)
       client = updated as Record<string, unknown>;
     }
 
+    let widget = await db('client_widgets').where({ client_id: req.clientId }).first();
+    if (!widget) {
+      const [created] = await db('client_widgets')
+        .insert({ client_id: req.clientId, config: JSON.stringify({}), created_at: new Date(), updated_at: new Date() })
+        .returning('*');
+      widget = created;
+    }
+
     ok(res, {
+      id: widget.id,
       widgetKey: client.widget_key,
       config: { ...DEFAULT_CONFIG, ...(client.widget_config as object ?? {}) },
     });
@@ -113,4 +122,42 @@ export async function regenerateKey(req: Request, res: Response, next: NextFunct
   } catch (e) {
     next(e);
   }
+}
+
+export async function getConfig(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id } = req.params;
+    const widget = await db('client_widgets').where({ id, client_id: req.clientId }).first();
+    if (!widget) { err(res, 'Widget not found', 404, 'NOT_FOUND'); return; }
+    ok(res, { config: widget.config ?? {} });
+  } catch (e) { next(e); }
+}
+
+export async function updateConfig(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id } = req.params;
+    const widget = await db('client_widgets').where({ id, client_id: req.clientId }).first();
+    if (!widget) { err(res, 'Widget not found', 404, 'NOT_FOUND'); return; }
+
+    const advancedConfigSchema = z.object({
+      minRating: z.number().int().min(1).max(5).optional(),
+      platforms: z.array(z.string()).optional(),
+      keywordFilter: z.string().max(100).optional(),
+      sortBy: z.enum(['newest', 'highest', 'lowest']).optional(),
+      reviewCount: z.number().int().min(1).max(50).optional(),
+      customCss: z.string().max(10000).optional().refine(
+        (css) => !css || !/(javascript:|@import|expression\s*\()/i.test(css),
+        'CSS contains disallowed content'
+      ),
+    });
+
+    const parsed = advancedConfigSchema.safeParse(req.body);
+    if (!parsed.success) { err(res, parsed.error.errors[0]?.message ?? 'Validation error', 400, 'VALIDATION_ERROR'); return; }
+
+    const currentConfig = (widget.config ?? {}) as Record<string, unknown>;
+    const newConfig = { ...currentConfig, ...parsed.data };
+
+    await db('client_widgets').where({ id }).update({ config: JSON.stringify(newConfig), updated_at: new Date() });
+    ok(res, { config: newConfig });
+  } catch (e) { next(e); }
 }

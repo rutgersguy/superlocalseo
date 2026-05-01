@@ -45,6 +45,12 @@ export async function processCitations(job: Job): Promise<void> {
         nap_match: c.napMatch,
         listing_url: c.listingUrl,
         pulled_at: now,
+        nap_name_match: c.napDetail?.nameMatch ?? null,
+        nap_address_match: c.napDetail?.addressMatch ?? null,
+        nap_phone_match: c.napDetail?.phoneMatch ?? null,
+        listed_name: c.napDetail?.listedName ?? null,
+        listed_address: c.napDetail?.listedAddress ?? null,
+        listed_phone: c.napDetail?.listedPhone ?? null,
       }));
 
       if (rows.length > 0) {
