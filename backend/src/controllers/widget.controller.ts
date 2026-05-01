@@ -13,10 +13,17 @@ const configSchema = z.object({
   showPlatformBadge: z.boolean().optional(),
 });
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // PUBLIC — no auth. Called by the embeddable widget.js from any domain.
 export async function publicWidget(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { key } = req.params;
+
+    if (!UUID_RE.test(key)) {
+      notFound(res, 'Widget not found');
+      return;
+    }
 
     const client = await db('clients').where({ widget_key: key }).first();
     if (!client) {
