@@ -25,7 +25,7 @@ interface ClientResponse {
 }
 
 const INDUSTRIES = ['Plumbing', 'HVAC', 'Electrical', 'Landscaping', 'Cleaning', 'Other'];
-type Tab = 'account' | 'integrations' | 'billing' | 'team';
+type Tab = 'account' | 'integrations' | 'billing' | 'team' | 'widgets';
 
 // ─── Team types ───────────────────────────────────────────────────────────────
 
@@ -58,6 +58,7 @@ function TabBar({ active, onChange, isOwner }: { active: Tab; onChange: (t: Tab)
     { key: 'integrations', label: 'Integrations' },
     { key: 'billing', label: 'Billing' },
     ...(isOwner ? [{ key: 'team' as Tab, label: 'Team' }] : []),
+    { key: 'widgets' as Tab, label: 'Widgets' },
   ];
   return (
     <div className="flex gap-1 border-b border-gray-200 mb-6">
@@ -142,6 +143,162 @@ function OAuthCard({ name, description, connected, comingSoon, onConnect, onDisc
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Widgets tab ──────────────────────────────────────────────────────────────
+
+interface WidgetConfig {
+  theme: 'light' | 'dark';
+  minRating: number;
+  maxCount: number;
+  showPlatformBadge: boolean;
+}
+
+interface WidgetData {
+  widgetKey: string;
+  config: WidgetConfig;
+}
+
+function WidgetTab() {
+  const { data, mutate } = useSWR<{ success: boolean; data: WidgetData }>('/widget', fetcher);
+  const widget = data?.data;
+
+  const [copied, setCopied] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [config, setConfig] = useState<Partial<WidgetConfig>>({});
+  const [regenerating, setRegenerating] = useState(false);
+
+  const cfg: WidgetConfig = { ...widget?.config, ...config } as WidgetConfig;
+  const key = widget?.widgetKey ?? '';
+
+  const embedSnippet = key
+    ? `<div data-sls-key="${key}"></div>\n<script src="${window.location.origin}/widget.js"></script>`
+    : '';
+
+  const copyEmbed = async () => {
+    await navigator.clipboard.writeText(embedSnippet);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const saveConfig = async () => {
+    setSaving(true);
+    try {
+      await apiFetch('/widget', { method: 'PATCH', body: JSON.stringify(cfg) });
+      await mutate();
+      setConfig({});
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const regenerate = async () => {
+    if (!confirm('This will break any existing embeds on your website. Continue?')) return;
+    setRegenerating(true);
+    try {
+      await apiFetch('/widget/regenerate', { method: 'POST' });
+      await mutate();
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  if (!widget) return <div className="space-y-3 animate-pulse">{[...Array(3)].map((_, i) => <div key={i} className="h-10 bg-gray-100 rounded-lg" />)}</div>;
+
+  return (
+    <div className="space-y-6">
+      {/* Embed code */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-900 mb-2">Embed code</h3>
+        <p className="text-xs text-gray-500 mb-3">Paste this snippet anywhere on your website to show your reviews.</p>
+        <div className="relative">
+          <pre className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-700 overflow-x-auto whitespace-pre-wrap font-mono">{embedSnippet}</pre>
+          <button
+            onClick={() => void copyEmbed()}
+            className="absolute top-2 right-2 px-2.5 py-1 bg-white border border-gray-200 rounded text-xs font-medium text-gray-600 hover:bg-gray-50"
+          >
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
+      </div>
+
+      {/* Config */}
+      <div className="border-t pt-5">
+        <h3 className="text-sm font-semibold text-gray-900 mb-4">Appearance</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Theme</label>
+            <select
+              value={cfg.theme ?? 'light'}
+              onChange={(e) => setConfig((c) => ({ ...c, theme: e.target.value as 'light' | 'dark' }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Reviews to show</label>
+            <select
+              value={cfg.maxCount ?? 8}
+              onChange={(e) => setConfig((c) => ({ ...c, maxCount: Number(e.target.value) }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              <option value={6}>6</option>
+              <option value={8}>8</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Minimum rating</label>
+            <select
+              value={cfg.minRating ?? 4}
+              onChange={(e) => setConfig((c) => ({ ...c, minRating: Number(e.target.value) }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              <option value={1}>1★ and up (all)</option>
+              <option value={3}>3★ and up</option>
+              <option value={4}>4★ and up</option>
+              <option value={5}>5★ only</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-3 pt-5">
+            <input
+              type="checkbox"
+              id="showPlatformBadge"
+              checked={cfg.showPlatformBadge ?? true}
+              onChange={(e) => setConfig((c) => ({ ...c, showPlatformBadge: e.target.checked }))}
+              className="rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+            />
+            <label htmlFor="showPlatformBadge" className="text-sm text-gray-700">Show platform badge</label>
+          </div>
+        </div>
+        <div className="mt-4">
+          <button
+            onClick={() => void saveConfig()}
+            disabled={saving}
+            className="px-4 py-2 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50"
+          >
+            {saving ? 'Saving...' : 'Save appearance'}
+          </button>
+        </div>
+      </div>
+
+      {/* Danger zone */}
+      <div className="border-t pt-5">
+        <h3 className="text-sm font-semibold text-gray-900 mb-1">Regenerate widget key</h3>
+        <p className="text-xs text-gray-500 mb-3">This invalidates your current embed. You'll need to update the snippet on your website.</p>
+        <button
+          onClick={() => void regenerate()}
+          disabled={regenerating}
+          className="px-4 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50"
+        >
+          {regenerating ? 'Regenerating...' : 'Regenerate key'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -418,6 +575,9 @@ export default function Settings() {
             />
           </div>
         )}
+
+        {/* Widgets tab */}
+        {activeTab === 'widgets' && <WidgetTab />}
 
         {/* Team tab */}
         {activeTab === 'team' && <TeamTab />}
