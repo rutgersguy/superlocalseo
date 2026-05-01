@@ -13,8 +13,7 @@ export interface PlaceResult {
   businessStatus: string | null;
 }
 
-const PLACES_BASE = 'https://maps.googleapis.com/maps/api/place';
-
+// Uses Places API (New): https://places.googleapis.com/v1/places:searchText
 export async function findBusiness(businessName: string, city: string): Promise<PlaceResult | null> {
   const key = config.googlePlacesApiKey;
   if (!key) {
@@ -22,43 +21,59 @@ export async function findBusiness(businessName: string, city: string): Promise<
     return null;
   }
 
-  const query = encodeURIComponent(`${businessName} ${city}`);
-  const fields = 'place_id,name,formatted_address,rating,user_ratings_total,website,photos,opening_hours,business_status';
-  const url = `${PLACES_BASE}/textsearch/json?query=${query}&fields=${fields}&key=${key}`;
+  const fieldMask = [
+    'places.id',
+    'places.displayName',
+    'places.formattedAddress',
+    'places.rating',
+    'places.userRatingCount',
+    'places.websiteUri',
+    'places.photos',
+    'places.regularOpeningHours',
+    'places.businessStatus',
+  ].join(',');
 
-  const res = await fetch(url);
+  const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': key,
+      'X-Goog-FieldMask': fieldMask,
+    },
+    body: JSON.stringify({ textQuery: `${businessName} ${city}` }),
+  });
+
   if (!res.ok) {
-    logger.error('Google Places API error', { status: res.status });
+    logger.error('Google Places API (New) error', { status: res.status, body: await res.text() });
     return null;
   }
 
   const json = await res.json() as {
-    status: string;
-    results: Array<{
-      place_id: string;
-      name: string;
-      formatted_address: string;
+    places?: Array<{
+      id: string;
+      displayName?: { text: string };
+      formattedAddress?: string;
       rating?: number;
-      user_ratings_total?: number;
-      website?: string;
+      userRatingCount?: number;
+      websiteUri?: string;
       photos?: unknown[];
-      opening_hours?: { weekday_text?: string[] };
-      business_status?: string;
+      regularOpeningHours?: { weekdayDescriptions?: string[] };
+      businessStatus?: string;
     }>;
   };
 
-  if (json.status !== 'OK' || !json.results.length) return null;
+  if (!json.places?.length) return null;
 
-  const r = json.results[0];
+  const p = json.places[0];
   return {
-    placeId: r.place_id,
-    name: r.name,
-    formattedAddress: r.formatted_address,
-    rating: r.rating ?? null,
-    userRatingsTotal: r.user_ratings_total ?? null,
-    hasWebsite: !!r.website,
-    photoCount: r.photos?.length ?? 0,
-    hasHours: !!(r.opening_hours?.weekday_text?.length),
-    businessStatus: r.business_status ?? null,
+    placeId: p.id,
+    name: p.displayName?.text ?? businessName,
+    formattedAddress: p.formattedAddress ?? '',
+    rating: p.rating ?? null,
+    userRatingsTotal: p.userRatingCount ?? null,
+    hasWebsite: !!p.websiteUri,
+    photoCount: p.photos?.length ?? 0,
+    hasHours: !!(p.regularOpeningHours?.weekdayDescriptions?.length),
+    businessStatus: p.businessStatus ?? null,
   };
 }
