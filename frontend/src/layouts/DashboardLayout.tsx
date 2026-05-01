@@ -1,7 +1,49 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { Home, BarChart2, Star, Link2, Settings, LogOut, Menu, X, FileText, Megaphone, Users2, ClipboardList, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { fetcher } from '../services/api';
+import useSWR from 'swr';
+
+declare global {
+  interface Window {
+    $crisp: unknown[];
+    CRISP_WEBSITE_ID: string;
+  }
+}
+
+const CRISP_WEBSITE_ID = 'b43a3ca0-74af-4cac-b7a7-e310cd2041d0';
+
+function CrispWidget() {
+  const { isAuthenticated } = useAuth();
+  const { data } = useSWR<{ success: boolean; data: { email: string; businessName: string } }>(
+    isAuthenticated ? '/clients' : null,
+    fetcher,
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.$crisp = [];
+    window.CRISP_WEBSITE_ID = CRISP_WEBSITE_ID;
+    const s = document.createElement('script');
+    s.src = 'https://client.crisp.chat/l.js';
+    s.async = true;
+    document.head.appendChild(s);
+    return () => { s.remove(); };
+  }, []);
+
+  useEffect(() => {
+    if (!data?.data) return;
+    const { email, businessName } = data.data;
+    const push = (cmd: unknown[]) => {
+      if (Array.isArray(window.$crisp)) window.$crisp.push(cmd);
+    };
+    if (email) push(['set', 'user:email', [email]]);
+    if (businessName) push(['set', 'user:nickname', [businessName]]);
+  }, [data]);
+
+  return null;
+}
 
 interface NavItem {
   to: string;
@@ -81,6 +123,8 @@ export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
+    <>
+    <CrispWidget />
     <div className="flex h-screen bg-gray-50">
       {/* Mobile overlay */}
       {sidebarOpen && (
@@ -133,5 +177,6 @@ export default function DashboardLayout() {
         </main>
       </div>
     </div>
+    </>
   );
 }
