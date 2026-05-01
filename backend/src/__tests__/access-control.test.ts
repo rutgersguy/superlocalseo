@@ -41,7 +41,7 @@ describe('Access control — client data isolation', () => {
     await db('reviews').insert({
       client_id: clientA.id,
       platform: 'google',
-      external_review_id: 'ext-secret-a',
+      external_review_id: `ext-secret-a-${Date.now()}`,
       author_name: 'Secret Author',
       rating: 5,
       body: 'secret review content',
