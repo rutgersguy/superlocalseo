@@ -87,12 +87,16 @@ export async function confirmPasswordReset(token: string, newPassword: string): 
 
 export async function googleSignIn(googleId: string, email: string, displayName: string) {
   let user = await db('users').where({ google_id: googleId }).first();
+  let status: 'new' | 'linked' | 'existing' = 'existing';
 
   if (!user) {
     user = await db('users').where({ email }).first();
     if (user) {
+      // Existing email account — link Google identity
       await db('users').where({ id: user.id }).update({ google_id: googleId });
+      status = 'linked';
     } else {
+      // Brand-new user via Google
       const stripeCustomerId = await createCustomer(email, displayName);
       const [newUser] = await db('users').insert({
         email,
@@ -110,11 +114,13 @@ export async function googleSignIn(googleId: string, email: string, displayName:
         trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
       });
       user = newUser;
+      status = 'new';
       logger.info('User registered via Google OAuth', { userId: newUser.id });
     }
   }
 
-  return issueTokens(user.id, user.role);
+  const tokens = await issueTokens(user.id, user.role);
+  return { ...tokens, status };
 }
 
 export async function issueTokens(userId: string, role: string) {

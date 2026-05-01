@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../services/api';
 
@@ -65,6 +65,16 @@ export default function Onboarding() {
   const [businessName, setBusinessName] = useState('');
   const [industry, setIndustry] = useState('');
 
+  // Pre-populate Step 1 from existing client record (Google signup sets a placeholder name)
+  useEffect(() => {
+    apiFetch<{ success: boolean; data: { businessName: string; industry: string | null } }>('/clients')
+      .then((res) => {
+        if (res.data.businessName) setBusinessName(res.data.businessName);
+        if (res.data.industry) setIndustry(res.data.industry);
+      })
+      .catch(() => {/* non-fatal */});
+  }, []);
+
   // Step 2 state
   const [locations, setLocations] = useState<Location[]>([]);
   const [showAddLocation, setShowAddLocation] = useState(false);
@@ -89,10 +99,12 @@ export default function Onboarding() {
     setSaving(true);
     setError('');
     try {
-      await apiFetch('/clients', {
-        method: 'PATCH',
-        body: JSON.stringify({ onboardingStep: nextStep }),
-      });
+      const payload: Record<string, unknown> = { onboardingStep: nextStep };
+      if (step === 1) {
+        payload.businessName = businessName;
+        payload.industry = industry || undefined;
+      }
+      await apiFetch('/clients', { method: 'PATCH', body: JSON.stringify(payload) });
       setStep(nextStep);
     } catch {
       setError('Failed to save progress. Please try again.');

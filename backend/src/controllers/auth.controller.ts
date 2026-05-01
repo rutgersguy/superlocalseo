@@ -139,9 +139,10 @@ export async function googleCallback(req: Request, res: Response, next: NextFunc
     const profilePayload = JSON.parse(Buffer.from(tokens.id_token.split('.')[1], 'base64url').toString());
     const { sub: googleId, email, name } = profilePayload as { sub: string; email: string; name: string };
 
-    const { accessToken, refreshToken } = await authService.googleSignIn(googleId, email, name);
+    const { accessToken, refreshToken, status } = await authService.googleSignIn(googleId, email, name);
     setRefreshCookie(res, refreshToken);
-    res.redirect(`${config.appUrl}/auth/google/success?token=${encodeURIComponent(accessToken)}`);
+    const params = new URLSearchParams({ token: accessToken, status });
+    res.redirect(`${config.appUrl}/auth/google/success?${params.toString()}`);
   } catch (e) {
     next(e);
   }

@@ -267,7 +267,7 @@ export default function Audit() {
               <h3 className="text-sm font-semibold text-gray-900 mb-1">Start fixing these issues today</h3>
               <p className="text-xs text-gray-500 mb-4">SuperLocalSEO tracks rankings, reviews, and citations daily — and sends you a monthly report showing exactly what moved and why.</p>
               <Link
-                to={`/register?email=${encodeURIComponent(email)}&business=${encodeURIComponent(audit.businessName ?? businessName)}`}
+                to={`/register?email=${encodeURIComponent(email)}&business=${encodeURIComponent(businessName || audit.businessName || '')}`}
                 className="inline-block bg-brand-500 text-white px-6 py-2.5 rounded-lg font-semibold text-sm hover:bg-brand-600"
               >
                 Start free 14-day trial

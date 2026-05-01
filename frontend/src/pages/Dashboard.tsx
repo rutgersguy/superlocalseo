@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import useSWR, { mutate } from 'swr';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { fetcher, apiFetch } from '../services/api';
@@ -241,6 +241,15 @@ function EMRProvisionBanner() {
 }
 
 export default function Dashboard() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [linkedDismissed, setLinkedDismissed] = useState(false);
+  const showLinkedBanner = searchParams.get('linked') === '1' && !linkedDismissed;
+
+  const dismissLinked = () => {
+    setLinkedDismissed(true);
+    setSearchParams((p) => { p.delete('linked'); return p; }, { replace: true });
+  };
+
   const { data: metricsData, isLoading: metricsLoading, error: metricsError } =
     useSWR<MetricsResponse>('/metrics', fetcher);
 
@@ -267,6 +276,12 @@ export default function Dashboard() {
         <p className="text-sm text-gray-500 mt-1">Overview of your local SEO performance</p>
       </div>
 
+      {showLinkedBanner && (
+        <div className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-xl text-sm text-green-800">
+          <span>Your Google account has been linked to your existing account.</span>
+          <button onClick={dismissLinked} className="ml-4 text-green-600 hover:text-green-800 font-medium">Dismiss</button>
+        </div>
+      )}
       <EMRProvisionBanner />
       <TrialBanner />
       <PastDueBanner />

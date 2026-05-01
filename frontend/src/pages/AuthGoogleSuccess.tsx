@@ -17,7 +17,15 @@ export default function AuthGoogleSuccess() {
     }
 
     setToken(token);
-    navigate('/dashboard', { replace: true });
+
+    const status = searchParams.get('status');
+    if (status === 'new') {
+      navigate('/onboarding', { replace: true });
+    } else if (status === 'linked') {
+      navigate('/dashboard?linked=1', { replace: true });
+    } else {
+      navigate('/dashboard', { replace: true });
+    }
   }, []);
 
   return (
