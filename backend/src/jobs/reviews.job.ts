@@ -2,6 +2,8 @@ import { Job } from 'bullmq';
 import { db } from '../db/connection';
 import { decrypt } from '../utils/crypto';
 import { fetchAllReviews, fetchCampaigns, fetchFeedback } from '../services/embedmyreviews.service';
+import { syncGBPReviews } from '../services/gbp.service';
+import { syncFacebookReviews } from '../services/facebook.service';
 import { logger } from '../utils/logger';
 
 export async function processReviews(_job: Job): Promise<void> {
@@ -142,6 +144,44 @@ export async function processReviews(_job: Job): Promise<void> {
         .where({ id: integration.id })
         .update({ error_message: (e as Error).message })
         .catch(() => undefined);
+    }
+  }
+
+  // GBP sync
+  const gbpIntegrations = await db('integrations')
+    .where({ provider: 'google', status: 'connected' })
+    .whereNotNull('oauth_access_token')
+    .select('client_id', 'oauth_access_token', 'oauth_refresh_token', 'oauth_expires_at');
+
+  for (const intg of gbpIntegrations) {
+    try {
+      await syncGBPReviews(
+        intg.client_id as string,
+        intg.oauth_access_token as string,
+        (intg.oauth_refresh_token as string | null) ?? null,
+        intg.oauth_expires_at ? new Date(intg.oauth_expires_at as string) : null,
+      );
+    } catch (e) {
+      logger.error('GBP review sync failed', { clientId: intg.client_id, error: (e as Error).message });
+    }
+  }
+
+  // Facebook sync
+  const fbIntegrations = await db('integrations')
+    .where({ provider: 'facebook', status: 'connected' })
+    .whereNotNull('oauth_access_token')
+    .whereNotNull('external_account_id')
+    .select('client_id', 'oauth_access_token', 'external_account_id');
+
+  for (const intg of fbIntegrations) {
+    try {
+      await syncFacebookReviews(
+        intg.client_id as string,
+        intg.external_account_id as string,
+        intg.oauth_access_token as string,
+      );
+    } catch (e) {
+      logger.error('Facebook review sync failed', { clientId: intg.client_id, error: (e as Error).message });
     }
   }
 }
