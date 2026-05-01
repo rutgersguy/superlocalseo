@@ -281,3 +281,59 @@ export async function suspendCustomer(customerId: string): Promise<void> {
     logger.warn('EMR suspendCustomer failed (non-fatal)', { customerId, status: res.status, body });
   }
 }
+
+export interface EMRFeedback {
+  id: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  rating?: number;
+  message?: string;
+  campaignId?: string;
+  receivedAt: string;
+}
+
+export async function fetchFeedback(
+  apiKey: string,
+  opts: { page?: number; campaignId?: string } = {},
+): Promise<{ feedback: EMRFeedback[]; total: number; hasMore: boolean }> {
+  const params = new URLSearchParams();
+  if (opts.page && opts.page > 1) params.set('page', String(opts.page));
+  if (opts.campaignId) params.set('campaign_id', opts.campaignId);
+  const query = params.toString() ? `?${params.toString()}` : '';
+  const res = await emrFetch(`/request-reviews/feedback${query}`, apiKey);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`EMR fetchFeedback failed: ${res.status} ${body}`);
+  }
+  const data = await res.json() as {
+    data?: Array<{
+      id: string;
+      first_name?: string;
+      last_name?: string;
+      email?: string;
+      phone?: string;
+      rating?: number;
+      message?: string;
+      campaign_id?: string;
+      created_at?: string;
+    }>;
+    meta?: { current_page: number; last_page: number; total?: number };
+  };
+  const items = data?.data ?? [];
+  const meta = data?.meta;
+  return {
+    feedback: items.map((f) => ({
+      id: f.id,
+      contactName: [f.first_name, f.last_name].filter(Boolean).join(' ') || undefined,
+      contactEmail: f.email,
+      contactPhone: f.phone,
+      rating: f.rating,
+      message: f.message,
+      campaignId: f.campaign_id,
+      receivedAt: f.created_at ?? new Date().toISOString(),
+    })),
+    total: meta?.total ?? items.length,
+    hasMore: meta ? meta.current_page < meta.last_page : false,
+  };
+}

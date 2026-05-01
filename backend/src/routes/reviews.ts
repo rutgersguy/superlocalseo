@@ -12,6 +12,7 @@ const router = Router();
 router.post('/webhook', ctrl.webhook);
 
 router.get('/', requireAuth, requireClient, validateQuery(ctrl.listQuerySchema), ctrl.list);
+router.get('/feedback', requireAuth, requireClient, ctrl.listFeedback);
 
 // AI response drafting
 router.get('/:id/response', requireAuth, requireClient, responseCtrl.get);

@@ -264,13 +264,61 @@ function ReviewCard({ review }: { review: Review }) {
   );
 }
 
+// ─── Feedback tab ─────────────────────────────────────────────────────────────
+
+function FeedbackTab() {
+  const { data, isLoading } = useSWR<{ success: boolean; data: { feedback: any[]; total: number } }>('/reviews/feedback', fetcher);
+  const feedback = data?.data?.feedback ?? [];
+  const total = data?.data?.total ?? 0;
+
+  if (isLoading) return <div className="text-sm text-gray-500">Loading...</div>;
+
+  if (feedback.length === 0) {
+    return (
+      <div className="text-center py-16 text-gray-400">
+        <p className="font-medium text-gray-600 mb-1">No private feedback yet</p>
+        <p className="text-sm">When a review requester rates 1–3★, their response appears here instead of going to Google.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-gray-500">{total} private responses</p>
+      {feedback.map((f: any) => (
+        <div key={f.id} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                {f.contactName && <span className="text-sm font-medium text-gray-800">{f.contactName}</span>}
+                <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-medium">Private</span>
+                {f.rating && (
+                  <span className="text-xs text-gray-500">{'★'.repeat(f.rating)}{'☆'.repeat(5 - f.rating)}</span>
+                )}
+              </div>
+              {f.contactEmail && <p className="text-xs text-gray-400">{f.contactEmail}</p>}
+              {f.message && <p className="text-sm text-gray-700 mt-2">{f.message}</p>}
+            </div>
+            <span className="text-xs text-gray-400 whitespace-nowrap">
+              {new Date(f.receivedAt).toLocaleDateString()}
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 const PLATFORMS = ['All', 'Google', 'Yelp', 'Facebook'];
 const RATINGS = ['All', '5', '4', '3', '2', '1'];
 const STATUSES = ['All', 'New', 'Responded'];
 
+type ActiveTab = 'reviews' | 'feedback';
+
 export default function Reviews() {
+  const [activeTab, setActiveTab] = useState<ActiveTab>('reviews');
   const [platform, setPlatform] = useState('All');
   const [rating, setRating] = useState('All');
   const [status, setStatus] = useState('All');
@@ -288,6 +336,9 @@ export default function Reviews() {
     `/reviews${queryString ? `?${queryString}` : ''}`, fetcher,
   );
   const reviews = data?.data?.reviews ?? [];
+
+  const { data: feedbackData } = useSWR<{ success: boolean; data: { feedback: any[]; total: number } }>('/reviews/feedback', fetcher);
+  const feedbackTotal = feedbackData?.data?.total ?? 0;
 
   const { data: trendData } = useSWR<{ success: boolean; data: { volume: Array<{ date: string; [k: string]: string | number }>; sentiment: Array<{ date: string; avgRating: number | null }> } }>(
     `/analytics/reviews/trend?days=${trendRange}`, fetcher,
@@ -361,47 +412,71 @@ export default function Reviews() {
         </div>
       </div>
 
-      {/* Filter bar */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex flex-wrap gap-3 items-center">
-        <select value={platform} onChange={(e) => setPlatform(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
-          {PLATFORMS.map((p) => <option key={p}>{p}</option>)}
-        </select>
-        <select value={rating} onChange={(e) => setRating(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
-          {RATINGS.map((r) => <option key={r} value={r}>{r === 'All' ? 'All ratings' : `${r}★`}</option>)}
-        </select>
-        <select value={status} onChange={(e) => setStatus(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
-          {STATUSES.map((s) => <option key={s}>{s}</option>)}
-        </select>
-        <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search reviews..."
-          className="flex-1 min-w-[160px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+      {/* Tab bar */}
+      <div className="flex gap-1 border-b border-gray-200">
+        <button
+          onClick={() => setActiveTab('reviews')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'reviews' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+        >
+          Reviews
+        </button>
+        <button
+          onClick={() => setActiveTab('feedback')}
+          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'feedback' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+        >
+          Private Feedback
+          {feedbackTotal > 0 && (
+            <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">{feedbackTotal}</span>
+          )}
+        </button>
       </div>
 
-      {error && <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">Failed to load reviews. Please refresh.</div>}
-
-      {/* Review cards */}
-      {isLoading ? (
-        <div className="grid gap-4">
-          {Array.from({ length: 4 }, (_, i) => (
-            <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 animate-pulse">
-              <div className="flex gap-3 mb-3">
-                <div className="w-9 h-9 bg-gray-200 rounded-full" />
-                <div className="flex-1 space-y-2"><div className="h-4 bg-gray-200 rounded w-32" /><div className="h-3 bg-gray-200 rounded w-20" /></div>
-              </div>
-              <div className="space-y-2"><div className="h-3 bg-gray-200 rounded w-full" /><div className="h-3 bg-gray-200 rounded w-4/5" /></div>
-            </div>
-          ))}
-        </div>
-      ) : reviews.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-12 text-center">
-          <p className="text-gray-400 text-sm">No reviews found matching your filters.</p>
-        </div>
+      {activeTab === 'feedback' ? (
+        <FeedbackTab />
       ) : (
-        <div className="grid gap-4">
-          {reviews.map((review) => <ReviewCard key={review.id} review={review} />)}
-        </div>
+        <>
+          {/* Filter bar */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex flex-wrap gap-3 items-center">
+            <select value={platform} onChange={(e) => setPlatform(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+              {PLATFORMS.map((p) => <option key={p}>{p}</option>)}
+            </select>
+            <select value={rating} onChange={(e) => setRating(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+              {RATINGS.map((r) => <option key={r} value={r}>{r === 'All' ? 'All ratings' : `${r}★`}</option>)}
+            </select>
+            <select value={status} onChange={(e) => setStatus(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+              {STATUSES.map((s) => <option key={s}>{s}</option>)}
+            </select>
+            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search reviews..."
+              className="flex-1 min-w-[160px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+
+          {error && <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">Failed to load reviews. Please refresh.</div>}
+
+          {isLoading ? (
+            <div className="grid gap-4">
+              {Array.from({ length: 4 }, (_, i) => (
+                <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 animate-pulse">
+                  <div className="flex gap-3 mb-3">
+                    <div className="w-9 h-9 bg-gray-200 rounded-full" />
+                    <div className="flex-1 space-y-2"><div className="h-4 bg-gray-200 rounded w-32" /><div className="h-3 bg-gray-200 rounded w-20" /></div>
+                  </div>
+                  <div className="space-y-2"><div className="h-3 bg-gray-200 rounded w-full" /><div className="h-3 bg-gray-200 rounded w-4/5" /></div>
+                </div>
+              ))}
+            </div>
+          ) : reviews.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-12 text-center">
+              <p className="text-gray-400 text-sm">No reviews found matching your filters.</p>
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {reviews.map((review) => <ReviewCard key={review.id} review={review} />)}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

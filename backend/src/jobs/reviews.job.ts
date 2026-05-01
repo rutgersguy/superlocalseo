@@ -1,7 +1,7 @@
 import { Job } from 'bullmq';
 import { db } from '../db/connection';
 import { decrypt } from '../utils/crypto';
-import { fetchAllReviews, fetchCampaigns } from '../services/embedmyreviews.service';
+import { fetchAllReviews, fetchCampaigns, fetchFeedback } from '../services/embedmyreviews.service';
 import { logger } from '../utils/logger';
 
 export async function processReviews(_job: Job): Promise<void> {
@@ -90,6 +90,39 @@ export async function processReviews(_job: Job): Promise<void> {
         logger.warn('Failed to sync EMR campaigns', {
           clientId: integration.client_id,
           error: (campaignErr as Error).message,
+        });
+      }
+
+      try {
+        const { feedback } = await fetchFeedback(apiKey);
+        for (const f of feedback) {
+          await db('private_feedback')
+            .insert({
+              client_id: integration.client_id,
+              emr_feedback_id: f.id,
+              campaign_id: f.campaignId ?? null,
+              contact_name: f.contactName ?? null,
+              contact_email: f.contactEmail ?? null,
+              contact_phone: f.contactPhone ?? null,
+              rating: f.rating ?? null,
+              message: f.message ?? null,
+              received_at: new Date(f.receivedAt),
+            })
+            .onConflict(['emr_feedback_id'])
+            .merge({
+              campaign_id: f.campaignId ?? null,
+              contact_name: f.contactName ?? null,
+              contact_email: f.contactEmail ?? null,
+              contact_phone: f.contactPhone ?? null,
+              rating: f.rating ?? null,
+              message: f.message ?? null,
+              received_at: new Date(f.receivedAt),
+            });
+        }
+      } catch (feedbackErr) {
+        logger.warn('Failed to sync EMR private feedback', {
+          clientId: integration.client_id,
+          error: (feedbackErr as Error).message,
         });
       }
 

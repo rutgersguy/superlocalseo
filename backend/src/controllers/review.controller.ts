@@ -76,6 +76,61 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
   }
 }
 
+export async function listFeedback(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10));
+    const limit = 20;
+    const campaignId = req.query.campaignId as string | undefined;
+
+    let query = db('private_feedback').where({ client_id: req.clientId });
+    if (campaignId) query = query.where({ campaign_id: campaignId });
+
+    const countResult = await query.clone().count('id as cnt').first();
+    const total = parseInt(String((countResult as Record<string, unknown>)?.cnt ?? 0), 10);
+
+    const rows = await query
+      .orderBy('received_at', 'desc')
+      .limit(limit)
+      .offset((page - 1) * limit);
+
+    ok(res, {
+      feedback: rows.map((f) => ({
+        id: f.id,
+        campaignId: f.campaign_id,
+        contactName: maskName(f.contact_name as string | null),
+        contactEmail: maskEmail(f.contact_email as string | null),
+        contactPhone: maskPhone(f.contact_phone as string | null),
+        rating: f.rating,
+        message: f.message,
+        receivedAt: f.received_at,
+      })),
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    });
+  } catch (e) {
+    next(e);
+  }
+}
+
+function maskName(name: string | null): string | null {
+  if (!name) return null;
+  const parts = name.trim().split(/\s+/);
+  return parts.map((p) => p[0] + '***').join(' ');
+}
+
+function maskEmail(email: string | null): string | null {
+  if (!email) return null;
+  const [local, domain] = email.split('@');
+  if (!local || !domain) return '***';
+  return `${local[0]}***@${domain}`;
+}
+
+function maskPhone(phone: string | null): string | null {
+  if (!phone) return null;
+  return phone.slice(0, 3) + '***';
+}
+
 interface WebhookPayload {
   event?: string;
   id?: string;
