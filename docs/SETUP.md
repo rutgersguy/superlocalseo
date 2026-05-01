@@ -45,9 +45,21 @@ APP_URL=http://localhost:5173
 
 Optional (needed for data pulls):
 ```
-BRIGHTLOCAL_API_KEY=...
-EMBEDMYREVIEWS_API_KEY=...
+BRIGHTLOCAL_API_KEY=...      # operator key — rankings + citations pulls
+EMBEDMYREVIEWS_API_KEY=...   # operator key — reviews pulls
 ```
+
+Google OAuth (Sign in with Google + Business Profile connect):
+```
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+```
+
+Create a GCP project, enable the Google Identity and My Business Business Information APIs, create an OAuth 2.0 client, and add these redirect URIs:
+- `https://superlocalseo.com/api/auth/google/callback`
+- `https://superlocalseo.com/api/integrations/google/callback`
+
+For local dev add `http://localhost:3000/api/auth/google/callback` etc.
 
 ## Running Migrations
 

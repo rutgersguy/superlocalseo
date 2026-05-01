@@ -2,26 +2,16 @@
 
 **Target:** 4–6 weeks to first paying client (Phase 1 MVP), 16 weeks to full production.
 
-**Status (as of 2026-04-30):** Phase 0 complete. Phase 1 complete. Phase 2 complete. Phase 3 in progress.
+**Status (as of 2026-05-01):** Phase 0 ✅ · Phase 1 ✅ · Phase 2 (Reports) ✅ · Phase 3 (Analytics) ✅ · Phase 2+ Advanced Features in progress (#68–71) · Phase 4 (Hardening) pending.
 
 ---
 
-## Phase 0 — Infrastructure Foundation (Weeks 1–2)
-
-Get the scaffolding right so every subsequent phase builds cleanly.
-
-### Goals
-- Docker Compose running all services locally (Postgres, Redis, API, Web, Nginx)
-- PostgreSQL schema deployed and migration tooling in place
-- Express API scaffold with auth middleware, error handling, logging, rate limiting
-- Stripe subscription billing wired up (day-one requirement)
-- GitHub Actions CI: lint + test on every push
-- Health check endpoints for liveness/readiness probes
+## Phase 0 — Infrastructure Foundation (Weeks 1–2) ✅
 
 ### Deliverables
 - [x] Docker Compose (local dev): postgres, redis, api, web, nginx
 - [x] Docker Compose (prod): same + Cloudflare SSL + n8n-nginx reverse proxy
-- [x] PostgreSQL schema — 12 tables (see [Architecture](docs/ARCHITECTURE.md))
+- [x] PostgreSQL schema — 13 tables (see [Architecture](docs/ARCHITECTURE.md))
 - [x] Knex.js migrations + seed data for development
 - [x] Express server: middleware stack (auth, logging, rate limit, error handler)
 - [x] Zod request validation on all endpoints
@@ -34,156 +24,132 @@ Get the scaffolding right so every subsequent phase builds cleanly.
 
 ---
 
-## Phase 1 — MVP: First Paying Client (Weeks 3–6)
+## Phase 1 — MVP: First Paying Client (Weeks 3–6) ✅
 
-Build everything needed to onboard a real client and collect payment.
-
-### Goals
-- Public landing page converts visitors to trials
-- Clients can sign up, connect their data sources, and see their dashboard
-- Stripe billing collects money from day one
-- BrightLocal pulling rankings and citations daily
-- EmbedMyReviews pulling reviews every 6 hours
-- Historical data stored from the first pull (BrightLocal has no history)
-
-### Deliverables
-
-#### Landing Page
-- [x] Hero section (headline, CTA, social proof)
-- [x] Value proposition cards (rankings, reviews, citations)
-- [x] Pricing table (Tier 1–3 with per-location pricing)
-- [x] FAQ (6 questions)
-- [x] Footer
-- [ ] SEO: meta tags, Open Graph, JSON-LD schema markup
-- [x] Mobile responsive (320px–1440px)
-- [ ] Lighthouse > 90 performance, > 95 accessibility
-
-#### Authentication
+### Authentication
 - [x] `POST /auth/register` — email + password + business name
 - [x] `POST /auth/login` — returns JWT access + refresh tokens
 - [x] `POST /auth/refresh` — silent token rotation
 - [x] `POST /auth/logout` — invalidate refresh token in Redis
 - [x] `POST /auth/forgot-password` + `POST /auth/reset-password`
-- [x] Email verification via SendGrid
+- [x] Email verification via Resend
 - [x] Role-based access: `admin`, `client`
-- [ ] Google OAuth (GitHub #64)
+- [x] Google OAuth — `GET /auth/google` + `GET /auth/google/callback` (sign-in/sign-up)
 
 #### Stripe Billing (Day One)
 - [x] Subscription creation on registration (Tier 1 default)
 - [x] Per-location billing: base price + per-additional-location fee
 - [x] Webhook handler: `invoice.paid`, `customer.subscription.deleted`, `payment_intent.payment_failed`
-- [ ] Grace period (3-day) on failed payments before access revoked
 - [x] Billing portal (Stripe Customer Portal)
+- [ ] Grace period (3-day) on failed payments before access revoked
 - [ ] Plan upgrade / downgrade flow
 
 #### Client Onboarding (4-Step Wizard)
-- [x] Step 1: Business info (name, industry, primary location)
-- [x] Step 2: Additional locations (address, phone, website per location)
+- [x] Step 1: Business info (name, industry)
+- [x] Step 2: Locations (address, phone, website per location)
 - [x] Step 3: Target keywords (add/remove, assign to locations)
-- [x] Step 4: Connect integrations (BrightLocal API key, EmbedMyReviews API key)
+- [x] Step 4: Connect platforms (Google Business Profile OAuth; Yelp/Facebook coming soon)
 - [x] Trigger initial data pull on completion
-- [x] Webhook registration with EmbedMyReviews
 
-#### BrightLocal Integration
+#### BrightLocal Integration (operator-level, not client-facing)
 - [x] API service wrapper (rate limiting, error handling, retry)
 - [x] Daily rankings pull → stored in `ranking_snapshots` table
 - [x] Daily citations pull → stored in `citation_snapshots` table
 - [x] Bull queue job: `brightlocal:pull` (cron `0 6 * * *`)
-- [x] `GET /rankings` with locationId/keywordId/searchEngine filters
-- [x] `GET /rankings/trend?keywordId=&locationId=&days=30`
+- [x] `GET /rankings` with filters
+- [x] `GET /rankings/trend?keywordId=&locationId=&days=`
 - [x] `GET /citations`
-- [ ] Redis cache: rankings 24h TTL, citations 24h TTL
 
-#### EmbedMyReviews Integration
+#### EmbedMyReviews Integration (operator-level)
 - [x] API service wrapper
-- [x] 6-hour review pull → stored in `reviews` table (dedup by platform + review ID)
-- [x] Bull queue job: `embedmyreviews:pull` (cron `0 */6 * * *`)
-- [x] Webhook handler: `POST /reviews/webhook` (real-time inbound)
+- [x] 6-hour review pull → stored in `reviews` table
+- [x] Bull queue job: cron `0 */6 * * *`
+- [x] Webhook handler: `POST /reviews/webhook` (real-time inbound, HMAC validated)
 - [x] `GET /reviews` with platform/rating/status/search filters + pagination
-- [ ] `GET /reviews/sentiment?dateRange=`
-- [ ] Redis cache: reviews 6h TTL
+
+#### Client-Facing Integrations
+- [x] Google Business Profile OAuth connect/disconnect (Settings + Onboarding)
+- [ ] Google Business Profile data sync (reviews, Q&A, info)
+- [ ] Yelp OAuth (coming soon)
+- [ ] Facebook OAuth (coming soon)
 
 #### Dashboard Pages
 - [x] **Home** — 4 metric cards + keyword summary table
-- [x] **Rankings** — sortable keyword table, trend chart (30d), rank delta badges
-- [x] **Reviews** — review cards, filter by platform/rating/status, search
+- [x] **Rankings** — sortable keyword table, trend chart (30d/90d/All toggle), rank delta badges, CSV export
+- [x] **Reviews** — review cards, filter by platform/rating/status/search, volume chart, sentiment trend chart, CSV export
 - [x] **Citations** — directory grid with completeness score
 - [x] **Reports** — report history, manual generate, download button
-- [x] **Settings** — account info, integrations, billing (Stripe portal link)
+- [x] **Settings** — account, integrations (Google/Yelp/Facebook), billing
 
 ---
 
-## Phase 2 — Monthly Reports (Weeks 7–9)
-
-Automated PDF reports are a core value prop. Clients need something tangible to justify the subscription.
-
-### Goals
-- Monthly PDF report auto-generated and emailed on the 1st of each month
-- Report covers rankings movement, review summary, citation health
-- Historical charts showing trend since client joined
+## Phase 2 — Monthly Reports (Weeks 7–9) ✅
 
 ### Deliverables
 - [x] Report template (HTML → PDF via Puppeteer): branded, multi-section
 - [x] Sections: executive summary, rankings table (delta vs prior month), reviews breakdown, citation completeness, recommendations
 - [x] Bull job: `reports:generate-monthly` (cron `0 8 1 * *`)
-- [x] Reports stored in DB (`reports` table) with local file reference
-- [x] SendGrid email: HTML email with PDF attachment
+- [x] Reports stored in DB + local file
+- [x] Resend email: HTML email with PDF attachment
 - [x] `GET /reports` — list all reports
 - [x] `GET /reports/:id/download` — download PDF
-- [x] Dashboard **Reports** page — report history, manual re-send, download button
+- [x] Dashboard **Reports** page with history + download
 - [x] Manual trigger endpoint: `POST /reports/generate`
 - [ ] Report preview in-browser (embedded PDF viewer)
 
 ---
 
-## Phase 3 — Historical Data & Analytics (Weeks 10–12)
-
-Since BrightLocal provides zero historical data, everything we store from day one becomes the client's competitive advantage. Make it queryable and visualized.
-
-### Goals
-- Full historical ranking charts from the client's start date
-- Month-over-month comparisons in the dashboard
-- Review trend analysis with sentiment over time
-- Exportable data for clients who want their own analysis
+## Phase 3 — Historical Data & Analytics (Weeks 10–12) ✅
 
 ### Deliverables
-- [ ] `ranking_snapshots` historical query API with arbitrary date ranges
-- [ ] Ranking trend chart (Recharts): 30d / 90d / all-time toggle
-- [ ] Position delta badges (↑3 / ↓1 / new) vs prior period
-- [ ] Review sentiment trend over time (line chart)
-- [ ] Review volume by platform over time (stacked bar chart)
-- [ ] Citation completeness over time
-- [ ] `GET /analytics/rankings/history?clientId=&keyword=&from=&to=`
-- [ ] `GET /analytics/reviews/trend?clientId=&from=&to=`
-- [ ] Bulk CSV export (all historical snapshots)
+- [x] `GET /analytics/rankings/history?from=&to=&keywordId=&locationId=` — arbitrary date range
+- [x] `GET /analytics/reviews/trend?days=&from=&to=&platform=` — volume + sentiment series
+- [x] `GET /analytics/export?type=rankings|reviews` — bulk CSV download
+- [x] Rankings page: 30d / 90d / All time-range toggle on trend chart
+- [x] Rankings page: position delta badges (▲3 / ▼1) vs prior snapshot
+- [x] Reviews page: volume by platform stacked bar chart (30d/90d/180d toggle)
+- [x] Reviews page: average rating trend line chart
+- [ ] Citation completeness over time chart
 - [ ] Admin dashboard: cross-client analytics view
+
+---
+
+## Phase 2+ — Advanced Features & Upsell (Weeks 10–16) 🔄
+
+Features designed to increase ARPU from $780 → $1,025+ and reduce churn. See [Epic #67](https://github.com/rutgersguy/superlocalseo/issues/67) for financial projections.
+
+### Quick Wins
+- [ ] **#68 Audit Report Lead Magnet** — free public SEO audit page → email capture → trial conversion
+- [ ] **#69 Team Members & RBAC** — invite users (admin/viewer roles), per-seat billing upsell
+- [ ] **#70 Review Widgets** — embeddable review carousel/grid for client websites
+- [ ] **#71 Lead Attribution & ROI** — track revenue per keyword, show clients the $ value of SEO
+- [ ] **#65 Crisp chat widget** — in-app support
+
+### Revenue Multipliers (Phase 3+)
+- [ ] Review request campaigns (SMS/email automation) — $150–300/mo upsell
+- [ ] AI review responses (Claude-powered, client approves) — $200–300/mo upsell
+- [ ] Competitor benchmarking dashboard — $200–400/mo upsell
+- [ ] QR codes & NFC for offline review capture — $150–250/mo upsell
+
+### Scale Plays (Phase 4+)
+- [ ] White-label reseller program — agencies resell to clients
+- [ ] Mobile app (iOS/Android with push notifications)
 
 ---
 
 ## Phase 4 — Hardening & Scale (Weeks 13–16)
 
-Production-grade reliability, security, and monitoring before wider sales push.
-
-### Goals
-- Sub-2s p95 API response times under 50 concurrent users
-- OWASP Top 10 coverage
-- Automated alerting on failures
-- Regression test suite protecting all prior phases
-
 ### Deliverables
-- [ ] Load tests (k6): 50 concurrent, < 2s p95 ✓
+- [ ] Load tests (k6): 50 concurrent, < 2s p95
 - [ ] OWASP Top 10 security audit + remediation
 - [ ] Prometheus metrics: request duration, queue depth, error rates
-- [ ] Grafana dashboard (or Datadog) for ops visibility
 - [ ] Sentry error tracking (frontend + backend)
-- [ ] Automated BrightLocal pull failure alerting (email/Slack)
-- [ ] Stripe webhook retry validation
+- [ ] Automated BrightLocal pull failure alerting
 - [ ] Regression test suite: all Phase 0–3 critical paths
 - [ ] Full Cypress E2E suite: register → onboard → view dashboard → download report
-- [ ] Penetration test checklist (auth, injection, rate limiting)
 - [ ] Database backup automation (daily snapshots, 30-day retention)
 - [ ] Disaster recovery runbook
-- [ ] Go-live checklist: DNS, TLS, Stripe live mode, SendGrid domain auth
+- [ ] Go-live checklist: DNS, TLS, Stripe live mode, Resend domain auth
 
 ---
 
@@ -195,10 +161,9 @@ Production-grade reliability, security, and monitoring before wider sales push.
 | Tier 2 | $700/mo | 3 | +$100/mo each |
 | Tier 3 | $1,200/mo | 5 | +$75/mo each |
 
-**Our BrightLocal cost per location:** ~$21/mo (reviews $6 + citations $15)  
-**EmbedMyReviews:** $99/mo flat (all clients, all locations)
+**BrightLocal cost per location:** ~$21/mo · **EmbedMyReviews:** $99/mo flat
 
-Margins remain strong even at 10+ locations per client. See [docs/PRICING.md](docs/PRICING.md) for full unit economics.
+See [docs/PRICING.md](docs/PRICING.md) for full unit economics.
 
 ---
 
@@ -206,12 +171,15 @@ Margins remain strong even at 10+ locations per client. See [docs/PRICING.md](do
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Server state | SWR | Handles caching, revalidation, background refresh natively |
-| Client state | React Context | Auth + UI state only; no Redux overhead needed |
-| ORM | Knex.js only | Migrations + type-safe queries; no TypeORM layer |
-| Job queue | Bull | Cron + retry + priority queues; no n8n needed |
+| Server state | SWR | Caching, revalidation, background refresh |
+| Client state | React Context | Auth + UI state only; no Redux overhead |
+| ORM | Knex.js only | Migrations + type-safe queries |
+| Job queue | Bull | Cron + retry + priority queues |
 | HTTP client | Native fetch / SWR | No Axios dependency |
-| PDF | Puppeteer | Render HTML report template → PDF server-side |
+| PDF | Puppeteer | Server-side HTML → PDF |
+| Charts | Recharts | Composable, TypeScript-native |
+| OAuth | Google OAuth 2.0 | Sign-in + Business Profile connect |
+| Email | Resend | Transactional email (verification, reports) |
 
 ---
 
@@ -222,5 +190,6 @@ Margins remain strong even at 10+ locations per client. See [docs/PRICING.md](do
 | Phase 0 | All services healthy in Docker, tests passing in CI |
 | Phase 1 | First paying client, card charged, dashboard live |
 | Phase 2 | First automated monthly report delivered by email |
-| Phase 3 | Client can view 90-day ranking trend |
+| Phase 3 | Client can view 90-day ranking trend + export data |
+| Phase 2+ | Team members, widgets, and audit funnel live |
 | Phase 4 | 50 concurrent users < 2s p95, OWASP audit passed |

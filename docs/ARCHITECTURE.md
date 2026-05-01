@@ -22,15 +22,21 @@
                     │
             ┌───────▼──────────────────────────────────────────┐
             │               Bull Job Queue                      │
-            │  brightlocal:pull (daily)                        │
+            │  brightlocal:pull (daily 06:00 UTC)              │
             │  embedmyreviews:pull (every 6h)                  │
-            │  reports:generate-monthly (1st of month)          │
+            │  reports:generate-monthly (1st of month 08:00)   │
             └──────┬──────────────────────────┬────────────────┘
                    │                          │
        ┌───────────▼────────┐    ┌────────────▼──────────────┐
        │   BrightLocal API  │    │   EmbedMyReviews API      │
-       │  (rankings+citations│    │  (reviews + webhooks)     │
+       │  rankings+citations │    │  reviews + webhooks       │
        └────────────────────┘    └───────────────────────────┘
+
+       ┌──────────────────────────────────────────────────────┐
+       │   Google OAuth 2.0                                   │
+       │  /auth/google          — Sign in with Google        │
+       │  /integrations/google  — Business Profile connect   │
+       └──────────────────────────────────────────────────────┘
 ```
 
 ## Database Schema (PostgreSQL 15)
@@ -40,10 +46,11 @@
 |---|---|---|
 | id | uuid PK | |
 | email | text unique | |
-| password_hash | text | bcrypt |
+| password_hash | text nullable | bcrypt; null for Google-only accounts |
+| google_id | text unique nullable | set on Google OAuth sign-in |
 | role | text | `admin` \| `client` |
 | stripe_customer_id | text | |
-| email_verified | boolean | |
+| email_verified | boolean | always true for Google OAuth users |
 | created_at | timestamptz | |
 
 ### `clients`
@@ -75,16 +82,23 @@
 | created_at | timestamptz | |
 
 ### `integrations`
+Client-facing OAuth connections (Google Business Profile; Yelp/Facebook coming soon).
+Operator credentials (BrightLocal, EmbedMyReviews) live in `.env` only — not in this table.
+
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | |
 | client_id | uuid FK → clients | |
-| provider | text | `brightlocal` \| `embedmyreviews` |
-| api_key_encrypted | text | AES-256 encrypted |
+| provider | text | `google` \| `yelp` \| `facebook` |
+| oauth_access_token | text nullable | |
+| oauth_refresh_token | text nullable | |
+| oauth_expires_at | timestamptz nullable | |
 | status | text | `connected` \| `error` \| `disconnected` |
 | last_pull_at | timestamptz | |
 | error_message | text | |
 | created_at | timestamptz | |
+
+Unique constraint: `(client_id, provider)`
 
 ### `keywords`
 | Column | Type | Notes |
@@ -177,6 +191,36 @@ Pre-aggregated daily rollups for fast dashboard queries.
 | resource_id | uuid | |
 | metadata | jsonb | |
 | created_at | timestamptz | |
+
+---
+
+## API Routes Summary
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/auth/register` | — | Email + password registration |
+| POST | `/auth/login` | — | Returns access token + refresh cookie |
+| POST | `/auth/refresh` | cookie | Silent token rotation |
+| GET | `/auth/google` | — | Redirect to Google OAuth |
+| GET | `/auth/google/callback` | — | OAuth callback → sets cookie, redirects |
+| GET | `/clients` | jwt | Get client profile + integrations |
+| PATCH | `/clients` | jwt | Update business name, industry |
+| GET | `/rankings` | jwt | Latest snapshot per keyword+location |
+| GET | `/rankings/trend` | jwt | Rank over time (days param) |
+| GET | `/reviews` | jwt | Paginated reviews with filters |
+| POST | `/reviews/webhook` | hmac | Real-time review ingest |
+| GET | `/citations` | jwt | Latest citation snapshots |
+| GET | `/analytics/rankings/history` | jwt | Arbitrary date range snapshots |
+| GET | `/analytics/reviews/trend` | jwt | Volume + sentiment series |
+| GET | `/analytics/export` | jwt | CSV download (rankings or reviews) |
+| GET | `/integrations/google/auth-url` | jwt | Google Business Profile OAuth URL |
+| GET | `/integrations/google/callback` | — | Business Profile OAuth callback |
+| DELETE | `/integrations/:provider` | jwt | Disconnect a platform |
+| GET | `/metrics` | jwt | Dashboard summary cards |
+| GET | `/reports` | jwt | List reports |
+| GET | `/reports/:id/download` | jwt | Download PDF |
+| POST | `/reports/generate` | jwt | Manual report trigger |
+| POST | `/billing/portal` | jwt | Stripe Customer Portal session |
 
 ---
 
