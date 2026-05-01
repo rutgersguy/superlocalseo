@@ -96,6 +96,66 @@ export async function download(req: Request, res: Response, next: NextFunction):
   }
 }
 
+// ─── view (inline) ───────────────────────────────────────────────────────────
+
+export async function view(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id } = req.params;
+
+    const report = await db('reports')
+      .where({ id })
+      .first() as {
+      id: string;
+      client_id: string;
+      file_path: string | null;
+      status: string;
+      period_month: number;
+      period_year: number;
+    } | undefined;
+
+    if (!report) {
+      notFound(res, 'Report not found');
+      return;
+    }
+
+    if (report.client_id !== req.clientId) {
+      notFound(res, 'Report not found');
+      return;
+    }
+
+    if (!report.file_path) {
+      err(res, 'Report file is not yet available', 422);
+      return;
+    }
+
+    // Check file exists
+    try {
+      await fs.promises.access(report.file_path, fs.constants.R_OK);
+    } catch {
+      notFound(res, 'Report file not found on disk');
+      return;
+    }
+
+    const monthStr = String(report.period_month).padStart(2, '0');
+    const filename = `SEO-Report-${report.period_year}-${monthStr}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+
+    const stream = fs.createReadStream(report.file_path);
+    stream.on('error', (streamErr) => {
+      if (!res.headersSent) {
+        next(streamErr);
+      } else {
+        res.end();
+      }
+    });
+    stream.pipe(res);
+  } catch (e) {
+    next(e);
+  }
+}
+
 // ─── generate ────────────────────────────────────────────────────────────────────
 
 export async function generate(req: Request, res: Response, next: NextFunction): Promise<void> {

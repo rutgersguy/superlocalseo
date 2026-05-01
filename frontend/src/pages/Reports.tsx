@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import useSWR from 'swr';
+import { Eye, X } from 'lucide-react';
 import { fetcher, apiFetch } from '../services/api';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -193,6 +194,123 @@ function GenerateModal({ onClose, onSuccess, initialMonth, initialYear }: Genera
   );
 }
 
+// ─── PDF Preview Modal ────────────────────────────────────────────────────────
+
+interface PreviewModalProps {
+  report: Report;
+  onClose: () => void;
+}
+
+function isMobile(): boolean {
+  return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+}
+
+function PreviewModal({ report, onClose }: PreviewModalProps) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const label = `${formatPeriod(report.periodMonth, report.periodYear)} Report`;
+  const mobile = isMobile();
+  const viewPath = `/reports/${report.id}/view`;
+
+  // Fetch the PDF as a blob (auth-aware) then create an object URL
+  useState(() => {
+    if (mobile) {
+      setLoading(false);
+      return;
+    }
+    void (async () => {
+      try {
+        const response = await apiFetch<never>(viewPath, {}, true);
+        if (!response.ok) {
+          setLoadError('Could not load report. Please try downloading instead.');
+          return;
+        }
+        const blob = await response.blob();
+        setBlobUrl(URL.createObjectURL(blob));
+      } catch {
+        setLoadError('Failed to fetch report PDF.');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  });
+
+  function handleClose() {
+    if (blobUrl) URL.revokeObjectURL(blobUrl);
+    onClose();
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/80 flex flex-col"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Preview ${label}`}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 bg-gray-900 text-white shrink-0">
+        <span className="text-sm font-medium truncate">{label}</span>
+        <button
+          onClick={handleClose}
+          className="ml-4 p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+          aria-label="Close preview"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 overflow-hidden relative">
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center text-white text-sm">
+            Loading PDF…
+          </div>
+        )}
+
+        {loadError && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white text-sm px-4 text-center">
+            <p>{loadError}</p>
+            <a
+              href={`/api${viewPath}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 bg-brand-500 hover:bg-brand-600 rounded-lg text-white text-sm font-medium transition-colors"
+            >
+              Open PDF in new tab
+            </a>
+          </div>
+        )}
+
+        {mobile && !loading && !loadError && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white text-sm px-4 text-center">
+            <p>Inline PDF preview is not supported on this device.</p>
+            <a
+              href={`/api${viewPath}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 bg-brand-500 hover:bg-brand-600 rounded-lg text-white text-sm font-medium transition-colors"
+            >
+              Open PDF
+            </a>
+          </div>
+        )}
+
+        {blobUrl && !mobile && (
+          <iframe
+            src={blobUrl}
+            title={label}
+            width="100%"
+            height="100%"
+            className="border-0 w-full h-full"
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function SkeletonRow() {
@@ -218,6 +336,7 @@ function SkeletonRow() {
 export default function Reports() {
   const [modalOpen, setModalOpen] = useState(false);
   const [resendModal, setResendModal] = useState<{ month: number; year: number } | null>(null);
+  const [previewReport, setPreviewReport] = useState<Report | null>(null);
 
   const { data, isLoading, error, mutate } = useSWR<ReportsResponse>('/reports', fetcher, {
     refreshInterval: 15_000,
@@ -316,14 +435,24 @@ export default function Reports() {
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
                       {(report.status === 'generated' || report.status === 'sent') && (
-                        <a
-                          href={`/api/reports/${report.id}/download`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-brand-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-                        >
-                          Download
-                        </a>
+                        <>
+                          <button
+                            onClick={() => setPreviewReport(report)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                            title="Preview PDF"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            Preview
+                          </button>
+                          <a
+                            href={`/api/reports/${report.id}/download`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-brand-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                          >
+                            Download
+                          </a>
+                        </>
                       )}
                       <button
                         onClick={() => openResend(report)}
@@ -355,6 +484,14 @@ export default function Reports() {
           initialYear={resendModal.year}
           onClose={() => setResendModal(null)}
           onSuccess={() => { setResendModal(null); void mutate(); }}
+        />
+      )}
+
+      {/* PDF Preview modal */}
+      {previewReport && (
+        <PreviewModal
+          report={previewReport}
+          onClose={() => setPreviewReport(null)}
         />
       )}
     </div>

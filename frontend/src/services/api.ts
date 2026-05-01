@@ -6,7 +6,9 @@ export function setAccessToken(token: string | null): void {
   _accessToken = token;
 }
 
-export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T>;
+export async function apiFetch<T>(path: string, init: RequestInit, rawResponse: true): Promise<Response>;
+export async function apiFetch<T>(path: string, init: RequestInit = {}, rawResponse?: true): Promise<T | Response> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(init.headers as Record<string, string> ?? {}),
@@ -33,6 +35,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
       setAccessToken(data.accessToken);
       headers['Authorization'] = `Bearer ${data.accessToken}`;
       const retry = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
+      if (rawResponse) return retry;
       return retry.json();
     } else {
       setAccessToken(null);
@@ -40,6 +43,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     }
   }
 
+  if (rawResponse) return res;
   return res.json();
 }
 

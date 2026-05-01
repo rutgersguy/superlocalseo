@@ -7,6 +7,7 @@ const router = Router();
 
 router.get('/', requireAuth, requireClient, ctrl.list);
 router.get('/:id/download', requireAuth, requireClient, ctrl.download);
+router.get('/:id/view', requireAuth, requireClient, ctrl.view);
 router.post('/generate', requireAuth, requireClient, ctrl.generate);
 
 export default router;
