@@ -31,6 +31,12 @@ function formatReview(r: Record<string, unknown>) {
     ingestedAt: r.ingested_at,
     platformUrl: r.platform_url,
     locationId: r.location_id,
+    replied: r.replied,
+    replyDate: r.reply_date,
+    emrReplyText: r.emr_reply_text,
+    hidden: r.hidden,
+    avatarUrl: r.avatar_url,
+    verified: r.verified,
   };
 }
 
@@ -71,15 +77,26 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
 }
 
 interface WebhookPayload {
+  event?: string;
   id?: string;
   platform?: string;
+  source?: string;
+  author?: string;
   author_name?: string;
   rating?: number;
   body?: string;
+  message?: string;
   date?: string;
   url?: string;
+  source_url?: string;
   client_api_key?: string;
   location_id?: string;
+  replied?: boolean;
+  reply?: string | null;
+  reply_date?: string | null;
+  hidden?: boolean;
+  avatar?: string | null;
+  verified?: boolean | null;
 }
 
 export async function webhook(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -104,13 +121,14 @@ export async function webhook(req: Request, res: Response, next: NextFunction): 
 
     const payload = req.body as WebhookPayload;
 
-    if (!payload.id || !payload.platform) {
+    // EMR uses 'source' for platform name in webhook payloads
+    const platform = payload.platform ?? payload.source;
+    if (!payload.id || !platform) {
       err(res, 'Missing required fields', 400, 'BAD_REQUEST');
       return;
     }
 
     // Find the client by matching API key (webhook includes client context)
-    // We'll look up by location_id if provided, otherwise skip
     const locationId = payload.location_id ?? null;
     let clientId: string | null = null;
 
@@ -120,39 +138,70 @@ export async function webhook(req: Request, res: Response, next: NextFunction): 
     }
 
     if (!clientId) {
-      // Can't associate — log and accept gracefully
       logger.warn('Webhook received but could not associate with a client', { externalId: payload.id });
       res.status(200).json({ received: true });
       return;
     }
 
-    const reviewDate = payload.date ? new Date(payload.date) : new Date();
+    const event = payload.event ?? 'review.created';
     const now = new Date();
 
-    await db('reviews')
-      .insert({
-        client_id: clientId,
-        location_id: locationId,
-        platform: payload.platform,
-        external_review_id: payload.id,
-        author_name: payload.author_name ?? 'Unknown',
-        rating: payload.rating ?? null,
-        body: payload.body ?? null,
-        sentiment: null,
-        status: 'new',
-        review_date: reviewDate,
-        ingested_at: now,
-        platform_url: payload.url ?? null,
-      })
-      .onConflict(['platform', 'external_review_id'])
-      .merge({
-        author_name: payload.author_name ?? 'Unknown',
-        rating: payload.rating ?? null,
-        body: payload.body ?? null,
-        platform_url: payload.url ?? null,
-        ingested_at: now,
-      });
+    if (event === 'review.updated') {
+      // Sync reply/status fields only — don't overwrite user-visible review content
+      await db('reviews')
+        .where({ platform, external_review_id: payload.id })
+        .update({
+          replied: payload.replied ?? !!payload.reply,
+          reply_date: payload.reply_date ? new Date(payload.reply_date) : null,
+          emr_reply_text: payload.reply ?? null,
+          hidden: payload.hidden ?? false,
+          ingested_at: now,
+        });
+    } else {
+      // review.created — full upsert
+      const reviewDate = payload.date ? new Date(payload.date) : now;
+      const authorName = payload.author_name ?? payload.author ?? 'Unknown';
+      const body = payload.body ?? payload.message ?? null;
+      const platformUrl = payload.url ?? payload.source_url ?? null;
 
+      await db('reviews')
+        .insert({
+          client_id: clientId,
+          location_id: locationId,
+          platform,
+          external_review_id: payload.id,
+          author_name: authorName,
+          rating: payload.rating ?? null,
+          body,
+          sentiment: null,
+          status: 'new',
+          review_date: reviewDate,
+          ingested_at: now,
+          platform_url: platformUrl,
+          replied: payload.replied ?? !!payload.reply,
+          reply_date: payload.reply_date ? new Date(payload.reply_date) : null,
+          emr_reply_text: payload.reply ?? null,
+          hidden: payload.hidden ?? false,
+          avatar_url: payload.avatar ?? null,
+          verified: payload.verified ?? null,
+        })
+        .onConflict(['platform', 'external_review_id'])
+        .merge({
+          author_name: authorName,
+          rating: payload.rating ?? null,
+          body,
+          platform_url: platformUrl,
+          replied: payload.replied ?? !!payload.reply,
+          reply_date: payload.reply_date ? new Date(payload.reply_date) : null,
+          emr_reply_text: payload.reply ?? null,
+          hidden: payload.hidden ?? false,
+          avatar_url: payload.avatar ?? null,
+          verified: payload.verified ?? null,
+          ingested_at: now,
+        });
+    }
+
+    logger.info('EMR webhook processed', { event, externalId: payload.id, platform });
     res.status(200).json({ received: true });
   } catch (e) {
     next(e);

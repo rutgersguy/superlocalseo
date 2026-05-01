@@ -8,8 +8,25 @@ export interface EMRReview {
   author: string;
   rating: number;
   body: string;
-  date: string; // ISO date string
+  date: string;
   url: string | null;
+  replied: boolean;
+  replyDate: string | null;
+  replyText: string | null;
+  hidden: boolean;
+  avatarUrl: string | null;
+  verified: boolean | null;
+}
+
+export interface EMRCampaign {
+  id: string;
+  name: string;
+  invited: number;
+  opened: number;
+  clicked: number;
+  reviewed: number;
+  privateFeedback: number;
+  unsubscribed: number;
 }
 
 async function emrFetch(path: string, apiKey: string, options: RequestInit = {}): Promise<Response> {
@@ -40,8 +57,17 @@ async function emrFetch(path: string, apiKey: string, options: RequestInit = {})
   throw new Error('EmbedMyReviews: max retry attempts exceeded after rate limiting');
 }
 
-export async function fetchReviews(apiKey: string, locationName?: string): Promise<EMRReview[]> {
-  const query = locationName ? `?location=${encodeURIComponent(locationName)}` : '';
+export async function fetchReviews(
+  apiKey: string,
+  opts: { locationId?: string; page?: number; rating?: number; sourceNames?: string[] } = {},
+): Promise<{ reviews: EMRReview[]; hasMore: boolean }> {
+  const params = new URLSearchParams();
+  if (opts.locationId) params.set('location_id', opts.locationId);
+  if (opts.page && opts.page > 1) params.set('page', String(opts.page));
+  if (opts.rating) params.set('rating', String(opts.rating));
+  if (opts.sourceNames?.length) opts.sourceNames.forEach((s) => params.append('source_names[]', s));
+
+  const query = params.toString() ? `?${params.toString()}` : '';
   const res = await emrFetch(`/reviews${query}`, apiKey);
 
   if (!res.ok) {
@@ -49,18 +75,120 @@ export async function fetchReviews(apiKey: string, locationName?: string): Promi
     throw new Error(`EmbedMyReviews fetchReviews failed: ${res.status} ${body}`);
   }
 
-  const data = (await res.json()) as { reviews?: Array<{ id: string; platform: string; author_name: string; rating: number; body: string; date: string; url: string | null }> };
-  const reviews = data?.reviews ?? [];
+  const data = await res.json() as {
+    data?: Array<{
+      id: string;
+      source: string;
+      author: string;
+      rating: number;
+      message: string;
+      date: string;
+      source_url?: string;
+      reply?: string | null;
+      reply_date?: string | null;
+      replied?: boolean;
+      hidden?: boolean;
+      avatar?: string | null;
+      verified?: boolean;
+    }>;
+    meta?: { current_page: number; last_page: number };
+  };
 
-  return reviews.map((r) => ({
+  const reviews = (data?.data ?? []).map((r) => ({
     id: r.id,
-    platform: r.platform,
-    author: r.author_name,
+    platform: r.source,
+    author: r.author,
     rating: r.rating,
-    body: r.body,
+    body: r.message,
     date: r.date,
-    url: r.url,
+    url: r.source_url ?? null,
+    replied: r.replied ?? !!r.reply,
+    replyDate: r.reply_date ?? null,
+    replyText: r.reply ?? null,
+    hidden: r.hidden ?? false,
+    avatarUrl: r.avatar ?? null,
+    verified: r.verified ?? null,
   }));
+
+  const meta = data?.meta;
+  const hasMore = meta ? meta.current_page < meta.last_page : false;
+
+  return { reviews, hasMore };
+}
+
+export async function fetchAllReviews(apiKey: string): Promise<EMRReview[]> {
+  const all: EMRReview[] = [];
+  let page = 1;
+  let hasMore = true;
+
+  while (hasMore) {
+    const result = await fetchReviews(apiKey, { page });
+    all.push(...result.reviews);
+    hasMore = result.hasMore;
+    page++;
+  }
+
+  return all;
+}
+
+export async function fetchCampaigns(apiKey: string): Promise<EMRCampaign[]> {
+  const res = await emrFetch('/request-reviews/campaigns', apiKey);
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`EmbedMyReviews fetchCampaigns failed: ${res.status} ${body}`);
+  }
+
+  const data = await res.json() as {
+    data?: Array<{
+      id: string;
+      name: string;
+      statistics?: {
+        invited?: number;
+        opened?: number;
+        clicked?: number;
+        reviewed?: number;
+        private_feedback?: number;
+        unsubscribed?: number;
+      };
+    }>;
+  };
+
+  return (data?.data ?? []).map((c) => ({
+    id: c.id,
+    name: c.name,
+    invited: c.statistics?.invited ?? 0,
+    opened: c.statistics?.opened ?? 0,
+    clicked: c.statistics?.clicked ?? 0,
+    reviewed: c.statistics?.reviewed ?? 0,
+    privateFeedback: c.statistics?.private_feedback ?? 0,
+    unsubscribed: c.statistics?.unsubscribed ?? 0,
+  }));
+}
+
+export async function sendInvite(
+  apiKey: string,
+  campaignId: string,
+  contact: { firstName: string; lastName?: string; email?: string; phone?: string },
+): Promise<void> {
+  if (!contact.email && !contact.phone) {
+    throw new Error('Invite requires at least email or phone');
+  }
+
+  const res = await emrFetch(`/request-reviews/campaigns/${encodeURIComponent(campaignId)}/invite`, apiKey, {
+    method: 'POST',
+    body: JSON.stringify({
+      first_name: contact.firstName,
+      last_name: contact.lastName ?? '',
+      ...(contact.email ? { email: contact.email } : {}),
+      ...(contact.phone ? { phone: contact.phone } : {}),
+    }),
+  });
+
+  if (!res.ok && res.status !== 202) {
+    const body = await res.text();
+    throw new Error(`EmbedMyReviews sendInvite failed: ${res.status} ${body}`);
+  }
 }
 
 export async function validateApiKey(apiKey: string): Promise<boolean> {

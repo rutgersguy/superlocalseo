@@ -1,11 +1,10 @@
 import { Job } from 'bullmq';
 import { db } from '../db/connection';
 import { decrypt } from '../utils/crypto';
-import { fetchReviews } from '../services/embedmyreviews.service';
+import { fetchAllReviews, fetchCampaigns } from '../services/embedmyreviews.service';
 import { logger } from '../utils/logger';
 
 export async function processReviews(_job: Job): Promise<void> {
-  // Get all clients with a connected EmbedMyReviews integration
   const integrations = await db('integrations')
     .where({ provider: 'embedmyreviews', status: 'connected' })
     .whereNotNull('api_key_encrypted')
@@ -14,13 +13,11 @@ export async function processReviews(_job: Job): Promise<void> {
   for (const integration of integrations) {
     try {
       const apiKey = decrypt(integration.api_key_encrypted as string);
-      const reviews = await fetchReviews(apiKey);
+      const reviews = await fetchAllReviews(apiKey);
 
       const now = new Date();
 
       for (const review of reviews) {
-        const reviewDate = new Date(review.date);
-
         await db('reviews')
           .insert({
             client_id: integration.client_id,
@@ -32,9 +29,15 @@ export async function processReviews(_job: Job): Promise<void> {
             body: review.body,
             sentiment: null,
             status: 'new',
-            review_date: reviewDate,
+            review_date: new Date(review.date),
             ingested_at: now,
             platform_url: review.url,
+            replied: review.replied,
+            reply_date: review.replyDate ? new Date(review.replyDate) : null,
+            emr_reply_text: review.replyText,
+            hidden: review.hidden,
+            avatar_url: review.avatarUrl,
+            verified: review.verified,
           })
           .onConflict(['platform', 'external_review_id'])
           .merge({
@@ -42,8 +45,52 @@ export async function processReviews(_job: Job): Promise<void> {
             rating: review.rating,
             body: review.body,
             platform_url: review.url,
+            replied: review.replied,
+            reply_date: review.replyDate ? new Date(review.replyDate) : null,
+            emr_reply_text: review.replyText,
+            hidden: review.hidden,
+            avatar_url: review.avatarUrl,
+            verified: review.verified,
             ingested_at: now,
           });
+      }
+
+      // Sync campaigns and their funnel metrics
+      try {
+        const campaigns = await fetchCampaigns(apiKey);
+        for (const c of campaigns) {
+          await db('emr_campaigns')
+            .insert({
+              client_id: integration.client_id,
+              emr_campaign_id: c.id,
+              name: c.name,
+              invited: c.invited,
+              opened: c.opened,
+              clicked: c.clicked,
+              reviewed: c.reviewed,
+              private_feedback: c.privateFeedback,
+              unsubscribed: c.unsubscribed,
+              metrics_pulled_at: now,
+            })
+            .onConflict(['client_id', 'emr_campaign_id'])
+            .merge({
+              name: c.name,
+              invited: c.invited,
+              opened: c.opened,
+              clicked: c.clicked,
+              reviewed: c.reviewed,
+              private_feedback: c.privateFeedback,
+              unsubscribed: c.unsubscribed,
+              metrics_pulled_at: now,
+              updated_at: now,
+            });
+        }
+      } catch (campaignErr) {
+        // Non-fatal — campaign fetch may fail if not set up
+        logger.warn('Failed to sync EMR campaigns', {
+          clientId: integration.client_id,
+          error: (campaignErr as Error).message,
+        });
       }
 
       await db('integrations').where({ id: integration.id }).update({ last_pull_at: now });
