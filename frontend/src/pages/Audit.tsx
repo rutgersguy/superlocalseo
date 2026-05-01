@@ -82,18 +82,19 @@ export default function Audit() {
   const [scanId, setScanId] = useState('');
   const [audit, setAudit] = useState<AuditData | null>(null);
   const [error, setError] = useState('');
+  const [capturing, setCapturing] = useState(false);
 
   const handleScan = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setStep('scanning');
     try {
-      const res = await apiFetch<ScanResponse['data']>('/audit/scan', {
+      const res = await apiFetch<ScanResponse>('/audit/scan', {
         method: 'POST',
         body: JSON.stringify({ businessName, city, keyword: keyword || undefined }),
       });
-      setScanId((res as unknown as ScanResponse['data']).scanId);
-      setAudit((res as unknown as ScanResponse['data']).audit);
+      setScanId(res.data.scanId);
+      setAudit(res.data.audit);
       setStep('results');
     } catch {
       setError('Something went wrong. Please try again.');
@@ -104,15 +105,18 @@ export default function Audit() {
   const handleCapture = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setCapturing(true);
     try {
-      const res = await apiFetch<CaptureResponse['data']>('/audit/capture', {
+      const res = await apiFetch<CaptureResponse>('/audit/capture', {
         method: 'POST',
         body: JSON.stringify({ scanId, email }),
       });
-      setAudit((res as unknown as CaptureResponse['data']).audit);
+      setAudit(res.data.audit);
       setStep('unlocked');
     } catch {
       setError('Something went wrong. Please try again.');
+    } finally {
+      setCapturing(false);
     }
   };
 
@@ -225,9 +229,10 @@ export default function Audit() {
                 />
                 <button
                   type="submit"
-                  className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-brand-600"
+                  disabled={capturing}
+                  className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-brand-600 disabled:opacity-60"
                 >
-                  Unlock
+                  {capturing ? 'Unlocking…' : 'Unlock'}
                 </button>
               </form>
             </div>
