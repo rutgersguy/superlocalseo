@@ -8,6 +8,7 @@ export interface BLRankingResult {
   rank: number | null;
   url: string | null;
   searchEngine: 'google' | 'bing';
+  rankType: 'organic' | 'local_pack' | 'paid';
 }
 
 export interface BLCitationResult {
@@ -64,7 +65,7 @@ export async function fetchRankings(campaignId: string): Promise<BLRankingResult
     throw new Error(`BrightLocal fetchRankings failed: ${res.status} ${body}`);
   }
 
-  const data = (await res.json()) as { response?: { results?: Array<{ keyword: string; rank: number | null; url: string | null; search_engine: string }> } };
+  const data = (await res.json()) as { response?: { results?: Array<{ keyword: string; rank: number | null; url: string | null; search_engine: string; rank_type?: string }> } };
   const results = data?.response?.results ?? [];
 
   return results.map((r) => ({
@@ -72,6 +73,7 @@ export async function fetchRankings(campaignId: string): Promise<BLRankingResult
     rank: r.rank,
     url: r.url,
     searchEngine: r.search_engine === 'bing' ? 'bing' : 'google',
+    rankType: (r.rank_type === 'local_pack' || r.rank_type === 'paid') ? r.rank_type : 'organic',
   }));
 }
 

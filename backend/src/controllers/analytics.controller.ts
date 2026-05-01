@@ -9,6 +9,7 @@ export const rankingsHistorySchema = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
   days: z.coerce.number().int().min(1).max(730).optional(),
+  rankType: z.string().optional(),
 });
 
 export const reviewsTrendSchema = z.object({
@@ -22,22 +23,13 @@ export async function rankingsHistory(req: Request, res: Response, next: NextFun
   try {
     const q = req.query as z.infer<typeof rankingsHistorySchema>;
 
-    let from: Date;
     let to: Date = new Date();
-
-    if (q.from) {
-      from = new Date(q.from);
-    } else {
-      from = new Date();
-      from.setDate(from.getDate() - (q.days ?? 90));
-    }
     if (q.to) to = new Date(q.to);
 
     let query = db('ranking_snapshots')
       .join('keywords', 'ranking_snapshots.keyword_id', 'keywords.id')
       .join('locations', 'ranking_snapshots.location_id', 'locations.id')
       .where('locations.client_id', req.clientId)
-      .where('ranking_snapshots.pulled_at', '>=', from)
       .where('ranking_snapshots.pulled_at', '<=', to)
       .select(
         'ranking_snapshots.id',
@@ -52,6 +44,25 @@ export async function rankingsHistory(req: Request, res: Response, next: NextFun
 
     if (q.keywordId) query = query.where('ranking_snapshots.keyword_id', q.keywordId);
     if (q.locationId) query = query.where('ranking_snapshots.location_id', q.locationId);
+    if (q.rankType && q.rankType !== 'all') query = query.where('ranking_snapshots.rank_type', q.rankType);
+
+    if (q.from) {
+      query = query.where('ranking_snapshots.pulled_at', '>=', new Date(q.from));
+    } else if (q.days) {
+      const from = new Date();
+      from.setDate(from.getDate() - q.days);
+      query = query.where('ranking_snapshots.pulled_at', '>=', from);
+    } else {
+      const minRow = await db('ranking_snapshots')
+        .where('ranking_snapshots.keyword_id', q.keywordId ?? db.raw('ranking_snapshots.keyword_id'))
+        .join('locations', 'ranking_snapshots.location_id', 'locations.id')
+        .where('locations.client_id', req.clientId)
+        .min('ranking_snapshots.pulled_at as min_pulled')
+        .first() as { min_pulled: Date | null } | undefined;
+      if (minRow?.min_pulled) {
+        query = query.where('ranking_snapshots.pulled_at', '>=', minRow.min_pulled);
+      }
+    }
 
     const rows = await query;
     ok(res, rows);

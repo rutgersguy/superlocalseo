@@ -61,6 +61,7 @@ export async function processRankings(job: Job): Promise<void> {
             rank: result.rank,
             url_ranked: result.url,
             search_engine: result.searchEngine,
+            rank_type: result.rankType,
             pulled_at: new Date(),
           });
         } else {
@@ -70,6 +71,7 @@ export async function processRankings(job: Job): Promise<void> {
             rank: result.rank,
             url_ranked: result.url,
             search_engine: result.searchEngine,
+            rank_type: result.rankType,
             pulled_at: new Date(),
           });
         }

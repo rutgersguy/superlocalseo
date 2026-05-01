@@ -7,6 +7,7 @@ export const listQuerySchema = z.object({
   locationId: z.string().uuid().optional(),
   keywordId: z.string().uuid().optional(),
   searchEngine: z.enum(['google', 'bing']).optional(),
+  rankType: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   page: z.coerce.number().int().min(1).default(1),
 });
@@ -23,12 +24,12 @@ type TrendQuery = z.infer<typeof trendQuerySchema>;
 export async function list(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const query = req.query as unknown as ListQuery;
-    const { locationId, keywordId, searchEngine, limit, page } = query;
+    const { locationId, keywordId, searchEngine, rankType, limit, page } = query;
 
     // Get latest snapshot per keyword+location+search_engine using a subquery
     const latestSubquery = db('ranking_snapshots')
       .select(
-        db.raw('DISTINCT ON (keyword_id, location_id, search_engine) keyword_id, location_id, search_engine, rank, url_ranked, pulled_at, id'),
+        db.raw('DISTINCT ON (keyword_id, location_id, search_engine) keyword_id, location_id, search_engine, rank, url_ranked, pulled_at, id, rank_type'),
       )
       .orderByRaw('keyword_id, location_id, search_engine, pulled_at DESC')
       .as('latest');
@@ -73,6 +74,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
     if (locationId) baseQuery = baseQuery.where('latest.location_id', locationId);
     if (keywordId) baseQuery = baseQuery.where('latest.keyword_id', keywordId);
     if (searchEngine) baseQuery = baseQuery.where('latest.search_engine', searchEngine);
+    if (rankType && rankType !== 'all') baseQuery = baseQuery.where('latest.rank_type', rankType);
 
     const offset = (page - 1) * limit;
     const rows = await baseQuery.limit(limit).offset(offset);

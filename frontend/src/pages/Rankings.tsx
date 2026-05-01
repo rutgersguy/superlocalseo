@@ -42,7 +42,8 @@ interface RoiData {
 }
 
 type SortKey = keyof Pick<RankingRow, 'keyword' | 'location' | 'rank' | 'delta' | 'pulledAt'>;
-type TrendRange = 30 | 90 | 365;
+type TrendRange = 30 | 90 | 0;
+type RankTypeFilter = 'all' | 'organic' | 'local_pack' | 'paid';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -71,7 +72,14 @@ function fmt$(n: number) {
 const TREND_RANGES: { label: string; value: TrendRange }[] = [
   { label: '30d', value: 30 },
   { label: '90d', value: 90 },
-  { label: 'All', value: 365 },
+  { label: 'All', value: 0 },
+];
+
+const RANK_TYPES: { label: string; value: RankTypeFilter }[] = [
+  { label: 'All', value: 'all' },
+  { label: 'Organic', value: 'organic' },
+  { label: 'Local Pack', value: 'local_pack' },
+  { label: 'Paid', value: 'paid' },
 ];
 
 // ─── Inline volume editor ──────────────────────────────────────────────────────
@@ -204,14 +212,16 @@ export default function Rankings() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [selectedRow, setSelectedRow] = useState<RankingRow | null>(null);
   const [trendRange, setTrendRange] = useState<TrendRange>(30);
+  const [rankType, setRankType] = useState<RankTypeFilter>('all');
   const [showRoi, setShowRoi] = useState(false);
   const [localVolumes, setLocalVolumes] = useState<Record<string, number | null>>({});
 
-  const { data: rankingsData, isLoading, error } = useSWR<{ success: boolean; data: RankingRow[] }>('/rankings', fetcher);
+  const rankingsUrl = rankType !== 'all' ? `/rankings?rankType=${rankType}` : '/rankings';
+  const { data: rankingsData, isLoading, error } = useSWR<{ success: boolean; data: RankingRow[] }>(rankingsUrl, fetcher);
   const { data: roiData, mutate: roiMutate } = useSWR<{ success: boolean; data: RoiData }>('/analytics/roi', fetcher);
 
   const trendKey = selectedRow
-    ? `/rankings/trend?keywordId=${selectedRow.keywordId}&locationId=${selectedRow.locationId}&days=${trendRange}`
+    ? `/rankings/trend?keywordId=${selectedRow.keywordId}&locationId=${selectedRow.locationId}${trendRange > 0 ? `&days=${trendRange}` : ''}${rankType !== 'all' ? `&rankType=${rankType}` : ''}`
     : null;
   const { data: trendData, isLoading: trendLoading } = useSWR<{ success: boolean; data: TrendPoint[] }>(trendKey, fetcher);
 
@@ -373,13 +383,23 @@ export default function Rankings() {
               <h2 className="text-base font-semibold text-gray-900">Rank Trend — {effectiveSelected.keyword}</h2>
               <p className="text-xs text-gray-500 mt-0.5">{effectiveSelected.location}</p>
             </div>
-            <div className="flex gap-1">
-              {TREND_RANGES.map((r) => (
-                <button key={r.value} onClick={() => setTrendRange(r.value)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${trendRange === r.value ? 'bg-brand-500 text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}>
-                  {r.label}
-                </button>
-              ))}
+            <div className="flex items-center gap-3">
+              <div className="flex gap-1">
+                {RANK_TYPES.map((rt) => (
+                  <button key={rt.value} onClick={() => setRankType(rt.value)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${rankType === rt.value ? 'bg-brand-500 text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}>
+                    {rt.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-1">
+                {TREND_RANGES.map((r) => (
+                  <button key={r.value} onClick={() => setTrendRange(r.value)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${trendRange === r.value ? 'bg-brand-500 text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}>
+                    {r.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
           {trendLoading ? (
@@ -391,7 +411,13 @@ export default function Rankings() {
               <LineChart data={trendPoints} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }}
-                  tickFormatter={(v: string) => v ? new Date(v).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''} />
+                  tickFormatter={(v: string) => {
+                    if (!v) return '';
+                    const d = new Date(v);
+                    return (trendRange === 0 || trendRange > 60)
+                      ? d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+                      : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                  }} />
                 <YAxis domain={[yMax, yMin]} reversed tick={{ fontSize: 11, fill: '#9ca3af' }} width={28} />
                 <Tooltip formatter={(value: number) => [`Rank ${value}`, 'Rank']}
                   labelFormatter={(label: string) => label ? new Date(label).toLocaleDateString() : ''} />
