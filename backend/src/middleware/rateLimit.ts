@@ -23,3 +23,15 @@ export const authLimiter = rateLimit({
   validate: false,
   message: { success: false, error: { message: 'Too many auth attempts', code: 'RATE_LIMITED' } },
 });
+
+// AI draft endpoints: 20 per 10 min per IP (Claude Haiku calls are metered)
+export const aiLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
+  validate: false,
+  keyGenerator: (req) => (req as Request).ip ?? 'unknown',
+  message: { success: false, error: { message: 'Too many AI requests, please wait', code: 'RATE_LIMITED' } },
+});

@@ -143,16 +143,16 @@ Features designed to increase ARPU from $780 → $1,025+ and reduce churn. See [
 ## Phase 4 — Hardening & Scale (Weeks 13–16)
 
 ### Deliverables
-- [ ] Load tests (k6): 50 concurrent, < 2s p95
-- [ ] OWASP Top 10 security audit + remediation
-- [ ] Prometheus metrics: request duration, queue depth, error rates
-- [ ] Sentry error tracking (frontend + backend)
-- [ ] Automated BrightLocal pull failure alerting
-- [ ] Regression test suite: all Phase 0–3 critical paths
-- [ ] Full Cypress E2E suite: register → onboard → view dashboard → download report
-- [ ] Database backup automation (daily snapshots, 30-day retention)
+- [x] Load tests (k6): `tests/k6/load-test.js` — 50 VU, p95 < 2s threshold
+- [x] OWASP Top 10 security audit + remediation — open-redirect fix, AI rate limiter, body size limit, timing-safe HMAC comparison
+- [x] Prometheus metrics: `GET /api/prom-metrics` (admin token) — request duration histogram, request counter, default Node.js metrics via prom-client
+- [x] Sentry error tracking — `@sentry/node` backend + `@sentry/react` frontend, graceful no-op when SENTRY_DSN not set
+- [x] Automated job failure alerting — email sent to operator inbox on any BullMQ worker failure
+- [x] Regression test suite — access-control scoping, webhook HMAC security, rate-limiting, auth (10 tests passing)
+- [x] Full Cypress E2E suite: `tests/cypress/e2e/critical-paths.cy.ts` — register → login → dashboard → reports → settings
+- [x] Database backup automation — `scripts/backup-db.sh` (pg_dump, gzip, 30-day retention via cron)
 - [ ] Disaster recovery runbook
-- [ ] Go-live checklist: DNS, TLS, Stripe live mode, Resend domain auth
+- [x] Go-live checklist: `docs/DEPLOY.md` — DNS, TLS, Stripe live mode, Resend domain auth, full smoke test steps
 
 ---
 

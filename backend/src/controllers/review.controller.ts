@@ -114,7 +114,10 @@ export async function webhook(req: Request, res: Response, next: NextFunction): 
       .update(rawBody)
       .digest('hex');
 
-    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    const sigBuf = Buffer.from(signature);
+    const expBuf = Buffer.from(expected);
+    const valid = sigBuf.length === expBuf.length && crypto.timingSafeEqual(sigBuf, expBuf);
+    if (!valid) {
       err(res, 'Invalid signature', 401, 'INVALID_SIGNATURE');
       return;
     }

@@ -5,6 +5,7 @@ import { processRankings } from './rankings.job';
 import { processCitations } from './citations.job';
 import { processReviews } from './reviews.job';
 import { processCompetitors } from './competitors.job';
+import { sendJobFailureAlert } from '../services/email.service';
 
 // BullMQ v5 needs plain connection options — it creates its own ioredis instances internally.
 // maxRetriesPerRequest: null is required for blocking commands (BLPOP).
@@ -90,18 +91,6 @@ export async function startWorkers(): Promise<void> {
     { connection },
   );
 
-  rankingsWorker.on('failed', (job, err) => {
-    logger.error('Rankings job failed', { jobId: job?.id, error: err.message });
-  });
-
-  citationsWorker.on('failed', (job, err) => {
-    logger.error('Citations job failed', { jobId: job?.id, error: err.message });
-  });
-
-  reviewsWorker.on('failed', (job, err) => {
-    logger.error('Reviews job failed', { jobId: job?.id, error: err.message });
-  });
-
   const competitorsWorker = new Worker(
     'competitors',
     async (job: Job) => {
@@ -111,13 +100,18 @@ export async function startWorkers(): Promise<void> {
     { connection },
   );
 
-  reportsWorker.on('failed', (job, err) => {
-    logger.error('Reports job failed', { jobId: job?.id, error: err.message });
-  });
+  function alertOnFail(name: string) {
+    return (job: { id?: string } | undefined, err: Error) => {
+      logger.error(`${name} job failed`, { jobId: job?.id, error: err.message });
+      void sendJobFailureAlert(name, err.message, { jobId: job?.id });
+    };
+  }
 
-  competitorsWorker.on('failed', (job, err) => {
-    logger.error('Competitors job failed', { jobId: job?.id, error: err.message });
-  });
+  rankingsWorker.on('failed', alertOnFail('rankings'));
+  citationsWorker.on('failed', alertOnFail('citations'));
+  reviewsWorker.on('failed', alertOnFail('reviews'));
+  reportsWorker.on('failed', alertOnFail('reports'));
+  competitorsWorker.on('failed', alertOnFail('competitors'));
 
   // Schedule repeatable daily jobs
   await rankingsQueue.add(

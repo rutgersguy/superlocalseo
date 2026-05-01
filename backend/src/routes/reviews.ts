@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { requireClient } from '../middleware/requireClient';
 import { validateQuery } from '../middleware/validate';
+import { aiLimiter } from '../middleware/rateLimit';
 import * as ctrl from '../controllers/review.controller';
 import * as responseCtrl from '../controllers/review_response.controller';
 
@@ -14,7 +15,7 @@ router.get('/', requireAuth, requireClient, validateQuery(ctrl.listQuerySchema),
 
 // AI response drafting
 router.get('/:id/response', requireAuth, requireClient, responseCtrl.get);
-router.post('/:id/response/draft', requireAuth, requireClient, responseCtrl.draft);
+router.post('/:id/response/draft', aiLimiter, requireAuth, requireClient, responseCtrl.draft);
 router.patch('/:id/response', requireAuth, requireClient, responseCtrl.update);
 
 export default router;

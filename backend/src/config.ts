@@ -77,6 +77,10 @@ export const config = {
     apiKey: optional('ANTHROPIC_API_KEY'),
   },
 
+  sentry: {
+    dsn: optional('SENTRY_DSN'),
+  },
+
   reports: {
     dir: optional('REPORTS_DIR', '/tmp/reports'),
   },

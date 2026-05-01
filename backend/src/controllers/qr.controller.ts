@@ -15,9 +15,12 @@ function redirectUrl(shortCode: string): string {
   return `${config.publicUrl}/api/qr/r/${shortCode}`;
 }
 
+// Only allow http/https schemes to prevent open-redirect to javascript: etc.
+const safeUrl = z.string().url().refine((u) => /^https?:\/\//i.test(u), 'URL must use http or https');
+
 const createSchema = z.object({
   name: z.string().min(1).max(255),
-  targetUrl: z.string().url(),
+  targetUrl: safeUrl,
   locationId: z.string().uuid().optional(),
 });
 
@@ -155,6 +158,13 @@ export async function redirect(req: Request, res: Response, next: NextFunction):
       return;
     }
 
+    // Guard against stored non-http URLs (defence in depth)
+    const target = qr.target_url as string;
+    if (!/^https?:\/\//i.test(target)) {
+      res.status(400).send('Invalid redirect target');
+      return;
+    }
+
     await db('qr_codes')
       .where({ id: qr.id })
       .update({
@@ -163,7 +173,7 @@ export async function redirect(req: Request, res: Response, next: NextFunction):
       })
       .catch((e) => logger.warn('scan_count update failed', { error: (e as Error).message }));
 
-    res.redirect(302, qr.target_url as string);
+    res.redirect(302, target);
   } catch (e) {
     next(e);
   }

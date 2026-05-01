@@ -58,6 +58,23 @@ export async function sendTeamInviteEmail(
   }).catch((e) => logger.error('Failed to send team invite email', { error: e, to }));
 }
 
+export async function sendJobFailureAlert(
+  jobName: string,
+  errorMessage: string,
+  context?: Record<string, unknown>,
+): Promise<void> {
+  const adminEmail = config.resend.fromEmail; // Alert goes to the operator inbox
+  await resend.emails.send({
+    from,
+    to: adminEmail,
+    subject: `[SuperLocalSEO] Job failure: ${jobName}`,
+    html: `<p><strong>Job:</strong> ${jobName}</p>
+<p><strong>Error:</strong> ${errorMessage}</p>
+${context ? `<pre>${JSON.stringify(context, null, 2)}</pre>` : ''}
+<p><small>${new Date().toISOString()}</small></p>`,
+  }).catch((e) => logger.error('Failed to send job failure alert', { error: e }));
+}
+
 export async function sendReportEmail(
   to: string,
   businessName: string,
