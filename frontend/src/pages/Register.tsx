@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 
 const GOOGLE_AUTH_URL = '/api/auth/google';
@@ -18,13 +18,20 @@ type FormData = z.infer<typeof schema>;
 export default function Register() {
   const { register: registerUser } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [apiError, setApiError] = useState('');
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<FormData>({ resolver: zodResolver(schema) });
+  } = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      email: searchParams.get('email') ?? '',
+      businessName: searchParams.get('business') ?? '',
+    },
+  });
 
   const onSubmit = async (data: FormData) => {
     setApiError('');
