@@ -2,7 +2,7 @@
 
 **Target:** 4–6 weeks to first paying client (Phase 1 MVP), 16 weeks to full production.
 
-**Status (as of 2026-05-01):** Phase 0 ✅ · Phase 1 ✅ · Phase 2 (Reports) ✅ · Phase 3 (Analytics) ✅ · Phase 2+ Advanced Features in progress (#68–71) · Phase 4 (Hardening) pending.
+**Status (as of 2026-05-01):** Phase 0 ✅ · Phase 1 ✅ · Phase 2 (Reports) ✅ · Phase 3 (Analytics) ✅ · Phase 2+ Advanced Features in progress (#71, #65 remaining) · Phase 4 (Hardening) pending.
 
 ---
 
@@ -119,10 +119,10 @@
 Features designed to increase ARPU from $780 → $1,025+ and reduce churn. See [Epic #67](https://github.com/rutgersguy/superlocalseo/issues/67) for financial projections.
 
 ### Quick Wins
-- [ ] **#68 Audit Report Lead Magnet** — free public SEO audit page → email capture → trial conversion
-- [ ] **#69 Team Members & RBAC** — invite users (admin/viewer roles), per-seat billing upsell
-- [ ] **#70 Review Widgets** — embeddable review carousel/grid for client websites
-- [ ] **#71 Lead Attribution & ROI** — track revenue per keyword, show clients the $ value of SEO
+- [x] **#68 Audit Report Lead Magnet** — free public `/audit` page, Google Places scan, 5-category score, email gate, register CTA
+- [x] **#69 Team Members & RBAC** — invite admin/viewer users by email, 48hr token flow, instant login on accept, owner-only Team tab in Settings
+- [x] **#70 Review Widgets** — embeddable `<script>` carousel with light/dark theme, per-widget config, live preview in Settings
+- [ ] **#71 Lead Attribution & ROI** — monthly search volume per keyword, CTR-based revenue estimates, ROI config in Settings, Est. Revenue column in Rankings
 - [ ] **#65 Crisp chat widget** — in-app support
 
 ### Revenue Multipliers (Phase 3+)

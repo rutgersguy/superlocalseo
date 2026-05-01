@@ -8,6 +8,7 @@ const router = Router();
 
 router.get('/', requireAuth, requireClient, validateQuery(ctrl.keywordQuerySchema), ctrl.list);
 router.post('/', requireAuth, requireClient, validate(ctrl.keywordSchema), ctrl.create);
+router.patch('/:id/volume', requireAuth, requireClient, ctrl.updateVolume);
 router.delete('/:id', requireAuth, requireClient, ctrl.remove);
 
 export default router;

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 import { fetcher } from '../services/api';
 
@@ -77,6 +78,25 @@ function DeltaBadge({ delta }: { delta: number }) {
   );
 }
 
+interface RoiTotals {
+  estClicks: number;
+  estLeads: number;
+  estRevenue: number;
+}
+
+interface RoiResponse {
+  success: boolean;
+  data: {
+    roiConfig: { avgCustomerValue: number; conversionRate: number };
+    totals: RoiTotals;
+  };
+}
+
+function fmt$(n: number) {
+  if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
+  return `$${n.toLocaleString()}`;
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -86,8 +106,12 @@ export default function Dashboard() {
   const { data: rankingsData, isLoading: rankingsLoading, error: rankingsError } =
     useSWR<RankingsResponse>('/rankings?limit=10', fetcher);
 
+  const { data: roiData } = useSWR<RoiResponse>('/analytics/roi', fetcher);
+
   const metrics = metricsData?.data;
   const rankings = rankingsData?.data ?? [];
+  const roi = roiData?.data;
+  const roiConfigured = (roi?.roiConfig?.avgCustomerValue ?? 0) > 0;
 
   return (
     <div className="space-y-6">
@@ -105,27 +129,35 @@ export default function Dashboard() {
 
       {/* Metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          label="Avg Rank"
-          value={metrics?.avgRank != null ? metrics.avgRank.toFixed(1) : '—'}
-          loading={metricsLoading}
-        />
-        <MetricCard
-          label="Keywords in Top 10"
-          value={metrics?.keywordsInTop10 ?? '—'}
-          loading={metricsLoading}
-        />
-        <MetricCard
-          label="Total Reviews"
-          value={metrics?.totalReviews ?? '—'}
-          loading={metricsLoading}
-        />
-        <MetricCard
-          label="Avg Rating"
-          value={metrics?.avgRating != null ? metrics.avgRating.toFixed(1) : '—'}
-          loading={metricsLoading}
-        />
+        <MetricCard label="Avg Rank" value={metrics?.avgRank != null ? metrics.avgRank.toFixed(1) : '—'} loading={metricsLoading} />
+        <MetricCard label="Keywords in Top 10" value={metrics?.keywordsInTop10 ?? '—'} loading={metricsLoading} />
+        <MetricCard label="Total Reviews" value={metrics?.totalReviews ?? '—'} loading={metricsLoading} />
+        <MetricCard label="Avg Rating" value={metrics?.avgRating != null ? metrics.avgRating.toFixed(1) : '—'} loading={metricsLoading} />
       </div>
+
+      {/* ROI banner — only shown once avgCustomerValue is configured */}
+      {roiConfigured && roi ? (
+        <div className="grid grid-cols-3 gap-4">
+          {[
+            { label: 'Est. Monthly Clicks', value: roi.totals.estClicks.toLocaleString() },
+            { label: 'Est. Monthly Leads', value: roi.totals.estLeads.toLocaleString() },
+            { label: 'Est. Monthly Revenue', value: fmt$(roi.totals.estRevenue) },
+          ].map((card) => (
+            <div key={card.label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+              <p className="text-xs text-gray-500 mb-1">{card.label}</p>
+              <p className="text-2xl font-bold text-gray-900">{card.value}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="bg-brand-50 border border-brand-100 rounded-xl px-5 py-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-brand-800">Unlock your ROI estimate</p>
+            <p className="text-xs text-brand-600 mt-0.5">Enter your average customer value to see the monthly $ impact of your rankings.</p>
+          </div>
+          <Link to="/dashboard/rankings" className="text-sm font-semibold text-brand-600 hover:text-brand-800 whitespace-nowrap ml-4">Set it up →</Link>
+        </div>
+      )}
 
       {/* Keyword summary table */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm">

@@ -115,6 +115,137 @@ export async function reviewsTrend(req: Request, res: Response, next: NextFuncti
   }
 }
 
+// CTR estimates by rank position (industry standard curve)
+const CTR_BY_RANK: Record<number, number> = {
+  1: 0.285, 2: 0.157, 3: 0.110, 4: 0.080, 5: 0.072,
+  6: 0.051, 7: 0.040, 8: 0.032, 9: 0.028, 10: 0.025,
+};
+function ctrForRank(rank: number): number {
+  if (rank <= 10) return CTR_BY_RANK[rank] ?? 0.025;
+  if (rank <= 20) return 0.010;
+  return 0.003;
+}
+
+const DEFAULT_ROI = { avgCustomerValue: 0, conversionRate: 2.5 };
+
+export async function roi(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const client = req.client as Record<string, unknown>;
+    const cfg = { ...DEFAULT_ROI, ...(client.roi_config as object ?? {}) };
+
+    // Latest rank per keyword for this client
+    const rows = await db('ranking_snapshots')
+      .join('keywords', 'ranking_snapshots.keyword_id', 'keywords.id')
+      .join('locations', 'ranking_snapshots.location_id', 'locations.id')
+      .where('locations.client_id', req.clientId)
+      .whereNotNull('ranking_snapshots.rank')
+      .select(
+        'keywords.id as keywordId',
+        'keywords.keyword',
+        'keywords.monthly_search_volume as monthlySearchVolume',
+        'locations.name as location',
+        'ranking_snapshots.location_id as locationId',
+        db.raw('MAX(ranking_snapshots.pulled_at) as latest_pulled'),
+      )
+      .groupBy('keywords.id', 'keywords.keyword', 'keywords.monthly_search_volume', 'locations.name', 'ranking_snapshots.location_id');
+
+    // For each group, get the rank at the latest pull
+    const keywordIds = rows.map((r) => r.keywordId);
+    const latestRanks = keywordIds.length
+      ? await db('ranking_snapshots')
+          .join('keywords', 'ranking_snapshots.keyword_id', 'keywords.id')
+          .join('locations', 'ranking_snapshots.location_id', 'locations.id')
+          .where('locations.client_id', req.clientId)
+          .whereIn('keywords.id', keywordIds)
+          .select(
+            'keywords.id as keywordId',
+            'ranking_snapshots.location_id as locationId',
+            'ranking_snapshots.rank',
+            'ranking_snapshots.pulled_at as pulledAt',
+          )
+          .orderBy('ranking_snapshots.pulled_at', 'desc')
+      : [];
+
+    // Build a map: keywordId+locationId → latest rank
+    const rankMap: Record<string, number> = {};
+    for (const r of latestRanks as Array<{ keywordId: string; locationId: string; rank: number }>) {
+      const key = `${r.keywordId}:${r.locationId}`;
+      if (!(key in rankMap)) rankMap[key] = r.rank;
+    }
+
+    const convRate = (cfg.conversionRate as number) / 100;
+
+    let totalClicks = 0;
+    let totalLeads = 0;
+    let totalRevenue = 0;
+
+    const keywords = rows.map((r) => {
+      const key = `${r.keywordId}:${r.locationId}`;
+      const rank: number = rankMap[key] ?? 0;
+      const vol: number = (r.monthlySearchVolume as number) ?? 0;
+      const ctr = rank > 0 ? ctrForRank(rank) : 0;
+      const estClicks = Math.round(vol * ctr);
+      const estLeads = Math.round(estClicks * convRate * 10) / 10;
+      const estRevenue = Math.round(estLeads * (cfg.avgCustomerValue as number));
+
+      totalClicks += estClicks;
+      totalLeads += estLeads;
+      totalRevenue += estRevenue;
+
+      return {
+        keywordId: r.keywordId,
+        keyword: r.keyword,
+        location: r.location,
+        locationId: r.locationId,
+        monthlySearchVolume: vol || null,
+        rank: rank || null,
+        ctr: rank > 0 ? Math.round(ctr * 1000) / 10 : null, // as % with 1 decimal
+        estClicks: vol && rank ? estClicks : null,
+        estLeads: vol && rank ? estLeads : null,
+        estRevenue: vol && rank ? estRevenue : null,
+      };
+    });
+
+    ok(res, {
+      roiConfig: cfg,
+      keywords,
+      totals: {
+        estClicks: totalClicks,
+        estLeads: Math.round(totalLeads * 10) / 10,
+        estRevenue: totalRevenue,
+      },
+    });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function updateRoiConfig(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { avgCustomerValue, conversionRate } = z.object({
+      avgCustomerValue: z.number().min(0).optional(),
+      conversionRate: z.number().min(0).max(100).optional(),
+    }).parse(req.body);
+
+    const client = req.client as Record<string, unknown>;
+    const current = { ...DEFAULT_ROI, ...(client.roi_config as object ?? {}) };
+    const merged = {
+      ...current,
+      ...(avgCustomerValue !== undefined ? { avgCustomerValue } : {}),
+      ...(conversionRate !== undefined ? { conversionRate } : {}),
+    };
+
+    await db('clients').where({ id: req.clientId }).update({
+      roi_config: merged,
+      updated_at: new Date(),
+    });
+
+    ok(res, { roiConfig: merged });
+  } catch (e) {
+    next(e);
+  }
+}
+
 export async function exportCsv(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { type = 'rankings' } = req.query as { type?: 'rankings' | 'reviews' };

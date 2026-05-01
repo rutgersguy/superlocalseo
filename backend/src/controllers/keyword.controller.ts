@@ -74,6 +74,39 @@ export async function create(req: Request, res: Response, next: NextFunction): P
   }
 }
 
+export async function updateVolume(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { monthlySearchVolume } = z.object({
+      monthlySearchVolume: z.number().int().min(0).nullable(),
+    }).parse(req.body);
+
+    const keyword = await db('keywords')
+      .join('locations', 'keywords.location_id', 'locations.id')
+      .where('keywords.id', id)
+      .where('locations.client_id', req.clientId)
+      .select('keywords.*')
+      .first();
+
+    if (!keyword) {
+      notFound(res, 'Keyword not found');
+      return;
+    }
+
+    const [updated] = await db('keywords').where({ id }).update({
+      monthly_search_volume: monthlySearchVolume,
+      updated_at: new Date(),
+    }).returning('*');
+
+    ok(res, {
+      ...formatKeyword(updated as Record<string, unknown>),
+      monthlySearchVolume: (updated as Record<string, unknown>).monthly_search_volume,
+    });
+  } catch (e) {
+    next(e);
+  }
+}
+
 export async function remove(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { id } = req.params;
