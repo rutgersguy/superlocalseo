@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { mutate } from 'swr';
 import { apiFetch } from '../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -65,12 +66,14 @@ export default function Onboarding() {
   const [businessName, setBusinessName] = useState('');
   const [industry, setIndustry] = useState('');
 
-  // Pre-populate Step 1 from existing client record (Google signup sets a placeholder name)
+  // Pre-populate from existing client record and resume from saved step
   useEffect(() => {
-    apiFetch<{ success: boolean; data: { businessName: string; industry: string | null } }>('/clients')
+    apiFetch<{ success: boolean; data: { businessName: string; industry: string | null; onboardingStep: number } }>('/clients')
       .then((res) => {
         if (res.data.businessName) setBusinessName(res.data.businessName);
         if (res.data.industry) setIndustry(res.data.industry);
+        const saved = res.data.onboardingStep;
+        if (saved > 0 && saved <= TOTAL_STEPS) setStep(saved);
       })
       .catch(() => {/* non-fatal */});
   }, []);
@@ -127,14 +130,29 @@ export default function Onboarding() {
     setError('');
     try {
       await apiFetch('/clients/complete-onboarding', { method: 'POST' });
-      navigate('/dashboard/settings?tab=billing');
     } catch {
       // Non-fatal: onboarding step was saved server-side even if provisioning timed out.
-      navigate('/dashboard/settings?tab=billing');
     } finally {
       setSaving(false);
       setProvisioning(false);
     }
+    // Flush SWR cache before navigating so OnboardingRedirect sees the updated onboardingStep
+    // and doesn't loop us back here.
+    await mutate('/clients');
+    navigate('/dashboard/settings?tab=billing');
+  };
+
+  const handleSkip = async () => {
+    try {
+      const payload: Record<string, unknown> = { onboardingStep: step };
+      if (step === 1) {
+        if (businessName) payload.businessName = businessName;
+        if (industry) payload.industry = industry;
+      }
+      await apiFetch('/clients', { method: 'PATCH', body: JSON.stringify(payload) });
+    } catch { /* non-fatal */ }
+    await mutate('/clients');
+    navigate('/dashboard');
   };
 
   // ── Step 2 helpers ──────────────────────────────────────────────────────────
@@ -186,9 +204,17 @@ export default function Onboarding() {
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="max-w-2xl mx-auto">
-        <div className="text-center mb-8">
-          <span className="text-2xl font-bold text-brand-500">SuperLocalSEO</span>
-          <h1 className="mt-3 text-2xl font-bold text-gray-900">Set up your account</h1>
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-2xl font-bold text-brand-500">SuperLocalSEO</span>
+            <button
+              onClick={() => void handleSkip()}
+              className="text-sm text-gray-400 hover:text-gray-600 hover:underline"
+            >
+              Finish later
+            </button>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900">Set up your account</h1>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
