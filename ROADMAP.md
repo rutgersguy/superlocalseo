@@ -2,7 +2,7 @@
 
 **Target:** 4–6 weeks to first paying client (Phase 1 MVP), 16 weeks to full production.
 
-**Status (as of 2026-05-01):** Phase 0 ✅ · Phase 1 ✅ · Phase 2 (Reports) ✅ · Phase 3 (Analytics) ✅ · Phase 2+ Quick Wins ✅ (#65 pending email/Crisp install) · Revenue Multipliers ✅ · Phase 4 (Hardening) ✅ · GBP/Facebook sync ✅ · Admin analytics ✅ · Gap report ✅ · CI pipeline ✅
+**Status (as of 2026-05-02):** Phase 0 ✅ · Phase 1 ✅ · Phase 2 (Reports) ✅ · Phase 3 (Analytics) ✅ · Phase 2+ Quick Wins ✅ · Revenue Multipliers ✅ · Phase 4 (Hardening) ✅ · All features complete — in active QA & polish
 
 ---
 
@@ -123,7 +123,7 @@ Features designed to increase ARPU from $780 → $1,025+ and reduce churn. See [
 - [x] **#69 Team Members & RBAC** — invite admin/viewer users by email, 48hr token flow, instant login on accept, owner-only Team tab in Settings
 - [x] **#70 Review Widgets** — embeddable `<script>` carousel with light/dark theme, per-widget config, live preview in Settings
 - [x] **#71 Lead Attribution & ROI** — search volume per keyword, CTR-based revenue estimates, ROI config in Settings, Est. Revenue column in Rankings
-- [ ] **#65 Crisp chat widget** — in-app support
+- [x] **#65 Crisp chat widget** — in-app support (websiteId b43a3ca0, identity push on login)
 
 ### Revenue Multipliers (Phase 3+)
 - [x] **#72 AI Review Responses** — Claude Haiku drafts per-review, client edits + approves + copies to platform; draft persists in DB
@@ -196,3 +196,18 @@ See [docs/PRICING.md](docs/PRICING.md) for full unit economics.
 | Phase 3 | Client can view 90-day ranking trend + export data |
 | Phase 2+ | Team members, widgets, and audit funnel live |
 | Phase 4 | 50 concurrent users < 2s p95, OWASP audit passed |
+
+---
+
+## QA & Polish Log
+
+### 2026-05-02
+- **docs/FEATURES.md** — 2,100-line comprehensive reference covering all 30 feature areas added to repo
+- **QA smoke test** — 45/45 checks passing; rate limiters disabled in dev so suite runs repeatedly without 429s; admin seed credentials set
+- **react-leaflet** — downgraded from v5 → v4 (v5 requires React 19; Docker `npm ci` was failing)
+- **Audit page frozen** — fixed response wrapper mismatch (`res.data.*` not `res.*`); added "Unlocking…" button state
+- **APP_URL** — changed from `http://localhost:5173` → `https://superlocalseo.com`; Google OAuth callback now redirects to real domain instead of localhost
+- **Google OAuth flow** — new Google signups routed to `/onboarding`; existing email accounts that sign in with Google get `google_id` linked + green "account linked" banner
+- **Onboarding Step 1** — pre-fetches existing `businessName`/`industry` from server; now saves both fields to DB when clicking Next (previously never persisted)
+- **Audit → Register pre-fill** — email + business name carried as query params to `/register`; user-typed name takes priority over Google Places name
+- **Auth error messages** — `EMAIL_TAKEN` returns `hint: 'google'|'password'`; register page shows contextual banner with correct CTA; login page detects `USE_GOOGLE_LOGIN` for passwordless accounts; fixed `res.message` → `res.error.message` extraction bug (previously always showed "Registration failed")
