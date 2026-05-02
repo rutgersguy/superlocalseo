@@ -11,6 +11,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleOnlyHint, setGoogleOnlyHint] = useState(false);
 
   const oauthError = searchParams.get('error');
   const [error, setError] = useState(
@@ -21,12 +22,18 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setGoogleOnlyHint(false);
     setLoading(true);
     try {
       await login(email, password);
       navigate('/dashboard');
-    } catch {
-      setError('Invalid email or password');
+    } catch (err) {
+      const e = err as Error & { code?: string };
+      if (e.code === 'USE_GOOGLE_LOGIN') {
+        setGoogleOnlyHint(true);
+      } else {
+        setError('Invalid email or password');
+      }
     } finally {
       setLoading(false);
     }
@@ -40,6 +47,16 @@ export default function Login() {
           <h1 className="mt-4 text-2xl font-bold text-gray-900">Sign in to your account</h1>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+          {googleOnlyHint && (
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+              <p className="font-medium mb-1">This account uses Google sign-in.</p>
+              <p className="mb-3 text-blue-700">No password is set — use the button below to sign in.</p>
+              <a href={GOOGLE_AUTH_URL} className="inline-flex items-center gap-2 bg-white border border-blue-300 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-blue-50">
+                <GoogleIcon />
+                Sign in with Google
+              </a>
+            </div>
+          )}
           {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>}
 
           {/* Google OAuth */}

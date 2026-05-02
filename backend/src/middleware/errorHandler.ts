@@ -20,5 +20,6 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     logger.error('Unhandled error', { error: err, path: req.path, method: req.method });
   }
 
-  res.status(status).json({ success: false, error: { message, code: (err as any)?.code ?? 'SERVER_ERROR' } });
+  const extra = (err as any)?.hint ? { hint: (err as any).hint } : {};
+  res.status(status).json({ success: false, error: { message, code: (err as any)?.code ?? 'SERVER_ERROR', ...extra } });
 }

@@ -20,6 +20,7 @@ export default function Register() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [apiError, setApiError] = useState('');
+  const [emailTakenHint, setEmailTakenHint] = useState<'google' | 'password' | null>(null);
 
   const {
     register,
@@ -35,11 +36,18 @@ export default function Register() {
 
   const onSubmit = async (data: FormData) => {
     setApiError('');
+    setEmailTakenHint(null);
     try {
       await registerUser(data.email, data.password, data.businessName);
       navigate('/registered', { state: { email: data.email } });
     } catch (err) {
-      setApiError(err instanceof Error ? err.message : 'Registration failed');
+      const e = err as Error & { code?: string; hint?: string };
+      if (e.code === 'EMAIL_TAKEN') {
+        setEmailTakenHint((e.hint as 'google' | 'password') ?? 'password');
+        setApiError('');
+      } else {
+        setApiError(e.message ?? 'Registration failed');
+      }
     }
   };
 
@@ -52,6 +60,27 @@ export default function Register() {
           <p className="mt-1 text-sm text-gray-600">Start your free 14-day trial</p>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+          {emailTakenHint === 'google' && (
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+              <p className="font-medium mb-1">This email is already registered via Google.</p>
+              <p className="mb-3 text-blue-700">Sign in with Google to access your account.</p>
+              <a href={GOOGLE_AUTH_URL} className="inline-flex items-center gap-2 bg-white border border-blue-300 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-blue-50">
+                <GoogleIcon />
+                Sign in with Google
+              </a>
+            </div>
+          )}
+
+          {emailTakenHint === 'password' && (
+            <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+              <p className="font-medium mb-1">An account with that email already exists.</p>
+              <p className="mb-3 text-yellow-700">Sign in to your existing account instead.</p>
+              <Link to="/login" className="inline-block bg-white border border-yellow-300 text-yellow-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-yellow-50">
+                Sign in →
+              </Link>
+            </div>
+          )}
+
           {apiError && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
               {apiError}

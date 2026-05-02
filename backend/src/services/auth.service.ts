@@ -13,7 +13,10 @@ const RESET_TTL = 60 * 60;
 
 export async function register(email: string, password: string, businessName: string) {
   const existing = await db('users').where({ email }).first();
-  if (existing) throw Object.assign(new Error('Email already in use'), { status: 409, code: 'EMAIL_TAKEN' });
+  if (existing) {
+    const hint = existing.google_id && !existing.password_hash ? 'google' : 'password';
+    throw Object.assign(new Error('Email already in use'), { status: 409, code: 'EMAIL_TAKEN', hint });
+  }
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
   const stripeCustomerId = await createCustomer(email, businessName);
@@ -35,6 +38,11 @@ export async function register(email: string, password: string, businessName: st
 export async function login(email: string, password: string) {
   const user = await db('users').where({ email }).first();
   if (!user) throw Object.assign(new Error('Invalid credentials'), { status: 401, code: 'INVALID_CREDENTIALS' });
+
+  if (!user.password_hash) {
+    // Google-only account — no password set
+    throw Object.assign(new Error('This account uses Google sign-in'), { status: 401, code: 'USE_GOOGLE_LOGIN' });
+  }
 
   const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) throw Object.assign(new Error('Invalid credentials'), { status: 401, code: 'INVALID_CREDENTIALS' });

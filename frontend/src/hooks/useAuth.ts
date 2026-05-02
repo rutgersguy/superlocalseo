@@ -50,10 +50,10 @@ export function useAuthState() {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const res = await apiFetch<{ success: boolean; data: { accessToken: string } }>('/auth/login', {
+    const res = await apiFetch<{ success: boolean; data: { accessToken: string }; error?: { message: string; code: string } }>('/auth/login', {
       method: 'POST', body: JSON.stringify({ email, password }),
     });
-    if (!res.success) throw new Error('Login failed');
+    if (!res.success) throw Object.assign(new Error(res.error?.message ?? 'Login failed'), { code: res.error?.code });
     setAccessToken(res.data.accessToken);
     const { userId, role } = decodeJwt(res.data.accessToken);
     setState({ userId, role, isAuthenticated: true, loading: false });
@@ -66,10 +66,16 @@ export function useAuthState() {
   }, []);
 
   const register = useCallback(async (email: string, password: string, businessName: string) => {
-    const res = await apiFetch<{ success: boolean; message?: string }>('/auth/register', {
+    const res = await apiFetch<{ success: boolean; error?: { message: string; code: string; hint?: string } }>('/auth/register', {
       method: 'POST', body: JSON.stringify({ email, password, businessName }),
     });
-    if (!res.success) throw new Error(res.message ?? 'Registration failed');
+    if (!res.success) {
+      const e = Object.assign(new Error(res.error?.message ?? 'Registration failed'), {
+        code: res.error?.code,
+        hint: res.error?.hint,
+      });
+      throw e;
+    }
   }, []);
 
   const setToken = useCallback((token: string) => {
