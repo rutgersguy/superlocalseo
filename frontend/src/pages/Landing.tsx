@@ -9,7 +9,7 @@ const faqs = [
   },
   {
     q: 'What third-party tools do I need?',
-    a: 'You\'ll need a BrightLocal account (for rank tracking and citation data) and an EmbedMyReviews account (for review monitoring). SuperLocalSEO connects to both via API keys you enter during onboarding.',
+    a: 'SuperLocalSEO connects directly to your Google Business Profile. During onboarding you can connect additional integrations to unlock reviews and citation monitoring.',
   },
   {
     q: 'Can I add locations over time?',

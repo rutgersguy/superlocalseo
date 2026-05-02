@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { Home, BarChart2, Star, Link2, Settings, LogOut, Menu, X, FileText, Megaphone, Users2, ClipboardList, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { fetcher } from '../services/api';
@@ -13,6 +13,24 @@ declare global {
 }
 
 const CRISP_WEBSITE_ID = 'b43a3ca0-74af-4cac-b7a7-e310cd2041d0';
+
+function OnboardingRedirect() {
+  const { role } = useAuth();
+  const navigate = useNavigate();
+  const { data } = useSWR<{ success: boolean; data: { onboardingStep: number } }>(
+    role === 'client' ? '/clients' : null,
+    fetcher,
+  );
+
+  useEffect(() => {
+    if (role !== 'client' || !data?.data) return;
+    if (data.data.onboardingStep === 0) {
+      navigate('/onboarding', { replace: true });
+    }
+  }, [data, role, navigate]);
+
+  return null;
+}
 
 function CrispWidget() {
   const { isAuthenticated } = useAuth();
@@ -124,6 +142,7 @@ export default function DashboardLayout() {
 
   return (
     <>
+    <OnboardingRedirect />
     <CrispWidget />
     <div className="flex h-screen bg-gray-50">
       {/* Mobile overlay */}

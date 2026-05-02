@@ -113,7 +113,7 @@ export default function AuditHistory() {
           <button
             onClick={() => void handleTrigger()}
             disabled={triggering || !canTrigger}
-            title={!hasBLCampaign ? 'No BrightLocal campaign on this location' : cooldownDaysLeft ? `Next audit in ${cooldownDaysLeft} days` : ''}
+            title={!hasBLCampaign ? 'No campaign configured for this location' : cooldownDaysLeft ? `Next audit in ${cooldownDaysLeft} days` : ''}
             className="px-4 py-2 text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {triggering ? 'Starting…' : 'Run Audit Now'}
@@ -127,7 +127,7 @@ export default function AuditHistory() {
 
       {!hasBLCampaign && selectedLocation && (
         <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-          This location doesn't have a BrightLocal campaign configured. Connect one in Integrations to enable audits.
+          This location doesn't have a campaign configured yet. Connect your integrations to enable audits.
         </div>
       )}
 

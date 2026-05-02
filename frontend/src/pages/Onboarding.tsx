@@ -364,16 +364,6 @@ export default function Onboarding() {
                   </button>
               </div>
 
-              {/* Yelp */}
-              <div className="border border-gray-200 rounded-xl p-5 opacity-60">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900">Yelp</h3>
-                    <p className="text-xs text-gray-500">Monitor and respond to Yelp reviews</p>
-                  </div>
-                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">Coming soon</span>
-                </div>
-              </div>
 
               {/* Facebook */}
               <div className="border border-gray-200 rounded-xl p-5 opacity-60">

@@ -1472,18 +1472,6 @@ export default function Settings() {
               onConnect={connectFacebook}
               onDisconnect={disconnectFacebook}
             />
-            <div className="border border-gray-200 rounded-xl p-5">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900">Yelp</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">Yelp review monitoring via reputation tracking</p>
-                </div>
-                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">Via BrightLocal</span>
-              </div>
-              <p className="mt-3 text-xs text-gray-500 leading-relaxed">
-                Yelp reviews are monitored automatically through your BrightLocal reputation campaign. Yelp removed direct API access in 2018 — BrightLocal&apos;s reputation monitoring is the reliable way to track them.
-              </p>
-            </div>
           </div>
         )}
 

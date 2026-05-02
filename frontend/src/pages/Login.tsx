@@ -12,6 +12,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleOnlyHint, setGoogleOnlyHint] = useState(false);
+  const [noAccountHint, setNoAccountHint] = useState(false);
 
   const oauthError = searchParams.get('error');
   const [error, setError] = useState(
@@ -23,6 +24,7 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setGoogleOnlyHint(false);
+    setNoAccountHint(false);
     setLoading(true);
     try {
       await login(email, password);
@@ -31,6 +33,8 @@ export default function Login() {
       const e = err as Error & { code?: string };
       if (e.code === 'USE_GOOGLE_LOGIN') {
         setGoogleOnlyHint(true);
+      } else if (e.code === 'USER_NOT_FOUND') {
+        setNoAccountHint(true);
       } else {
         setError('Invalid email or password');
       }
@@ -47,6 +51,18 @@ export default function Login() {
           <h1 className="mt-4 text-2xl font-bold text-gray-900">Sign in to your account</h1>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+          {noAccountHint && (
+            <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+              <p className="font-medium mb-1">No account found for that email.</p>
+              <p className="mb-3 text-amber-700">Want to get started with a free 14-day trial?</p>
+              <Link
+                to={`/register?email=${encodeURIComponent(email)}`}
+                className="inline-block bg-brand-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-brand-600"
+              >
+                Create account →
+              </Link>
+            </div>
+          )}
           {googleOnlyHint && (
             <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
               <p className="font-medium mb-1">This account uses Google sign-in.</p>

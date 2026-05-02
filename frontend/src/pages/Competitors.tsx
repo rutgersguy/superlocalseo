@@ -361,7 +361,7 @@ function GapReport() {
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 text-center">
         <Target size={32} className="mx-auto text-gray-300 mb-3" />
         <h3 className="font-semibold text-gray-700 mb-1">No ranking data yet</h3>
-        <p className="text-sm text-gray-400">Connect BrightLocal to start tracking keyword rankings and see gap opportunities.</p>
+        <p className="text-sm text-gray-400">Connect your integrations to start tracking keyword rankings and see gap opportunities.</p>
       </div>
     );
   }

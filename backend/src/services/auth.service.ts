@@ -37,7 +37,7 @@ export async function register(email: string, password: string, businessName: st
 
 export async function login(email: string, password: string) {
   const user = await db('users').where({ email }).first();
-  if (!user) throw Object.assign(new Error('Invalid credentials'), { status: 401, code: 'INVALID_CREDENTIALS' });
+  if (!user) throw Object.assign(new Error('No account found with that email'), { status: 401, code: 'USER_NOT_FOUND' });
 
   if (!user.password_hash) {
     // Google-only account — no password set
