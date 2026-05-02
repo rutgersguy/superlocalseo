@@ -138,8 +138,9 @@ export default function Audit() {
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
             <form onSubmit={handleScan} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Business Name</label>
+                <label htmlFor="audit-businessName" className="block text-sm font-medium text-gray-700 mb-1">Business Name</label>
                 <input
+                  id="audit-businessName"
                   type="text"
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
@@ -149,8 +150,9 @@ export default function Audit() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">City / Area</label>
+                <label htmlFor="audit-city" className="block text-sm font-medium text-gray-700 mb-1">City / Area</label>
                 <input
+                  id="audit-city"
                   type="text"
                   value={city}
                   onChange={(e) => setCity(e.target.value)}

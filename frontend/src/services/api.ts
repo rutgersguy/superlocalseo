@@ -28,7 +28,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}, rawRespo
   }
 
   // Silent token refresh on 401
-  if (res.status === 401 && path !== '/auth/refresh') {
+  if (res.status === 401 && path !== '/auth/refresh' && path !== '/auth/login' && path !== '/auth/register') {
     const refreshed = await fetch(`${API_BASE}/auth/refresh`, { method: 'POST', credentials: 'include' });
     if (refreshed.ok) {
       const { data } = await refreshed.json();

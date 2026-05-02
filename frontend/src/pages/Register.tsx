@@ -107,8 +107,9 @@ export default function Register() {
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Business Name</label>
+              <label htmlFor="reg-businessName" className="block text-sm font-medium text-gray-700 mb-1">Business Name</label>
               <input
+                id="reg-businessName"
                 type="text"
                 {...register('businessName')}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -119,8 +120,9 @@ export default function Register() {
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label htmlFor="reg-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
               <input
+                id="reg-email"
                 type="email"
                 {...register('email')}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -131,8 +133,9 @@ export default function Register() {
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <label htmlFor="reg-password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
               <input
+                id="reg-password"
                 type="password"
                 {...register('password')}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"

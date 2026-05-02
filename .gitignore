@@ -9,3 +9,6 @@ coverage/
 .DS_Store
 data/reports/
 *.pdf
+tests/e2e/.auth/
+test-results/
+playwright-report/

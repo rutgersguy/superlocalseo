@@ -282,8 +282,9 @@ export default function Onboarding() {
                   <h3 className="text-sm font-semibold text-gray-900">Add Location</h3>
                   {(['name', 'address', 'city', 'state', 'zip', 'phone'] as const).map((field) => (
                     <div key={field}>
-                      <label className="block text-sm font-medium text-gray-700 mb-1 capitalize">{field}</label>
+                      <label htmlFor={`loc-${field}`} className="block text-sm font-medium text-gray-700 mb-1">{field.charAt(0).toUpperCase() + field.slice(1)}</label>
                       <input
+                        id={`loc-${field}`}
                         type="text"
                         value={newLocation[field]}
                         onChange={(e) => setNewLocation((p) => ({ ...p, [field]: e.target.value }))}
