@@ -330,7 +330,7 @@ export default function Dashboard() {
             <p className="text-sm font-medium text-brand-800">Unlock your ROI estimate</p>
             <p className="text-xs text-brand-600 mt-0.5">Enter your average customer value to see the monthly $ impact of your rankings.</p>
           </div>
-          <Link to="/dashboard/rankings" className="text-sm font-semibold text-brand-600 hover:text-brand-800 whitespace-nowrap ml-4">Set it up →</Link>
+          <Link to="/dashboard/rankings?roi=1" className="text-sm font-semibold text-brand-600 hover:text-brand-800 whitespace-nowrap ml-4">Set it up →</Link>
         </div>
       )}
 

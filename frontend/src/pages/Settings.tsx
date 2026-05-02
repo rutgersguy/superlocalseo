@@ -1309,6 +1309,9 @@ interface BillingStatus {
   status: string | null;
   currentPeriodEnd: string | null;
   locationCount: number;
+  includedLocationCount: number | null;
+  extraLocationCount: number;
+  extraLocationCostPerMonth: number;
   hasPaymentMethod: boolean;
   paymentFailedAt: string | null;
   graceDaysRemaining: number | null;
@@ -1440,7 +1443,7 @@ function WhiteLabelSection() {
   );
 }
 
-function BillingTab() {
+function BillingTab({ onGoToLocations }: { onGoToLocations: () => void }) {
   const { data, isLoading, mutate: mutateBilling } = useSWR<BillingResponse>('/billing', fetcher);
   const billing = data?.data;
   const [changing, setChanging] = useState<number | null>(null);
@@ -1598,6 +1601,32 @@ function BillingTab() {
           );
         })}
       </div>
+
+      {/* Extra location charges */}
+      {hasSub && (billing?.extraLocationCount ?? 0) > 0 && (
+        <div className="border border-amber-200 bg-amber-50 rounded-xl p-4">
+          <p className="text-sm font-semibold text-amber-900 mb-1">Extra location charges</p>
+          <div className="flex items-center justify-between text-sm text-amber-800">
+            <span>
+              {billing!.extraLocationCount} extra location{billing!.extraLocationCount !== 1 ? 's' : ''}
+              {billing?.includedLocationCount != null && (
+                <span className="text-amber-600 text-xs ml-1">
+                  ({billing.includedLocationCount} included in your plan)
+                </span>
+              )}
+            </span>
+            <span className="font-semibold">${billing!.extraLocationCostPerMonth}/mo</span>
+          </div>
+          <p className="text-xs text-amber-600 mt-2">
+            Billed automatically each month. Remove locations in{' '}
+            <button className="underline font-medium" onClick={onGoToLocations}>
+              Settings → Locations
+            </button>{' '}
+            to reduce this charge.
+          </p>
+        </div>
+      )}
+
 
       {/* Portal link for payment / invoice management */}
       <div className="pt-1 border-t">
@@ -1790,7 +1819,7 @@ export default function Settings() {
         {activeTab === 'team' && <TeamTab />}
 
         {/* Billing tab */}
-        {activeTab === 'billing' && <BillingTab />}
+        {activeTab === 'billing' && <BillingTab onGoToLocations={() => setActiveTab('locations')} />}
       </div>
     </div>
   );

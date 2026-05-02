@@ -5,6 +5,9 @@ import { ok, created, noContent, notFound, err } from '../utils/response';
 import { addLocationToSubscription, removeLocationFromSubscription } from '../services/stripe.service';
 import { logger } from '../utils/logger';
 
+// How many locations are included in each tier before extra charges apply
+const INCLUDED_PER_TIER: Record<number, number> = { 1: 1, 2: 3, 3: Infinity };
+
 export const locationSchema = z.object({
   name: z.string().min(1).max(255),
   address: z.string().optional(),
@@ -51,8 +54,9 @@ export async function create(req: Request, res: Response, next: NextFunction): P
     const client = req.client;
 
     // Check if this is the first location (make it primary)
-    const existingCount = await db('locations').where({ client_id: req.clientId }).count('id as cnt').first();
-    const isPrimary = parseInt(String((existingCount as Record<string, unknown>)?.cnt ?? 0), 10) === 0;
+    const existingCountRow = await db('locations').where({ client_id: req.clientId }).count('id as cnt').first();
+    const existingCount = parseInt(String((existingCountRow as Record<string, unknown>)?.cnt ?? 0), 10);
+    const isPrimary = existingCount === 0;
 
     const [location] = await db('locations').insert({
       client_id: req.clientId,
@@ -68,12 +72,16 @@ export async function create(req: Request, res: Response, next: NextFunction): P
       updated_at: new Date(),
     }).returning('*');
 
-    // If not the first location and client has a subscription, bill for it
-    if (!isPrimary && client.stripe_subscription_id) {
+    // Bill only when the new total exceeds the plan's included location count
+    if (client.stripe_subscription_id) {
       const tier = (client.subscription_tier as number) as 1 | 2 | 3;
-      addLocationToSubscription(client.stripe_subscription_id as string, tier).catch((e) =>
-        logger.error('Failed to add location to Stripe subscription', { error: (e as Error).message }),
-      );
+      const included = INCLUDED_PER_TIER[tier] ?? 1;
+      const newTotal = existingCount + 1;
+      if (newTotal > included) {
+        addLocationToSubscription(client.stripe_subscription_id as string, tier).catch((e) =>
+          logger.error('Failed to add location to Stripe subscription', { error: (e as Error).message }),
+        );
+      }
     }
 
     created(res, formatLocation(location as Record<string, unknown>));
@@ -114,24 +122,26 @@ export async function remove(req: Request, res: Response, next: NextFunction): P
     const location = await db('locations').where({ id, client_id: req.clientId }).first();
     if (!location) { notFound(res, 'Location not found'); return; }
 
+    const totalCountRow = await db('locations').where({ client_id: req.clientId }).count('id as cnt').first();
+    const totalCount = parseInt(String((totalCountRow as Record<string, unknown>)?.cnt ?? 0), 10);
+
     // Prevent deleting the primary location if it's the only one
-    if (location.is_primary) {
-      const totalCount = await db('locations').where({ client_id: req.clientId }).count('id as cnt').first();
-      const total = parseInt(String((totalCount as Record<string, unknown>)?.cnt ?? 0), 10);
-      if (total <= 1) {
-        err(res, 'Cannot delete the only location', 400, 'CANNOT_DELETE_ONLY_LOCATION');
-        return;
-      }
+    if (location.is_primary && totalCount <= 1) {
+      err(res, 'Cannot delete the only location', 400, 'CANNOT_DELETE_ONLY_LOCATION');
+      return;
     }
 
     await db('locations').where({ id }).delete();
 
-    // Update Stripe subscription if applicable
+    // Remove billing only when the deleted location was beyond the plan's included count
     if (client.stripe_subscription_id) {
       const tier = (client.subscription_tier as number) as 1 | 2 | 3;
-      removeLocationFromSubscription(client.stripe_subscription_id as string, tier).catch((e) =>
-        logger.error('Failed to remove location from Stripe subscription', { error: (e as Error).message }),
-      );
+      const included = INCLUDED_PER_TIER[tier] ?? 1;
+      if (totalCount > included) {
+        removeLocationFromSubscription(client.stripe_subscription_id as string, tier).catch((e) =>
+          logger.error('Failed to remove location from Stripe subscription', { error: (e as Error).message }),
+        );
+      }
     }
 
     noContent(res);

@@ -6,6 +6,9 @@ import { getBillingPortalUrl, createSubscription, changeSubscriptionTier, create
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
+const INCLUDED_PER_TIER: Record<number, number> = { 1: 1, 2: 3, 3: Infinity };
+const EXTRA_PRICE_PER_TIER: Record<number, number> = { 1: 150, 2: 100, 3: 75 };
+
 export const subscribeSchema = z.object({
   tier: z.union([z.literal(1), z.literal(2), z.literal(3)]),
 });
@@ -60,11 +63,19 @@ export async function status(req: Request, res: Response, next: NextFunction): P
       trialDaysRemaining = Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60 * 24)));
     }
 
+    const tier = (client.subscription_tier as number) ?? 1;
+    const included = INCLUDED_PER_TIER[tier] ?? 1;
+    const extraLocationCount = included === Infinity ? 0 : Math.max(0, locationCount - included);
+    const extraLocationCostPerMonth = extraLocationCount * (EXTRA_PRICE_PER_TIER[tier] ?? 150);
+
     ok(res, {
       tier: client.subscription_tier,
       status: client.subscription_status,
       currentPeriodEnd: client.subscription_current_period_end,
       locationCount,
+      includedLocationCount: included === Infinity ? null : included,
+      extraLocationCount,
+      extraLocationCostPerMonth,
       hasPaymentMethod,
       paymentFailedAt: client.payment_failed_at ?? null,
       graceDaysRemaining,

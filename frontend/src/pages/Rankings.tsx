@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -375,13 +376,14 @@ function GeoGridPanel({ allKeywords }: { allKeywords: RankingRow[] }) {
 // ─── Main component ────────────────────────────────────────────────────────────
 
 export default function Rankings() {
+  const [searchParams] = useSearchParams();
   const [sortKey, setSortKey] = useState<SortKey>('rank');
   const [mainTab, setMainTab] = useState<MainTab>('table');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [selectedRow, setSelectedRow] = useState<RankingRow | null>(null);
   const [trendRange, setTrendRange] = useState<TrendRange>(30);
   const [rankType, setRankType] = useState<RankTypeFilter>('all');
-  const [showRoi, setShowRoi] = useState(false);
+  const [showRoi, setShowRoi] = useState(() => searchParams.get('roi') === '1');
   const [localVolumes, setLocalVolumes] = useState<Record<string, number | null>>({});
 
   const rankingsUrl = rankType !== 'all' ? `/rankings?rankType=${rankType}` : '/rankings';
