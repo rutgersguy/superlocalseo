@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { apiFetch, setAccessToken } from '../services/api';
+import { apiFetch, setAccessToken, refreshToken } from '../services/api';
 
 interface AuthState {
   userId: string | null;
@@ -33,19 +33,28 @@ export function useAuthState() {
   const [state, setState] = useState<AuthState>({ userId: null, role: null, isAuthenticated: false, loading: true });
 
   // On mount, attempt a silent token refresh using the httpOnly refresh cookie.
+  // Uses the shared refreshToken() singleton so this never races with the 401 interceptor.
   useEffect(() => {
-    apiFetch<{ success: boolean; data?: { accessToken: string } }>('/auth/refresh', { method: 'POST' })
-      .then((res) => {
-        if (res.success && res.data?.accessToken) {
-          setAccessToken(res.data.accessToken);
-          const { userId, role } = decodeJwt(res.data.accessToken);
+    refreshToken()
+      .then((token) => {
+        if (token) {
+          const { userId, role } = decodeJwt(token);
           setState({ userId, role, isAuthenticated: true, loading: false });
         } else {
-          setState({ userId: null, role: null, isAuthenticated: false, loading: false });
+          // If setToken() already ran (e.g. Google OAuth callback), preserve that auth state
+          setState((prev) =>
+            prev.isAuthenticated
+              ? { ...prev, loading: false }
+              : { userId: null, role: null, isAuthenticated: false, loading: false }
+          );
         }
       })
       .catch(() => {
-        setState({ userId: null, role: null, isAuthenticated: false, loading: false });
+        setState((prev) =>
+          prev.isAuthenticated
+            ? { ...prev, loading: false }
+            : { userId: null, role: null, isAuthenticated: false, loading: false }
+        );
       });
   }, []);
 

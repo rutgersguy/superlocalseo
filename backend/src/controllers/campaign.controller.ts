@@ -45,7 +45,14 @@ export async function create(req: Request, res: Response, next: NextFunction): P
       return;
     }
 
-    const emrCampaign = await createEMRCampaign(apiKey, name.trim(), templateId);
+    let emrCampaign: { id: string; name: string };
+    try {
+      emrCampaign = await createEMRCampaign(apiKey, name.trim(), templateId);
+    } catch (e) {
+      logger.warn('EMR createCampaign failed', { clientId: req.clientId, error: (e as Error).message });
+      err(res, 'Could not reach the review platform. Please try again in a moment.', 503, 'EMR_UNAVAILABLE');
+      return;
+    }
 
     const [campaign] = await db('emr_campaigns')
       .insert({ client_id: req.clientId, emr_campaign_id: emrCampaign.id, name: emrCampaign.name })
@@ -178,20 +185,23 @@ export async function listUnsubscribes(req: Request, res: Response, next: NextFu
   try {
     const apiKey = await getApiKey(req.clientId);
     if (!apiKey) {
-      ok(res, { unsubscribes: [], total: 0 });
+      ok(res, { unsubscribes: [], total: 0, hasMore: false });
       return;
     }
     const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10));
-    const result = await fetchUnsubscribes(apiKey, { page });
-
-    ok(res, {
-      unsubscribes: result.unsubscribes.map((u) => ({
-        ...u,
-        contact: maskContact(u.contact, u.type),
-      })),
-      total: result.total,
-      hasMore: result.hasMore,
-    });
+    try {
+      const result = await fetchUnsubscribes(apiKey, { page });
+      ok(res, {
+        unsubscribes: result.unsubscribes.map((u) => ({
+          ...u,
+          contact: maskContact(u.contact, u.type),
+        })),
+        total: result.total,
+        hasMore: result.hasMore,
+      });
+    } catch {
+      ok(res, { unsubscribes: [], total: 0, hasMore: false });
+    }
   } catch (e) {
     next(e);
   }
@@ -212,13 +222,17 @@ export async function getCredits(req: Request, res: Response, next: NextFunction
   try {
     const apiKey = await getApiKey(req.clientId);
     if (!apiKey) {
-      ok(res, { email: 0, sms: 0, total: 0, available: false });
+      ok(res, { email: 0, sms: 0, total: 0, connected: false, available: false });
       return;
     }
-    const credits = await fetchCredits(apiKey);
-    ok(res, { ...credits, available: true });
+    try {
+      const credits = await fetchCredits(apiKey);
+      ok(res, { ...credits, connected: true, available: true });
+    } catch {
+      ok(res, { email: 0, sms: 0, total: 0, connected: true, available: false });
+    }
   } catch (e) {
-    ok(res, { email: 0, sms: 0, total: 0, available: false });
+    next(e);
   }
 }
 

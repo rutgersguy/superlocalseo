@@ -160,10 +160,14 @@ Returns: `{ userId, clientId }` — **no access token on registration** (user mu
 Called automatically by the frontend on app load (via `useAuthState` hook). Uses the `refreshToken` cookie — no body required.
 
 - Validates refresh token signature and Redis blocklist
-- Issues new access token + rotates refresh token
+- Issues new access token + rotates refresh token (single-use rotation)
 - Returns `{ accessToken }`
 
 The frontend decodes the JWT payload (base64) to extract `userId` and `role` — no additional `/me` endpoint needed.
+
+**Deduplication:** The frontend maintains a single in-flight `refreshToken()` promise (in `api.ts`). Both `useAuthState` on mount and the 401 interceptor share this singleton — concurrent callers receive the same promise rather than issuing parallel refresh requests. This prevents double-consumption of the single-use refresh token.
+
+**Race safety (Google OAuth):** `AuthGoogleSuccess` calls `setToken(token)` synchronously before navigating. `useAuthState`'s refresh runs concurrently; if it fails (e.g. no cookie yet), it uses a functional state update that preserves `isAuthenticated: true` if `setToken` already ran.
 
 ### Password Reset
 
@@ -664,28 +668,53 @@ Either `email` or `phone` is required (not both mandatory). Triggers an immediat
 - Returns `{ sent, failed, skipped, failures: [ { index, error } ] }`
 - `failed` contacts are reported with their index and error reason for debugging
 
+**`POST /api/campaigns`** *(requires team admin)*
+```json
+{ "name": "Post-Service Follow-up", "templateId": "optional-emr-template-id" }
+```
+Creates a new campaign in EMR and stores a local record in `emr_campaigns`. Returns `503 EMR_UNAVAILABLE` (with user-friendly message) if the EMR API is unreachable, rather than a generic 500.
+
 **`GET /api/campaigns/credits`**
 
 Returns remaining invitation credits:
 ```json
-{ "email": 450, "sms": 200, "total": 650, "available": true }
+{ "email": 450, "sms": 200, "total": 650, "connected": true, "available": true }
 ```
+- `connected: true` — an EMR API key is configured for this client (operator fallback counts)
+- `available: true` — the EMR API responded successfully; credits are accurate
+- When the EMR API is unreachable, returns `{ connected: true, available: false, email: 0, sms: 0, total: 0 }` rather than a 500
 
 **`GET /api/campaigns/unsubscribes`**
 
-Returns masked unsubscribe list (email shown as `j***@gmail.com`, SMS as `512-***-0100`).
+Returns masked unsubscribe list (email shown as `j***@gmail.com`, SMS as `512-***-0100`). Returns empty list silently if the EMR API is unreachable.
 
 **`GET /api/campaigns/templates`**
 
 Returns available invitation templates from EMR.
 
+### EMR Key Resolution
+
+`getClientEMRKey(clientId)` resolves the API key to use in this order:
+
+1. Per-client key from `integrations` table (status `connected`, `api_key_encrypted` not null)
+2. Operator-level key from `EMBEDMYREVIEWS_API_KEY` env var (covers legacy/unprovisioned clients)
+3. `null` — no key at all (EMR features disabled)
+
+### EMR Provisioning
+
+`provisionClient(clientId)` creates a per-client EMR sub-account via the agency API and stores the resulting API key in `integrations`. If the agency API fails (plan limitation, API unavailable), it falls back to storing the shared operator key. This makes the function idempotent and safe to retry.
+
+`deprovisionClient(clientId)` suspends the sub-account when a subscription is canceled.
+
+`deleteClientEMR(clientId)` hard-deletes the sub-account when a client record is permanently removed.
+
 ### Campaigns Page Walkthrough
 
 1. **Campaign cards** — Each campaign shows the full funnel with a mini conversion funnel visualisation (invited → opened → clicked → reviewed)
-2. **Invite panel** — Single-contact invite form (name, email, phone)
-3. **Bulk invite** — CSV-style multi-line entry (up to 500 contacts)
-4. **Template picker** — Select which EMR template to use for invites
-5. **Credit display** — Email and SMS credits remaining
+2. **Create campaign** — Modal with optional template picker; calls `POST /api/campaigns`
+3. **Invite panel** — Single-contact invite form (name, email, phone)
+4. **Bulk invite** — CSV upload or paste (up to 500 contacts); unsubscribed contacts auto-skipped
+5. **Credit display** — Email and SMS credits remaining (hidden when unavailable)
 6. **Unsubscribe list** — Masked view of opted-out contacts
 
 ---

@@ -7,7 +7,7 @@ export function setAccessToken(token: string | null): void {
   _accessToken = token;
 }
 
-function refreshToken(): Promise<string | null> {
+export function refreshToken(): Promise<string | null> {
   if (_refreshPromise) return _refreshPromise;
   _refreshPromise = fetch(`${API_BASE}/auth/refresh`, { method: 'POST', credentials: 'include' })
     .then(async (res) => {
@@ -16,7 +16,7 @@ function refreshToken(): Promise<string | null> {
         setAccessToken(body.data.accessToken);
         return body.data.accessToken;
       }
-      setAccessToken(null);
+      // Don't clear _accessToken here — caller decides what to do on failure
       return null;
     })
     .finally(() => { _refreshPromise = null; });

@@ -34,7 +34,7 @@ interface UnsubscribesResponse {
 
 interface CreditsResponse {
   success: boolean;
-  data: { email: number; sms: number; total: number; available: boolean };
+  data: { email: number; sms: number; total: number; connected: boolean; available: boolean };
 }
 
 interface TemplatesResponse {
@@ -123,10 +123,15 @@ function NewCampaignModal({ onClose }: { onClose: () => void }) {
     setLoading(true);
     setError(null);
     try {
-      await apiFetch('/campaigns', {
+      const res = await apiFetch<{ success: boolean; error?: { message: string } }>('/campaigns', {
         method: 'POST',
         body: JSON.stringify({ name: name.trim(), templateId }),
       });
+      if (!res.success) {
+        setError(res.error?.message ?? 'Failed to create campaign. Please try again.');
+        setLoading(false);
+        return;
+      }
       await mutate('/campaigns');
       onClose();
     } catch {
@@ -673,9 +678,11 @@ export default function Campaigns() {
       {!isLoading && campaigns.length === 0 && (
         <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
           <Mail size={32} className="mx-auto text-gray-300 mb-3" />
-          <h3 className="font-semibold text-gray-700 mb-1">No campaigns found</h3>
+          <h3 className="font-semibold text-gray-700 mb-1">No campaigns yet</h3>
           <p className="text-sm text-gray-400">
-            Campaigns are created in your EmbedMyReviews dashboard and synced here automatically every 6 hours. Connect your EmbedMyReviews account in Settings → Integrations to get started.
+            {credits?.connected === false
+              ? 'Connect your EmbedMyReviews account in Settings → Integrations to get started.'
+              : 'Click "New Campaign" above to create your first review request campaign.'}
           </p>
         </div>
       )}

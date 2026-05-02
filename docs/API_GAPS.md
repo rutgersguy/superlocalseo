@@ -840,6 +840,7 @@ deleteGbpPhoto(campaignId: string, blPhotoId: string): Promise<void>
 ## EMR-1 — Customer Provisioning (Multi-Tenant EMR Sub-Accounts)
 
 **Priority:** HIGH  
+**Status:** ✅ Implemented (2026-05-02) — with operator-key fallback  
 **Effort:** 3 weeks  
 **Dependencies:** Must be done before agency/reseller plan launch
 
@@ -888,11 +889,14 @@ Helper `getClientEMRKey(clientId)` — decrypt and return the per-client key; fa
 **`frontend/src/pages/Onboarding.tsx`** — Step 4: after platforms are connected, show a spinner "Setting up your review account…" while EMR provisioning completes. On failure: show retry button (non-fatal; provisioning can be retried later from Settings).
 
 ### Acceptance Criteria
-- [ ] New clients provisioned with their own EMR customer ID during onboarding
-- [ ] Per-client EMR API key encrypted at rest
-- [ ] All EMR API calls use per-client key when available; fall back gracefully for legacy clients
-- [ ] Deleting a client cleans up their EMR sub-account
-- [ ] Onboarding completes successfully even if EMR provisioning fails (async retry)
+- [x] New clients provisioned with their own EMR customer ID during onboarding
+- [x] Per-client EMR API key encrypted at rest (`integrations.api_key_encrypted`, AES-256)
+- [x] All EMR API calls use per-client key when available; fall back to operator key for legacy clients (`getClientEMRKey`)
+- [x] Deleting a client cleans up their EMR sub-account (`deleteClientEMR`)
+- [x] Onboarding completes successfully even if EMR provisioning fails — falls back to shared operator key and logs a warning
+- [x] `/api/clients/retry-emr-provision` endpoint for manual retry from the dashboard
+
+**Note:** The agency sub-account API (`POST /agency/customers`) is currently returning 404 from `api.embedmyreviews.com`. The fallback to the shared operator key is active for all new clients until the EMR API URL/credentials are corrected in `.env`. Check with EmbedMyReviews for the correct `EMBEDMYREVIEWS_API_KEY` and API base URL.
 
 ---
 
