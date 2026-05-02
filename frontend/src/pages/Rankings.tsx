@@ -54,8 +54,10 @@ type MainTab = 'table' | 'map';
 interface GridPoint { lat: number; lng: number; rank: number | null; url: string | null; }
 interface GeoReport { id: string; locationId: string; keywordId: string; status: string; centerLat: number; centerLng: number; gridData: GridPoint[] | null; completedAt: string | null; createdAt: string; }
 interface GeoReportsResponse { success: boolean; data: { reports: GeoReport[] }; }
-interface LocationOption { id: string; name: string; }
+interface LocationOption { id: string; name: string; city?: string; state?: string; }
 interface LocationsResponse { success: boolean; data: LocationOption[]; }
+interface KeywordItem { id: string; locationId: string; keyword: string; }
+interface KeywordsListResponse { success: boolean; data: KeywordItem[]; }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -217,6 +219,108 @@ function RoiConfigPanel({ config, onSave }: { config: { avgCustomerValue: number
   );
 }
 
+// ─── Keywords panel ──────────────────────────────────────────────────────────
+
+function KeywordsPanel({ onChanged }: { onChanged: () => void }) {
+  const { data: locData } = useSWR<LocationsResponse>('/locations', fetcher);
+  const locations = locData?.data ?? [];
+  const [activeLocationId, setActiveLocationId] = useState('');
+  const [newKeyword, setNewKeyword] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (locations.length > 0 && !activeLocationId) setActiveLocationId(locations[0].id);
+  }, [locations, activeLocationId]);
+
+  const kwUrl = activeLocationId ? `/keywords?locationId=${activeLocationId}` : null;
+  const { data: kwData, mutate: mutateKw } = useSWR<KeywordsListResponse>(kwUrl, fetcher);
+  const keywords = kwData?.data ?? [];
+
+  const handleAdd = async () => {
+    const kw = newKeyword.trim();
+    if (!kw || !activeLocationId) return;
+    setAdding(true);
+    setAddError(null);
+    try {
+      const res = await apiFetch<{ success: boolean; error?: { message: string } }>('/keywords', {
+        method: 'POST',
+        body: JSON.stringify({ locationId: activeLocationId, keyword: kw }),
+      });
+      if (!(res as { success: boolean }).success) {
+        setAddError((res as { error?: { message: string } }).error?.message ?? 'Failed to add keyword');
+        return;
+      }
+      setNewKeyword('');
+      await mutateKw();
+      onChanged();
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    await apiFetch(`/keywords/${id}`, { method: 'DELETE' }, true);
+    await mutateKw();
+    onChanged();
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-900">Manage Keywords</h2>
+          <p className="text-xs text-gray-500 mt-0.5">Keywords are tracked per location. New keywords appear in the table below after the next scheduled scan.</p>
+        </div>
+        <select
+          value={activeLocationId}
+          onChange={(e) => setActiveLocationId(e.target.value)}
+          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 min-w-[180px]"
+        >
+          {locations.map((l) => (
+            <option key={l.id} value={l.id}>{[l.name, l.city, l.state].filter(Boolean).join(', ')}</option>
+          ))}
+        </select>
+      </div>
+      {!activeLocationId ? (
+        <p className="text-sm text-gray-400">Select a location to manage its keywords.</p>
+      ) : (
+        <div className="space-y-2">
+          {keywords.length > 0 && (
+            <div className="divide-y divide-gray-100 rounded-lg border border-gray-100 overflow-hidden">
+              {keywords.map((kw) => (
+                <div key={kw.id} className="flex items-center justify-between px-3 py-2 bg-gray-50">
+                  <span className="text-sm text-gray-800">{kw.keyword}</span>
+                  <button onClick={() => void handleDelete(kw.id)} className="text-red-400 hover:text-red-600 text-xs font-medium ml-4">Remove</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {keywords.length === 0 && <p className="text-sm text-gray-400">No keywords yet for this location.</p>}
+          {addError && <p className="text-xs text-red-500">{addError}</p>}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newKeyword}
+              onChange={(e) => { setNewKeyword(e.target.value); setAddError(null); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') void handleAdd(); }}
+              placeholder="e.g. plumber near me"
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            <button
+              onClick={() => void handleAdd()}
+              disabled={adding || !newKeyword.trim() || !activeLocationId}
+              className="px-4 py-2 text-sm font-medium bg-brand-500 text-white rounded-lg hover:bg-brand-600 disabled:opacity-50"
+            >
+              {adding ? 'Adding…' : 'Add'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 // ─── Geo-Grid panel ────────────────────────────────────────────────────────────
@@ -229,7 +333,7 @@ function rankColor(rank: number | null): string {
   return '#dc2626';
 }
 
-function GeoGridPanel({ allKeywords }: { allKeywords: RankingRow[] }) {
+function GeoGridPanel() {
   const [selectedLocationId, setSelectedLocationId] = useState('');
   const [selectedKeywordId, setSelectedKeywordId] = useState('');
   const [triggering, setTriggering] = useState(false);
@@ -238,6 +342,10 @@ function GeoGridPanel({ allKeywords }: { allKeywords: RankingRow[] }) {
 
   const { data: locData } = useSWR<LocationsResponse>('/locations', fetcher);
   const locations = locData?.data ?? [];
+
+  const kwKey = selectedLocationId ? `/keywords?locationId=${selectedLocationId}` : null;
+  const { data: kwData } = useSWR<KeywordsListResponse>(kwKey, fetcher);
+  const keywords = kwData?.data ?? [];
 
   const reportsKey = selectedLocationId && selectedKeywordId
     ? `/geo-grid?locationId=${selectedLocationId}&keywordId=${selectedKeywordId}`
@@ -258,8 +366,6 @@ function GeoGridPanel({ allKeywords }: { allKeywords: RankingRow[] }) {
     }, 10000);
     return () => clearInterval(interval);
   }, [pollingId, reports, mutateReports]);
-
-  const keywords = Array.from(new Map(allKeywords.map((k) => [k.keywordId, k])).values());
 
   const handleTrigger = async () => {
     if (!selectedLocationId || !selectedKeywordId) return;
@@ -298,7 +404,7 @@ function GeoGridPanel({ allKeywords }: { allKeywords: RankingRow[] }) {
           <select value={selectedKeywordId} onChange={(e) => setSelectedKeywordId(e.target.value)}
             className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
             <option value="">Select keyword…</option>
-            {keywords.map((k) => <option key={k.keywordId} value={k.keywordId}>{k.keyword}</option>)}
+            {keywords.map((k) => <option key={k.id} value={k.id}>{k.keyword}</option>)}
           </select>
         </div>
         <button onClick={() => void handleTrigger()} disabled={triggering || !selectedLocationId || !selectedKeywordId}
@@ -384,11 +490,14 @@ export default function Rankings() {
   const [trendRange, setTrendRange] = useState<TrendRange>(30);
   const [rankType, setRankType] = useState<RankTypeFilter>('all');
   const [showRoi, setShowRoi] = useState(() => searchParams.get('roi') === '1');
+  const [showKeywords, setShowKeywords] = useState(false);
   const [localVolumes, setLocalVolumes] = useState<Record<string, number | null>>({});
 
   const rankingsUrl = rankType !== 'all' ? `/rankings?rankType=${rankType}` : '/rankings';
-  const { data: rankingsData, isLoading, error } = useSWR<{ success: boolean; data: RankingRow[] }>(rankingsUrl, fetcher);
+  const { data: rankingsData, isLoading, error, mutate: mutateRankings } = useSWR<{ success: boolean; data: RankingRow[] }>(rankingsUrl, fetcher);
   const { data: roiData, mutate: roiMutate } = useSWR<{ success: boolean; data: RoiData }>('/analytics/roi', fetcher);
+  const { data: allKwData, mutate: mutateAllKw } = useSWR<KeywordsListResponse>('/keywords', fetcher);
+  const { data: locData } = useSWR<LocationsResponse>('/locations', fetcher);
 
   const trendKey = selectedRow
     ? `/rankings/trend?keywordId=${selectedRow.keywordId}&locationId=${selectedRow.locationId}${trendRange > 0 ? `&days=${trendRange}` : ''}${rankType !== 'all' ? `&rankType=${rankType}` : ''}`
@@ -398,6 +507,10 @@ export default function Rankings() {
   const rows = rankingsData?.data ?? [];
   const effectiveSelected = selectedRow ?? (rows[0] ?? null);
   const roiByKeyword = Object.fromEntries((roiData?.data?.keywords ?? []).map((k) => [k.keywordId, k]));
+
+  const locationMap = Object.fromEntries((locData?.data ?? []).map((l) => [l.id, l]));
+  const rankedKeywordIds = new Set(rows.map((r) => r.keywordId));
+  const pendingKeywords = (allKwData?.data ?? []).filter((k) => !rankedKeywordIds.has(k.id));
 
   const sorted = [...rows].sort((a, b) => {
     const av = a[sortKey] ?? 0;
@@ -431,6 +544,12 @@ export default function Rankings() {
         </div>
         <div className="flex gap-2">
           <button
+            onClick={() => setShowKeywords((v) => !v)}
+            className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${showKeywords ? 'bg-brand-500 text-white border-brand-500' : 'text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+          >
+            Keywords
+          </button>
+          <button
             onClick={() => setShowRoi((v) => !v)}
             className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${showRoi ? 'bg-brand-500 text-white border-brand-500' : 'text-gray-600 border-gray-300 hover:bg-gray-50'}`}
           >
@@ -441,6 +560,11 @@ export default function Rankings() {
           </button>
         </div>
       </div>
+
+      {/* Keywords management panel */}
+      {showKeywords && (
+        <KeywordsPanel onChanged={() => { void mutateAllKw(); void mutateRankings(); }} />
+      )}
 
       {/* ROI panel */}
       {showRoi && roiConfig && (
@@ -482,7 +606,7 @@ export default function Rankings() {
       </div>
 
       {mainTab === 'map' && (
-        <GeoGridPanel allKeywords={rows} />
+        <GeoGridPanel />
       )}
 
       {mainTab === 'table' && (<>
@@ -514,14 +638,15 @@ export default function Rankings() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {sorted.length === 0 ? (
+              {sorted.length === 0 && pendingKeywords.length === 0 ? (
                 <tr>
                   <td colSpan={showRoi ? 7 : 6} className="px-6 py-10 text-center text-gray-400">
-                    No ranking data available.
+                    No keywords yet. Click <strong>Keywords</strong> above to add some.
                   </td>
                 </tr>
               ) : (
-                sorted.map((row) => {
+                <>
+                {sorted.map((row) => {
                   const roi = roiByKeyword[row.keywordId];
                   const localVol = row.keywordId in localVolumes ? localVolumes[row.keywordId] : roi?.monthlySearchVolume ?? null;
                   return (
@@ -559,7 +684,25 @@ export default function Rankings() {
                       </td>
                     </tr>
                   );
-                })
+                })}
+                {pendingKeywords.map((pk) => {
+                  const loc = locationMap[pk.locationId];
+                  const locName = loc ? [loc.name, loc.city, loc.state].filter(Boolean).join(', ') : '—';
+                  return (
+                    <tr key={`pending-${pk.id}`} className="opacity-60">
+                      <td className="px-6 py-3 font-medium text-gray-700">{pk.keyword}</td>
+                      <td className="px-6 py-3 text-gray-500">{locName}</td>
+                      <td className="px-6 py-3 text-right">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Pending scan</span>
+                      </td>
+                      <td className="px-6 py-3 text-right text-gray-300 text-sm">—</td>
+                      <td className="px-6 py-3 text-gray-300 text-sm">—</td>
+                      {showRoi && <td className="px-4 py-3 text-right text-gray-300 text-sm">—</td>}
+                      <td className="px-4 py-3 text-right text-gray-300 text-sm">—</td>
+                    </tr>
+                  );
+                })}
+                </>
               )}
             </tbody>
           </table>

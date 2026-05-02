@@ -66,12 +66,12 @@ function TabBar({ active, onChange, isOwner }: { active: Tab; onChange: (t: Tab)
     { key: 'qrcodes' as Tab, label: 'QR Codes' },
   ];
   return (
-    <div className="flex gap-1 border-b border-gray-200 mb-6">
+    <div className="flex gap-1 overflow-x-auto border-b border-gray-200 mb-6 flex-nowrap">
       {tabs.map((t) => (
         <button
           key={t.key}
           onClick={() => onChange(t.key)}
-          className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+          className={`px-3 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap flex-shrink-0 ${
             active === t.key
               ? 'border-brand-500 text-brand-500'
               : 'border-transparent text-gray-500 hover:text-gray-900'
@@ -1870,7 +1870,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6 max-w-4xl">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
         <p className="text-sm text-gray-500 mt-1">Manage your account, integrations, and billing</p>
