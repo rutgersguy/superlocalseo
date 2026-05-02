@@ -1,9 +1,26 @@
 const API_BASE = '/api';
 
 let _accessToken: string | null = null;
+let _refreshPromise: Promise<string | null> | null = null;
 
 export function setAccessToken(token: string | null): void {
   _accessToken = token;
+}
+
+function refreshToken(): Promise<string | null> {
+  if (_refreshPromise) return _refreshPromise;
+  _refreshPromise = fetch(`${API_BASE}/auth/refresh`, { method: 'POST', credentials: 'include' })
+    .then(async (res) => {
+      if (res.ok) {
+        const body = await res.json() as { data: { accessToken: string } };
+        setAccessToken(body.data.accessToken);
+        return body.data.accessToken;
+      }
+      setAccessToken(null);
+      return null;
+    })
+    .finally(() => { _refreshPromise = null; });
+  return _refreshPromise;
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T>;
@@ -27,18 +44,15 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}, rawRespo
     return body as T;
   }
 
-  // Silent token refresh on 401
+  // Silent token refresh on 401 — deduplicated so concurrent 401s share one refresh call
   if (res.status === 401 && path !== '/auth/refresh' && path !== '/auth/login' && path !== '/auth/register') {
-    const refreshed = await fetch(`${API_BASE}/auth/refresh`, { method: 'POST', credentials: 'include' });
-    if (refreshed.ok) {
-      const { data } = await refreshed.json();
-      setAccessToken(data.accessToken);
-      headers['Authorization'] = `Bearer ${data.accessToken}`;
+    const newToken = await refreshToken();
+    if (newToken) {
+      headers['Authorization'] = `Bearer ${newToken}`;
       const retry = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
       if (rawResponse) return retry;
       return retry.json();
     } else {
-      setAccessToken(null);
       window.location.href = '/login';
     }
   }

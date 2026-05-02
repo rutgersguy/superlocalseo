@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
-import { sendInvite, fetchUnsubscribes, fetchCredits, fetchCampaignTemplates } from '../services/embedmyreviews.service';
+import { sendInvite, fetchUnsubscribes, fetchCredits, fetchCampaignTemplates, createCampaign as createEMRCampaign } from '../services/embedmyreviews.service';
 import { getClientEMRKey } from '../services/emr_provisioning';
 import { logger } from '../utils/logger';
 
@@ -25,6 +25,40 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
         unsubscribed: c.unsubscribed,
         metricsPulledAt: c.metrics_pulled_at,
       })),
+    });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function create(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { name, templateId } = req.body as { name?: string; templateId?: string };
+    if (!name?.trim()) {
+      err(res, 'Campaign name required', 400, 'VALIDATION_ERROR');
+      return;
+    }
+
+    const apiKey = await getClientEMRKey(req.clientId);
+    if (!apiKey) {
+      err(res, 'EmbedMyReviews integration not connected. Connect your account in Settings → Integrations.', 400, 'NOT_CONNECTED');
+      return;
+    }
+
+    const emrCampaign = await createEMRCampaign(apiKey, name.trim(), templateId);
+
+    const [campaign] = await db('emr_campaigns')
+      .insert({ client_id: req.clientId, emr_campaign_id: emrCampaign.id, name: emrCampaign.name })
+      .returning('*');
+
+    ok(res, {
+      campaign: {
+        id: campaign.id,
+        emrCampaignId: emrCampaign.id,
+        name: emrCampaign.name,
+        invited: 0, opened: 0, clicked: 0, reviewed: 0, privateFeedback: 0, unsubscribed: 0,
+        metricsPulledAt: null,
+      },
     });
   } catch (e) {
     next(e);

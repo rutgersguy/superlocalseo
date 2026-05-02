@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import { Mail, Upload, Send, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, UserX, Plus, X } from 'lucide-react';
 import { fetcher, apiFetch } from '../services/api';
 
@@ -67,7 +67,7 @@ function CreditBadge() {
 
 // ── Template picker ─────────────────────────────────────────────────────────
 
-function TemplatePicker({ onSelect }: { onSelect: (name: string) => void }) {
+function TemplatePicker({ onSelect }: { onSelect: (name: string, id?: string) => void }) {
   const { data, isLoading } = useSWR<TemplatesResponse>('/campaigns/templates', fetcher);
   const templates = data?.data?.templates ?? [];
 
@@ -80,7 +80,7 @@ function TemplatePicker({ onSelect }: { onSelect: (name: string) => void }) {
         {templates.map((t) => (
           <button
             key={t.id}
-            onClick={() => onSelect(t.name)}
+            onClick={() => onSelect(t.name, t.id)}
             className="text-left p-3 border border-gray-200 rounded-lg hover:border-brand-400 hover:bg-brand-50 transition-colors"
           >
             <p className="text-sm font-medium text-gray-900">{t.name}</p>
@@ -88,7 +88,7 @@ function TemplatePicker({ onSelect }: { onSelect: (name: string) => void }) {
           </button>
         ))}
         <button
-          onClick={() => onSelect('')}
+          onClick={() => onSelect('', undefined)}
           className="text-left p-3 border border-dashed border-gray-300 rounded-lg hover:border-brand-400 text-sm text-gray-500 hover:text-brand-600"
         >
           Start from scratch
@@ -101,16 +101,38 @@ function TemplatePicker({ onSelect }: { onSelect: (name: string) => void }) {
 // ── New campaign modal ──────────────────────────────────────────────────────
 
 function NewCampaignModal({ onClose }: { onClose: () => void }) {
+  const { mutate } = useSWRConfig();
   const { data: templatesData, isLoading: templatesLoading } = useSWR<TemplatesResponse>('/campaigns/templates', fetcher);
   const templates = templatesData?.data?.templates ?? [];
   const [step, setStep] = useState<'pick' | 'name'>('pick');
   const [name, setName] = useState('');
+  const [templateId, setTemplateId] = useState<string | undefined>();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const showPicker = step === 'pick' && (templatesLoading || templates.length > 0);
 
-  function handleTemplateSelect(templateName: string) {
+  function handleTemplateSelect(templateName: string, id?: string) {
     setName(templateName);
+    setTemplateId(id);
     setStep('name');
+  }
+
+  async function handleCreate() {
+    if (!name.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await apiFetch('/campaigns', {
+        method: 'POST',
+        body: JSON.stringify({ name: name.trim(), templateId }),
+      });
+      await mutate('/campaigns');
+      onClose();
+    } catch {
+      setError('Failed to create campaign. Please try again.');
+      setLoading(false);
+    }
   }
 
   return (
@@ -134,27 +156,32 @@ function NewCampaignModal({ onClose }: { onClose: () => void }) {
                   autoFocus
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) void handleCreate(); }}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   placeholder="e.g. Post-visit review request"
                 />
               </div>
-              <p className="text-xs text-gray-400">
-                Campaigns are created in your EmbedMyReviews dashboard. Use this name as a reference when setting up your campaign there.
-              </p>
+              {error && (
+                <div className="flex items-center gap-2 text-red-600 text-xs">
+                  <AlertCircle size={13} /> {error}
+                </div>
+              )}
               <div className="flex gap-3">
                 {templates.length > 0 && step === 'name' && (
                   <button
                     onClick={() => setStep('pick')}
-                    className="px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+                    disabled={loading}
+                    className="px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
                   >
                     Back
                   </button>
                 )}
                 <button
-                  onClick={onClose}
+                  onClick={() => void handleCreate()}
+                  disabled={loading || !name.trim()}
                   className="flex-1 px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 disabled:opacity-50 transition-colors"
                 >
-                  Done
+                  {loading ? 'Creating…' : 'Create Campaign'}
                 </button>
               </div>
             </div>

@@ -204,6 +204,7 @@ function PastDueBanner() {
 function EMRProvisionBanner() {
   const { data: clientData, isLoading } = useSWR<ClientResponse>('/clients', fetcher);
   const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
   const status = clientData?.data?.emrProvisioningStatus;
@@ -211,31 +212,37 @@ function EMRProvisionBanner() {
 
   const handleRetry = async () => {
     setRetrying(true);
+    setRetryError(false);
     try {
       await apiFetch('/clients/retry-emr-provision', { method: 'POST' });
       await mutate('/clients');
     } catch {
-      // retry failed — user can try again
+      setRetryError(true);
     } finally {
       setRetrying(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-between p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-      <span>Your review account setup didn't complete. This may affect review campaigns and widgets.</span>
-      <div className="flex items-center gap-3 ml-4 shrink-0">
-        <button
-          onClick={() => void handleRetry()}
-          disabled={retrying}
-          className="font-medium underline hover:no-underline disabled:opacity-50"
-        >
-          {retrying ? 'Retrying…' : 'Retry setup'}
-        </button>
-        <button onClick={() => setDismissed(true)} className="text-amber-600 hover:text-amber-800 font-bold">
-          ×
-        </button>
+    <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 space-y-1">
+      <div className="flex items-center justify-between">
+        <span>Your review account setup didn't complete. This may affect review campaigns and widgets.</span>
+        <div className="flex items-center gap-3 ml-4 shrink-0">
+          <button
+            onClick={() => void handleRetry()}
+            disabled={retrying}
+            className="font-medium underline hover:no-underline disabled:opacity-50"
+          >
+            {retrying ? 'Retrying…' : 'Retry setup'}
+          </button>
+          <button onClick={() => setDismissed(true)} className="text-amber-600 hover:text-amber-800 font-bold">
+            ×
+          </button>
+        </div>
       </div>
+      {retryError && (
+        <p className="text-xs text-red-700">Setup failed — please try again or contact support if the problem persists.</p>
+      )}
     </div>
   );
 }

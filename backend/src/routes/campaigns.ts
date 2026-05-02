@@ -6,6 +6,7 @@ import * as campaign from '../controllers/campaign.controller';
 const router = Router();
 
 router.get('/', requireClient, campaign.list);
+router.post('/', requireClient, requireTeamAdmin, campaign.create);
 router.get('/unsubscribes', requireAuth, requireClient, campaign.listUnsubscribes);
 router.get('/credits', requireAuth, requireClient, campaign.getCredits);
 router.get('/templates', requireAuth, requireClient, campaign.listTemplates);

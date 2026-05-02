@@ -387,6 +387,54 @@ export async function fetchCampaignTemplates(apiKey: string): Promise<EMRTemplat
   }));
 }
 
+export async function createCampaign(
+  apiKey: string,
+  name: string,
+  templateId?: string,
+): Promise<EMRCampaign> {
+  const body: Record<string, unknown> = { name };
+  if (templateId) body.template_id = templateId;
+
+  const res = await emrFetch('/request-reviews/campaigns', apiKey, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`EMR createCampaign failed: ${res.status} ${text}`);
+  }
+
+  const data = await res.json() as {
+    data?: {
+      id: string;
+      name: string;
+      statistics?: {
+        invited?: number;
+        opened?: number;
+        clicked?: number;
+        reviewed?: number;
+        private_feedback?: number;
+        unsubscribed?: number;
+      };
+    };
+  };
+
+  const c = data?.data;
+  if (!c?.id) throw new Error('EMR createCampaign: unexpected response shape');
+
+  return {
+    id: c.id,
+    name: c.name,
+    invited: c.statistics?.invited ?? 0,
+    opened: c.statistics?.opened ?? 0,
+    clicked: c.statistics?.clicked ?? 0,
+    reviewed: c.statistics?.reviewed ?? 0,
+    privateFeedback: c.statistics?.private_feedback ?? 0,
+    unsubscribed: c.statistics?.unsubscribed ?? 0,
+  };
+}
+
 export async function fetchUnsubscribes(
   apiKey: string,
   opts: { page?: number } = {},
