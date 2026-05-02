@@ -27,7 +27,7 @@ interface ClientResponse {
 }
 
 const INDUSTRIES = ['Plumbing', 'HVAC', 'Electrical', 'Landscaping', 'Cleaning', 'Other'];
-type Tab = 'account' | 'locations' | 'integrations' | 'billing' | 'team' | 'widgets' | 'qrcodes';
+type Tab = 'account' | 'locations' | 'keywords' | 'integrations' | 'billing' | 'team' | 'widgets' | 'qrcodes';
 
 // ─── Team types ───────────────────────────────────────────────────────────────
 
@@ -58,6 +58,7 @@ function TabBar({ active, onChange, isOwner }: { active: Tab; onChange: (t: Tab)
   const tabs: { key: Tab; label: string }[] = [
     { key: 'account', label: 'Account' },
     { key: 'locations', label: 'Locations' },
+    { key: 'keywords', label: 'Keywords' },
     { key: 'integrations', label: 'Integrations' },
     { key: 'billing', label: 'Billing' },
     ...(isOwner ? [{ key: 'team' as Tab, label: 'Team' }] : []),
@@ -686,7 +687,7 @@ function QRTab() {
       {showForm && (
         <form onSubmit={(e) => void handleCreate(e)} className="border border-gray-200 rounded-xl p-5 bg-gray-50 space-y-4">
           <h4 className="font-medium text-gray-800">Create QR code</h4>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Name *</label>
               <input
@@ -705,7 +706,11 @@ function QRTab() {
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
               >
                 <option value="">— None —</option>
-                {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                {locations.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {[l.name, l.city, l.state].filter(Boolean).join(', ')}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -1302,6 +1307,155 @@ function LocationsTab({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
+// ─── Keywords tab ────────────────────────────────────────────────────────────
+
+interface Keyword {
+  id: string;
+  locationId: string;
+  keyword: string;
+}
+
+function KeywordsTab({ isAdmin }: { isAdmin: boolean }) {
+  const { data: locsData } = useSWR<{ success: boolean; data: Location[] }>('/locations', fetcher);
+  const locations = locsData?.data ?? [];
+
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('');
+  const activeLocationId = selectedLocationId || locations[0]?.id || '';
+
+  const kwUrl = activeLocationId ? `/keywords?locationId=${activeLocationId}` : null;
+  const { data: kwData, mutate: mutateKw } = useSWR<{ success: boolean; data: Keyword[] }>(kwUrl, fetcher);
+  const keywords = kwData?.data ?? [];
+
+  const [newKeyword, setNewKeyword] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleAdd() {
+    const kw = newKeyword.trim();
+    if (!kw || !activeLocationId) return;
+    setAdding(true);
+    setAddError(null);
+    try {
+      const res = await apiFetch<{ success: boolean; error?: { message: string } }>('/keywords', {
+        method: 'POST',
+        body: JSON.stringify({ locationId: activeLocationId, keyword: kw }),
+      });
+      if (!res.success) {
+        setAddError((res as { error?: { message: string } }).error?.message ?? 'Failed to add keyword');
+        return;
+      }
+      setNewKeyword('');
+      await mutateKw();
+    } catch {
+      setAddError('Network error');
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    setDeleting(true);
+    try {
+      await apiFetch(`/keywords/${id}`, { method: 'DELETE' }, true);
+      await mutateKw();
+      setConfirmDelete(null);
+    } catch {
+      // non-fatal
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  if (locations.length === 0) {
+    return (
+      <p className="text-sm text-gray-400">Add a location first before managing keywords.</p>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Location selector */}
+      {locations.length > 1 && (
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Location</label>
+          <select
+            value={activeLocationId}
+            onChange={(e) => setSelectedLocationId(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          >
+            {locations.map((l) => (
+              <option key={l.id} value={l.id}>
+                {[l.name, l.city, l.state].filter(Boolean).join(', ')}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Keyword list */}
+      <div className="border border-gray-200 rounded-xl overflow-hidden">
+        {keywords.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-gray-400 text-center">No keywords yet — add one below.</p>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {keywords.map((kw) => (
+              <li key={kw.id} className="flex items-center justify-between px-4 py-2.5">
+                <span className="text-sm text-gray-800">{kw.keyword}</span>
+                {isAdmin && (
+                  <div className="flex items-center gap-2 shrink-0 ml-4">
+                    {confirmDelete === kw.id ? (
+                      <>
+                        <span className="text-xs text-gray-500">Remove?</span>
+                        <button onClick={() => void handleDelete(kw.id)} disabled={deleting}
+                          className="text-xs text-red-600 hover:text-red-700 font-medium disabled:opacity-50">Yes</button>
+                        <button onClick={() => setConfirmDelete(null)} className="text-xs text-gray-500 hover:text-gray-700">No</button>
+                      </>
+                    ) : (
+                      <button onClick={() => setConfirmDelete(kw.id)} className="text-gray-300 hover:text-red-500 transition-colors">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Add keyword */}
+      {isAdmin && (
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <input
+              value={newKeyword}
+              onChange={(e) => { setNewKeyword(e.target.value); setAddError(null); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') void handleAdd(); }}
+              placeholder="e.g. plumber near me"
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            <button
+              onClick={() => void handleAdd()}
+              disabled={adding || !newKeyword.trim()}
+              className="flex items-center gap-1.5 px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 disabled:opacity-50 transition-colors"
+            >
+              <Plus size={14} /> {adding ? 'Adding…' : 'Add'}
+            </button>
+          </div>
+          {addError && (
+            <div className="flex items-center gap-2 text-red-600 text-xs">
+              <AlertCircle size={13} /> {addError}
+            </div>
+          )}
+          <p className="text-xs text-gray-400">Press Enter or click Add. Duplicates are rejected automatically.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Billing tab ─────────────────────────────────────────────────────────────
 
 interface BillingStatus {
@@ -1727,6 +1881,9 @@ export default function Settings() {
 
         {/* Locations tab */}
         {activeTab === 'locations' && <LocationsTab isAdmin={isOwner} />}
+
+        {/* Keywords tab */}
+        {activeTab === 'keywords' && <KeywordsTab isAdmin={isOwner} />}
 
         {/* Account tab */}
         {activeTab === 'account' && (
