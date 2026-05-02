@@ -164,8 +164,12 @@ export async function capture(req: Request, res: Response, next: NextFunction): 
 
     await db('audit_leads').where({ id: scanId }).update({ email, updated_at: new Date() });
 
-    // Unlock all locked categories in audit_data
     const auditData = lead.audit_data as ReturnType<typeof buildAuditData>;
+
+    // Send email before unlocking so it reflects the locked/free breakdown the user saw
+    void sendAuditLeadEmail(email, lead.business_name as string, auditData);
+
+    // Unlock all locked categories in audit_data
     auditData.categories = auditData.categories.map((c) => ({
       ...c,
       locked: false,
@@ -173,13 +177,6 @@ export async function capture(req: Request, res: Response, next: NextFunction): 
         ? ['Sign up to start tracking this — we monitor daily']
         : c.details,
     }));
-
-    void sendAuditLeadEmail(
-      email,
-      lead.business_name as string,
-      auditData.overallScore,
-      auditData.overallGrade,
-    );
 
     ok(res, { audit: auditData });
   } catch (e) {
