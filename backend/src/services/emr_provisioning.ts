@@ -41,7 +41,24 @@ export async function provisionClient(clientId: string): Promise<void> {
   const email = (user?.email as string) ?? `client+${clientId}@superlocalseo.com`;
   const businessName = (client.business_name as string) ?? 'Business';
 
-  const { customerId, apiKey } = await createCustomer(businessName, email);
+  let customerId: string | undefined;
+  let apiKey: string;
+
+  try {
+    const result = await createCustomer(businessName, email);
+    customerId = result.customerId;
+    apiKey = result.apiKey;
+  } catch (e) {
+    // Agency sub-account creation failed (plan limitation or API unavailable).
+    // Fall back to the shared operator key so the client can still use EMR features.
+    const operatorKey = config.embedmyreviews.apiKey;
+    if (!operatorKey) throw e; // re-throw only if there's truly no key at all
+    logger.warn('EMR agency provisioning failed, falling back to shared operator key', {
+      clientId,
+      error: (e as Error).message,
+    });
+    apiKey = operatorKey;
+  }
 
   const now = new Date();
   const encryptedKey = encrypt(apiKey);
@@ -70,12 +87,12 @@ export async function provisionClient(clientId: string): Promise<void> {
   }
 
   await db('clients').where({ id: clientId }).update({
-    emr_customer_id: customerId,
+    ...(customerId ? { emr_customer_id: customerId } : {}),
     emr_provisioning_status: 'provisioned',
     updated_at: now,
   });
 
-  logger.info('EMR customer provisioned', { clientId, customerId });
+  logger.info('EMR provisioned for client', { clientId, customerId: customerId ?? 'shared-operator-key' });
 }
 
 /**
