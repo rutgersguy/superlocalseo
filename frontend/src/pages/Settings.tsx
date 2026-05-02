@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, type ChangeEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useSWR, { mutate as swrMutate } from 'swr';
 import { QrCode, Download, Trash2, Plus, AlertCircle, CheckCircle2, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
@@ -27,7 +27,7 @@ interface ClientResponse {
 }
 
 const INDUSTRIES = ['Plumbing', 'HVAC', 'Electrical', 'Landscaping', 'Cleaning', 'Other'];
-type Tab = 'account' | 'integrations' | 'billing' | 'team' | 'widgets' | 'qrcodes';
+type Tab = 'account' | 'locations' | 'integrations' | 'billing' | 'team' | 'widgets' | 'qrcodes';
 
 // ─── Team types ───────────────────────────────────────────────────────────────
 
@@ -57,6 +57,7 @@ interface TeamData {
 function TabBar({ active, onChange, isOwner }: { active: Tab; onChange: (t: Tab) => void; isOwner: boolean }) {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'account', label: 'Account' },
+    { key: 'locations', label: 'Locations' },
     { key: 'integrations', label: 'Integrations' },
     { key: 'billing', label: 'Billing' },
     ...(isOwner ? [{ key: 'team' as Tab, label: 'Team' }] : []),
@@ -1000,6 +1001,307 @@ function RoiSettingsSection() {
   );
 }
 
+// ─── Locations tab ───────────────────────────────────────────────────────────
+
+interface Location {
+  id: string;
+  name: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  phone: string | null;
+  website: string | null;
+  isPrimary: boolean;
+}
+
+interface LocForm {
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  phone: string;
+  website: string;
+}
+
+const EMPTY_LOC_FORM: LocForm = { name: '', address: '', city: '', state: '', zip: '', phone: '', website: '' };
+const TIER_INCLUDED: Record<number, number> = { 1: 1, 2: 3, 3: Infinity };
+const EXTRA_PRICE: Record<number, number> = { 1: 150, 2: 100, 3: 75 };
+
+function locFormFromLocation(loc: Location): LocForm {
+  return {
+    name: loc.name,
+    address: loc.address ?? '',
+    city: loc.city ?? '',
+    state: loc.state ?? '',
+    zip: loc.zip ?? '',
+    phone: loc.phone ?? '',
+    website: loc.website ?? '',
+  };
+}
+
+function LocationForm({
+  initial, onSave, onCancel, saving, error,
+}: {
+  initial: LocForm;
+  onSave: (form: LocForm) => void;
+  onCancel: () => void;
+  saving: boolean;
+  error: string | null;
+}) {
+  const [form, setForm] = useState<LocForm>(initial);
+  const set = (k: keyof LocForm) => (e: ChangeEvent<HTMLInputElement>) =>
+    setForm((p) => ({ ...p, [k]: e.target.value }));
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2">
+          <label className="block text-xs text-gray-500 mb-1">Location name *</label>
+          <input autoFocus value={form.name} onChange={set('name')} placeholder="e.g. Main Office"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-xs text-gray-500 mb-1">Address</label>
+          <input value={form.address} onChange={set('address')} placeholder="123 Main St"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">City</label>
+          <input value={form.city} onChange={set('city')} placeholder="Austin"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">State</label>
+            <input value={form.state} onChange={set('state')} placeholder="TX"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">ZIP</label>
+            <input value={form.zip} onChange={set('zip')} placeholder="78701"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Phone</label>
+          <input value={form.phone} onChange={set('phone')} placeholder="+15125550100"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Website</label>
+          <input value={form.website} onChange={set('website')} placeholder="https://..."
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+      </div>
+      {error && (
+        <div className="flex items-center gap-2 text-red-600 text-xs">
+          <AlertCircle size={13} /> {error}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <button onClick={() => onSave(form)} disabled={saving || !form.name.trim()}
+          className="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 disabled:opacity-50 transition-colors">
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+        <button onClick={onCancel} disabled={saving}
+          className="px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors">
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function LocationsTab({ isAdmin }: { isAdmin: boolean }) {
+  const { data, mutate } = useSWR<{ success: boolean; data: Location[] }>('/locations', fetcher);
+  const { data: billingData } = useSWR<BillingResponse>('/billing/status', fetcher);
+
+  const locations = data?.data ?? [];
+  const tier = billingData?.data?.tier ?? 1;
+  const included = TIER_INCLUDED[tier] ?? 1;
+  const extraPrice = EXTRA_PRICE[tier] ?? 150;
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [addSaving, setAddSaving] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleSaveEdit(id: string, form: LocForm) {
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      const res = await apiFetch<{ success: boolean; error?: { message: string } }>(`/locations/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(form),
+      });
+      if (!res.success) {
+        setEditError((res as { error?: { message: string } }).error?.message ?? 'Failed to save');
+        return;
+      }
+      await mutate();
+      setEditingId(null);
+    } catch {
+      setEditError('Network error');
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
+  async function handleAdd(form: LocForm) {
+    setAddSaving(true);
+    setAddError(null);
+    try {
+      const res = await apiFetch<{ success: boolean; error?: { message: string } }>('/locations', {
+        method: 'POST',
+        body: JSON.stringify(form),
+      });
+      if (!res.success) {
+        setAddError((res as { error?: { message: string } }).error?.message ?? 'Failed to add location');
+        return;
+      }
+      await mutate();
+      setShowAdd(false);
+    } catch {
+      setAddError('Network error');
+    } finally {
+      setAddSaving(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    setDeleting(true);
+    try {
+      await apiFetch(`/locations/${id}`, { method: 'DELETE' }, true);
+      await mutate();
+      setConfirmDelete(null);
+    } catch {
+      // non-fatal
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  const isOverLimit = included !== Infinity && locations.length > included;
+  const isAtLimit = included !== Infinity && locations.length >= included;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-gray-600">
+            {locations.length} location{locations.length !== 1 ? 's' : ''}
+            {included !== Infinity && ` · ${Math.min(locations.length, included)} of ${included} included in your plan`}
+          </p>
+          {isOverLimit && (
+            <p className="text-xs text-gray-400 mt-0.5">
+              {locations.length - included} extra at ${extraPrice}/mo each
+            </p>
+          )}
+        </div>
+        {isAdmin && !showAdd && (
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors"
+          >
+            <Plus size={14} /> Add location
+          </button>
+        )}
+      </div>
+
+      {locations.map((loc) => (
+        <div key={loc.id} className="border border-gray-200 rounded-xl p-4">
+          {editingId === loc.id ? (
+            <LocationForm
+              initial={locFormFromLocation(loc)}
+              onSave={(form) => void handleSaveEdit(loc.id, form)}
+              onCancel={() => { setEditingId(null); setEditError(null); }}
+              saving={editSaving}
+              error={editError}
+            />
+          ) : (
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm text-gray-900">{loc.name}</span>
+                  {loc.isPrimary && (
+                    <span className="text-xs px-2 py-0.5 bg-brand-50 text-brand-600 rounded-full font-medium">Primary</span>
+                  )}
+                </div>
+                {(loc.address || loc.city) && (
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {[loc.address, loc.city, loc.state, loc.zip].filter(Boolean).join(', ')}
+                  </p>
+                )}
+                {(loc.phone || loc.website) && (
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {loc.phone && <span className="mr-3">{loc.phone}</span>}
+                    {loc.website && (
+                      <a href={loc.website} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                        {loc.website}
+                      </a>
+                    )}
+                  </p>
+                )}
+              </div>
+              {isAdmin && (
+                <div className="flex items-center gap-2 shrink-0">
+                  {confirmDelete === loc.id ? (
+                    <>
+                      <span className="text-xs text-gray-500">Delete?</span>
+                      <button onClick={() => void handleDelete(loc.id)} disabled={deleting}
+                        className="text-xs text-red-600 hover:text-red-700 font-medium disabled:opacity-50">Yes</button>
+                      <button onClick={() => setConfirmDelete(null)} className="text-xs text-gray-500 hover:text-gray-700">No</button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => { setEditingId(loc.id); setEditError(null); }}
+                        className="text-xs text-brand-600 hover:text-brand-700 font-medium">Edit</button>
+                      {locations.length > 1 && (
+                        <button onClick={() => setConfirmDelete(loc.id)} className="text-gray-300 hover:text-red-500 transition-colors">
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+
+      {showAdd && isAdmin && (
+        <div className="border border-brand-200 bg-brand-50/30 rounded-xl p-4">
+          {isAtLimit && (
+            <div className="flex items-start gap-2 text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs mb-4">
+              <AlertCircle size={13} className="mt-0.5 shrink-0" />
+              <span>
+                You've used all {included} included location{included !== 1 ? 's' : ''}. This location will be billed at an additional ${extraPrice}/mo.
+              </span>
+            </div>
+          )}
+          <p className="text-sm font-medium text-gray-700 mb-3">New location</p>
+          <LocationForm
+            initial={EMPTY_LOC_FORM}
+            onSave={(form) => void handleAdd(form)}
+            onCancel={() => { setShowAdd(false); setAddError(null); }}
+            saving={addSaving}
+            error={addError}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Billing tab ─────────────────────────────────────────────────────────────
 
 interface BillingStatus {
@@ -1393,6 +1695,9 @@ export default function Settings() {
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
         <TabBar active={activeTab} onChange={setActiveTab} isOwner={isOwner} />
+
+        {/* Locations tab */}
+        {activeTab === 'locations' && <LocationsTab isAdmin={isOwner} />}
 
         {/* Account tab */}
         {activeTab === 'account' && (
