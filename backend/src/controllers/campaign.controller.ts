@@ -49,8 +49,17 @@ export async function create(req: Request, res: Response, next: NextFunction): P
     try {
       emrCampaign = await createEMRCampaign(apiKey, name.trim(), templateId);
     } catch (e) {
-      logger.warn('EMR createCampaign failed', { clientId: req.clientId, error: (e as Error).message });
-      err(res, 'Could not reach the review platform. Please try again in a moment.', 503, 'EMR_UNAVAILABLE');
+      const msg = (e as Error).message;
+      logger.warn('EMR createCampaign failed', { clientId: req.clientId, error: msg });
+      const isMethodNotAllowed = msg.includes('405');
+      err(
+        res,
+        isMethodNotAllowed
+          ? 'Campaign creation is not available via the API on your EmbedMyReviews plan. Create campaigns directly in your EmbedMyReviews dashboard — they will appear here automatically.'
+          : 'Could not reach the review platform. Please try again in a moment.',
+        503,
+        'EMR_UNAVAILABLE',
+      );
       return;
     }
 

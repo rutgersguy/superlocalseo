@@ -1,7 +1,7 @@
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
-const BASE_URL = 'https://api.embedmyreviews.com/v1';
+const BASE_URL = 'https://gmzx.app.embedmyreviews.com/api/v1';
 
 export interface EMRReview {
   id: string;
