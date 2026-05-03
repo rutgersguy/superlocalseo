@@ -433,7 +433,7 @@ export async function createBrightLocalLocation(input: BLLocationInput): Promise
     'location-reference': locationRef,
   });
 
-  if (!res.ok && res.status !== 302) {
+  if (!res.ok) {
     const body = await res.text();
     throw new Error(`BrightLocal createLocation failed: ${res.status} ${body}`);
   }
@@ -462,16 +462,14 @@ export async function createLsrcCampaign(params: {
     language: 'en',
     'google-location': params.googleLocation,
     'location-id': String(params.locationId),
-    'time_zone': '3',
+    'time-zone': '3',
     'search-engines': ['google', 'google-local'],
     keywords: params.keywords,
   });
 
-  // The BrightLocal LSRC add endpoint returns 302→500 for some location configurations.
-  // Check for server errors gracefully.
-  if (res.status === 302 || !res.ok) {
+  if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`BrightLocal createLsrcCampaign failed: ${res.status} ${body.slice(0, 200)}`);
+    throw new Error(`BrightLocal createLsrcCampaign failed: ${res.status} ${body}`);
   }
 
   const data = (await res.json()) as { 'campaign-id'?: string | number; success?: boolean; errors?: Record<string, string> };
@@ -498,6 +496,11 @@ export async function provisionBrightLocalCampaign(locationData: {
 }): Promise<string> {
   const { name, website, address, city, state, zip, phone } = locationData;
 
+  // BrightLocal requires address data — skip provisioning if we have nothing useful to send.
+  if (!address && !city && !state && !zip) {
+    throw new Error(`BrightLocal provisioning skipped for "${name}": no address data available`);
+  }
+
   const blLocationId = await createBrightLocalLocation({
     name,
     url: website ?? 'http://example.com',
@@ -509,7 +512,8 @@ export async function provisionBrightLocalCampaign(locationData: {
   });
 
   const googleLocation = [city, state].filter(Boolean).join(', ') || name;
-  const keywords = [`${name.toLowerCase()}`, 'hvac', 'hvac near me', 'air conditioning repair'];
+  // Generic keywords based on business name — callers can override via createLsrcCampaign directly.
+  const keywords = [name.toLowerCase(), `${name.toLowerCase()} near me`];
 
   const campaignId = await createLsrcCampaign({
     name,
