@@ -2,6 +2,7 @@ import { Job } from 'bullmq';
 import { db } from '../db/connection';
 import { decrypt } from '../utils/crypto';
 import { fetchRankings } from '../services/brightlocal.service';
+import { config } from '../config';
 import { logger } from '../utils/logger';
 
 export interface SyncResult {
@@ -10,7 +11,7 @@ export interface SyncResult {
   snapshotsSaved: number;
   errors: Array<{ locationId: string; message: string }>;
   noCampaignIds: boolean;
-  noIntegration: boolean;
+  notConfigured: boolean;
 }
 
 export async function syncRankingsForClient(clientId: string): Promise<SyncResult> {
@@ -20,21 +21,15 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
     snapshotsSaved: 0,
     errors: [],
     noCampaignIds: false,
-    noIntegration: false,
+    notConfigured: false,
   };
 
-  // Check if any BrightLocal integration exists for this client
-  const integration = await db('integrations')
-    .where({ client_id: clientId, provider: 'brightlocal', status: 'connected' })
-    .whereNotNull('api_key_encrypted')
-    .first();
-
-  if (!integration) {
-    result.noIntegration = true;
+  // BrightLocal is a platform-level integration — just check the platform API key
+  if (!config.brightlocal.apiKey) {
+    result.notConfigured = true;
     return result;
   }
 
-  // Get all locations for this client
   const allLocations = await db('locations').where({ client_id: clientId }).select('id', 'brightlocal_campaign_id');
   result.locationsFound = allLocations.length;
 
@@ -73,13 +68,11 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
         result.snapshotsSaved++;
       }
 
-      await db('integrations').where({ id: (integration as Record<string, unknown>).id }).update({ last_pull_at: new Date() });
       logger.info('Rankings pulled successfully', { locationId: location.id, resultCount: results.length });
     } catch (e) {
       const msg = (e as Error).message;
       result.errors.push({ locationId: location.id as string, message: msg });
       logger.error('Failed to pull rankings for location', { locationId: location.id, error: msg });
-      await db('integrations').where({ id: (integration as Record<string, unknown>).id }).update({ error_message: msg }).catch(() => undefined);
     }
   }
 

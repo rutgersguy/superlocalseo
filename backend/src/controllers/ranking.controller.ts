@@ -157,13 +157,15 @@ export async function sync(req: Request, res: Response, next: NextFunction): Pro
 
     ok(res, {
       ...result,
-      message: result.noIntegration
-        ? 'No BrightLocal integration found. Connect BrightLocal in Settings → Integrations.'
+      message: result.notConfigured
+        ? 'BrightLocal is not configured on this server. Contact support.'
         : result.noCampaignIds
-          ? `Found ${result.locationsFound} location(s) but none have a BrightLocal campaign ID linked. Contact support to link your campaigns.`
+          ? `Found ${result.locationsFound} location(s) but no BrightLocal campaign IDs are linked yet. Contact support to get your campaigns connected.`
           : result.snapshotsSaved > 0
-            ? `Synced ${result.snapshotsSaved} ranking data point(s) across ${result.locationsWithCampaign} location(s).`
-            : `Found ${result.locationsWithCampaign} linked campaign(s) but BrightLocal returned no ranking data yet — it may take 24–48h after campaign creation.`,
+            ? `Refreshed ${result.snapshotsSaved} ranking data point(s) across ${result.locationsWithCampaign} location(s).`
+            : result.errors.length > 0
+              ? `Could not reach BrightLocal: ${result.errors[0]?.message ?? 'unknown error'}`
+              : `Found ${result.locationsWithCampaign} linked campaign(s) but BrightLocal returned no data yet — campaigns may take 24–48h after creation.`,
     });
   } catch (e) {
     next(e);
