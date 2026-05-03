@@ -558,9 +558,15 @@ export default function Rankings() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-gray-900">Rankings</h1>
-          <p className="text-sm text-gray-500 mt-1">Keyword ranking performance across all locations</p>
+          <button
+            onClick={() => void handleSync()}
+            disabled={syncing}
+            className="px-3 py-1.5 text-xs font-medium text-brand-600 bg-brand-50 border border-brand-200 rounded-lg hover:bg-brand-100 disabled:opacity-50 transition-colors"
+          >
+            {syncing ? 'Refreshing…' : 'Refresh Now'}
+          </button>
         </div>
         <div className="flex gap-2">
           <button
@@ -574,13 +580,6 @@ export default function Rankings() {
             className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${showRoi ? 'bg-brand-500 text-white border-brand-500' : 'text-gray-600 border-gray-300 hover:bg-gray-50'}`}
           >
             ROI
-          </button>
-          <button
-            onClick={() => void handleSync()}
-            disabled={syncing}
-            className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-          >
-            {syncing ? 'Syncing…' : 'Sync now'}
           </button>
           <button onClick={() => { window.location.href = '/api/analytics/export?type=rankings'; }} className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
             Export CSV
