@@ -532,15 +532,18 @@ export default function Rankings() {
     setSyncing(true);
     setSyncMessage(null);
     try {
-      const res = await apiFetch<{ success: boolean; message?: string; error?: { message: string } }>('/rankings/sync', { method: 'POST' });
-      const msg = (res as { message?: string; error?: { message: string } }).message ?? (res as { error?: { message: string } }).error?.message ?? 'Done.';
-      setSyncMessage({ text: msg, ok: (res as { success: boolean }).success });
-      if ((res as { success: boolean }).success) {
+      const res = await apiFetch<{ success: boolean; data?: { message?: string }; error?: { message: string } }>('/rankings/sync', { method: 'POST' });
+      const isOk = (res as { success: boolean }).success;
+      const msg = (res as { data?: { message?: string } }).data?.message
+        ?? (res as { error?: { message: string } }).error?.message
+        ?? (isOk ? 'Refresh complete.' : 'Refresh failed.');
+      setSyncMessage({ text: msg, ok: isOk });
+      if (isOk) {
         await mutateRankings();
         await mutateAllKw();
       }
     } catch (e) {
-      setSyncMessage({ text: (e as Error).message ?? 'Sync failed.', ok: false });
+      setSyncMessage({ text: (e as Error).message ?? 'Refresh failed.', ok: false });
     } finally {
       setSyncing(false);
     }

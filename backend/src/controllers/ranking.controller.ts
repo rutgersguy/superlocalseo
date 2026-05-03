@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
+import { redis } from '../db/redis';
 import { ok, err } from '../utils/response';
 import { syncRankingsForClient } from '../jobs/rankings.job';
 
@@ -137,21 +138,20 @@ export async function trend(req: Request, res: Response, next: NextFunction): Pr
 
 export async function sync(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    // Enforce 24-hour cooldown based on last_pull_at on the BrightLocal integration
-    const integration = await db('integrations')
-      .where({ client_id: req.clientId, provider: 'brightlocal', status: 'connected' })
-      .select('last_pull_at')
-      .first();
+    const cooldownKey = `rankings:sync:cooldown:${req.clientId as string}`;
+    const lastSyncStr = await redis.get(cooldownKey);
 
-    if (integration?.last_pull_at) {
-      const lastPull = new Date(integration.last_pull_at as string);
-      const hoursSince = (Date.now() - lastPull.getTime()) / (1000 * 60 * 60);
+    if (lastSyncStr) {
+      const lastSync = new Date(lastSyncStr);
+      const hoursSince = (Date.now() - lastSync.getTime()) / (1000 * 60 * 60);
       if (hoursSince < 24) {
-        const nextAvailable = new Date(lastPull.getTime() + 24 * 60 * 60 * 1000);
-        err(res, `Rankings were last synced ${Math.round(hoursSince)}h ago. Next sync available at ${nextAvailable.toLocaleTimeString()}.`, 429, 'SYNC_COOLDOWN');
+        const nextAvailable = new Date(lastSync.getTime() + 24 * 60 * 60 * 1000);
+        err(res, `Rankings were last refreshed ${Math.round(hoursSince)}h ago. Next refresh available after ${nextAvailable.toLocaleTimeString()}.`, 429, 'SYNC_COOLDOWN');
         return;
       }
     }
+
+    await redis.set(cooldownKey, new Date().toISOString(), 'EX', 24 * 60 * 60);
 
     const result = await syncRankingsForClient(req.clientId as string);
 
