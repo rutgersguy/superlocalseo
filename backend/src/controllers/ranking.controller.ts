@@ -146,7 +146,13 @@ export async function sync(req: Request, res: Response, next: NextFunction): Pro
       const hoursSince = (Date.now() - lastSync.getTime()) / (1000 * 60 * 60);
       if (hoursSince < 24) {
         const nextAvailable = new Date(lastSync.getTime() + 24 * 60 * 60 * 1000);
-        err(res, `Rankings were last refreshed ${Math.round(hoursSince)}h ago. Next refresh available after ${nextAvailable.toLocaleTimeString()}.`, 429, 'SYNC_COOLDOWN');
+        const timeStr = nextAvailable.toLocaleTimeString('en-US', {
+          timeZone: 'America/New_York',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        }).replace(' AM', 'am').replace(' PM', 'pm');
+        err(res, `Rankings recently experienced a manual refresh. Please try again tomorrow after ${timeStr} EST.`, 429, 'SYNC_COOLDOWN');
         return;
       }
     }

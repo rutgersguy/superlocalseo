@@ -1032,6 +1032,7 @@ interface Location {
   phone: string | null;
   website: string | null;
   isPrimary: boolean;
+  brightlocalCampaignId: string | null;
 }
 
 interface LocForm {
@@ -1042,9 +1043,10 @@ interface LocForm {
   zip: string;
   phone: string;
   website: string;
+  brightlocalCampaignId: string;
 }
 
-const EMPTY_LOC_FORM: LocForm = { name: '', address: '', city: '', state: '', zip: '', phone: '', website: '' };
+const EMPTY_LOC_FORM: LocForm = { name: '', address: '', city: '', state: '', zip: '', phone: '', website: '', brightlocalCampaignId: '' };
 const TIER_INCLUDED: Record<number, number> = { 1: 1, 2: 3, 3: Infinity };
 const EXTRA_PRICE: Record<number, number> = { 1: 150, 2: 100, 3: 75 };
 
@@ -1057,6 +1059,7 @@ function locFormFromLocation(loc: Location): LocForm {
     zip: loc.zip ?? '',
     phone: loc.phone ?? '',
     website: loc.website ?? '',
+    brightlocalCampaignId: loc.brightlocalCampaignId ?? '',
   };
 }
 
@@ -1112,6 +1115,12 @@ function LocationForm({
           <label className="block text-xs text-gray-500 mb-1">Website</label>
           <input value={form.website} onChange={set('website')} placeholder="https://..."
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-xs text-gray-500 mb-1">BrightLocal Campaign ID</label>
+          <input value={form.brightlocalCampaignId} onChange={set('brightlocalCampaignId')} placeholder="e.g. 12345"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          <p className="text-xs text-gray-400 mt-1">Found in your BrightLocal dashboard under the campaign settings.</p>
         </div>
       </div>
       {error && (

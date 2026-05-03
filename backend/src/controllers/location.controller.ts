@@ -16,6 +16,7 @@ export const locationSchema = z.object({
   zip: z.string().optional(),
   phone: z.string().optional(),
   website: z.string().url().optional().or(z.literal('')),
+  brightlocalCampaignId: z.string().max(100).optional().or(z.literal('')),
 });
 
 export const locationPatchSchema = locationSchema.partial();
@@ -67,6 +68,7 @@ export async function create(req: Request, res: Response, next: NextFunction): P
       zip: body.zip ?? null,
       phone: body.phone ?? null,
       website: body.website ?? null,
+      brightlocal_campaign_id: body.brightlocalCampaignId || null,
       is_primary: isPrimary,
       created_at: new Date(),
       updated_at: new Date(),
@@ -106,6 +108,7 @@ export async function update(req: Request, res: Response, next: NextFunction): P
     if (body.zip !== undefined) updates.zip = body.zip;
     if (body.phone !== undefined) updates.phone = body.phone;
     if (body.website !== undefined) updates.website = body.website;
+    if (body.brightlocalCampaignId !== undefined) updates.brightlocal_campaign_id = body.brightlocalCampaignId || null;
 
     const [updated] = await db('locations').where({ id }).update(updates).returning('*');
     ok(res, formatLocation(updated as Record<string, unknown>));
