@@ -66,21 +66,35 @@ function TabBar({ active, onChange, isOwner }: { active: Tab; onChange: (t: Tab)
     { key: 'qrcodes' as Tab, label: 'QR Codes' },
   ];
   return (
-    <div className="flex gap-1 overflow-x-auto border-b border-gray-200 mb-6 flex-nowrap">
-      {tabs.map((t) => (
-        <button
-          key={t.key}
-          onClick={() => onChange(t.key)}
-          className={`px-3 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap flex-shrink-0 ${
-            active === t.key
-              ? 'border-brand-500 text-brand-500'
-              : 'border-transparent text-gray-500 hover:text-gray-900'
-          }`}
+    <>
+      {/* Mobile: dropdown */}
+      <div className="sm:hidden mb-4">
+        <select
+          value={active}
+          onChange={(e) => onChange(e.target.value as Tab)}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
         >
-          {t.label}
-        </button>
-      ))}
-    </div>
+          {tabs.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+        </select>
+      </div>
+
+      {/* Desktop: equal-width tab strip */}
+      <div className="hidden sm:flex border-b border-gray-200 mb-6">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => onChange(t.key)}
+            className={`flex-1 py-2.5 text-xs font-medium text-center transition-colors border-b-2 -mb-px ${
+              active === t.key
+                ? 'border-brand-500 text-brand-500'
+                : 'border-transparent text-gray-500 hover:text-gray-900'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+    </>
   );
 }
 
