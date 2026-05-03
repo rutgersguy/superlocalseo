@@ -492,6 +492,8 @@ export default function Rankings() {
   const [showRoi, setShowRoi] = useState(() => searchParams.get('roi') === '1');
   const [showKeywords, setShowKeywords] = useState(false);
   const [localVolumes, setLocalVolumes] = useState<Record<string, number | null>>({});
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<{ text: string; ok: boolean } | null>(null);
 
   const rankingsUrl = rankType !== 'all' ? `/rankings?rankType=${rankType}` : '/rankings';
   const { data: rankingsData, isLoading, error, mutate: mutateRankings } = useSWR<{ success: boolean; data: RankingRow[] }>(rankingsUrl, fetcher);
@@ -526,6 +528,24 @@ export default function Rankings() {
     else { setSortKey(key); setSortDir('asc'); }
   };
 
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncMessage(null);
+    try {
+      const res = await apiFetch<{ success: boolean; message?: string; error?: { message: string } }>('/rankings/sync', { method: 'POST' });
+      const msg = (res as { message?: string; error?: { message: string } }).message ?? (res as { error?: { message: string } }).error?.message ?? 'Done.';
+      setSyncMessage({ text: msg, ok: (res as { success: boolean }).success });
+      if ((res as { success: boolean }).success) {
+        await mutateRankings();
+        await mutateAllKw();
+      }
+    } catch (e) {
+      setSyncMessage({ text: (e as Error).message ?? 'Sync failed.', ok: false });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const trendPoints = trendData?.data ?? [];
   const ranks = trendPoints.map((p) => p.rank);
   const yMin = ranks.length ? Math.min(...ranks) - 2 : 1;
@@ -555,11 +575,25 @@ export default function Rankings() {
           >
             ROI
           </button>
+          <button
+            onClick={() => void handleSync()}
+            disabled={syncing}
+            className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+          >
+            {syncing ? 'Syncing…' : 'Sync now'}
+          </button>
           <button onClick={() => { window.location.href = '/api/analytics/export?type=rankings'; }} className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
             Export CSV
           </button>
         </div>
       </div>
+
+      {/* Sync result message */}
+      {syncMessage && (
+        <div className={`px-4 py-3 rounded-lg text-sm ${syncMessage.ok ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
+          {syncMessage.text}
+        </div>
+      )}
 
       {/* Keywords management panel */}
       {showKeywords && (

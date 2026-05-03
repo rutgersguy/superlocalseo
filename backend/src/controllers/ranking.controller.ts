@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
-import { ok } from '../utils/response';
+import { ok, err } from '../utils/response';
+import { syncRankingsForClient } from '../jobs/rankings.job';
 
 export const listQuerySchema = z.object({
   locationId: z.string().uuid().optional(),
@@ -129,6 +130,41 @@ export async function trend(req: Request, res: Response, next: NextFunction): Pr
       date: r.date,
       rank: r.rank !== null ? Number(r.rank) : null,
     })));
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function sync(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    // Enforce 24-hour cooldown based on last_pull_at on the BrightLocal integration
+    const integration = await db('integrations')
+      .where({ client_id: req.clientId, provider: 'brightlocal', status: 'connected' })
+      .select('last_pull_at')
+      .first();
+
+    if (integration?.last_pull_at) {
+      const lastPull = new Date(integration.last_pull_at as string);
+      const hoursSince = (Date.now() - lastPull.getTime()) / (1000 * 60 * 60);
+      if (hoursSince < 24) {
+        const nextAvailable = new Date(lastPull.getTime() + 24 * 60 * 60 * 1000);
+        err(res, `Rankings were last synced ${Math.round(hoursSince)}h ago. Next sync available at ${nextAvailable.toLocaleTimeString()}.`, 429, 'SYNC_COOLDOWN');
+        return;
+      }
+    }
+
+    const result = await syncRankingsForClient(req.clientId as string);
+
+    ok(res, {
+      ...result,
+      message: result.noIntegration
+        ? 'No BrightLocal integration found. Connect BrightLocal in Settings → Integrations.'
+        : result.noCampaignIds
+          ? `Found ${result.locationsFound} location(s) but none have a BrightLocal campaign ID linked. Contact support to link your campaigns.`
+          : result.snapshotsSaved > 0
+            ? `Synced ${result.snapshotsSaved} ranking data point(s) across ${result.locationsWithCampaign} location(s).`
+            : `Found ${result.locationsWithCampaign} linked campaign(s) but BrightLocal returned no ranking data yet — it may take 24–48h after campaign creation.`,
+    });
   } catch (e) {
     next(e);
   }

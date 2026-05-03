@@ -8,5 +8,6 @@ const router = Router();
 
 router.get('/', requireAuth, requireClient, validateQuery(ctrl.listQuerySchema), ctrl.list);
 router.get('/trend', requireAuth, requireClient, validateQuery(ctrl.trendQuerySchema), ctrl.trend);
+router.post('/sync', requireAuth, requireClient, ctrl.sync);
 
 export default router;
