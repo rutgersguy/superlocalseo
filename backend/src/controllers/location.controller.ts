@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, created, noContent, notFound, err } from '../utils/response';
 import { addLocationToSubscription, removeLocationFromSubscription } from '../services/stripe.service';
+import { provisionBrightLocalCampaign } from '../services/brightlocal.service';
 import { logger } from '../utils/logger';
 
 // How many locations are included in each tier before extra charges apply
@@ -84,6 +85,31 @@ export async function create(req: Request, res: Response, next: NextFunction): P
           logger.error('Failed to add location to Stripe subscription', { error: (e as Error).message }),
         );
       }
+    }
+
+    // Auto-provision BrightLocal campaign if no campaign ID already provided
+    const loc = location as Record<string, unknown>;
+    if (!loc.brightlocal_campaign_id) {
+      provisionBrightLocalCampaign({
+        name: body.name,
+        website: body.website ?? null,
+        address: body.address ?? null,
+        city: body.city ?? null,
+        state: body.state ?? null,
+        zip: body.zip ?? null,
+        phone: body.phone ?? null,
+      }).then(async (campaignId) => {
+        await db('locations').where({ id: loc.id }).update({
+          brightlocal_campaign_id: campaignId,
+          updated_at: new Date(),
+        });
+        logger.info('BrightLocal campaign auto-provisioned', { locationId: loc.id, campaignId });
+      }).catch((e) => {
+        logger.error('Failed to auto-provision BrightLocal campaign', {
+          locationId: loc.id,
+          error: (e as Error).message,
+        });
+      });
     }
 
     created(res, formatLocation(location as Record<string, unknown>));
