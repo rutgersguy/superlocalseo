@@ -143,6 +143,35 @@ export async function update(req: Request, res: Response, next: NextFunction): P
   }
 }
 
+export async function provision(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id } = req.params;
+    const location = await db('locations').where({ id, client_id: req.clientId }).first();
+    if (!location) { notFound(res, 'Location not found'); return; }
+
+    if (location.brightlocal_campaign_id) {
+      ok(res, { campaignId: location.brightlocal_campaign_id, alreadyProvisioned: true });
+      return;
+    }
+
+    const campaignId = await provisionBrightLocalCampaign({
+      name: location.name as string,
+      website: location.website as string | null,
+      address: location.address as string | null,
+      city: location.city as string | null,
+      state: location.state as string | null,
+      zip: location.zip as string | null,
+      phone: location.phone as string | null,
+    });
+
+    await db('locations').where({ id }).update({ brightlocal_campaign_id: campaignId, updated_at: new Date() });
+    logger.info('BrightLocal campaign provisioned via manual trigger', { locationId: id, campaignId });
+    ok(res, { campaignId, alreadyProvisioned: false });
+  } catch (e) {
+    next(e);
+  }
+}
+
 export async function remove(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { id } = req.params;

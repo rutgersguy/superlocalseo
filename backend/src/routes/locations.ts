@@ -8,6 +8,7 @@ const router = Router();
 
 router.get('/', requireAuth, requireClient, ctrl.list);
 router.post('/', requireAuth, requireClient, validate(ctrl.locationSchema), ctrl.create);
+router.post('/:id/provision', requireAuth, requireClient, ctrl.provision);
 router.patch('/:id', requireAuth, requireClient, validate(ctrl.locationPatchSchema), ctrl.update);
 router.delete('/:id', requireAuth, requireClient, ctrl.remove);
 
