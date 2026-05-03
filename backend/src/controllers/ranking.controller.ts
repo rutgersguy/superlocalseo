@@ -142,17 +142,16 @@ export async function sync(req: Request, res: Response, next: NextFunction): Pro
     const lastSyncStr = await redis.get(cooldownKey);
 
     if (lastSyncStr) {
-      const lastSync = new Date(lastSyncStr);
-      const hoursSince = (Date.now() - lastSync.getTime()) / (1000 * 60 * 60);
+      const lastManualRefresh = new Date(lastSyncStr);
+      const hoursSince = (Date.now() - lastManualRefresh.getTime()) / (1000 * 60 * 60);
       if (hoursSince < 24) {
-        const nextAvailable = new Date(lastSync.getTime() + 24 * 60 * 60 * 1000);
-        const timeStr = nextAvailable.toLocaleTimeString('en-US', {
+        const timeStr = lastManualRefresh.toLocaleTimeString('en-US', {
           timeZone: 'America/New_York',
           hour: 'numeric',
           minute: '2-digit',
           hour12: true,
         }).replace(' AM', 'am').replace(' PM', 'pm');
-        err(res, `Rankings recently experienced a manual refresh. Please try again tomorrow after ${timeStr} EST.`, 429, 'SYNC_COOLDOWN');
+        err(res, `Rankings were manually refreshed today at ${timeStr} EST. Manual refreshes are limited to once every 24 hours.`, 429, 'SYNC_COOLDOWN');
         return;
       }
     }

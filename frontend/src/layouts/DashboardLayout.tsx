@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Link, Outlet, useNavigate } from 'react-router-dom';
 import { Home, BarChart2, Star, Link2, Settings, LogOut, Menu, X, FileText, Megaphone, Users2, ClipboardList, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { fetcher } from '../services/api';
@@ -63,29 +63,25 @@ function CrispWidget() {
   return null;
 }
 
-interface NavItem {
-  to: string;
-  label: string;
-  icon: React.ReactNode;
-}
+interface NavItem { to: string; label: string; icon: React.ReactNode; }
 
 const navItems: NavItem[] = [
-  { to: '/dashboard', label: 'Dashboard', icon: <Home size={18} aria-hidden="true" /> },
-  { to: '/dashboard/rankings', label: 'Rankings', icon: <BarChart2 size={18} aria-hidden="true" /> },
-  { to: '/dashboard/reviews', label: 'Reviews', icon: <Star size={18} aria-hidden="true" /> },
-  { to: '/dashboard/campaigns', label: 'Campaigns', icon: <Megaphone size={18} aria-hidden="true" /> },
-  { to: '/dashboard/competitors', label: 'Competitors', icon: <Users2 size={18} aria-hidden="true" /> },
-  { to: '/dashboard/citations', label: 'Citations', icon: <Link2 size={18} aria-hidden="true" /> },
-  { to: '/dashboard/audit', label: 'SEO Audit', icon: <ClipboardList size={18} aria-hidden="true" /> },
-  { to: '/dashboard/reports', label: 'Reports', icon: <FileText size={18} aria-hidden="true" /> },
-  { to: '/dashboard/settings', label: 'Settings', icon: <Settings size={18} aria-hidden="true" /> },
+  { to: '/dashboard',              label: 'Dashboard',   icon: <Home size={17} aria-hidden="true" /> },
+  { to: '/dashboard/rankings',     label: 'Rankings',    icon: <BarChart2 size={17} aria-hidden="true" /> },
+  { to: '/dashboard/reviews',      label: 'Reviews',     icon: <Star size={17} aria-hidden="true" /> },
+  { to: '/dashboard/campaigns',    label: 'Campaigns',   icon: <Megaphone size={17} aria-hidden="true" /> },
+  { to: '/dashboard/competitors',  label: 'Competitors', icon: <Users2 size={17} aria-hidden="true" /> },
+  { to: '/dashboard/citations',    label: 'Citations',   icon: <Link2 size={17} aria-hidden="true" /> },
+  { to: '/dashboard/audit',        label: 'SEO Audit',   icon: <ClipboardList size={17} aria-hidden="true" /> },
+  { to: '/dashboard/reports',      label: 'Reports',     icon: <FileText size={17} aria-hidden="true" /> },
+  { to: '/dashboard/settings',     label: 'Settings',    icon: <Settings size={17} aria-hidden="true" /> },
 ];
 
 function SidebarNav({ onNav }: { onNav?: () => void }) {
   const { logout, role } = useAuth();
   return (
     <>
-      <nav className="flex-1 px-3 py-4 space-y-1" aria-label="Dashboard navigation">
+      <nav className="flex-1 px-2.5 py-2 space-y-0.5" aria-label="Dashboard navigation">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
@@ -93,43 +89,47 @@ function SidebarNav({ onNav }: { onNav?: () => void }) {
             end={item.to === '/dashboard'}
             onClick={onNav}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                 isActive
-                  ? 'bg-brand-500 text-white'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                  ? 'bg-slate-800 text-white'
+                  : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
               }`
             }
           >
-            {item.icon}
-            {item.label}
+            {({ isActive }) => (
+              <>
+                <span className={`shrink-0 ${isActive ? 'text-brand-400' : ''}`}>{item.icon}</span>
+                {item.label}
+              </>
+            )}
           </NavLink>
         ))}
       </nav>
 
       {role === 'admin' && (
-        <div className="px-3 pb-2">
+        <div className="px-2.5 pb-2">
           <NavLink
             to="/admin"
             onClick={onNav}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                isActive ? 'bg-red-500 text-white' : 'text-red-600 hover:bg-red-50 hover:text-red-700'
+              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                isActive ? 'bg-red-900/40 text-red-300' : 'text-red-400/80 hover:bg-red-900/30 hover:text-red-300'
               }`
             }
           >
-            <ShieldAlert size={18} aria-hidden="true" />
+            <ShieldAlert size={17} aria-hidden="true" />
             Admin
           </NavLink>
         </div>
       )}
 
-      <div className="px-3 py-4 border-t border-gray-100">
+      <div className="px-2.5 py-3 border-t border-slate-800">
         <button
           onClick={() => void logout()}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800/60 hover:text-slate-200 transition-all duration-150"
           aria-label="Sign out"
         >
-          <LogOut size={18} aria-hidden="true" />
+          <LogOut size={17} aria-hidden="true" />
           Sign out
         </button>
       </div>
@@ -137,65 +137,88 @@ function SidebarNav({ onNav }: { onNav?: () => void }) {
   );
 }
 
+
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { isAuthenticated } = useAuth();
+  const { data: clientData } = useSWR<{ success: boolean; data: { businessName: string; email: string } }>(
+    isAuthenticated ? '/clients' : null,
+    fetcher,
+  );
+  const businessName = clientData?.data?.businessName ?? '';
 
   return (
     <>
-    <OnboardingRedirect />
-    <CrispWidget />
-    <div className="flex h-screen bg-gray-50">
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-20 bg-black/40 lg:hidden"
-          aria-hidden="true"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar — desktop: always visible; mobile: slide-in drawer */}
-      <aside
-        className={`fixed inset-y-0 left-0 z-30 w-[220px] bg-white border-r border-gray-200 flex flex-col transform transition-transform duration-200 ease-in-out
-          lg:relative lg:translate-x-0 lg:flex-shrink-0
-          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
-        aria-label="Sidebar"
-      >
-        <div className="px-5 py-5 border-b border-gray-100 flex items-center justify-between">
-          <span className="text-lg font-bold text-brand-500">SuperLocalSEO</span>
-          <button
-            className="lg:hidden p-1 rounded text-gray-400 hover:text-gray-600"
+      <OnboardingRedirect />
+      <CrispWidget />
+      <div className="flex h-screen bg-slate-100">
+        {/* Mobile overlay */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 z-20 bg-black/50 lg:hidden"
+            aria-hidden="true"
             onClick={() => setSidebarOpen(false)}
-            aria-label="Close sidebar"
-          >
-            <X size={18} />
-          </button>
-        </div>
-        <SidebarNav onNav={() => setSidebarOpen(false)} />
-      </aside>
+          />
+        )}
 
-      {/* Main area */}
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        {/* Top bar */}
-        <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-3">
+        {/* Sidebar */}
+        <aside
+          className={`fixed inset-y-0 left-0 z-30 w-56 bg-slate-900 flex flex-col transform transition-transform duration-200 ease-in-out
+            lg:relative lg:translate-x-0 lg:flex-shrink-0
+            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
+          aria-label="Sidebar"
+        >
+          {/* Logo */}
+          <div className="px-4 pt-5 pb-3 flex items-center justify-between shrink-0">
+            <Link to="/dashboard" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+              <div className="w-7 h-7 rounded-lg bg-brand-500 flex items-center justify-center shrink-0">
+                <BarChart2 size={14} className="text-white" aria-hidden="true" />
+              </div>
+              <span className="text-sm font-bold text-white tracking-tight leading-none">SuperLocalSEO</span>
+            </Link>
             <button
-              className="lg:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100"
+              className="lg:hidden p-1 rounded text-slate-500 hover:text-slate-300"
+              onClick={() => setSidebarOpen(false)}
+              aria-label="Close sidebar"
+            >
+              <X size={17} />
+            </button>
+          </div>
+
+          {/* Business context pill */}
+          {businessName && (
+            <div className="px-3 pb-3 shrink-0">
+              <Link to="/dashboard" className="block hover:opacity-80 transition-opacity">
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-medium">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                  <span className="truncate">{businessName}</span>
+                </div>
+              </Link>
+            </div>
+          )}
+
+          <SidebarNav onNav={() => setSidebarOpen(false)} />
+        </aside>
+
+        {/* Main area */}
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          {/* Top bar */}
+          <header className="bg-white border-b border-slate-200/80 px-4 sm:px-6 h-14 flex items-center shrink-0">
+            <button
+              className="lg:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100"
               onClick={() => setSidebarOpen(true)}
               aria-label="Open sidebar"
             >
-              <Menu size={20} aria-hidden="true" />
+              <Menu size={19} aria-hidden="true" />
             </button>
-            <span className="text-base sm:text-lg font-semibold text-gray-900">SuperLocalSEO</span>
-          </div>
-        </header>
+          </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
-          <Outlet />
-        </main>
+          {/* Page content */}
+          <main className="flex-1 overflow-y-auto p-5 sm:p-6">
+            <Outlet />
+          </main>
+        </div>
       </div>
-    </div>
     </>
   );
 }

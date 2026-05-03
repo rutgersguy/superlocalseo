@@ -72,14 +72,14 @@ function TabBar({ active, onChange, isOwner }: { active: Tab; onChange: (t: Tab)
         <select
           value={active}
           onChange={(e) => onChange(e.target.value as Tab)}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
         >
           {tabs.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
         </select>
       </div>
 
       {/* Desktop: equal-width tab strip */}
-      <div className="hidden sm:flex border-b border-gray-200 mb-6">
+      <div className="hidden sm:flex border-b border-slate-200 mb-6">
         {tabs.map((t) => (
           <button
             key={t.key}
@@ -87,7 +87,7 @@ function TabBar({ active, onChange, isOwner }: { active: Tab; onChange: (t: Tab)
             className={`flex-1 py-2.5 text-xs font-medium text-center transition-colors border-b-2 -mb-px ${
               active === t.key
                 ? 'border-brand-500 text-brand-500'
-                : 'border-transparent text-gray-500 hover:text-gray-900'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
             }`}
           >
             {t.label}
@@ -123,18 +123,18 @@ function OAuthCard({ name, description, connected, comingSoon, onConnect, onDisc
   };
 
   return (
-    <div className="border border-gray-200 rounded-xl p-5">
+    <div className="border border-slate-200 rounded-xl p-5">
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-gray-900">{name}</h3>
-          <p className="text-xs text-gray-500 mt-0.5">{description}</p>
+          <h3 className="text-sm font-semibold text-slate-900">{name}</h3>
+          <p className="text-xs text-slate-500 mt-0.5">{description}</p>
         </div>
         {comingSoon ? (
-          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">Coming soon</span>
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-400">Coming soon</span>
         ) : (
           <span
             className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-              connected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+              connected ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'
             }`}
           >
             {connected ? 'Connected' : 'Not connected'}
@@ -347,7 +347,7 @@ function WidgetAdvancedPanel({ widgetId }: { widgetId: string }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+        className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
       >
         {open ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
         Advanced settings
@@ -356,11 +356,11 @@ function WidgetAdvancedPanel({ widgetId }: { widgetId: string }) {
         <div className="mt-4 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Only show reviews rated ★ or higher</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Only show reviews rated ★ or higher</label>
               <select
                 value={cfg.minRating ?? 1}
                 onChange={(e) => setDraft((d) => ({ ...d, minRating: Number(e.target.value) }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               >
                 <option value={1}>1★ (all)</option>
                 <option value={2}>2★</option>
@@ -370,11 +370,11 @@ function WidgetAdvancedPanel({ widgetId }: { widgetId: string }) {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Sort By</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Sort By</label>
               <select
                 value={cfg.sortBy ?? 'newest'}
                 onChange={(e) => setDraft((d) => ({ ...d, sortBy: e.target.value as WidgetAdvancedConfig['sortBy'] }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               >
                 <option value="newest">Newest</option>
                 <option value="highest">Highest rated</option>
@@ -382,27 +382,27 @@ function WidgetAdvancedPanel({ widgetId }: { widgetId: string }) {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Max Reviews</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Max Reviews</label>
               <input
                 type="number"
                 min={1}
                 max={50}
                 value={cfg.reviewCount ?? 10}
                 onChange={(e) => setDraft((d) => ({ ...d, reviewCount: Number(e.target.value) }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-2">Platform Filter</label>
+            <label className="block text-xs font-medium text-slate-600 mb-2">Platform Filter</label>
             <div className="flex flex-wrap gap-3">
               {ALL_PLATFORMS.map((p) => (
-                <label key={p} className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
+                <label key={p} className="flex items-center gap-1.5 text-sm text-slate-700 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={activePlatforms.includes(p.toLowerCase())}
                     onChange={() => togglePlatform(p)}
-                    className="rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+                    className="rounded border-slate-200 text-brand-500 focus:ring-brand-500"
                   />
                   {p}
                 </label>
@@ -410,13 +410,13 @@ function WidgetAdvancedPanel({ widgetId }: { widgetId: string }) {
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Custom CSS</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Custom CSS</label>
             <textarea
               value={cfg.customCss ?? ''}
               onChange={(e) => setDraft((d) => ({ ...d, customCss: e.target.value }))}
               placeholder=".emr-widget { ... }"
               rows={4}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
               style={{ height: 120 }}
             />
           </div>
@@ -482,19 +482,19 @@ function WidgetTab() {
     }
   };
 
-  if (!widget) return <div className="space-y-3 animate-pulse">{[...Array(3)].map((_, i) => <div key={i} className="h-10 bg-gray-100 rounded-lg" />)}</div>;
+  if (!widget) return <div className="space-y-3 animate-pulse">{[...Array(3)].map((_, i) => <div key={i} className="h-10 bg-slate-100 rounded-lg" />)}</div>;
 
   return (
     <div className="space-y-6">
       {/* Embed code */}
       <div>
-        <h3 className="text-sm font-semibold text-gray-900 mb-2">Embed code</h3>
-        <p className="text-xs text-gray-500 mb-3">Paste this snippet anywhere on your website to show your reviews.</p>
+        <h3 className="text-sm font-semibold text-slate-900 mb-2">Embed code</h3>
+        <p className="text-xs text-slate-500 mb-3">Paste this snippet anywhere on your website to show your reviews.</p>
         <div className="relative">
-          <pre className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-700 overflow-x-auto whitespace-pre-wrap font-mono">{embedSnippet}</pre>
+          <pre className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-700 overflow-x-auto whitespace-pre-wrap font-mono">{embedSnippet}</pre>
           <button
             onClick={() => void copyEmbed()}
-            className="absolute top-2 right-2 px-2.5 py-1 bg-white border border-gray-200 rounded text-xs font-medium text-gray-600 hover:bg-gray-50"
+            className="absolute top-2 right-2 px-2.5 py-1 bg-white border border-slate-200 rounded text-xs font-medium text-slate-600 hover:bg-slate-50"
           >
             {copied ? 'Copied!' : 'Copy'}
           </button>
@@ -503,25 +503,25 @@ function WidgetTab() {
 
       {/* Config */}
       <div className="border-t pt-5">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4">Appearance</h3>
+        <h3 className="text-sm font-semibold text-slate-900 mb-4">Appearance</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Theme</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Theme</label>
             <select
               value={cfg.theme ?? 'light'}
               onChange={(e) => setConfig((c) => ({ ...c, theme: e.target.value as 'light' | 'dark' }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
               <option value="light">Light</option>
               <option value="dark">Dark</option>
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Reviews to show</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Reviews to show</label>
             <select
               value={cfg.maxCount ?? 8}
               onChange={(e) => setConfig((c) => ({ ...c, maxCount: Number(e.target.value) }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
               <option value={6}>6</option>
               <option value={8}>8</option>
@@ -530,11 +530,11 @@ function WidgetTab() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Minimum rating</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Minimum rating</label>
             <select
               value={cfg.minRating ?? 4}
               onChange={(e) => setConfig((c) => ({ ...c, minRating: Number(e.target.value) }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
               <option value={1}>1★ and up (all)</option>
               <option value={3}>3★ and up</option>
@@ -548,9 +548,9 @@ function WidgetTab() {
               id="showPlatformBadge"
               checked={cfg.showPlatformBadge ?? true}
               onChange={(e) => setConfig((c) => ({ ...c, showPlatformBadge: e.target.checked }))}
-              className="rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+              className="rounded border-slate-200 text-brand-500 focus:ring-brand-500"
             />
-            <label htmlFor="showPlatformBadge" className="text-sm text-gray-700">Show platform badge</label>
+            <label htmlFor="showPlatformBadge" className="text-sm text-slate-700">Show platform badge</label>
           </div>
         </div>
         <div className="mt-4 flex items-center gap-3">
@@ -563,7 +563,7 @@ function WidgetTab() {
           </button>
           <button
             onClick={() => setShowPreview((v) => !v)}
-            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50"
+            className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50"
           >
             {showPreview ? 'Hide preview' : 'Preview widget'}
           </button>
@@ -573,8 +573,8 @@ function WidgetTab() {
       {/* Live preview */}
       {showPreview && (
         <div className="border-t pt-5">
-          <h3 className="text-sm font-semibold text-gray-900 mb-3">Live preview</h3>
-          <p className="text-xs text-gray-500 mb-3">Reflects your current settings before saving.</p>
+          <h3 className="text-sm font-semibold text-slate-900 mb-3">Live preview</h3>
+          <p className="text-xs text-slate-500 mb-3">Reflects your current settings before saving.</p>
           <WidgetPreview widgetKey={key} cfg={cfg} />
         </div>
       )}
@@ -584,8 +584,8 @@ function WidgetTab() {
 
       {/* Danger zone */}
       <div className="border-t pt-5">
-        <h3 className="text-sm font-semibold text-gray-900 mb-1">Regenerate widget key</h3>
-        <p className="text-xs text-gray-500 mb-3">This invalidates your current embed. You'll need to update the snippet on your website.</p>
+        <h3 className="text-sm font-semibold text-slate-900 mb-1">Regenerate widget key</h3>
+        <p className="text-xs text-slate-500 mb-3">This invalidates your current embed. You'll need to update the snippet on your website.</p>
         <button
           onClick={() => void regenerate()}
           disabled={regenerating}
@@ -689,7 +689,7 @@ function QRTab() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500">Generate printable QR codes that link customers directly to your Google review page. Scans are tracked automatically.</p>
+        <p className="text-sm text-slate-500">Generate printable QR codes that link customers directly to your Google review page. Scans are tracked automatically.</p>
         <button
           onClick={() => setShowForm((v) => !v)}
           className="flex items-center gap-2 px-3 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors"
@@ -699,25 +699,25 @@ function QRTab() {
       </div>
 
       {showForm && (
-        <form onSubmit={(e) => void handleCreate(e)} className="border border-gray-200 rounded-xl p-5 bg-gray-50 space-y-4">
-          <h4 className="font-medium text-gray-800">Create QR code</h4>
+        <form onSubmit={(e) => void handleCreate(e)} className="border border-slate-200 rounded-xl p-5 bg-slate-50 space-y-4">
+          <h4 className="font-medium text-slate-800">Create QR code</h4>
           <div className="space-y-3">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Name *</label>
+              <label className="block text-xs text-slate-500 mb-1">Name *</label>
               <input
                 required
                 value={form.name}
                 onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                 placeholder="Front desk card"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Location (optional)</label>
+              <label className="block text-xs text-slate-500 mb-1">Location (optional)</label>
               <select
                 value={form.locationId}
                 onChange={(e) => handleLocationChange(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
               >
                 <option value="">— None —</option>
                 {locations.map((l) => (
@@ -729,16 +729,16 @@ function QRTab() {
             </div>
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Target URL (Google review link) *</label>
+            <label className="block text-xs text-slate-500 mb-1">Target URL (Google review link) *</label>
             <input
               required
               type="url"
               value={form.targetUrl}
               onChange={(e) => setForm((p) => ({ ...p, targetUrl: e.target.value }))}
               placeholder="https://search.google.com/local/writereview?placeid=…"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
             />
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-slate-400 mt-1">
               Get your Google review link from{' '}
               <a href="https://business.google.com" target="_blank" rel="noopener noreferrer" className="text-brand-500 hover:underline">Google Business Profile</a>.
               {form.locationId && locations.find((l) => l.id === form.locationId)?.google_place_id && (
@@ -749,7 +749,7 @@ function QRTab() {
           {formError && <div className="flex items-center gap-2 text-red-600 text-sm"><AlertCircle size={13} /> {formError}</div>}
           {formOk && <div className="flex items-center gap-2 text-green-700 text-sm"><CheckCircle2 size={13} /> Created!</div>}
           <div className="flex justify-end gap-3">
-            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancel</button>
+            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900">Cancel</button>
             <button type="submit" disabled={saving} className="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 disabled:opacity-50 transition-colors">
               {saving ? 'Creating…' : 'Create'}
             </button>
@@ -759,37 +759,37 @@ function QRTab() {
 
       {isLoading && (
         <div className="space-y-3">
-          {[1, 2].map((n) => <div key={n} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}
+          {[1, 2].map((n) => <div key={n} className="h-20 bg-slate-100 rounded-xl animate-pulse" />)}
         </div>
       )}
 
       {!isLoading && qrCodes.length === 0 && !showForm && (
-        <div className="border-2 border-dashed border-gray-200 rounded-xl py-12 text-center">
-          <QrCode size={36} className="mx-auto text-gray-300 mb-3" />
-          <p className="text-sm text-gray-500 font-medium">No QR codes yet</p>
-          <p className="text-xs text-gray-400 mt-1">Create one to start directing customers to your review page</p>
+        <div className="border-2 border-dashed border-slate-200 rounded-xl py-12 text-center">
+          <QrCode size={36} className="mx-auto text-slate-300 mb-3" />
+          <p className="text-sm text-slate-500 font-medium">No QR codes yet</p>
+          <p className="text-xs text-slate-400 mt-1">Create one to start directing customers to your review page</p>
         </div>
       )}
 
       {qrCodes.length > 0 && (
         <div className="space-y-3">
           {qrCodes.map((qr) => (
-            <div key={qr.id} className="flex items-center gap-4 border border-gray-200 rounded-xl px-5 py-4 bg-white">
+            <div key={qr.id} className="flex items-center gap-4 border border-slate-200 rounded-xl px-5 py-4 bg-white">
               <img
                 ref={imgRef}
                 src={`/api/qr/${qr.id}/image.png`}
                 alt={`QR code for ${qr.name}`}
-                className="w-14 h-14 rounded border border-gray-100"
+                className="w-14 h-14 rounded border border-slate-100"
               />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-gray-800">{qr.name}</span>
-                  {qr.locationName && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{qr.locationName}</span>}
+                  <span className="font-medium text-slate-800">{qr.name}</span>
+                  {qr.locationName && <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{qr.locationName}</span>}
                 </div>
                 <a href={qr.targetUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-brand-500 hover:underline flex items-center gap-1 mt-0.5 truncate">
                   <ExternalLink size={10} /> {qr.targetUrl.length > 50 ? `${qr.targetUrl.slice(0, 50)}…` : qr.targetUrl}
                 </a>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-slate-400 mt-0.5">
                   {qr.scanCount.toLocaleString()} scan{qr.scanCount !== 1 ? 's' : ''}
                   {qr.lastScannedAt && ` · last ${new Date(qr.lastScannedAt).toLocaleDateString()}`}
                 </p>
@@ -798,14 +798,14 @@ function QRTab() {
                 <button
                   onClick={() => downloadImage(qr.id, qr.name)}
                   title="Download PNG"
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-brand-500 hover:bg-gray-100 transition-colors"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-brand-500 hover:bg-slate-100 transition-colors"
                 >
                   <Download size={15} />
                 </button>
                 <button
                   onClick={() => void handleDelete(qr.id, qr.name)}
                   title="Delete"
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                 >
                   <Trash2 size={15} />
                 </button>
@@ -859,7 +859,7 @@ function TeamTab() {
   };
 
   if (isLoading) {
-    return <div className="space-y-3 animate-pulse">{[...Array(3)].map((_, i) => <div key={i} className="h-12 bg-gray-100 rounded-lg" />)}</div>;
+    return <div className="space-y-3 animate-pulse">{[...Array(3)].map((_, i) => <div key={i} className="h-12 bg-slate-100 rounded-lg" />)}</div>;
   }
 
   return (
@@ -867,24 +867,24 @@ function TeamTab() {
       {/* Member list */}
       <div className="space-y-2">
         {team?.owner && (
-          <div className="flex items-center justify-between py-3 px-4 bg-gray-50 rounded-lg">
+          <div className="flex items-center justify-between py-3 px-4 bg-slate-50 rounded-lg">
             <div>
-              <p className="text-sm font-medium text-gray-900">{team.owner.email}</p>
-              <p className="text-xs text-gray-400">Account owner</p>
+              <p className="text-sm font-medium text-slate-900">{team.owner.email}</p>
+              <p className="text-xs text-slate-400">Account owner</p>
             </div>
             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-brand-100 text-brand-700">Owner</span>
           </div>
         )}
         {team?.members.map((m) => (
-          <div key={m.id} className="flex items-center justify-between py-3 px-4 border border-gray-200 rounded-lg">
+          <div key={m.id} className="flex items-center justify-between py-3 px-4 border border-slate-200 rounded-lg">
             <div>
-              <p className="text-sm font-medium text-gray-900">{m.email}</p>
-              <p className="text-xs text-gray-400">
+              <p className="text-sm font-medium text-slate-900">{m.email}</p>
+              <p className="text-xs text-slate-400">
                 {m.accepted ? 'Active' : m.expired ? 'Invite expired' : 'Invite pending'}
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 capitalize">{m.role}</span>
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 capitalize">{m.role}</span>
               <button
                 onClick={() => void removeMember(m.id)}
                 className="text-xs text-red-500 hover:text-red-700 font-medium"
@@ -895,25 +895,25 @@ function TeamTab() {
           </div>
         ))}
         {!team?.members.length && (
-          <p className="text-sm text-gray-400 text-center py-4">No team members yet.</p>
+          <p className="text-sm text-slate-400 text-center py-4">No team members yet.</p>
         )}
       </div>
 
       {/* Invite form */}
       <div className="border-t pt-5">
-        <h3 className="text-sm font-semibold text-gray-900 mb-3">Invite team member</h3>
+        <h3 className="text-sm font-semibold text-slate-900 mb-3">Invite team member</h3>
         <div className="flex gap-2">
           <input
             type="email"
             placeholder="email@example.com"
             value={inviteEmail}
             onChange={(e) => setInviteEmail(e.target.value)}
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
           <select
             value={inviteRole}
             onChange={(e) => setInviteRole(e.target.value as 'admin' | 'viewer')}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
             <option value="viewer">Viewer</option>
             <option value="admin">Admin</option>
@@ -928,7 +928,7 @@ function TeamTab() {
         </div>
         {inviteError && <p className="mt-2 text-sm text-red-600">{inviteError}</p>}
         {inviteSuccess && <p className="mt-2 text-sm text-green-600">{inviteSuccess}</p>}
-        <p className="mt-2 text-xs text-gray-400">Admins can manage locations and keywords. Viewers have read-only access.</p>
+        <p className="mt-2 text-xs text-slate-400">Admins can manage locations and keywords. Viewers have read-only access.</p>
       </div>
     </div>
   );
@@ -975,22 +975,22 @@ function RoiSettingsSection() {
 
   return (
     <div className="border-t pt-5">
-      <h3 className="text-sm font-semibold text-gray-900 mb-1">ROI Settings</h3>
-      <p className="text-xs text-gray-500 mb-4">Used to estimate monthly revenue value from your keyword rankings.</p>
+      <h3 className="text-sm font-semibold text-slate-900 mb-1">ROI Settings</h3>
+      <p className="text-xs text-slate-500 mb-4">Used to estimate monthly revenue value from your keyword rankings.</p>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Average Customer Value ($)</label>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Average Customer Value ($)</label>
           <input
             type="number"
             min={0}
             value={resolvedAcv}
             onChange={(e) => setAcv(e.target.value)}
             placeholder="500"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Conversion Rate (%)</label>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Conversion Rate (%)</label>
           <input
             type="number"
             min={0}
@@ -999,11 +999,11 @@ function RoiSettingsSection() {
             value={resolvedConv}
             onChange={(e) => setConv(e.target.value)}
             placeholder="3"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
       </div>
-      <p className="mt-3 text-xs text-gray-400">
+      <p className="mt-3 text-xs text-slate-400">
         Est. monthly revenue = keyword impressions × CTR × {resolvedConv || '3'}% × ${resolvedAcv || '500'}
       </p>
       <div className="mt-3 flex items-center gap-3">
@@ -1078,41 +1078,41 @@ function LocationForm({
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
-          <label className="block text-xs text-gray-500 mb-1">Location name *</label>
+          <label className="block text-xs text-slate-500 mb-1">Location name *</label>
           <input autoFocus value={form.name} onChange={set('name')} placeholder="e.g. Main Office"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
         <div className="col-span-2">
-          <label className="block text-xs text-gray-500 mb-1">Address</label>
+          <label className="block text-xs text-slate-500 mb-1">Address</label>
           <input value={form.address} onChange={set('address')} placeholder="123 Main St"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">City</label>
+          <label className="block text-xs text-slate-500 mb-1">City</label>
           <input value={form.city} onChange={set('city')} placeholder="Austin"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="block text-xs text-gray-500 mb-1">State</label>
+            <label className="block text-xs text-slate-500 mb-1">State</label>
             <input value={form.state} onChange={set('state')} placeholder="TX"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">ZIP</label>
+            <label className="block text-xs text-slate-500 mb-1">ZIP</label>
             <input value={form.zip} onChange={set('zip')} placeholder="78701"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
           </div>
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Phone</label>
+          <label className="block text-xs text-slate-500 mb-1">Phone</label>
           <input value={form.phone} onChange={set('phone')} placeholder="+15125550100"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Website</label>
+          <label className="block text-xs text-slate-500 mb-1">Website</label>
           <input value={form.website} onChange={set('website')} placeholder="https://..."
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
       </div>
       {error && (
@@ -1126,7 +1126,7 @@ function LocationForm({
           {saving ? 'Saving…' : 'Save'}
         </button>
         <button onClick={onCancel} disabled={saving}
-          className="px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors">
+          className="px-4 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors">
           Cancel
         </button>
       </div>
@@ -1216,12 +1216,12 @@ function LocationsTab({ isAdmin }: { isAdmin: boolean }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-slate-600">
             {locations.length} location{locations.length !== 1 ? 's' : ''}
             {included !== Infinity && ` · ${Math.min(locations.length, included)} of ${included} included in your plan`}
           </p>
           {isOverLimit && (
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-xs text-slate-400 mt-0.5">
               {locations.length - included} extra at ${extraPrice}/mo each
             </p>
           )}
@@ -1237,7 +1237,7 @@ function LocationsTab({ isAdmin }: { isAdmin: boolean }) {
       </div>
 
       {locations.map((loc) => (
-        <div key={loc.id} className="border border-gray-200 rounded-xl p-4">
+        <div key={loc.id} className="border border-slate-200 rounded-xl p-4">
           {editingId === loc.id ? (
             <LocationForm
               initial={locFormFromLocation(loc)}
@@ -1250,18 +1250,18 @@ function LocationsTab({ isAdmin }: { isAdmin: boolean }) {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-sm text-gray-900">{loc.name}</span>
+                  <span className="font-semibold text-sm text-slate-900">{loc.name}</span>
                   {loc.isPrimary && (
                     <span className="text-xs px-2 py-0.5 bg-brand-50 text-brand-600 rounded-full font-medium">Primary</span>
                   )}
                 </div>
                 {(loc.address || loc.city) && (
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-xs text-slate-500 mt-0.5">
                     {[loc.address, loc.city, loc.state, loc.zip].filter(Boolean).join(', ')}
                   </p>
                 )}
                 {(loc.phone || loc.website) && (
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="text-xs text-slate-400 mt-0.5">
                     {loc.phone && <span className="mr-3">{loc.phone}</span>}
                     {loc.website && (
                       <a href={loc.website} target="_blank" rel="noopener noreferrer" className="hover:underline">
@@ -1275,17 +1275,17 @@ function LocationsTab({ isAdmin }: { isAdmin: boolean }) {
                 <div className="flex items-center gap-2 shrink-0">
                   {confirmDelete === loc.id ? (
                     <>
-                      <span className="text-xs text-gray-500">Delete?</span>
+                      <span className="text-xs text-slate-500">Delete?</span>
                       <button onClick={() => void handleDelete(loc.id)} disabled={deleting}
                         className="text-xs text-red-600 hover:text-red-700 font-medium disabled:opacity-50">Yes</button>
-                      <button onClick={() => setConfirmDelete(null)} className="text-xs text-gray-500 hover:text-gray-700">No</button>
+                      <button onClick={() => setConfirmDelete(null)} className="text-xs text-slate-500 hover:text-slate-700">No</button>
                     </>
                   ) : (
                     <>
                       <button onClick={() => { setEditingId(loc.id); setEditError(null); }}
                         className="text-xs text-brand-600 hover:text-brand-700 font-medium">Edit</button>
                       {locations.length > 1 && (
-                        <button onClick={() => setConfirmDelete(loc.id)} className="text-gray-300 hover:text-red-500 transition-colors">
+                        <button onClick={() => setConfirmDelete(loc.id)} className="text-slate-300 hover:text-red-500 transition-colors">
                           <Trash2 size={14} />
                         </button>
                       )}
@@ -1308,7 +1308,7 @@ function LocationsTab({ isAdmin }: { isAdmin: boolean }) {
               </span>
             </div>
           )}
-          <p className="text-sm font-medium text-gray-700 mb-3">New location</p>
+          <p className="text-sm font-medium text-slate-700 mb-3">New location</p>
           <LocationForm
             initial={EMPTY_LOC_FORM}
             onSave={(form) => void handleAdd(form)}
@@ -1385,7 +1385,7 @@ function KeywordsTab({ isAdmin }: { isAdmin: boolean }) {
 
   if (locations.length === 0) {
     return (
-      <p className="text-sm text-gray-400">Add a location first before managing keywords.</p>
+      <p className="text-sm text-slate-400">Add a location first before managing keywords.</p>
     );
   }
 
@@ -1394,11 +1394,11 @@ function KeywordsTab({ isAdmin }: { isAdmin: boolean }) {
       {/* Location selector */}
       {locations.length > 1 && (
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Location</label>
+          <label className="block text-xs text-slate-500 mb-1">Location</label>
           <select
             value={activeLocationId}
             onChange={(e) => setSelectedLocationId(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
             {locations.map((l) => (
               <option key={l.id} value={l.id}>
@@ -1410,25 +1410,25 @@ function KeywordsTab({ isAdmin }: { isAdmin: boolean }) {
       )}
 
       {/* Keyword list */}
-      <div className="border border-gray-200 rounded-xl overflow-hidden">
+      <div className="border border-slate-200 rounded-xl overflow-hidden">
         {keywords.length === 0 ? (
-          <p className="px-4 py-6 text-sm text-gray-400 text-center">No keywords yet — add one below.</p>
+          <p className="px-4 py-6 text-sm text-slate-400 text-center">No keywords yet — add one below.</p>
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-slate-100">
             {keywords.map((kw) => (
               <li key={kw.id} className="flex items-center justify-between px-4 py-2.5">
-                <span className="text-sm text-gray-800">{kw.keyword}</span>
+                <span className="text-sm text-slate-800">{kw.keyword}</span>
                 {isAdmin && (
                   <div className="flex items-center gap-2 shrink-0 ml-4">
                     {confirmDelete === kw.id ? (
                       <>
-                        <span className="text-xs text-gray-500">Remove?</span>
+                        <span className="text-xs text-slate-500">Remove?</span>
                         <button onClick={() => void handleDelete(kw.id)} disabled={deleting}
                           className="text-xs text-red-600 hover:text-red-700 font-medium disabled:opacity-50">Yes</button>
-                        <button onClick={() => setConfirmDelete(null)} className="text-xs text-gray-500 hover:text-gray-700">No</button>
+                        <button onClick={() => setConfirmDelete(null)} className="text-xs text-slate-500 hover:text-slate-700">No</button>
                       </>
                     ) : (
-                      <button onClick={() => setConfirmDelete(kw.id)} className="text-gray-300 hover:text-red-500 transition-colors">
+                      <button onClick={() => setConfirmDelete(kw.id)} className="text-slate-300 hover:text-red-500 transition-colors">
                         <Trash2 size={14} />
                       </button>
                     )}
@@ -1449,7 +1449,7 @@ function KeywordsTab({ isAdmin }: { isAdmin: boolean }) {
               onChange={(e) => { setNewKeyword(e.target.value); setAddError(null); }}
               onKeyDown={(e) => { if (e.key === 'Enter') void handleAdd(); }}
               placeholder="e.g. plumber near me"
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
             <button
               onClick={() => void handleAdd()}
@@ -1464,7 +1464,7 @@ function KeywordsTab({ isAdmin }: { isAdmin: boolean }) {
               <AlertCircle size={13} /> {addError}
             </div>
           )}
-          <p className="text-xs text-gray-400">Press Enter or click Add. Duplicates are rejected automatically.</p>
+          <p className="text-xs text-slate-400">Press Enter or click Add. Duplicates are rejected automatically.</p>
         </div>
       )}
     </div>
@@ -1552,46 +1552,46 @@ function WhiteLabelSection() {
 
   return (
     <div className="border-t pt-5">
-      <h3 className="text-sm font-semibold text-gray-900 mb-1">White-Label Reports</h3>
-      <p className="text-xs text-gray-500 mb-4">Customize the branding on your monthly PDF reports. Leave blank to use SuperLocalSEO defaults.</p>
+      <h3 className="text-sm font-semibold text-slate-900 mb-1">White-Label Reports</h3>
+      <p className="text-xs text-slate-500 mb-4">Customize the branding on your monthly PDF reports. Leave blank to use SuperLocalSEO defaults.</p>
       <div className="space-y-3">
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Company Name</label>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Company Name</label>
           <input
             type="text"
             value={resolvedName}
             onChange={(e) => setCompanyName(e.target.value)}
             placeholder="Your Agency Name"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Logo URL</label>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Logo URL</label>
           <input
             type="url"
             value={resolvedLogo}
             onChange={(e) => setLogoUrl(e.target.value)}
             placeholder="https://yoursite.com/logo.png"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
-          <p className="text-xs text-gray-400 mt-1">PNG or SVG, publicly accessible. Will appear in the report header.</p>
+          <p className="text-xs text-slate-400 mt-1">PNG or SVG, publicly accessible. Will appear in the report header.</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex-1">
-            <label className="block text-xs font-medium text-gray-600 mb-1">Brand Color</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Brand Color</label>
             <div className="flex items-center gap-2">
               <input
                 type="color"
                 value={resolvedColor}
                 onChange={(e) => setColor(e.target.value)}
-                className="h-9 w-14 border border-gray-300 rounded-lg cursor-pointer p-0.5"
+                className="h-9 w-14 border border-slate-200 rounded-lg cursor-pointer p-0.5"
               />
               <input
                 type="text"
                 value={resolvedColor}
                 onChange={(e) => setColor(e.target.value)}
                 placeholder="#0052CC"
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
           </div>
@@ -1675,9 +1675,9 @@ function BillingTab({ onGoToLocations }: { onGoToLocations: () => void }) {
   if (isLoading) {
     return (
       <div className="space-y-4 animate-pulse">
-        <div className="h-5 bg-gray-200 rounded w-40" />
+        <div className="h-5 bg-slate-200 rounded w-40" />
         <div className="grid grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => <div key={i} className="h-48 bg-gray-100 rounded-xl" />)}
+          {[1, 2, 3].map((i) => <div key={i} className="h-48 bg-slate-100 rounded-xl" />)}
         </div>
       </div>
     );
@@ -1723,23 +1723,23 @@ function BillingTab({ onGoToLocations }: { onGoToLocations: () => void }) {
             <div
               key={plan.tier}
               className={`border rounded-xl p-5 flex flex-col gap-3 transition-colors ${
-                isCurrent ? 'border-brand-500 bg-brand-50' : 'border-gray-200 bg-white'
+                isCurrent ? 'border-brand-500 bg-brand-50' : 'border-slate-200 bg-white'
               }`}
             >
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="font-semibold text-gray-900">{plan.name}</p>
-                  <p className="text-xl font-bold text-gray-900 mt-0.5">{plan.price}<span className="text-sm font-normal text-gray-500">/mo</span></p>
+                  <p className="font-semibold text-slate-900">{plan.name}</p>
+                  <p className="text-xl font-bold text-slate-900 mt-0.5">{plan.price}<span className="text-sm font-normal text-slate-500">/mo</span></p>
                 </div>
                 {isCurrent && (
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isActive ? 'bg-green-100 text-green-700' : isPastDue ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isActive ? 'bg-green-100 text-green-700' : isPastDue ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
                     {isActive ? 'Current' : isPastDue ? 'Past due' : billing?.status ?? 'Current'}
                   </span>
                 )}
               </div>
               <ul className="space-y-1.5 flex-1">
                 {plan.features.map((f) => (
-                  <li key={f} className="flex items-start gap-1.5 text-xs text-gray-600">
+                  <li key={f} className="flex items-start gap-1.5 text-xs text-slate-600">
                     <span className="text-green-500 mt-0.5">✓</span> {f}
                   </li>
                 ))}
@@ -1751,7 +1751,7 @@ function BillingTab({ onGoToLocations }: { onGoToLocations: () => void }) {
                   className={`w-full py-2 px-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
                     isUpgrade
                       ? 'bg-brand-500 text-white hover:bg-brand-600'
-                      : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+                      : 'border border-slate-200 text-slate-700 hover:bg-slate-50'
                   }`}
                 >
                   {changing === plan.tier ? 'Changing…' : isUpgrade ? 'Upgrade' : isDowngrade ? 'Downgrade' : 'Switch'}
@@ -1807,7 +1807,7 @@ function BillingTab({ onGoToLocations }: { onGoToLocations: () => void }) {
           {portalLoading ? 'Redirecting…' : 'Manage payment method & invoices →'}
         </button>
         {billing?.currentPeriodEnd && (
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-slate-400 mt-1">
             Current period ends {new Date(billing.currentPeriodEnd).toLocaleDateString()}
           </p>
         )}
@@ -1889,11 +1889,11 @@ export default function Settings() {
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-        <p className="text-sm text-gray-500 mt-1">Manage your account, integrations, and billing</p>
+        <h1 className="text-xl font-bold text-slate-900 tracking-tight">Settings</h1>
+        <p className="text-sm text-slate-500 mt-1">Manage your account, integrations, and billing</p>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+      <div className="bg-white rounded-xl shadow-card p-6">
         <TabBar active={activeTab} onChange={setActiveTab} isOwner={isAdmin} />
 
         {/* Locations tab */}
@@ -1906,37 +1906,37 @@ export default function Settings() {
         {activeTab === 'account' && (
           <div className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
               <input
                 type="email"
                 value={client?.email ?? ''}
                 readOnly
-                className="w-full border border-gray-200 bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-500 cursor-not-allowed"
+                className="w-full border border-slate-200 bg-slate-50 rounded-lg px-3 py-2 text-sm text-slate-500 cursor-not-allowed"
               />
-              <p className="mt-1 text-xs text-gray-400">Email cannot be changed here.</p>
+              <p className="mt-1 text-xs text-slate-400">Email cannot be changed here.</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Business Name</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Business Name</label>
               {isLoading ? (
-                <div className="h-9 bg-gray-200 rounded-lg animate-pulse" />
+                <div className="h-9 bg-slate-200 rounded-lg animate-pulse" />
               ) : (
                 <input
                   type="text"
                   value={resolvedBusinessName}
                   onChange={(e) => setBusinessName(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Industry</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Industry</label>
               {isLoading ? (
-                <div className="h-9 bg-gray-200 rounded-lg animate-pulse" />
+                <div className="h-9 bg-slate-200 rounded-lg animate-pulse" />
               ) : (
                 <select
                   value={resolvedIndustry}
                   onChange={(e) => setIndustry(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 >
                   <option value="">Select industry</option>
                   {INDUSTRIES.map((ind) => <option key={ind} value={ind}>{ind}</option>)}

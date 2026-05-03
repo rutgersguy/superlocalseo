@@ -36,7 +36,7 @@ function Stars({ rating }: { rating: number }) {
   return (
     <span className="text-yellow-400 text-sm">
       {'★'.repeat(Math.max(0, Math.min(5, rating)))}
-      <span className="text-gray-300">{'★'.repeat(5 - Math.max(0, Math.min(5, rating)))}</span>
+      <span className="text-slate-300">{'★'.repeat(5 - Math.max(0, Math.min(5, rating)))}</span>
     </span>
   );
 }
@@ -47,7 +47,7 @@ function PlatformBadge({ platform }: { platform: string }) {
     Yelp: 'bg-red-100 text-red-600',
     Facebook: 'bg-indigo-100 text-indigo-700',
   };
-  return <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${colors[platform] ?? 'bg-gray-100 text-gray-600'}`}>{platform}</span>;
+  return <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${colors[platform] ?? 'bg-slate-100 text-slate-600'}`}>{platform}</span>;
 }
 
 function Avatar({ name }: { name: string }) {
@@ -133,16 +133,16 @@ function ResponsePanel({ reviewId, reviewBody }: { reviewId: string; reviewBody:
     setTimeout(() => setCopied(false), 2000);
   };
 
-  if (isLoading) return <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-400">Loading response…</div>;
+  if (isLoading) return <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-400">Loading response…</div>;
 
   if (!reviewBody) return (
-    <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-400 italic">
+    <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-400 italic">
       This review has no text — nothing to respond to.
     </div>
   );
 
   return (
-    <div className="mt-3 pt-3 border-t border-gray-100">
+    <div className="mt-3 pt-3 border-t border-slate-100">
       {!response ? (
         <button
           onClick={() => void draftResponse()}
@@ -165,7 +165,7 @@ function ResponsePanel({ reviewId, reviewBody }: { reviewId: string; reviewBody:
               <button
                 onClick={() => void draftResponse()}
                 disabled={drafting}
-                className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                className="text-xs text-slate-400 hover:text-slate-600 disabled:opacity-50"
                 title="Regenerate"
               >
                 {drafting ? '…' : '↺ Regenerate'}
@@ -181,7 +181,7 @@ function ResponsePanel({ reviewId, reviewBody }: { reviewId: string; reviewBody:
               className="w-full border border-brand-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
             />
           ) : (
-            <p className="text-sm text-gray-700 leading-relaxed bg-gray-50 rounded-lg px-3 py-2.5">{displayText}</p>
+            <p className="text-sm text-slate-700 leading-relaxed bg-slate-50 rounded-lg px-3 py-2.5">{displayText}</p>
           )}
 
           <div className="flex gap-2 flex-wrap">
@@ -202,23 +202,23 @@ function ResponsePanel({ reviewId, reviewBody }: { reviewId: string; reviewBody:
                 <button onClick={() => void approve()} disabled={saving} className="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
                   Save & Approve
                 </button>
-                <button onClick={() => setEditing(false)} className="px-3 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50">
+                <button onClick={() => setEditing(false)} className="px-3 py-1.5 text-xs text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50">
                   Cancel
                 </button>
               </>
             ) : (
-              <button onClick={startEdit} className="px-3 py-1.5 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">
+              <button onClick={startEdit} className="px-3 py-1.5 text-xs text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
                 Edit
               </button>
             )}
             {response.status === 'approved' && (
-              <button onClick={() => void copyText()} className="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">
+              <button onClick={() => void copyText()} className="px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
                 {copied ? 'Copied!' : 'Copy to clipboard'}
               </button>
             )}
           </div>
           {response.status === 'approved' && (
-            <p className="text-xs text-gray-400">Copy this text and paste it as your reply on {response.reviewId && 'the platform'}.</p>
+            <p className="text-xs text-slate-400">Copy this text and paste it as your reply on {response.reviewId && 'the platform'}.</p>
           )}
         </div>
       )}
@@ -243,7 +243,7 @@ function SyncBLButton({ onSynced }: { onSynced: () => void }) {
   };
   return (
     <button onClick={() => void handleSync()} disabled={syncing}
-      className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+      className="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50">
       {syncing ? 'Syncing…' : 'Sync BL Reviews'}
     </button>
   );
@@ -282,27 +282,27 @@ function PostReplyModal({ review, onClose, onPosted }: { review: Review; onClose
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg flex flex-col">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-900">Post Reply to Google</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 font-bold text-xl">×</button>
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-slate-900">Post Reply to Google</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 font-bold text-xl">×</button>
         </div>
         <div className="px-6 py-4 space-y-3">
-          <p className="text-sm text-gray-500">
-            Replying to <span className="font-medium text-gray-700">{review.authorName}</span>
+          <p className="text-sm text-slate-500">
+            Replying to <span className="font-medium text-slate-700">{review.authorName}</span>
           </p>
           <textarea
             value={text || aiDraft}
             onChange={(e) => setText(e.target.value)}
             rows={5}
             maxLength={4000}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
             placeholder="Write your reply…"
           />
-          <p className="text-xs text-gray-400 text-right">{effectiveText.length}/4000</p>
+          <p className="text-xs text-slate-400 text-right">{effectiveText.length}/4000</p>
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
-        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
+        <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
           <button onClick={() => void handlePost()} disabled={posting || !effectiveText.trim()}
             className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
             {posting ? 'Posting…' : 'Post to Google'}
@@ -323,7 +323,7 @@ function ReviewCard({ review, onReplyPosted }: { review: Review; onReplyPosted: 
   const alreadyPosted = review.blReplyStatus === 'posted';
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+    <div className="bg-white rounded-xl shadow-card p-5">
       {showReplyModal && (
         <PostReplyModal
           review={review}
@@ -336,7 +336,7 @@ function ReviewCard({ review, onReplyPosted }: { review: Review; onReplyPosted: 
           <Avatar name={review.authorName} />
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-gray-900 text-sm">{review.authorName}</span>
+              <span className="font-semibold text-slate-900 text-sm">{review.authorName}</span>
               <PlatformBadge platform={review.platform} />
               {review.status === 'new' && (
                 <span className="text-xs bg-yellow-100 text-yellow-700 font-medium px-2 py-0.5 rounded-full">New</span>
@@ -349,7 +349,7 @@ function ReviewCard({ review, onReplyPosted }: { review: Review; onReplyPosted: 
             </div>
             <div className="flex items-center gap-2 mt-0.5">
               <Stars rating={review.rating} />
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-slate-400">
                 {review.reviewDate ? new Date(review.reviewDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
               </span>
             </div>
@@ -367,14 +367,14 @@ function ReviewCard({ review, onReplyPosted }: { review: Review; onReplyPosted: 
           <button
             onClick={() => setShowResponse((v) => !v)}
             className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-              showResponse ? 'bg-brand-50 text-brand-600 border-brand-200' : 'text-gray-500 border-gray-200 hover:bg-gray-50'
+              showResponse ? 'bg-brand-50 text-brand-600 border-brand-200' : 'text-slate-500 border-slate-200 hover:bg-slate-50'
             }`}
           >
             {showResponse ? 'Hide' : 'Respond'}
           </button>
         </div>
       </div>
-      <p className="mt-3 text-sm text-gray-700 leading-relaxed line-clamp-3">{review.body}</p>
+      <p className="mt-3 text-sm text-slate-700 leading-relaxed line-clamp-3">{review.body}</p>
       {showResponse && <ResponsePanel reviewId={review.id} reviewBody={review.body} />}
     </div>
   );
@@ -387,12 +387,12 @@ function FeedbackTab() {
   const feedback = data?.data?.feedback ?? [];
   const total = data?.data?.total ?? 0;
 
-  if (isLoading) return <div className="text-sm text-gray-500">Loading...</div>;
+  if (isLoading) return <div className="text-sm text-slate-500">Loading...</div>;
 
   if (feedback.length === 0) {
     return (
-      <div className="text-center py-16 text-gray-400">
-        <p className="font-medium text-gray-600 mb-1">No private feedback yet</p>
+      <div className="text-center py-16 text-slate-400">
+        <p className="font-medium text-slate-600 mb-1">No private feedback yet</p>
         <p className="text-sm">When a review requester rates 1–3★, their response appears here instead of going to Google.</p>
       </div>
     );
@@ -400,22 +400,22 @@ function FeedbackTab() {
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-gray-500">{total} private responses</p>
+      <p className="text-sm text-slate-500">{total} private responses</p>
       {feedback.map((f: any) => (
-        <div key={f.id} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+        <div key={f.id} className="bg-white rounded-xl p-4 shadow-card">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
-                {f.contactName && <span className="text-sm font-medium text-gray-800">{f.contactName}</span>}
+                {f.contactName && <span className="text-sm font-medium text-slate-800">{f.contactName}</span>}
                 <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-medium">Private</span>
                 {f.rating && (
-                  <span className="text-xs text-gray-500">{'★'.repeat(f.rating)}{'☆'.repeat(5 - f.rating)}</span>
+                  <span className="text-xs text-slate-500">{'★'.repeat(f.rating)}{'☆'.repeat(5 - f.rating)}</span>
                 )}
               </div>
-              {f.contactEmail && <p className="text-xs text-gray-400">{f.contactEmail}</p>}
-              {f.message && <p className="text-sm text-gray-700 mt-2">{f.message}</p>}
+              {f.contactEmail && <p className="text-xs text-slate-400">{f.contactEmail}</p>}
+              {f.message && <p className="text-sm text-slate-700 mt-2">{f.message}</p>}
             </div>
-            <span className="text-xs text-gray-400 whitespace-nowrap">
+            <span className="text-xs text-slate-400 whitespace-nowrap">
               {new Date(f.receivedAt).toLocaleDateString()}
             </span>
           </div>
@@ -468,13 +468,13 @@ export default function Reviews() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Reviews</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage and monitor customer reviews across platforms</p>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Reviews</h1>
+          <p className="text-sm text-slate-500 mt-1">Manage and monitor customer reviews across platforms</p>
         </div>
         <div className="flex gap-2">
           <SyncBLButton onSynced={() => void mutateReviews()} />
           <button onClick={() => { window.location.href = '/api/analytics/export?type=reviews'; }}
-            className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+            className="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">
             Export CSV
           </button>
         </div>
@@ -482,20 +482,20 @@ export default function Reviews() {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <div className="bg-white rounded-xl shadow-card p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-gray-900">Review Volume by Platform</h2>
+            <h2 className="text-sm font-semibold text-slate-900">Review Volume by Platform</h2>
             <div className="flex gap-1">
               {TREND_RANGES.map((r) => (
                 <button key={r.value} onClick={() => setTrendRange(r.value)}
-                  className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${trendRange === r.value ? 'bg-brand-500 text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}>
+                  className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${trendRange === r.value ? 'bg-brand-500 text-white' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}>
                   {r.label}
                 </button>
               ))}
             </div>
           </div>
           {volumeData.length === 0 ? (
-            <div className="h-40 flex items-center justify-center text-sm text-gray-400">No data yet</div>
+            <div className="h-40 flex items-center justify-center text-sm text-slate-400">No data yet</div>
           ) : (
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={volumeData} margin={{ top: 2, right: 8, bottom: 2, left: 0 }}>
@@ -510,10 +510,10 @@ export default function Reviews() {
             </ResponsiveContainer>
           )}
         </div>
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-gray-900 mb-4">Average Rating Over Time</h2>
+        <div className="bg-white rounded-xl shadow-card p-5">
+          <h2 className="text-sm font-semibold text-slate-900 mb-4">Average Rating Over Time</h2>
           {sentimentData.length === 0 ? (
-            <div className="h-40 flex items-center justify-center text-sm text-gray-400">No data yet</div>
+            <div className="h-40 flex items-center justify-center text-sm text-slate-400">No data yet</div>
           ) : (
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={sentimentData} margin={{ top: 2, right: 8, bottom: 2, left: 0 }}>
@@ -532,16 +532,16 @@ export default function Reviews() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1 border-b border-slate-200">
         <button
           onClick={() => setActiveTab('reviews')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'reviews' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'reviews' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
         >
           Reviews
         </button>
         <button
           onClick={() => setActiveTab('feedback')}
-          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'feedback' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'feedback' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
         >
           Private Feedback
           {feedbackTotal > 0 && (
@@ -555,21 +555,21 @@ export default function Reviews() {
       ) : (
         <>
           {/* Filter bar */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex flex-wrap gap-3 items-center">
+          <div className="bg-white rounded-xl shadow-card p-4 flex flex-wrap gap-3 items-center">
             <select value={platform} onChange={(e) => setPlatform(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
               {PLATFORMS.map((p) => <option key={p}>{p}</option>)}
             </select>
             <select value={rating} onChange={(e) => setRating(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
               {RATINGS.map((r) => <option key={r} value={r}>{r === 'All' ? 'All ratings' : `${r}★`}</option>)}
             </select>
             <select value={status} onChange={(e) => setStatus(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
               {STATUSES.map((s) => <option key={s}>{s}</option>)}
             </select>
             <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search reviews..."
-              className="flex-1 min-w-[160px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+              className="flex-1 min-w-[160px] border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
           </div>
 
           {error && <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">Failed to load reviews. Please refresh.</div>}
@@ -577,18 +577,18 @@ export default function Reviews() {
           {isLoading ? (
             <div className="grid gap-4">
               {Array.from({ length: 4 }, (_, i) => (
-                <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 animate-pulse">
+                <div key={i} className="bg-white rounded-xl shadow-card p-5 animate-pulse">
                   <div className="flex gap-3 mb-3">
-                    <div className="w-9 h-9 bg-gray-200 rounded-full" />
-                    <div className="flex-1 space-y-2"><div className="h-4 bg-gray-200 rounded w-32" /><div className="h-3 bg-gray-200 rounded w-20" /></div>
+                    <div className="w-9 h-9 bg-slate-100 rounded-full" />
+                    <div className="flex-1 space-y-2"><div className="h-4 bg-slate-100 rounded w-32" /><div className="h-3 bg-slate-100 rounded w-20" /></div>
                   </div>
-                  <div className="space-y-2"><div className="h-3 bg-gray-200 rounded w-full" /><div className="h-3 bg-gray-200 rounded w-4/5" /></div>
+                  <div className="space-y-2"><div className="h-3 bg-slate-100 rounded w-full" /><div className="h-3 bg-slate-100 rounded w-4/5" /></div>
                 </div>
               ))}
             </div>
           ) : reviews.length === 0 ? (
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-12 text-center">
-              <p className="text-gray-400 text-sm">No reviews found matching your filters.</p>
+            <div className="bg-white rounded-xl shadow-card p-12 text-center">
+              <p className="text-slate-400 text-sm">No reviews found matching your filters.</p>
             </div>
           ) : (
             <div className="grid gap-4">
