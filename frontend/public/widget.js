@@ -3,10 +3,11 @@
   'use strict';
 
   var API_ORIGIN = (function () {
-    var scripts = document.querySelectorAll('script[data-sls-key]');
-    if (scripts.length) {
-      var src = scripts[scripts.length - 1].src;
-      try { return new URL(src).origin; } catch (e) { return ''; }
+    var all = document.querySelectorAll('script[src]');
+    for (var i = all.length - 1; i >= 0; i--) {
+      if (all[i].src && all[i].src.indexOf('/widget.js') !== -1) {
+        try { return new URL(all[i].src).origin; } catch (e) { break; }
+      }
     }
     return '';
   })();

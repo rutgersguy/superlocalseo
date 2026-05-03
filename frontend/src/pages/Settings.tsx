@@ -1827,9 +1827,11 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
   const { data, isLoading, error, mutate } = useSWR<ClientResponse>('/clients', fetcher);
   const client = data?.data;
-  const { data: teamData } = useSWR<{ success: boolean; data: { owner: { userId: string } | null } }>('/team', fetcher);
+  const { data: teamData } = useSWR<{ success: boolean; data: { owner: { userId: string } | null; members: Array<{ userId: string | null; role: string; accepted: boolean }> } }>('/team', fetcher);
   const { userId } = useAuth();
   const isOwner = !!(teamData?.data?.owner?.userId && teamData.data.owner.userId === userId);
+  const currentMember = teamData?.data?.members?.find((m) => m.userId === userId && m.accepted);
+  const isAdmin = isOwner || currentMember?.role === 'admin';
 
   // Account form state
   const [businessName, setBusinessName] = useState('');
@@ -1892,13 +1894,13 @@ export default function Settings() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <TabBar active={activeTab} onChange={setActiveTab} isOwner={isOwner} />
+        <TabBar active={activeTab} onChange={setActiveTab} isOwner={isAdmin} />
 
         {/* Locations tab */}
-        {activeTab === 'locations' && <LocationsTab isAdmin={isOwner} />}
+        {activeTab === 'locations' && <LocationsTab isAdmin={isAdmin} />}
 
         {/* Keywords tab */}
-        {activeTab === 'keywords' && <KeywordsTab isAdmin={isOwner} />}
+        {activeTab === 'keywords' && <KeywordsTab isAdmin={isAdmin} />}
 
         {/* Account tab */}
         {activeTab === 'account' && (
@@ -1941,18 +1943,20 @@ export default function Settings() {
                 </select>
               )}
             </div>
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                onClick={() => void saveAccount()}
-                disabled={accountSaving || isLoading}
-                className="bg-brand-500 text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-brand-600 disabled:opacity-50"
-              >
-                {accountSaving ? 'Saving...' : 'Save changes'}
-              </button>
-              {accountSuccess && (
-                <span className="text-sm text-green-600 font-medium">Saved!</span>
-              )}
-            </div>
+            {isAdmin && (
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  onClick={() => void saveAccount()}
+                  disabled={accountSaving || isLoading}
+                  className="bg-brand-500 text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-brand-600 disabled:opacity-50"
+                >
+                  {accountSaving ? 'Saving...' : 'Save changes'}
+                </button>
+                {accountSuccess && (
+                  <span className="text-sm text-green-600 font-medium">Saved!</span>
+                )}
+              </div>
+            )}
             <RoiSettingsSection />
           </div>
         )}
