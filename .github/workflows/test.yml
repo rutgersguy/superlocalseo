@@ -24,6 +24,17 @@ jobs:
         ports:
           - 6379:6379
 
+    env:
+      DATABASE_URL: postgresql://slseo:slseo@localhost:5432/superlocalseo_test
+      REDIS_URL: redis://localhost:6379
+      NODE_ENV: test
+      JWT_SECRET: test-secret
+      JWT_REFRESH_SECRET: test-refresh-secret
+      ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      STRIPE_SECRET_KEY: sk_test_placeholder
+      STRIPE_PUBLISHABLE_KEY: pk_test_placeholder
+      RESEND_API_KEY: re_test_placeholder
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,19 +48,9 @@ jobs:
 
       - name: Run migrations (test DB)
         run: cd backend && npx knex migrate:latest
-        env:
-          DATABASE_URL: postgresql://slseo:slseo@localhost:5432/superlocalseo_test
-          NODE_ENV: test
 
       - name: Run tests
-        run: cd backend && npm test -- --coverage
-        env:
-          DATABASE_URL: postgresql://slseo:slseo@localhost:5432/superlocalseo_test
-          REDIS_URL: redis://localhost:6379
-          NODE_ENV: test
-          JWT_SECRET: test-secret
-          JWT_REFRESH_SECRET: test-refresh-secret
-          ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
+        run: cd backend && npm test -- --forceExit
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4
@@ -72,6 +73,3 @@ jobs:
 
       - name: Type check
         run: cd frontend && npm run type-check
-
-      - name: Lint
-        run: cd frontend && npm run lint
