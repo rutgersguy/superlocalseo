@@ -21,7 +21,7 @@ export const authLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: () => isDev || process.env.NODE_ENV === 'test',
+  skip: () => isDev,
   validate: false,
   message: { success: false, error: { message: 'Too many auth attempts', code: 'RATE_LIMITED' } },
 });
