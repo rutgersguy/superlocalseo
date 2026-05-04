@@ -130,7 +130,7 @@ export default function Landing() {
               Built for home service businesses
             </div>
             <h1 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-6 leading-tight">
-              Local SEO that actually<br className="hidden sm:block" />shows up on the map
+              Local SEO that actually<br className="hidden sm:block" />{' '}shows up on the map
             </h1>
             <p className="text-lg sm:text-xl text-slate-600 mb-10 max-w-2xl mx-auto">
               Rankings, reviews, and citations in one dashboard. Automated monthly PDF reports
