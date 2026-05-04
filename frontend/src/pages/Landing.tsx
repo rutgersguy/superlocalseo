@@ -67,7 +67,7 @@ const featureCards = [
   },
   {
     title: 'AI Review Responses',
-    desc: 'One click and Claude AI drafts a personalized, on-brand reply to any review. Edit, approve, and copy to the platform.',
+    desc: 'One click and AI drafts a personalized, on-brand reply to any review. Edit, approve, and copy to the platform.',
     Icon: MessageSquare,
   },
   {
