@@ -244,7 +244,7 @@ function SyncBLButton({ onSynced }: { onSynced: () => void }) {
   return (
     <button onClick={() => void handleSync()} disabled={syncing}
       className="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50">
-      {syncing ? 'Syncing…' : 'Sync BL Reviews'}
+      {syncing ? 'Syncing…' : 'Sync Reviews'}
     </button>
   );
 }
