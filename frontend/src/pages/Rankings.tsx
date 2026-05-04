@@ -6,6 +6,7 @@ import {
 } from 'recharts';
 import { MapContainer, CircleMarker, Popup, TileLayer } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import { BarChart2, Search } from 'lucide-react';
 import { apiFetch, fetcher } from '../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -95,6 +96,17 @@ const RANK_TYPES: { label: string; value: RankTypeFilter }[] = [
   { label: 'Local Pack', value: 'local_pack' },
   { label: 'Paid', value: 'paid' },
 ];
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 2) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
 
 // ─── Inline volume editor ──────────────────────────────────────────────────────
 
@@ -494,6 +506,8 @@ export default function Rankings() {
   const [localVolumes, setLocalVolumes] = useState<Record<string, number | null>>({});
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const [search, setSearch] = useState('');
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   const rankingsUrl = rankType !== 'all' ? `/rankings?rankType=${rankType}` : '/rankings';
   const { data: rankingsData, isLoading, error, mutate: mutateRankings } = useSWR<{ success: boolean; data: RankingRow[] }>(rankingsUrl, fetcher);
@@ -522,6 +536,14 @@ export default function Rankings() {
       : String(av).localeCompare(String(bv));
     return sortDir === 'asc' ? cmp : -cmp;
   });
+
+  const filtered = search
+    ? sorted.filter((r) => r.keyword.toLowerCase().includes(search.toLowerCase()))
+    : sorted;
+
+  const avgRank = rows.length > 0
+    ? rows.reduce((sum, r) => sum + r.rank, 0) / rows.length
+    : null;
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
@@ -584,9 +606,25 @@ export default function Rankings() {
           >
             ROI
           </button>
-          <button onClick={() => { window.location.href = '/api/analytics/export?type=rankings'; }} className="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
-            Export CSV
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowExportMenu((v) => !v)}
+              className="px-3 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+              title="More actions"
+            >
+              ···
+            </button>
+            {showExportMenu && (
+              <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-card-md z-10 min-w-[140px]">
+                <button
+                  onClick={() => { window.location.href = '/api/analytics/export?type=rankings'; setShowExportMenu(false); }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+                >
+                  Export CSV
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -623,6 +661,22 @@ export default function Rankings() {
         </div>
       )}
 
+      {rows.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { label: 'AVG RANK', value: avgRank != null ? avgRank.toFixed(1) : '—' },
+            { label: 'KEYWORDS TRACKED', value: String(rows.length + pendingKeywords.length) },
+            { label: 'IN TOP 3', value: String(rows.filter((r) => r.rank <= 3).length) },
+            { label: 'GAINS THIS SCAN', value: String(rows.filter((r) => r.delta != null && r.delta > 0).length) },
+          ].map((c) => (
+            <div key={c.label} className="bg-white rounded-xl shadow-card p-5">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">{c.label}</p>
+              <p className="text-3xl font-bold text-slate-900 tracking-tight">{c.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
       {error && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
           Failed to load rankings. Please refresh.
@@ -633,11 +687,16 @@ export default function Rankings() {
       <div className="flex gap-1 border-b border-slate-200">
         <button onClick={() => setMainTab('table')}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${mainTab === 'table' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-          Rankings Table
+          <span className="flex items-center gap-1.5">
+            <BarChart2 size={14} />
+            Rankings Table
+          </span>
         </button>
         <button onClick={() => setMainTab('map')}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${mainTab === 'map' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-          📍 Visibility Map
+          <span className="flex items-center gap-1.5">
+            📍 Visibility Map
+          </span>
         </button>
       </div>
 
@@ -646,6 +705,18 @@ export default function Rankings() {
       )}
 
       {mainTab === 'table' && (<>
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 max-w-xs">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search keywords…"
+            className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+      </div>
       <div className="bg-white rounded-xl shadow-card overflow-hidden overflow-x-auto">
         {isLoading ? (
           <div className="p-8 text-center text-sm text-slate-400">Loading rankings...</div>
@@ -674,7 +745,7 @@ export default function Rankings() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {sorted.length === 0 && pendingKeywords.length === 0 ? (
+              {filtered.length === 0 && pendingKeywords.length === 0 ? (
                 <tr>
                   <td colSpan={showRoi ? 7 : 6} className="px-6 py-10 text-center text-slate-400">
                     No keywords yet. Click <strong>Keywords</strong> above to add some.
@@ -682,7 +753,7 @@ export default function Rankings() {
                 </tr>
               ) : (
                 <>
-                {sorted.map((row) => {
+                {filtered.map((row) => {
                   const roi = roiByKeyword[row.keywordId];
                   const localVol = row.keywordId in localVolumes ? localVolumes[row.keywordId] : roi?.monthlySearchVolume ?? null;
                   return (
@@ -698,7 +769,7 @@ export default function Rankings() {
                         {row.delta != null ? <DeltaBadge delta={row.delta} /> : <span className="text-slate-400 text-sm">—</span>}
                       </td>
                       <td className="px-6 py-3 text-slate-500">
-                        {row.pulledAt ? new Date(row.pulledAt).toLocaleDateString() : '—'}
+                        {row.pulledAt ? timeAgo(row.pulledAt) : '—'}
                       </td>
                       {showRoi && (
                         <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
@@ -729,7 +800,7 @@ export default function Rankings() {
                       <td className="px-6 py-3 font-medium text-slate-700">{pk.keyword}</td>
                       <td className="px-6 py-3 text-slate-500">{locName}</td>
                       <td className="px-6 py-3 text-right">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Pending scan</span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Awaiting scan</span>
                       </td>
                       <td className="px-6 py-3 text-right text-slate-300 text-sm">—</td>
                       <td className="px-6 py-3 text-slate-300 text-sm">—</td>
