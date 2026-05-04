@@ -460,7 +460,7 @@ export default function Competitors() {
   const googleStat = stats?.byPlatform.find((p) => p.platform.toLowerCase() === 'google');
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-900">Competitor Benchmarking</h1>
