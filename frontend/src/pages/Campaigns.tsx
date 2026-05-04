@@ -56,7 +56,7 @@ function CreditBadge() {
     <div className={`flex items-center gap-3 text-sm px-3 py-1.5 rounded-lg border ${
       isCritical ? 'bg-red-50 border-red-200 text-red-700' :
       isLow ? 'bg-amber-50 border-amber-200 text-amber-700' :
-      'bg-gray-50 border-gray-200 text-gray-600'
+      'bg-slate-50 border-slate-200 text-slate-600'
     }`}>
       <span>📧 {credits.email}</span>
       <span>📱 {credits.sms}</span>
@@ -71,25 +71,25 @@ function TemplatePicker({ onSelect }: { onSelect: (name: string, id?: string) =>
   const { data, isLoading } = useSWR<TemplatesResponse>('/campaigns/templates', fetcher);
   const templates = data?.data?.templates ?? [];
 
-  if (isLoading) return <div className="text-sm text-gray-400">Loading templates...</div>;
+  if (isLoading) return <div className="text-sm text-slate-400">Loading templates...</div>;
 
   return (
     <div className="space-y-3">
-      <p className="text-sm font-medium text-gray-700">Start from a template</p>
+      <p className="text-sm font-medium text-slate-700">Start from a template</p>
       <div className="grid grid-cols-2 gap-3">
         {templates.map((t) => (
           <button
             key={t.id}
             onClick={() => onSelect(t.name, t.id)}
-            className="text-left p-3 border border-gray-200 rounded-lg hover:border-brand-400 hover:bg-brand-50 transition-colors"
+            className="text-left p-3 border border-slate-200 rounded-lg hover:border-brand-400 hover:bg-brand-50 transition-colors"
           >
-            <p className="text-sm font-medium text-gray-900">{t.name}</p>
-            {t.description && <p className="text-xs text-gray-500 mt-0.5">{t.description}</p>}
+            <p className="text-sm font-medium text-slate-900">{t.name}</p>
+            {t.description && <p className="text-xs text-slate-500 mt-0.5">{t.description}</p>}
           </button>
         ))}
         <button
           onClick={() => onSelect('', undefined)}
-          className="text-left p-3 border border-dashed border-gray-300 rounded-lg hover:border-brand-400 text-sm text-gray-500 hover:text-brand-600"
+          className="text-left p-3 border border-dashed border-slate-300 rounded-lg hover:border-brand-400 text-sm text-slate-500 hover:text-brand-600"
         >
           Start from scratch
         </button>
@@ -143,9 +143,9 @@ function NewCampaignModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h2 className="font-semibold text-gray-900">New Campaign</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <h2 className="font-semibold text-slate-900">New Campaign</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <X size={18} />
           </button>
         </div>
@@ -156,13 +156,13 @@ function NewCampaignModal({ onClose }: { onClose: () => void }) {
           {!showPicker && (
             <div className="space-y-4">
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Campaign name</label>
+                <label className="block text-xs text-slate-500 mb-1">Campaign name</label>
                 <input
                   autoFocus
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) void handleCreate(); }}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   placeholder="e.g. Post-visit review request"
                 />
               </div>
@@ -176,7 +176,7 @@ function NewCampaignModal({ onClose }: { onClose: () => void }) {
                   <button
                     onClick={() => setStep('pick')}
                     disabled={loading}
-                    className="px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                    className="px-4 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
                   >
                     Back
                   </button>
@@ -203,12 +203,12 @@ function FunnelBar({ label, value, base, color }: { label: string; value: number
   const pct = base > 0 ? Math.round((value / base) * 100) : 0;
   return (
     <div className="flex items-center gap-2 text-sm">
-      <span className="w-28 text-gray-500 text-xs truncate">{label}</span>
-      <div className="flex-1 bg-gray-100 rounded-full h-2">
+      <span className="w-28 text-slate-500 text-xs truncate">{label}</span>
+      <div className="flex-1 bg-slate-100 rounded-full h-2">
         <div className={`h-2 rounded-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="w-12 text-right font-medium text-gray-700">{value.toLocaleString()}</span>
-      <span className="w-8 text-right text-gray-400 text-xs">{pct}%</span>
+      <span className="w-12 text-right font-medium text-slate-700">{value.toLocaleString()}</span>
+      <span className="w-8 text-right text-slate-400 text-xs">{pct}%</span>
     </div>
   );
 }
@@ -251,43 +251,43 @@ function InviteForm({ campaignId, onSent }: { campaignId: string; onSent: () => 
     <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs text-gray-500 mb-1">First name *</label>
+          <label className="block text-xs text-slate-500 mb-1">First name *</label>
           <input
             required
             value={form.firstName}
             onChange={(e) => setForm((p) => ({ ...p, firstName: e.target.value }))}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             placeholder="Jane"
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Last name</label>
+          <label className="block text-xs text-slate-500 mb-1">Last name</label>
           <input
             value={form.lastName}
             onChange={(e) => setForm((p) => ({ ...p, lastName: e.target.value }))}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             placeholder="Smith"
           />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Email</label>
+          <label className="block text-xs text-slate-500 mb-1">Email</label>
           <input
             type="email"
             value={form.email}
             onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             placeholder="jane@example.com"
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Phone</label>
+          <label className="block text-xs text-slate-500 mb-1">Phone</label>
           <input
             type="tel"
             value={form.phone}
             onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             placeholder="+15551234567"
           />
         </div>
@@ -413,12 +413,12 @@ function BulkUpload({ campaignId, onSent }: { campaignId: string; onSent: () => 
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+          className="flex items-center gap-2 px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors"
         >
           <Upload size={14} /> Upload CSV
         </button>
         <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleFileChange} />
-        <span className="text-xs text-gray-400">or paste below</span>
+        <span className="text-xs text-slate-400">or paste below</span>
       </div>
 
       <textarea
@@ -426,7 +426,7 @@ function BulkUpload({ campaignId, onSent }: { campaignId: string; onSent: () => 
         onChange={(e) => handleCsvChange(e.target.value)}
         rows={5}
         placeholder={'first_name,last_name,email,phone\nJane,Smith,jane@example.com,\nJohn,Doe,,+15551234567'}
-        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y"
+        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y"
       />
 
       {parseError && (
@@ -436,14 +436,14 @@ function BulkUpload({ campaignId, onSent }: { campaignId: string; onSent: () => 
       )}
 
       {preview.length > 0 && (
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-slate-500">
           Preview ({contacts.length} contact{contacts.length !== 1 ? 's' : ''}):
           {preview.map((c, i) => (
-            <span key={i} className="ml-1 inline-block bg-gray-100 rounded px-1.5 py-0.5 mr-1">
+            <span key={i} className="ml-1 inline-block bg-slate-100 rounded px-1.5 py-0.5 mr-1">
               {c.firstName} {c.lastName ?? ''} {c.email ? `<${c.email}>` : c.phone ?? ''}
             </span>
           ))}
-          {contacts.length > 5 && <span className="text-gray-400">…and {contacts.length - 5} more</span>}
+          {contacts.length > 5 && <span className="text-slate-400">…and {contacts.length - 5} more</span>}
         </div>
       )}
 
@@ -478,14 +478,14 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
   const base = campaign.invited || 1;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+    <div className="bg-white border border-slate-200 rounded-xl shadow-card overflow-hidden">
       <div
-        className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-gray-50 transition-colors"
+        className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-slate-50 transition-colors"
         onClick={() => setExpanded((v) => !v)}
       >
         <div>
-          <h3 className="font-semibold text-gray-900">{campaign.name}</h3>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <h3 className="font-semibold text-slate-900">{campaign.name}</h3>
+          <p className="text-xs text-slate-400 mt-0.5">
             {campaign.invited.toLocaleString()} invited · {campaign.reviewed.toLocaleString()} reviewed
             {inviteCount > 0 && <span className="ml-2 text-brand-500">+{inviteCount} sent this session</span>}
           </p>
@@ -495,17 +495,17 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
             <div className="text-lg font-bold text-brand-600">
               {campaign.invited > 0 ? Math.round((campaign.reviewed / campaign.invited) * 100) : 0}%
             </div>
-            <div className="text-xs text-gray-400">review rate</div>
+            <div className="text-xs text-slate-400">review rate</div>
           </div>
-          {expanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+          {expanded ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
         </div>
       </div>
 
       {expanded && (
-        <div className="px-5 pb-5 border-t border-gray-100 space-y-5">
+        <div className="px-5 pb-5 border-t border-slate-100 space-y-5">
           {/* Funnel */}
           <div className="pt-4 space-y-2">
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Funnel</h4>
+            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Funnel</h4>
             <FunnelBar label="Invited" value={campaign.invited} base={base} color="bg-brand-400" />
             <FunnelBar label="Opened" value={campaign.opened} base={base} color="bg-brand-500" />
             <FunnelBar label="Clicked" value={campaign.clicked} base={base} color="bg-brand-600" />
@@ -520,17 +520,17 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
 
           {/* Send invites */}
           <div>
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Send invites</h4>
+            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Send invites</h4>
             <div className="flex gap-3 mb-4">
               <button
                 onClick={() => setTab('single')}
-                className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg transition-colors ${tab === 'single' ? 'bg-brand-50 text-brand-700 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+                className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg transition-colors ${tab === 'single' ? 'bg-brand-50 text-brand-700 font-medium' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 <Mail size={14} /> Single
               </button>
               <button
                 onClick={() => setTab('bulk')}
-                className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg transition-colors ${tab === 'bulk' ? 'bg-brand-50 text-brand-700 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+                className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg transition-colors ${tab === 'bulk' ? 'bg-brand-50 text-brand-700 font-medium' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 <Upload size={14} /> Bulk CSV
               </button>
@@ -564,22 +564,22 @@ function UnsubscribedSection() {
   const total = data?.data?.total ?? 0;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+    <div className="bg-white border border-slate-200 rounded-xl shadow-card overflow-hidden">
       <div
-        className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-gray-50 transition-colors"
+        className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-slate-50 transition-colors"
         onClick={() => setExpanded((v) => !v)}
       >
         <div className="flex items-center gap-2">
-          <UserX size={16} className="text-gray-400" />
-          <span className="font-semibold text-gray-900">
+          <UserX size={16} className="text-slate-400" />
+          <span className="font-semibold text-slate-900">
             Unsubscribed {total > 0 ? `(${total.toLocaleString()})` : ''}
           </span>
         </div>
-        {expanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+        {expanded ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
       </div>
 
       {expanded && (
-        <div className="border-t border-gray-100">
+        <div className="border-t border-slate-100">
           <div className="px-5 py-3 bg-blue-50 border-b border-blue-100 text-xs text-blue-800">
             These contacts have opted out of review request emails and will be automatically skipped in bulk uploads.
           </div>
@@ -587,13 +587,13 @@ function UnsubscribedSection() {
           {isLoading && (
             <div className="px-5 py-6 space-y-2">
               {[1, 2, 3].map((n) => (
-                <div key={n} className="h-4 bg-gray-100 rounded animate-pulse" />
+                <div key={n} className="h-4 bg-slate-100 rounded animate-pulse" />
               ))}
             </div>
           )}
 
           {!isLoading && unsubscribes.length === 0 && (
-            <div className="px-5 py-8 text-center text-sm text-gray-400">
+            <div className="px-5 py-8 text-center text-sm text-slate-400">
               No unsubscribes yet — great engagement!
             </div>
           )}
@@ -601,16 +601,16 @@ function UnsubscribedSection() {
           {!isLoading && unsubscribes.length > 0 && (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 text-left">
-                  <th className="px-5 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Contact</th>
-                  <th className="px-5 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Date Unsubscribed</th>
+                <tr className="border-b border-slate-100 text-left">
+                  <th className="px-5 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wide">Contact</th>
+                  <th className="px-5 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wide">Date Unsubscribed</th>
                 </tr>
               </thead>
               <tbody>
                 {unsubscribes.map((u, i) => (
-                  <tr key={i} className="border-b border-gray-50 last:border-0">
-                    <td className="px-5 py-2.5 text-gray-700 font-mono text-xs">{u.contact}</td>
-                    <td className="px-5 py-2.5 text-gray-500 text-xs">
+                  <tr key={i} className="border-b border-slate-50 last:border-0">
+                    <td className="px-5 py-2.5 text-slate-700 font-mono text-xs">{u.contact}</td>
+                    <td className="px-5 py-2.5 text-slate-500 text-xs">
                       {new Date(u.unsubscribedAt).toLocaleDateString()}
                     </td>
                   </tr>
@@ -647,7 +647,7 @@ export default function Campaigns() {
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-gray-900">Review Campaigns</h1>
+            <h1 className="text-xl font-bold text-slate-900">Review Campaigns</h1>
             <CreditBadge />
           </div>
           <button
@@ -657,7 +657,7 @@ export default function Campaigns() {
             <Plus size={14} /> New Campaign
           </button>
         </div>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-slate-500">
           Send review requests via EmbedMyReviews. Happy customers are routed to Google; others to a private feedback form.
         </p>
         {credits?.available && credits.total < 50 && (
@@ -670,16 +670,16 @@ export default function Campaigns() {
       {isLoading && (
         <div className="space-y-3">
           {[1, 2].map((n) => (
-            <div key={n} className="bg-white border border-gray-200 rounded-xl h-20 animate-pulse" />
+            <div key={n} className="bg-white border border-slate-200 rounded-xl h-20 animate-pulse" />
           ))}
         </div>
       )}
 
       {!isLoading && campaigns.length === 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
-          <Mail size={32} className="mx-auto text-gray-300 mb-3" />
-          <h3 className="font-semibold text-gray-700 mb-1">No campaigns yet</h3>
-          <p className="text-sm text-gray-400">
+        <div className="bg-white border border-slate-200 rounded-xl p-8 text-center">
+          <Mail size={32} className="mx-auto text-slate-300 mb-3" />
+          <h3 className="font-semibold text-slate-700 mb-1">No campaigns yet</h3>
+          <p className="text-sm text-slate-400">
             {credits?.connected === false
               ? 'Connect your EmbedMyReviews account in Settings → Integrations to get started.'
               : 'Click "New Campaign" above to create your first review request campaign.'}
