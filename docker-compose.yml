@@ -64,6 +64,7 @@ services:
       - "5173:5173"
     volumes:
       - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
     environment:
       - VITE_API_URL=http://localhost:3000
     depends_on:
