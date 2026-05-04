@@ -47,16 +47,10 @@ jobs:
         run: cd backend && npm ci
 
       - name: Run migrations (test DB)
-        run: cd backend && npx knex migrate:latest
+        run: cd backend && npm run migrate
 
       - name: Run tests
         run: cd backend && npm test -- --forceExit
-
-      - name: Upload coverage
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-coverage
-          path: backend/coverage/
 
   frontend:
     runs-on: ubuntu-latest
