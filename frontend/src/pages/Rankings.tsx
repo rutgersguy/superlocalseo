@@ -617,7 +617,17 @@ export default function Rankings() {
             {showExportMenu && (
               <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-card-md z-10 min-w-[140px]">
                 <button
-                  onClick={() => { window.location.href = '/api/analytics/export?type=rankings'; setShowExportMenu(false); }}
+                  onClick={async () => {
+                    setShowExportMenu(false);
+                    const res = await apiFetch<never>('/analytics/export?type=rankings', {}, true);
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'rankings-export.csv';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
                   className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
                 >
                   Export CSV
