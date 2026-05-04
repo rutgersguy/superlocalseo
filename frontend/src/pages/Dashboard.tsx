@@ -345,7 +345,7 @@ export default function Dashboard() {
         {[
           { label: 'Track Keywords',  to: '/dashboard/rankings',      Icon: TrendingUp  },
           { label: 'View Reviews',    to: '/dashboard/reviews',       Icon: Star        },
-          { label: 'Run SEO Audit',   to: '/dashboard/audit-history', Icon: ClipboardList },
+          { label: 'Run SEO Audit',   to: '/dashboard/audit', Icon: ClipboardList },
           { label: 'Generate Report', to: '/dashboard/reports',       Icon: FileText    },
         ].map(({ label, to, Icon }) => (
           <Link
