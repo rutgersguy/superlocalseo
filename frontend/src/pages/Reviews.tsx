@@ -243,7 +243,7 @@ function SyncBLButton({ onSynced }: { onSynced: () => void }) {
   };
   return (
     <button onClick={() => void handleSync()} disabled={syncing}
-      className="px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50">
+      className="px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50">
       {syncing ? 'Syncing…' : 'Sync Reviews'}
     </button>
   );
@@ -474,7 +474,7 @@ export default function Reviews() {
         <div className="flex gap-2">
           <SyncBLButton onSynced={() => void mutateReviews()} />
           <button onClick={() => { window.location.href = '/api/analytics/export?type=reviews'; }}
-            className="px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">
+            className="px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
             Export CSV
           </button>
         </div>
