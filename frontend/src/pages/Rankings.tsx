@@ -582,26 +582,24 @@ export default function Rankings() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Rankings</h1>
+        <h1 className="text-xl font-bold text-slate-900 tracking-tight">Rankings</h1>
+        <div className="flex gap-1 sm:gap-2">
           <button
             onClick={() => void handleSync()}
             disabled={syncing}
-            className="px-1.5 py-1 text-xs sm:px-3 sm:py-1.5 font-medium text-brand-600 bg-brand-50 border border-brand-200 rounded-lg hover:bg-brand-100 disabled:opacity-50 transition-colors"
+            className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-3 sm:py-1.5 font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
           >
-            {syncing ? 'Refreshing…' : 'Refresh Now'}
+            {syncing ? 'Refreshing…' : 'Refresh'}
           </button>
-        </div>
-        <div className="flex gap-1 sm:gap-2">
           <button
             onClick={() => setShowKeywords((v) => !v)}
-            className={`px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium rounded-lg border transition-colors ${showKeywords ? 'bg-brand-500 text-white border-brand-500' : 'text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+            className={`whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium rounded-lg border transition-colors ${showKeywords ? 'bg-brand-500 text-white border-brand-500' : 'text-slate-600 border-slate-200 hover:bg-slate-50'}`}
           >
             Keywords
           </button>
           <button
             onClick={() => setShowRoi((v) => !v)}
-            className={`px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium rounded-lg border transition-colors ${showRoi ? 'bg-brand-500 text-white border-brand-500' : 'text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+            className={`whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium rounded-lg border transition-colors ${showRoi ? 'bg-brand-500 text-white border-brand-500' : 'text-slate-600 border-slate-200 hover:bg-slate-50'}`}
           >
             ROI
           </button>
@@ -616,7 +614,7 @@ export default function Rankings() {
               a.click();
               URL.revokeObjectURL(url);
             }}
-            className="px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+            className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
           >
             Export CSV
           </button>
