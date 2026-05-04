@@ -77,7 +77,7 @@ const featureCards = [
   },
   {
     title: 'Automated Monthly Reports',
-    desc: 'A branded PDF report lands in your inbox on the 1st of every month — rankings, reviews, citations, and recommendations.',
+    desc: 'A PDF report lands in your inbox on the 1st of every month — rankings, reviews, citations, and recommendations.',
     Icon: FileText,
   },
   {
