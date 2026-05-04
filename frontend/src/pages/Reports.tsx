@@ -316,13 +316,12 @@ function PreviewModal({ report, onClose }: PreviewModalProps) {
 function SkeletonRow() {
   return (
     <tr className="animate-pulse">
-      {[1, 2, 3, 4].map((i) => (
-        <td key={i} className="px-4 py-3">
-          <div className="h-4 bg-gray-200 rounded w-3/4" />
-        </td>
-      ))}
+      <td className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-3/4" /></td>
+      <td className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-1/2" /></td>
+      <td className="hidden sm:table-cell px-4 py-3"><div className="h-4 bg-gray-200 rounded w-3/4" /></td>
+      <td className="hidden sm:table-cell px-4 py-3"><div className="h-4 bg-gray-200 rounded w-3/4" /></td>
       <td className="px-4 py-3">
-        <div className="flex gap-2">
+        <div className="flex justify-end gap-2">
           <div className="h-7 bg-gray-200 rounded w-20" />
           <div className="h-7 bg-gray-200 rounded w-16" />
         </div>
@@ -375,7 +374,7 @@ export default function Reports() {
       )}
 
       {/* Table card */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="border-b border-gray-100">
@@ -385,10 +384,10 @@ export default function Reports() {
               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 Status
               </th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              <th className="hidden sm:table-cell text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 Generated
               </th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              <th className="hidden sm:table-cell text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 Sent to
               </th>
               <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -426,10 +425,10 @@ export default function Reports() {
                   <td className="px-4 py-3">
                     <StatusBadge status={report.status} />
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-500">
+                  <td className="hidden sm:table-cell px-4 py-3 text-sm text-gray-500">
                     {formatDate(report.generatedAt)}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-500">
+                  <td className="hidden sm:table-cell px-4 py-3 text-sm text-gray-500">
                     {report.emailRecipient ?? '—'}
                   </td>
                   <td className="px-4 py-3">
