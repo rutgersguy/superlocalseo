@@ -468,7 +468,7 @@ export default function Competitors() {
         </div>
         <button
           onClick={() => setShowAdd(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors"
+          className="flex items-center gap-2 px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors"
         >
           <Plus size={15} /> Add competitor
         </button>
