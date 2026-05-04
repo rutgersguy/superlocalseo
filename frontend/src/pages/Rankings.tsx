@@ -722,16 +722,17 @@ export default function Rankings() {
                 {(['keyword', 'location', 'rank', 'delta', 'pulledAt'] as SortKey[]).map((key) => {
                   const labels: Record<SortKey, string> = { keyword: 'Keyword', location: 'Location', rank: 'Rank', delta: 'Change', pulledAt: 'Updated' };
                   const right = ['rank', 'delta'].includes(key);
+                  const hideMobile = ['location', 'pulledAt'].includes(key);
                   return (
-                    <th key={key} onClick={() => handleSort(key)} className={`px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest cursor-pointer hover:text-slate-900 select-none ${right ? 'text-right' : 'text-left'}`}>
+                    <th key={key} onClick={() => handleSort(key)} className={`${hideMobile ? 'hidden sm:table-cell' : ''} px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest cursor-pointer hover:text-slate-900 select-none ${right ? 'text-right' : 'text-left'}`}>
                       {labels[key]}<SortIcon active={sortKey === key} dir={sortDir} />
                     </th>
                   );
                 })}
                 {showRoi && (
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest text-right">Search Vol.</th>
+                  <th className="hidden sm:table-cell px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest text-right">Search Vol.</th>
                 )}
-                <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest text-right">
+                <th className="hidden sm:table-cell px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest text-right">
                   <span className="flex items-center justify-end gap-1">
                     Est. Revenue / mo
                     <span title="Based on your ROI settings" className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold cursor-help leading-none">i</span>
@@ -758,16 +759,16 @@ export default function Rankings() {
                       className={`cursor-pointer transition-colors ${effectiveSelected?.keywordId === row.keywordId ? 'bg-brand-50' : 'hover:bg-slate-50/80'}`}
                     >
                       <td className="px-6 py-3 font-medium text-slate-900">{row.keyword}</td>
-                      <td className="px-6 py-3 text-slate-500">{row.location ?? '—'}</td>
+                      <td className="hidden sm:table-cell px-6 py-3 text-slate-500">{row.location ?? '—'}</td>
                       <td className="px-6 py-3 text-right font-semibold text-slate-900">{row.rank}</td>
                       <td className="px-6 py-3 text-right">
                         {row.delta != null ? <DeltaBadge delta={row.delta} /> : <span className="text-slate-400 text-sm">—</span>}
                       </td>
-                      <td className="px-6 py-3 text-slate-500">
+                      <td className="hidden sm:table-cell px-6 py-3 text-slate-500">
                         {row.pulledAt ? timeAgo(row.pulledAt) : '—'}
                       </td>
                       {showRoi && (
-                        <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <td className="hidden sm:table-cell px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                           <VolumeCell
                             keywordId={row.keywordId}
                             value={localVol}
@@ -778,7 +779,7 @@ export default function Rankings() {
                           />
                         </td>
                       )}
-                      <td className="px-4 py-3 text-right font-medium text-slate-700 tabular-nums">
+                      <td className="hidden sm:table-cell px-4 py-3 text-right font-medium text-slate-700 tabular-nums">
                         {roiConfigured
                           ? (roi?.estRevenue != null ? fmt$(roi.estRevenue) : <span className="text-slate-300 text-xs">—</span>)
                           : <span className="text-slate-300 text-xs">—</span>
@@ -793,14 +794,14 @@ export default function Rankings() {
                   return (
                     <tr key={`pending-${pk.id}`} className="opacity-60">
                       <td className="px-6 py-3 font-medium text-slate-700">{pk.keyword}</td>
-                      <td className="px-6 py-3 text-slate-500">{locName}</td>
+                      <td className="hidden sm:table-cell px-6 py-3 text-slate-500">{locName}</td>
                       <td className="px-6 py-3 text-right">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Awaiting scan</span>
                       </td>
                       <td className="px-6 py-3 text-right text-slate-300 text-sm">—</td>
-                      <td className="px-6 py-3 text-slate-300 text-sm">—</td>
-                      {showRoi && <td className="px-4 py-3 text-right text-slate-300 text-sm">—</td>}
-                      <td className="px-4 py-3 text-right text-slate-300 text-sm">—</td>
+                      <td className="hidden sm:table-cell px-6 py-3 text-slate-300 text-sm">—</td>
+                      {showRoi && <td className="hidden sm:table-cell px-4 py-3 text-right text-slate-300 text-sm">—</td>}
+                      <td className="hidden sm:table-cell px-4 py-3 text-right text-slate-300 text-sm">—</td>
                     </tr>
                   );
                 })}
