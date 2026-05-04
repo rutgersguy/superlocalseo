@@ -2,3 +2,10 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  /* Ensure the native dropdown arrow never clips option text */
+  select {
+    padding-right: 2.25rem !important;
+  }
+}
