@@ -312,8 +312,8 @@ export default function Dashboard() {
       {/* Secondary metric row */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <MetricCard label="Local SEO Score" value={latestAuditScore != null ? `${latestAuditScore.toFixed(0)}/100` : '—'} loading={!auditData} />
-        <VisibilityCard vis={vis} loading={!visData} />
         <MetricCard label="Citation Score" value={metrics?.citationScore != null ? `${metrics.citationScore}/100` : '—'} loading={metricsLoading} />
+        <VisibilityCard vis={vis} loading={!visData} />
       </div>
 
       {/* ROI section */}
