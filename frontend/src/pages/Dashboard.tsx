@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import useSWR, { mutate } from 'swr';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
+import { TrendingUp, Star, ClipboardList, FileText } from 'lucide-react';
 import { fetcher, apiFetch } from '../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -309,9 +310,10 @@ export default function Dashboard() {
       </div>
 
       {/* Secondary metric row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <MetricCard label="Local SEO Score" value={latestAuditScore != null ? `${latestAuditScore.toFixed(0)}/100` : '—'} loading={!auditData} />
         <VisibilityCard vis={vis} loading={!visData} />
+        <MetricCard label="Citation Score" value={metrics?.citationScore != null ? `${metrics.citationScore}/100` : '—'} loading={metricsLoading} />
       </div>
 
       {/* ROI section */}
@@ -329,14 +331,33 @@ export default function Dashboard() {
           ))}
         </div>
       ) : (
-        <div className="bg-brand-50 border border-brand-100 rounded-xl px-5 py-4 flex items-center justify-between">
+        <div className="bg-white rounded-xl shadow-card px-5 py-4 flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold text-brand-900">Unlock your ROI estimate</p>
-            <p className="text-xs text-brand-600 mt-0.5">Enter your average customer value to see the monthly $ impact of your rankings.</p>
+            <p className="text-sm font-semibold text-slate-900">Unlock your ROI estimate</p>
+            <p className="text-xs text-slate-500 mt-0.5">Enter your average customer value to see the monthly $ impact of your rankings.</p>
           </div>
-          <Link to="/dashboard/rankings?roi=1" className="shrink-0 ml-4 text-sm font-semibold text-brand-600 hover:text-brand-800 transition-colors">Set it up →</Link>
+          <Link to="/dashboard/rankings?roi=1" className="shrink-0 ml-4 bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors">Set it up →</Link>
         </div>
       )}
+
+      {/* Quick actions row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: 'Track Keywords',  to: '/dashboard/rankings',      Icon: TrendingUp  },
+          { label: 'View Reviews',    to: '/dashboard/reviews',       Icon: Star        },
+          { label: 'Run SEO Audit',   to: '/dashboard/audit-history', Icon: ClipboardList },
+          { label: 'Generate Report', to: '/dashboard/reports',       Icon: FileText    },
+        ].map(({ label, to, Icon }) => (
+          <Link
+            key={label}
+            to={to}
+            className="bg-white rounded-xl shadow-card p-5 flex items-center gap-3 hover:shadow-card-md transition-shadow group"
+          >
+            <Icon size={20} className="text-brand-500 shrink-0" />
+            <span className="text-sm font-medium text-slate-700 group-hover:text-brand-600 transition-colors">{label}</span>
+          </Link>
+        ))}
+      </div>
 
       {/* Top keywords table */}
       <div className="bg-white rounded-xl shadow-card overflow-hidden">
