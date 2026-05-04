@@ -350,20 +350,18 @@ export default function Reports() {
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div>
+        <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Monthly PDF reports are generated automatically on the 1st of each month.
-          </p>
+          <button
+            onClick={() => setModalOpen(true)}
+            className="whitespace-nowrap inline-flex items-center gap-2 px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors shadow-sm"
+          >
+            <span aria-hidden="true">+</span>
+            Generate Report
+          </button>
         </div>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="whitespace-nowrap inline-flex items-center gap-2 px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors shadow-sm"
-        >
-          <span aria-hidden="true">+</span>
-          Generate Report
-        </button>
+        <p className="text-sm text-gray-500 mt-1">Monthly PDF reports are generated automatically on the 1st of each month.</p>
       </div>
 
       {/* Error */}

@@ -98,12 +98,10 @@ export default function AuditHistory() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div>
+        <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">Local SEO Audit</h1>
-          <p className="text-sm text-gray-500 mt-1">Monthly health scores across NAP, citations, reviews, and Google presence</p>
-        </div>
-        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3">
           {locations.length > 1 && (
             <select value={effectiveLocationId} onChange={(e) => setSelectedLocationId(e.target.value)}
               className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
@@ -118,7 +116,9 @@ export default function AuditHistory() {
           >
             {triggering ? 'Starting…' : 'Run Audit'}
           </button>
+          </div>
         </div>
+        <p className="text-sm text-gray-500 mt-1">Monthly health scores across NAP, citations, reviews, and Google presence</p>
       </div>
 
       {triggerError && (

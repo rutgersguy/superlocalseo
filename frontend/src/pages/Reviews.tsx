@@ -466,18 +466,18 @@ export default function Reviews() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div>
+        <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">Reviews</h1>
-          <p className="text-sm text-slate-500 mt-1">Manage and monitor customer reviews across platforms</p>
+          <div className="flex gap-2">
+            <SyncBLButton onSynced={() => void mutateReviews()} />
+            <button onClick={() => { window.location.href = '/api/analytics/export?type=reviews'; }}
+              className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+              Export CSV
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <SyncBLButton onSynced={() => void mutateReviews()} />
-          <button onClick={() => { window.location.href = '/api/analytics/export?type=reviews'; }}
-            className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
-            Export CSV
-          </button>
-        </div>
+        <p className="text-sm text-slate-500 mt-1">Manage and monitor customer reviews across platforms</p>
       </div>
 
       {/* Charts */}

@@ -224,17 +224,10 @@ export default function Citations() {
         <SubmitModal directories={unlistedDirs} onClose={() => setShowSubmitModal(false)} />
       )}
 
-      <div className="flex items-start justify-between">
-        <div>
+      <div>
+        <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">Citations</h1>
-          <p className="text-sm text-gray-500 mt-1">Business listing status across online directories</p>
-          {napErrorCount > 0 && (
-            <p className="text-sm text-red-600 font-medium mt-1">
-              {napErrorCount} citation{napErrorCount !== 1 ? 's' : ''} have NAP errors
-            </p>
-          )}
-        </div>
-        <div className="flex gap-2">
+          <div className="flex gap-2">
           {unlistedDirs.length > 0 && (
             <button onClick={() => setShowSubmitModal(true)}
               className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors">
@@ -249,7 +242,14 @@ export default function Citations() {
           >
             Show errors only
           </button>
+          </div>
         </div>
+        <p className="text-sm text-gray-500 mt-1">Business listing status across online directories</p>
+        {napErrorCount > 0 && (
+          <p className="text-sm text-red-600 font-medium mt-1">
+            {napErrorCount} citation{napErrorCount !== 1 ? 's' : ''} have NAP errors
+          </p>
+        )}
       </div>
 
       {error && (

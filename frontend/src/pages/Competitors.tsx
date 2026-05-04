@@ -461,17 +461,17 @@ export default function Competitors() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Competitor Benchmarking</h1>
-          <p className="text-sm text-slate-500 mt-1">Track how your Google rating and review count compares to local competitors.</p>
+      <div>
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-slate-900">Competitors</h1>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="whitespace-nowrap flex items-center gap-2 px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors"
+          >
+            <Plus size={15} /> Add competitor
+          </button>
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="whitespace-nowrap flex items-center gap-2 px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors"
-        >
-          <Plus size={15} /> Add competitor
-        </button>
+        <p className="text-sm text-slate-500 mt-1">Track how your Google rating and review count compares to local competitors.</p>
       </div>
 
       {/* Your business card */}
