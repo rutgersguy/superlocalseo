@@ -47,7 +47,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://slseo:slseo@postgres:5432/superlocalseo
       - REDIS_URL=redis://redis:6379
-      - DISABLE_WORKERS=true
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
     depends_on:
       postgres:
         condition: service_healthy
