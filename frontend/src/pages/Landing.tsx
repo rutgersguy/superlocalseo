@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, TrendingUp, Star, MapPin } from 'lucide-react';
+import { ChevronDown, TrendingUp, Star, MapPin, MessageSquare, Users, FileText, DollarSign } from 'lucide-react';
 
 const faqs = [
   {
@@ -8,8 +8,8 @@ const faqs = [
     a: 'You get 14 days completely free — no credit card required to start. At the end of the trial, choose a plan that fits your business or cancel with no obligation.',
   },
   {
-    q: 'What third-party tools do I need?',
-    a: 'SuperLocalSEO connects directly to your Google Business Profile. During onboarding you can connect additional integrations to unlock reviews and citation monitoring.',
+    q: 'What do I need to get started?',
+    a: 'Just your business info and a Google account. During onboarding you connect your Google Business Profile to unlock review monitoring. Rank tracking and citation monitoring activate automatically — no extra tools or accounts needed on your end.',
   },
   {
     q: 'Can I add locations over time?',
@@ -20,8 +20,8 @@ const faqs = [
     a: 'Each report includes an executive summary, keyword ranking trends with deltas vs. the prior month, review volume and rating breakdown, citation health score, and a recommendations section. Reports are generated on the 1st of each month and emailed automatically.',
   },
   {
-    q: 'Can I manage multiple clients?',
-    a: 'SuperLocalSEO is built for a single agency or business owner managing their own locations. Multi-client white-label support is on the roadmap.',
+    q: 'Can I add team members?',
+    a: 'Yes. You can invite team members with different permission levels — Owner, Admin, or Viewer. Admins can send review invites and manage settings; Viewers get read-only access to all dashboard data. No extra charge per seat.',
   },
   {
     q: 'Is my data secure?',
@@ -64,6 +64,31 @@ const featureCards = [
     title: 'Citation Health',
     desc: 'Know which directories list your business and whether your NAP data matches everywhere.',
     Icon: MapPin,
+  },
+  {
+    title: 'AI Review Responses',
+    desc: 'One click and Claude AI drafts a personalized, on-brand reply to any review. Edit, approve, and copy to the platform.',
+    Icon: MessageSquare,
+  },
+  {
+    title: 'Review Request Campaigns',
+    desc: 'Send bulk review invites by email or SMS. Happy customers go to Google. Unhappy ones go to a private feedback form.',
+    Icon: Users,
+  },
+  {
+    title: 'Automated Monthly Reports',
+    desc: 'A branded PDF report lands in your inbox on the 1st of every month — rankings, reviews, citations, and recommendations.',
+    Icon: FileText,
+  },
+  {
+    title: 'ROI & Revenue Attribution',
+    desc: 'See the estimated monthly revenue impact of your keyword rankings based on search volume and your average customer value.',
+    Icon: DollarSign,
+  },
+  {
+    title: 'Competitor Benchmarking',
+    desc: "Track competitors' Google ratings and review counts. See exactly where you rank in your local market.",
+    Icon: TrendingUp,
   },
 ];
 
@@ -162,11 +187,11 @@ export default function Landing() {
         {/* Value props */}
         <section className="max-w-5xl mx-auto px-6 py-12 sm:py-16" aria-labelledby="features-heading">
           <h2 id="features-heading" className="text-2xl font-bold text-slate-900 text-center mb-10">Everything you need to rank locally</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {featureCards.map(({ title, desc, Icon }) => (
               <div key={title} className="p-6 rounded-2xl border border-slate-100 shadow-sm">
                 <Icon size={24} className="text-brand-500 mb-3" />
-                <h3 className="text-lg font-semibold text-slate-900 mb-2">{title}</h3>
+                <h3 className="text-base font-semibold text-slate-900 mb-2">{title}</h3>
                 <p className="text-slate-600 text-sm leading-relaxed">{desc}</p>
               </div>
             ))}
@@ -181,9 +206,9 @@ export default function Landing() {
           </div>
           <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-6">
             {[
-              { name: 'Starter', price: '$350', extra: '$150', features: ['1 location included', 'Daily rank tracking', 'Review monitoring', 'Citation health', 'Monthly PDF report'] },
-              { name: 'Growth', price: '$700', extra: '$100', features: ['3 locations included', 'Everything in Starter', 'Priority support', 'Trend analytics'] },
-              { name: 'Pro', price: '$1,200', extra: '$75', features: ['5 locations included', 'Everything in Growth', 'Dedicated onboarding', 'Custom reporting'] },
+              { name: 'Starter', price: '$350', extra: '$150', features: ['1 location included', 'Daily rank tracking', 'Review monitoring + AI responses', 'Citation health', 'Monthly PDF report', 'Review request campaigns', 'Competitor benchmarking'] },
+              { name: 'Growth', price: '$700', extra: '$100', features: ['3 locations included', 'Everything in Starter', 'ROI & revenue attribution', 'Historical trend analytics', 'Team members & roles', 'Priority support'] },
+              { name: 'Scale', price: '$1,200', extra: '$75', features: ['5 locations included', 'Everything in Growth', 'Dedicated onboarding', 'QR code review capture', 'Embeddable review widget'] },
             ].map((tier, i) => (
               <div key={tier.name} className={`p-8 rounded-2xl border ${i === 1 ? 'border-brand-500 shadow-lg' : 'border-slate-200'} bg-white`}>
                 {i === 1 && <div className="text-xs font-semibold text-brand-500 uppercase tracking-wide mb-3" aria-label="Most popular plan">Most popular</div>}
