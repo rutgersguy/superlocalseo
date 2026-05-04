@@ -1,7 +1,7 @@
 import rateLimit from 'express-rate-limit';
 import { Request } from 'express';
 
-const isDev = process.env.NODE_ENV !== 'production';
+const isDev = process.env.NODE_ENV === 'development';
 
 const skip = (req: Request) =>
   isDev || process.env.NODE_ENV === 'test' || req.path.startsWith('/health');
