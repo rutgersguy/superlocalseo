@@ -237,13 +237,13 @@ export default function Citations() {
         <div className="flex gap-2">
           {unlistedDirs.length > 0 && (
             <button onClick={() => setShowSubmitModal(true)}
-              className="px-4 py-2 text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700">
+              className="px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700">
               Submit Missing ({unlistedDirs.length})
             </button>
           )}
           <button
             onClick={() => setShowErrorsOnly((v) => !v)}
-            className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+            className={`px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium rounded-lg border transition-colors ${
               showErrorsOnly ? 'bg-brand-500 text-white border-brand-500' : 'text-gray-600 border-gray-300 hover:bg-gray-50'
             }`}
           >

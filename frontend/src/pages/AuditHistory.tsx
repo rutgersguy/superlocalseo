@@ -114,7 +114,7 @@ export default function AuditHistory() {
             onClick={() => void handleTrigger()}
             disabled={triggering || !canTrigger}
             title={!hasBLCampaign ? 'No campaign configured for this location' : cooldownDaysLeft ? `Next audit in ${cooldownDaysLeft} days` : ''}
-            className="px-4 py-2 text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {triggering ? 'Starting…' : 'Run Audit Now'}
           </button>

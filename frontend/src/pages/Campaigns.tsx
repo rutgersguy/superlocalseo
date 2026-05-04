@@ -652,7 +652,7 @@ export default function Campaigns() {
           </div>
           <button
             onClick={() => setShowNewCampaign(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors"
+            className="inline-flex items-center gap-2 px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors"
           >
             <Plus size={14} /> New Campaign
           </button>
