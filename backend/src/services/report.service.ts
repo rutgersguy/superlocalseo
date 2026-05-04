@@ -403,6 +403,9 @@ export function renderReportHtml(data: ReportData): string {
   table { width: 100%; border-collapse: collapse; }
   th { background: #f9fafb; padding: 10px 14px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; text-align: left; border-bottom: 2px solid #e5e7eb; }
   th.center { text-align: center; }
+  @media print {
+    .page { max-width: 100%; }
+  }
 </style>
 </head>
 <body>
@@ -496,8 +499,8 @@ export function renderReportHtml(data: ReportData): string {
     </div>
   </div>
 
-  <!-- Recommendations -->
-  <div style="padding:0 40px 40px">
+  <!-- Recommendations (new page) -->
+  <div style="page-break-before:always;padding:40px 40px 40px">
     <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Recommendations</h2>
     <div style="background:#f0f4ff;border:1px solid #dbeafe;border-radius:8px;padding:20px">
       <ul style="padding-left:18px">
