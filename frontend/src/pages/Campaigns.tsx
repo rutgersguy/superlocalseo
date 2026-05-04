@@ -176,7 +176,7 @@ function NewCampaignModal({ onClose }: { onClose: () => void }) {
                   <button
                     onClick={() => setStep('pick')}
                     disabled={loading}
-                    className="px-4 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                    className="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
                   >
                     Back
                   </button>
@@ -652,7 +652,7 @@ export default function Campaigns() {
           </div>
           <button
             onClick={() => setShowNewCampaign(true)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors"
           >
             <Plus size={14} /> New Campaign
           </button>
