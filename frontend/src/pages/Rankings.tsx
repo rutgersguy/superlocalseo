@@ -592,16 +592,16 @@ export default function Rankings() {
             {syncing ? 'Refreshing…' : 'Refresh Now'}
           </button>
         </div>
-        <div className="flex gap-1.5 sm:gap-2">
+        <div className="flex gap-1 sm:gap-2">
           <button
             onClick={() => setShowKeywords((v) => !v)}
-            className={`px-2.5 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium rounded-lg border transition-colors ${showKeywords ? 'bg-brand-500 text-white border-brand-500' : 'text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+            className={`px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium rounded-lg border transition-colors ${showKeywords ? 'bg-brand-500 text-white border-brand-500' : 'text-slate-600 border-slate-200 hover:bg-slate-50'}`}
           >
             Keywords
           </button>
           <button
             onClick={() => setShowRoi((v) => !v)}
-            className={`px-2.5 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium rounded-lg border transition-colors ${showRoi ? 'bg-brand-500 text-white border-brand-500' : 'text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+            className={`px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium rounded-lg border transition-colors ${showRoi ? 'bg-brand-500 text-white border-brand-500' : 'text-slate-600 border-slate-200 hover:bg-slate-50'}`}
           >
             ROI
           </button>
@@ -616,7 +616,7 @@ export default function Rankings() {
               a.click();
               URL.revokeObjectURL(url);
             }}
-            className="px-2.5 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+            className="px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
           >
             Export CSV
           </button>
