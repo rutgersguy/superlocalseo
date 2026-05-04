@@ -128,9 +128,9 @@ export async function submit(req: Request, res: Response, next: NextFunction): P
     const { locationId, directories } = parsed.data;
     const location = await db('locations')
       .where({ id: locationId, client_id: req.clientId })
-      .first() as { id: string; bl_campaign_id?: string } | undefined;
+      .first() as { id: string; brightlocal_campaign_id?: string } | undefined;
     if (!location) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
-    if (!location.bl_campaign_id) { err(res, 'Location has no BrightLocal campaign configured', 422, 'NO_BL_CAMPAIGN'); return; }
+    if (!location.brightlocal_campaign_id) { err(res, 'Location has no BrightLocal campaign configured', 422, 'NO_BL_CAMPAIGN'); return; }
 
     let targetDirs: string[];
     if (directories && directories.length > 0) {
@@ -145,7 +145,7 @@ export async function submit(req: Request, res: Response, next: NextFunction): P
 
     if (targetDirs.length === 0) { ok(res, { submitted: 0, message: 'No unlisted directories found' }); return; }
 
-    const { jobId } = await submitCitations(location.bl_campaign_id, targetDirs);
+    const { jobId } = await submitCitations(location.brightlocal_campaign_id, targetDirs);
 
     const rows = targetDirs.map((dir) => ({
       client_id: req.clientId,

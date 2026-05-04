@@ -10,8 +10,8 @@ export async function processAudits(job: Job): Promise<void> {
     const locations = await db('locations')
       .join('clients', 'locations.client_id', 'clients.id')
       .whereNotIn('clients.subscription_status', ['canceled', 'past_due'])
-      .whereNotNull('locations.bl_campaign_id')
-      .select('locations.id as locationId', 'locations.client_id as clientId', 'locations.bl_campaign_id as campaignId') as Array<{ locationId: string; clientId: string; campaignId: string }>;
+      .whereNotNull('locations.brightlocal_campaign_id')
+      .select('locations.id as locationId', 'locations.client_id as clientId', 'locations.brightlocal_campaign_id as campaignId') as Array<{ locationId: string; clientId: string; campaignId: string }>;
 
     logger.info(`Audit fan-out: ${locations.length} locations`);
     for (const loc of locations) {

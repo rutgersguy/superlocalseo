@@ -39,9 +39,9 @@ export async function trigger(req: Request, res: Response, next: NextFunction): 
 
     const location = await db('locations')
       .where({ id: parsed.data.locationId, client_id: req.clientId })
-      .first() as { id: string; bl_campaign_id?: string } | undefined;
+      .first() as { id: string; brightlocal_campaign_id?: string } | undefined;
     if (!location) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
-    if (!location.bl_campaign_id) { err(res, 'Location has no BrightLocal campaign configured', 422, 'NO_BL_CAMPAIGN'); return; }
+    if (!location.brightlocal_campaign_id) { err(res, 'Location has no BrightLocal campaign configured', 422, 'NO_BL_CAMPAIGN'); return; }
 
     // 30-day cooldown
     const recent = await db('location_audits')
@@ -58,7 +58,7 @@ export async function trigger(req: Request, res: Response, next: NextFunction): 
       }
     }
 
-    const { reportId } = await createAuditReport(location.bl_campaign_id);
+    const { reportId } = await createAuditReport(location.brightlocal_campaign_id);
     const [row] = await db('location_audits').insert({
       client_id: req.clientId,
       location_id: location.id,

@@ -20,9 +20,9 @@ export async function trigger(req: Request, res: Response, next: NextFunction): 
 
     const location = await db('locations')
       .where({ id: locationId, client_id: req.clientId })
-      .first() as { id: string; bl_campaign_id?: string; lat?: number; lng?: number } | undefined;
+      .first() as { id: string; brightlocal_campaign_id?: string; lat?: number; lng?: number } | undefined;
     if (!location) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
-    if (!location.bl_campaign_id) { err(res, 'Location has no BrightLocal campaign', 422, 'NO_BL_CAMPAIGN'); return; }
+    if (!location.brightlocal_campaign_id) { err(res, 'Location has no BrightLocal campaign', 422, 'NO_BL_CAMPAIGN'); return; }
     if (!location.lat || !location.lng) { err(res, 'Location has no coordinates — add lat/lng in Locations settings', 422, 'NO_COORDINATES'); return; }
 
     const keyword = await db('keywords')
@@ -31,7 +31,7 @@ export async function trigger(req: Request, res: Response, next: NextFunction): 
     if (!keyword) { err(res, 'Keyword not found', 404, 'NOT_FOUND'); return; }
 
     const { reportId } = await createGeoGridReport(
-      location.bl_campaign_id,
+      location.brightlocal_campaign_id,
       keyword.keyword,
       Number(location.lat),
       Number(location.lng),

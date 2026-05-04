@@ -37,15 +37,15 @@ export async function reply(req: Request, res: Response, next: NextFunction): Pr
     // Find location's BL campaign
     let campaignId: string | undefined;
     if (review.location_id) {
-      const loc = await db('locations').where({ id: review.location_id }).first() as { bl_campaign_id?: string } | undefined;
-      campaignId = loc?.bl_campaign_id;
+      const loc = await db('locations').where({ id: review.location_id }).first() as { brightlocal_campaign_id?: string } | undefined;
+      campaignId = loc?.brightlocal_campaign_id;
     }
     if (!campaignId) {
       const anyLoc = await db('locations')
         .where({ client_id: req.clientId })
-        .whereNotNull('bl_campaign_id')
-        .first() as { bl_campaign_id: string } | undefined;
-      campaignId = anyLoc?.bl_campaign_id;
+        .whereNotNull('brightlocal_campaign_id')
+        .first() as { brightlocal_campaign_id: string } | undefined;
+      campaignId = anyLoc?.brightlocal_campaign_id;
     }
     if (!campaignId) { err(res, 'No BrightLocal campaign configured', 422, 'NO_BL_CAMPAIGN'); return; }
 
@@ -68,15 +68,15 @@ export async function syncBLReviews(req: Request, res: Response, next: NextFunct
   try {
     const locations = await db('locations')
       .where({ client_id: req.clientId })
-      .whereNotNull('bl_campaign_id')
-      .select('id', 'bl_campaign_id') as Array<{ id: string; bl_campaign_id: string }>;
+      .whereNotNull('brightlocal_campaign_id')
+      .select('id', 'brightlocal_campaign_id') as Array<{ id: string; brightlocal_campaign_id: string }>;
 
     if (locations.length === 0) { ok(res, { synced: 0 }); return; }
 
     let synced = 0;
     for (const loc of locations) {
       try {
-        const { reviews: blReviews } = await fetchReputationReviews(loc.bl_campaign_id);
+        const { reviews: blReviews } = await fetchReputationReviews(loc.brightlocal_campaign_id);
         for (const blReview of blReviews) {
           const existing = await db('reviews')
             .where({ client_id: req.clientId })
