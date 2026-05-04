@@ -116,33 +116,42 @@ export default function Landing() {
 
       <main id="main-content">
         {/* Hero */}
-        <section className="max-w-4xl mx-auto px-6 pt-16 sm:pt-24 pb-16 text-center">
-          <div className="inline-flex items-center gap-2 bg-brand-50 text-brand-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-6 border border-brand-100">
-            <span className="w-1.5 h-1.5 rounded-full bg-brand-500 inline-block" />
-            Built for home service businesses
+        <section className="relative overflow-hidden">
+          <img
+            src="/hero-bg.jpg"
+            alt="Business owner discussing local search rankings"
+            className="absolute inset-0 w-full h-full object-cover object-center"
+            aria-hidden="false"
+          />
+          <div className="absolute inset-0 bg-white/85" />
+          <div className="relative z-10 max-w-4xl mx-auto px-6 pt-16 sm:pt-24 pb-16 text-center">
+            <div className="inline-flex items-center gap-2 bg-brand-50 text-brand-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-6 border border-brand-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-500 inline-block" />
+              Built for home service businesses
+            </div>
+            <h1 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-6 leading-tight">
+              Local SEO that actually<br className="hidden sm:block" />shows up on the map
+            </h1>
+            <p className="text-lg sm:text-xl text-slate-600 mb-10 max-w-2xl mx-auto">
+              Rankings, reviews, and citations in one dashboard. Automated monthly PDF reports
+              delivered to your inbox. Built for plumbers, HVAC, and electricians.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Link
+                to="/audit"
+                className="inline-block bg-brand-500 text-white text-lg px-8 py-4 rounded-xl font-semibold hover:bg-brand-600 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+              >
+                Get your free SEO audit
+              </Link>
+              <Link
+                to="/register"
+                className="inline-block border border-slate-300 text-slate-700 text-lg px-8 py-4 rounded-xl font-semibold hover:bg-slate-50 transition-colors"
+              >
+                Start free trial
+              </Link>
+            </div>
+            <p className="mt-4 text-sm text-slate-500">Free audit — no account needed. Trial requires no credit card.</p>
           </div>
-          <h1 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-6 leading-tight">
-            Local SEO that actually<br className="hidden sm:block" />shows up on the map
-          </h1>
-          <p className="text-lg sm:text-xl text-slate-600 mb-10 max-w-2xl mx-auto">
-            Rankings, reviews, and citations in one dashboard. Automated monthly PDF reports
-            delivered to your inbox. Built for plumbers, HVAC, and electricians.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link
-              to="/audit"
-              className="inline-block bg-brand-500 text-white text-lg px-8 py-4 rounded-xl font-semibold hover:bg-brand-600 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
-            >
-              Get your free SEO audit
-            </Link>
-            <Link
-              to="/register"
-              className="inline-block border border-slate-300 text-slate-700 text-lg px-8 py-4 rounded-xl font-semibold hover:bg-slate-50 transition-colors"
-            >
-              Start free trial
-            </Link>
-          </div>
-          <p className="mt-4 text-sm text-slate-500">Free audit — no account needed. Trial requires no credit card.</p>
         </section>
 
         {/* Social proof strip */}
