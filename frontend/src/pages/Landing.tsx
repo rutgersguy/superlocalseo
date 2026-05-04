@@ -62,7 +62,7 @@ const featureCards = [
   },
   {
     title: 'Citation Health',
-    desc: 'Know which directories list your business and whether your NAP data matches everywhere.',
+    desc: 'Know which directories list your business and whether your business data matches everywhere.',
     Icon: MapPin,
   },
   {
