@@ -61,6 +61,11 @@ export const config = {
     apiKey: optional('BRIGHTLOCAL_API_KEY'),
   },
 
+  dataforseo: {
+    login: optional('DATAFORSEO_LOGIN'),
+    password: optional('DATAFORSEO_PASSWORD'),
+  },
+
   embedmyreviews: {
     apiKey: optional('EMBEDMYREVIEWS_API_KEY'),
     webhookSecret: optional('EMBEDMYREVIEWS_WEBHOOK_SECRET'),

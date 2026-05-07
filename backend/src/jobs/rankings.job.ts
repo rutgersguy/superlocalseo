@@ -1,6 +1,7 @@
 import { Job } from 'bullmq';
 import { db } from '../db/connection';
 import { createRankingRequest, fetchRankingResult, RankingSearchEngine } from '../services/brightlocal.service';
+import { getSearchVolumes } from '../services/dataforseo.service';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
@@ -54,10 +55,27 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
   for (const location of locations) {
     const keywords = await db('keywords')
       .where({ location_id: location.id })
-      .select('id', 'keyword');
+      .select('id', 'keyword', 'monthly_search_volume');
 
     if (keywords.length === 0) continue;
     result.locationsWithKeywords++;
+
+    // Backfill missing search volumes from DataForSEO
+    const missingVolume = keywords.filter((k) => k.monthly_search_volume == null);
+    if (missingVolume.length > 0) {
+      const volumes = await getSearchVolumes(missingVolume.map((k) => k.keyword as string));
+      for (const v of volumes) {
+        if (v.monthlySearchVolume != null) {
+          const kw = missingVolume.find((k) => (k.keyword as string).toLowerCase() === v.keyword.toLowerCase());
+          if (kw) {
+            await db('keywords').where({ id: kw.id }).update({
+              monthly_search_volume: v.monthlySearchVolume,
+              updated_at: new Date(),
+            });
+          }
+        }
+      }
+    }
 
     const geoLocation = [location.city, location.state, 'United States']
       .filter(Boolean)
