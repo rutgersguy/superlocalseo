@@ -18,6 +18,14 @@ router.get('/cities', requireAuth, async (req, res, next) => {
     url.searchParams.set('components', 'country:us');
     url.searchParams.set('key', config.googlePlacesApiKey);
 
+    // Bias results toward the location's coordinates when provided
+    const lat = parseFloat(String(req.query.lat ?? ''));
+    const lng = parseFloat(String(req.query.lng ?? ''));
+    if (!isNaN(lat) && !isNaN(lng)) {
+      url.searchParams.set('location', `${lat},${lng}`);
+      url.searchParams.set('radius', '80000'); // ~50 miles
+    }
+
     const r = await fetch(url.toString());
     if (!r.ok) { ok(res, []); return; }
 

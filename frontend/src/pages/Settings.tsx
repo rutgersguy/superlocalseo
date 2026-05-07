@@ -1078,13 +1078,15 @@ function locFormFromLocation(loc: Location): LocForm {
 interface CitySuggestion { city: string; state: string | null; label: string; }
 
 function LocationForm({
-  initial, onSave, onCancel, saving, error,
+  initial, onSave, onCancel, saving, error, lat, lng,
 }: {
   initial: LocForm;
   onSave: (form: LocForm) => void;
   onCancel: () => void;
   saving: boolean;
   error: string | null;
+  lat?: number | null;
+  lng?: number | null;
 }) {
   const [form, setForm] = useState<LocForm>(initial);
   const [cityInput, setCityInput] = useState('');
@@ -1115,7 +1117,9 @@ function LocationForm({
     debounceRef.current = setTimeout(async () => {
       setLoadingSuggestions(true);
       try {
-        const res = await apiFetch<{ success: boolean; data: CitySuggestion[] }>(`/places/cities?q=${encodeURIComponent(val.trim())}`);
+        const params = new URLSearchParams({ q: val.trim() });
+        if (lat != null && lng != null) { params.set('lat', String(lat)); params.set('lng', String(lng)); }
+        const res = await apiFetch<{ success: boolean; data: CitySuggestion[] }>(`/places/cities?${params}`);
         if (res.success && res.data.length > 0) {
           setSuggestions(res.data);
           setSuggestionsOpen(true);
@@ -1371,6 +1375,8 @@ function LocationsTab({ isAdmin }: { isAdmin: boolean }) {
               onCancel={() => { setEditingId(null); setEditError(null); }}
               saving={editSaving}
               error={editError}
+              lat={loc.lat}
+              lng={loc.lng}
             />
           ) : (
             <div className="flex items-start justify-between gap-3">
