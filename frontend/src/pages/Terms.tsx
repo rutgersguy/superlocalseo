@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 
 const EFFECTIVE_DATE = 'May 7, 2026';
-const CONTACT_EMAIL = 'support@superlocalseo.com';
+const CONTACT_EMAIL = 'hello@superlocalseo.com';
 
 export default function Terms() {
   return (
@@ -219,7 +219,7 @@ export default function Terms() {
           <section>
             <h2 className="text-xl font-semibold text-slate-900 mb-3">15. Governing Law &amp; Disputes</h2>
             <p className="text-slate-600 leading-relaxed">
-              These Terms are governed by the laws of the State of New Jersey, United States,
+              These Terms are governed by the laws of the State of Oklahoma, United States,
               without regard to conflict-of-law principles. Any disputes will be resolved through
               binding arbitration under the AAA Consumer Arbitration Rules, except that either
               party may seek injunctive or other equitable relief in any court of competent

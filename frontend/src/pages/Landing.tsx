@@ -249,7 +249,7 @@ export default function Landing() {
           </div>
           <p className="mt-8 text-center text-sm text-slate-600">
             Still have questions?{' '}
-            <a href="mailto:support@superlocalseo.com" className="text-brand-500 hover:underline">
+            <a href="mailto:hello@superlocalseo.com" className="text-brand-500 hover:underline">
               Email us
             </a>
           </p>
@@ -262,7 +262,7 @@ export default function Landing() {
         <p className="mt-2 flex items-center justify-center gap-4">
           <Link to="/privacy" className="hover:text-slate-900">Privacy Policy</Link>
           <Link to="/terms" className="hover:text-slate-900">Terms of Service</Link>
-          <a href="mailto:support@superlocalseo.com" className="hover:text-slate-900">support@superlocalseo.com</a>
+          <a href="mailto:hello@superlocalseo.com" className="hover:text-slate-900">hello@superlocalseo.com</a>
         </p>
       </footer>
     </div>

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 
 const EFFECTIVE_DATE = 'May 7, 2026';
-const CONTACT_EMAIL = 'support@superlocalseo.com';
+const CONTACT_EMAIL = 'hello@superlocalseo.com';
 
 export default function Privacy() {
   return (
