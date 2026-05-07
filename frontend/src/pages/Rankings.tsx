@@ -20,6 +20,7 @@ interface RankingRow {
   delta: number | null;
   pulledAt: string;
   searchEngine: string;
+  geoLocation: string | null;
 }
 
 interface TrendPoint {
@@ -763,11 +764,16 @@ export default function Rankings() {
                   const localVol = row.keywordId in localVolumes ? localVolumes[row.keywordId] : roi?.monthlySearchVolume ?? null;
                   return (
                     <tr
-                      key={`${row.keywordId}-${row.searchEngine}`}
+                      key={`${row.keywordId}-${row.searchEngine}-${row.geoLocation ?? 'primary'}`}
                       onClick={() => setSelectedRow(row)}
-                      className={`cursor-pointer transition-colors ${effectiveSelected?.keywordId === row.keywordId && effectiveSelected?.searchEngine === row.searchEngine ? 'bg-brand-50' : 'hover:bg-slate-50/80'}`}
+                      className={`cursor-pointer transition-colors ${effectiveSelected?.keywordId === row.keywordId && effectiveSelected?.searchEngine === row.searchEngine && effectiveSelected?.geoLocation === row.geoLocation ? 'bg-brand-50' : 'hover:bg-slate-50/80'}`}
                     >
-                      <td className="px-6 py-3 font-medium text-slate-900">{row.keyword}</td>
+                      <td className="px-6 py-3 font-medium text-slate-900">
+                        {row.keyword}
+                        {row.geoLocation && (
+                          <span className="ml-2 text-xs font-normal text-slate-400">{row.geoLocation.split(',')[0]}</span>
+                        )}
+                      </td>
                       <td className="hidden sm:table-cell px-6 py-3 text-slate-500">{row.location ?? '—'}</td>
                       <td className="px-6 py-3 text-right font-semibold text-slate-900">{row.rank}</td>
                       <td className="px-6 py-3 text-right">

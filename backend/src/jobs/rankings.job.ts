@@ -83,35 +83,49 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
       }
     }
 
-    const geoLocation = [location.city, location.state, 'United States']
+    const primaryGeo = [location.city, location.state, 'United States']
       .filter(Boolean)
       .join(', ') || (location.name as string);
+
+    // Build list of geos to check: primary city (geo_location=null) + service area cities (capped at 4 extra)
+    const serviceArea = (location.service_area as string[]) ?? [];
+    const extraGeos: Array<{ geoStr: string; geoLabel: string }> = serviceArea.slice(0, 4).map((city) => {
+      // city is stored as "Broken Arrow, OK" — append country for BrightLocal
+      const parts = city.split(',').map((s) => s.trim());
+      return { geoStr: [...parts, 'United States'].join(', '), geoLabel: city };
+    });
+    const allGeos: Array<{ geoStr: string; geoLabel: string | null }> = [
+      { geoStr: primaryGeo, geoLabel: null },
+      ...extraGeos,
+    ];
 
     // Use the client's business name for NAP matching; fall back to the location label.
     const businessName = clientBusinessName ?? (location.name as string);
 
     // Fire all requests for this location upfront, then poll in parallel
-    const pending: Array<{ requestId: string; keywordId: string; keyword: string; engine: string }> = [];
+    const pending: Array<{ requestId: string; keywordId: string; keyword: string; engine: string; geoLabel: string | null }> = [];
 
-    for (const kw of keywords) {
-      for (const engine of SEARCH_ENGINES) {
-        try {
-          const requestId = await createRankingRequest({
-            keyword: kw.keyword as string,
-            searchEngine: engine,
-            geoLocation,
-            websiteUrl: location.website as string | null,
-            businessName,
-            phone: location.phone as string | null,
-            postcode: location.zip as string | null,
-          });
-          pending.push({ requestId, keywordId: kw.id as string, keyword: kw.keyword as string, engine });
-          result.requestsFired++;
-        } catch (e) {
-          result.errors.push({
-            locationId: location.id as string,
-            message: `createRankingRequest "${kw.keyword as string}"/${engine}: ${(e as Error).message}`,
-          });
+    for (const { geoStr, geoLabel } of allGeos) {
+      for (const kw of keywords) {
+        for (const engine of SEARCH_ENGINES) {
+          try {
+            const requestId = await createRankingRequest({
+              keyword: kw.keyword as string,
+              searchEngine: engine,
+              geoLocation: geoStr,
+              websiteUrl: location.website as string | null,
+              businessName,
+              phone: location.phone as string | null,
+              postcode: location.zip as string | null,
+            });
+            pending.push({ requestId, keywordId: kw.id as string, keyword: kw.keyword as string, engine, geoLabel });
+            result.requestsFired++;
+          } catch (e) {
+            result.errors.push({
+              locationId: location.id as string,
+              message: `createRankingRequest "${kw.keyword as string}"/${engine}/${geoLabel ?? 'primary'}: ${(e as Error).message}`,
+            });
+          }
         }
       }
     }
@@ -119,13 +133,13 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
     const settled = await Promise.allSettled(pending.map((p) => pollUntilReady(p.requestId)));
 
     for (let i = 0; i < pending.length; i++) {
-      const { keywordId, keyword: kw } = pending[i];
+      const { keywordId, keyword: kw, geoLabel } = pending[i];
       const outcome = settled[i];
 
       if (outcome.status === 'rejected') {
         result.errors.push({
           locationId: location.id as string,
-          message: `poll "${kw}": ${(outcome.reason as Error).message}`,
+          message: `poll "${kw}"/${geoLabel ?? 'primary'}: ${(outcome.reason as Error).message}`,
         });
         continue;
       }
@@ -138,6 +152,7 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
         url_ranked: r.url,
         search_engine: r.searchEngine,
         rank_type: r.rankType ?? 'organic',
+        geo_location: geoLabel,
         pulled_at: new Date(),
       });
       result.snapshotsSaved++;

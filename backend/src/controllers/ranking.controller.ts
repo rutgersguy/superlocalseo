@@ -28,27 +28,27 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
     const query = req.query as unknown as ListQuery;
     const { locationId, keywordId, searchEngine, rankType, limit, page } = query;
 
-    // Get latest snapshot per keyword+location+search_engine using a subquery
+    // Get latest snapshot per keyword+location+engine+geo_location
     const latestSubquery = db('ranking_snapshots')
       .select(
-        db.raw('DISTINCT ON (keyword_id, location_id, search_engine) keyword_id, location_id, search_engine, rank, url_ranked, pulled_at, id, rank_type'),
+        db.raw('DISTINCT ON (keyword_id, location_id, search_engine, geo_location) keyword_id, location_id, search_engine, geo_location, rank, url_ranked, pulled_at, id, rank_type'),
       )
-      .orderByRaw('keyword_id, location_id, search_engine, pulled_at DESC')
+      .orderByRaw('keyword_id, location_id, search_engine, geo_location, pulled_at DESC')
       .as('latest');
 
-    // Get second-most-recent for delta calculation
+    // Get second-most-recent for delta calculation (per geo_location)
     const previousSubquery = db('ranking_snapshots')
       .select(
-        db.raw('DISTINCT ON (keyword_id, location_id, search_engine) keyword_id, location_id, search_engine, rank as prev_rank'),
+        db.raw('DISTINCT ON (keyword_id, location_id, search_engine, geo_location) keyword_id, location_id, search_engine, geo_location, rank as prev_rank'),
       )
       .where(
         'id',
         'not in',
         db('ranking_snapshots')
-          .select(db.raw('DISTINCT ON (keyword_id, location_id, search_engine) id'))
-          .orderByRaw('keyword_id, location_id, search_engine, pulled_at DESC'),
+          .select(db.raw('DISTINCT ON (keyword_id, location_id, search_engine, geo_location) id'))
+          .orderByRaw('keyword_id, location_id, search_engine, geo_location, pulled_at DESC'),
       )
-      .orderByRaw('keyword_id, location_id, search_engine, pulled_at DESC')
+      .orderByRaw('keyword_id, location_id, search_engine, geo_location, pulled_at DESC')
       .as('previous');
 
     let baseQuery = db
@@ -56,7 +56,8 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
       .leftJoin(previousSubquery, function () {
         this.on('latest.keyword_id', '=', 'previous.keyword_id')
           .andOn('latest.location_id', '=', 'previous.location_id')
-          .andOn('latest.search_engine', '=', 'previous.search_engine');
+          .andOn('latest.search_engine', '=', 'previous.search_engine')
+          .andOnVal(db.raw('latest.geo_location IS NOT DISTINCT FROM previous.geo_location'));
       })
       .join('keywords', 'latest.keyword_id', 'keywords.id')
       .join('locations', 'latest.location_id', 'locations.id')
@@ -71,6 +72,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
         'latest.search_engine as searchEngine',
         'latest.url_ranked as url',
         'latest.pulled_at as pulledAt',
+        'latest.geo_location as geoLocation',
       );
 
     if (locationId) baseQuery = baseQuery.where('latest.location_id', locationId);
@@ -92,6 +94,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
       searchEngine: r.searchEngine,
       url: r.url,
       pulledAt: r.pulledAt,
+      geoLocation: r.geoLocation ?? null,
     }));
 
     ok(res, results);

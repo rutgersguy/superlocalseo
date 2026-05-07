@@ -166,7 +166,7 @@ export async function roi(req: Request, res: Response, next: NextFunction): Prom
       )
       .groupBy('keywords.id', 'keywords.keyword', 'keywords.monthly_search_volume', 'locations.name', 'ranking_snapshots.location_id');
 
-    // For each group, get the rank at the latest pull
+    // For each keyword+location, get the best (lowest) rank across all geo_locations at the latest pull
     const keywordIds = rows.map((r) => r.keywordId);
     const latestRanks = keywordIds.length
       ? await db('ranking_snapshots')
@@ -174,6 +174,7 @@ export async function roi(req: Request, res: Response, next: NextFunction): Prom
           .join('locations', 'ranking_snapshots.location_id', 'locations.id')
           .where('locations.client_id', req.clientId)
           .whereIn('keywords.id', keywordIds)
+          .whereNotNull('ranking_snapshots.rank')
           .select(
             'keywords.id as keywordId',
             'ranking_snapshots.location_id as locationId',
@@ -184,11 +185,14 @@ export async function roi(req: Request, res: Response, next: NextFunction): Prom
           .orderBy('ranking_snapshots.pulled_at', 'desc')
       : [];
 
-    // Build a map: keywordId+locationId → { rank, rankType } (first = latest)
+    // Build a map: keywordId+locationId → best { rank, rankType } across all geo_locations
     const rankMap: Record<string, { rank: number; rankType: string }> = {};
     for (const r of latestRanks as Array<{ keywordId: string; locationId: string; rank: number; rankType: string }>) {
       const key = `${r.keywordId}:${r.locationId}`;
-      if (!(key in rankMap)) rankMap[key] = { rank: r.rank, rankType: r.rankType ?? 'organic' };
+      const existing = rankMap[key];
+      if (!existing || r.rank < existing.rank) {
+        rankMap[key] = { rank: r.rank, rankType: r.rankType ?? 'organic' };
+      }
     }
 
     const convRate = (cfg.conversionRate as number) / 100;
