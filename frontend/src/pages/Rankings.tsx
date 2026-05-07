@@ -538,8 +538,12 @@ export default function Rankings() {
   const pendingKeywords = (allKwData?.data ?? []).filter((k) => !rankedKeywordIds.has(k.id));
 
   const sorted = [...rows].sort((a, b) => {
-    const av = a[sortKey] ?? 0;
-    const bv = b[sortKey] ?? 0;
+    const av = a[sortKey];
+    const bv = b[sortKey];
+    // Nulls always sort last regardless of direction
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
     const cmp = typeof av === 'number' && typeof bv === 'number'
       ? av - bv
       : String(av).localeCompare(String(bv));
