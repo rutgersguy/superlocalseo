@@ -55,6 +55,57 @@ export function locationCodeForCity(city: string | null | undefined, stateAbbr: 
   return locationCodeForState(stateAbbr);
 }
 
+// Returns unique DMA/state codes for a service area, deduped so multi-city areas
+// in the same metro don't inflate volumes by querying the same pool twice.
+export function locationCodesForServiceArea(
+  serviceArea: string[],
+  primaryCity: string | null | undefined,
+  state: string | null | undefined,
+): number[] {
+  const cities = serviceArea.length > 0 ? serviceArea : [primaryCity ?? ''];
+  const seen = new Set<number>();
+  for (const city of cities) {
+    seen.add(locationCodeForCity(city, state));
+  }
+  return Array.from(seen);
+}
+
+// Fetches search volumes aggregated across all unique location codes in the service
+// area. Volumes for the same keyword across distinct DMAs are summed.
+export async function getAggregatedSearchVolumes(
+  keywords: string[],
+  serviceArea: string[],
+  primaryCity: string | null | undefined,
+  state: string | null | undefined,
+): Promise<SearchVolumeResult[]> {
+  const codes = locationCodesForServiceArea(serviceArea, primaryCity, state);
+
+  if (codes.length === 1) {
+    return getSearchVolumes(keywords, codes[0]);
+  }
+
+  const allResults = await Promise.all(codes.map((code) => getSearchVolumes(keywords, code)));
+
+  // Sum volumes across DMAs per keyword
+  const totals = new Map<string, number | null>();
+  for (const batch of allResults) {
+    for (const { keyword, monthlySearchVolume } of batch) {
+      const key = keyword.toLowerCase();
+      const prev = totals.get(key);
+      if (monthlySearchVolume == null) {
+        if (!totals.has(key)) totals.set(key, null);
+      } else {
+        totals.set(key, (prev ?? 0) + monthlySearchVolume);
+      }
+    }
+  }
+
+  return keywords.map((kw) => ({
+    keyword: kw,
+    monthlySearchVolume: totals.get(kw.toLowerCase()) ?? null,
+  }));
+}
+
 function authHeader(): string {
   const { login, password } = config.dataforseo;
   return 'Basic ' + Buffer.from(`${login}:${password}`).toString('base64');

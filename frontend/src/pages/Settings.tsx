@@ -1042,6 +1042,7 @@ interface Location {
   website: string | null;
   isPrimary: boolean;
   brightlocalCampaignId: string | null;
+  serviceArea: string[];
   lat: number | null;
   lng: number | null;
 }
@@ -1054,9 +1055,10 @@ interface LocForm {
   zip: string;
   phone: string;
   website: string;
+  serviceArea: string[];
 }
 
-const EMPTY_LOC_FORM: LocForm = { name: '', address: '', city: '', state: '', zip: '', phone: '', website: '' };
+const EMPTY_LOC_FORM: LocForm = { name: '', address: '', city: '', state: '', zip: '', phone: '', website: '', serviceArea: [] };
 const TIER_INCLUDED: Record<number, number> = { 1: 1, 2: 3, 3: Infinity };
 const EXTRA_PRICE: Record<number, number> = { 1: 150, 2: 100, 3: 75 };
 
@@ -1069,6 +1071,7 @@ function locFormFromLocation(loc: Location): LocForm {
     zip: loc.zip ?? '',
     phone: loc.phone ?? '',
     website: loc.website ?? '',
+    serviceArea: loc.serviceArea ?? [],
   };
 }
 
@@ -1082,8 +1085,20 @@ function LocationForm({
   error: string | null;
 }) {
   const [form, setForm] = useState<LocForm>(initial);
+  const [cityInput, setCityInput] = useState('');
   const set = (k: keyof LocForm) => (e: ChangeEvent<HTMLInputElement>) =>
     setForm((p) => ({ ...p, [k]: e.target.value }));
+
+  function addCity() {
+    const trimmed = cityInput.trim();
+    if (!trimmed || form.serviceArea.includes(trimmed)) { setCityInput(''); return; }
+    setForm((p) => ({ ...p, serviceArea: [...p.serviceArea, trimmed] }));
+    setCityInput('');
+  }
+
+  function removeCity(city: string) {
+    setForm((p) => ({ ...p, serviceArea: p.serviceArea.filter((c) => c !== city) }));
+  }
 
   return (
     <div className="space-y-3">
@@ -1124,6 +1139,33 @@ function LocationForm({
           <label className="block text-xs text-slate-500 mb-1">Website</label>
           <input value={form.website} onChange={set('website')} placeholder="https://..."
             className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-xs text-slate-500 mb-1">Service area cities <span className="text-slate-400">(used for search volume estimates)</span></label>
+          {form.serviceArea.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-2">
+              {form.serviceArea.map((city) => (
+                <span key={city} className="inline-flex items-center gap-1 bg-brand-50 text-brand-700 text-xs font-medium px-2 py-1 rounded-full border border-brand-200">
+                  {city}
+                  <button type="button" onClick={() => removeCity(city)} className="hover:text-brand-900 leading-none">&times;</button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <input
+              value={cityInput}
+              onChange={(e) => setCityInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addCity(); } }}
+              placeholder="e.g. Broken Arrow, Owasso…"
+              className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            <button type="button" onClick={addCity}
+              className="px-3 py-2 bg-slate-100 text-slate-600 text-sm rounded-lg hover:bg-slate-200 transition-colors whitespace-nowrap">
+              Add city
+            </button>
+          </div>
+          <p className="text-xs text-slate-400 mt-1">Press Enter or comma to add. Leave blank to use the primary city only.</p>
         </div>
       </div>
       {error && (
@@ -1285,6 +1327,14 @@ function LocationsTab({ isAdmin }: { isAdmin: boolean }) {
                       </a>
                     )}
                   </p>
+                )}
+                {loc.serviceArea.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    <span className="text-xs text-slate-400 mr-0.5">Serves:</span>
+                    {loc.serviceArea.map((city) => (
+                      <span key={city} className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">{city}</span>
+                    ))}
+                  </div>
                 )}
               </div>
               {isAdmin && (

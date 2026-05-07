@@ -1,7 +1,7 @@
 import { Job } from 'bullmq';
 import { db } from '../db/connection';
 import { createRankingRequest, fetchRankingResult, RankingSearchEngine } from '../services/brightlocal.service';
-import { getSearchVolumes, locationCodeForCity } from '../services/dataforseo.service';
+import { getAggregatedSearchVolumes } from '../services/dataforseo.service';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
@@ -49,7 +49,7 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
 
   const locations = await db('locations')
     .where({ client_id: clientId })
-    .select('id', 'name', 'city', 'state', 'zip', 'phone', 'website');
+    .select('id', 'name', 'city', 'state', 'zip', 'phone', 'website', 'service_area');
   result.locationsFound = locations.length;
 
   for (const location of locations) {
@@ -63,8 +63,13 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
     // Backfill missing search volumes from DataForSEO (state-scoped for accuracy)
     const missingVolume = keywords.filter((k) => k.monthly_search_volume == null);
     if (missingVolume.length > 0) {
-      const locCode = locationCodeForCity(location.city as string | null, location.state as string | null);
-      const volumes = await getSearchVolumes(missingVolume.map((k) => k.keyword as string), locCode);
+      const serviceArea = (location.service_area as string[]) ?? [];
+      const volumes = await getAggregatedSearchVolumes(
+        missingVolume.map((k) => k.keyword as string),
+        serviceArea,
+        location.city as string | null,
+        location.state as string | null,
+      );
       for (const v of volumes) {
         if (v.monthlySearchVolume != null) {
           const kw = missingVolume.find((k) => (k.keyword as string).toLowerCase() === v.keyword.toLowerCase());

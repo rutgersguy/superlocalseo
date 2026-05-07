@@ -44,6 +44,7 @@ export const locationSchema = z.object({
   phone: z.string().optional(),
   website: z.string().url().optional().or(z.literal('')),
   brightlocalCampaignId: z.string().max(100).optional().or(z.literal('')),
+  serviceArea: z.array(z.string().min(1).max(100)).max(20).optional(),
 });
 
 export const locationPatchSchema = locationSchema.partial();
@@ -65,6 +66,7 @@ function formatLocation(l: Record<string, unknown>) {
     lng: l.lng != null ? Number(l.lng) : null,
     isPrimary: l.is_primary,
     brightlocalCampaignId: l.brightlocal_campaign_id,
+    serviceArea: (l.service_area as string[]) ?? [],
     createdAt: l.created_at,
   };
 }
@@ -98,6 +100,7 @@ export async function create(req: Request, res: Response, next: NextFunction): P
       phone: body.phone ?? null,
       website: body.website ?? null,
       brightlocal_campaign_id: body.brightlocalCampaignId || null,
+      service_area: JSON.stringify(body.serviceArea ?? []),
       is_primary: isPrimary,
       created_at: new Date(),
       updated_at: new Date(),
@@ -150,6 +153,7 @@ export async function update(req: Request, res: Response, next: NextFunction): P
     if (body.phone !== undefined) updates.phone = body.phone;
     if (body.website !== undefined) updates.website = body.website;
     if (body.brightlocalCampaignId !== undefined) updates.brightlocal_campaign_id = body.brightlocalCampaignId || null;
+    if (body.serviceArea !== undefined) updates.service_area = JSON.stringify(body.serviceArea);
 
     const [updated] = await db('locations').where({ id }).update(updates).returning('*') as Array<Record<string, unknown>>;
 
