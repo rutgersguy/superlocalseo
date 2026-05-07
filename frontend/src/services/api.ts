@@ -51,6 +51,8 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}, rawRespo
       headers['Authorization'] = `Bearer ${newToken}`;
       const retry = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
       if (rawResponse) return retry;
+      const retryCt = retry.headers.get('content-type') ?? '';
+      if (!retryCt.includes('application/json')) throw new Error(`Server error (${retry.status}) — please try again.`);
       return retry.json();
     } else {
       window.location.href = '/login';
@@ -58,6 +60,11 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}, rawRespo
   }
 
   if (rawResponse) return res;
+
+  const ct = res.headers.get('content-type') ?? '';
+  if (!ct.includes('application/json')) {
+    throw new Error(`Server error (${res.status}) — please try again.`);
+  }
   return res.json();
 }
 
