@@ -51,14 +51,23 @@
 - [x] Step 4: Connect platforms (Google Business Profile OAuth; Yelp/Facebook coming soon)
 - [x] Trigger initial data pull on completion
 
-#### BrightLocal Integration (operator-level, not client-facing)
-- [x] API service wrapper (rate limiting, error handling, retry)
-- [x] Daily rankings pull → stored in `ranking_snapshots` table
-- [x] Daily citations pull → stored in `citation_snapshots` table
-- [x] Bull queue job: `brightlocal:pull` (cron `0 6 * * *`)
-- [x] `GET /rankings` with filters
+#### BrightLocal Integration (operator-level, pay-per-request Data API)
+- [x] Data API service wrapper (`api.brightlocal.com`, `x-api-key` header, retry on 429)
+- [x] Daily rankings pull via `POST /data/v1/rankings/search` (5 engines: google, google-mobile, google-local-finder, bing, bing-local) → stored in `ranking_snapshots`
+- [x] Monthly citation audit via `POST /data/v1/listings/find` per directory → stored in `citation_snapshots` with NAP field-level accuracy
+- [x] Geo-grid heatmap via coordinate-based ranking requests (7×7 or 13×13 grid) → stored in `geo_grid_reports`
+- [x] In-house audit scoring: NAP score, citation score, ranking score, composite → stored in `location_audits`
+- [x] Industry-aware directory targeting: `CORE_DIRECTORIES` + industry-specific extras (Health: healthgrades/zocdoc; Legal: avvo/justia/findlaw; etc.)
+- [x] Industry-aware keyword seeding: 35 industries across 8 groups, keywords seeded on location create
+- [x] Bull queue jobs: `brightlocal:rankings` (cron `0 6 * * *`), `brightlocal:citations` (monthly), `brightlocal:geogrid` (on-demand)
+- [x] `GET /rankings` with filters (locationId, keywordId, searchEngine, rankType, pagination)
 - [x] `GET /rankings/trend?keywordId=&locationId=&days=`
-- [x] `GET /citations`
+- [x] `POST /rankings/sync` — manual refresh with 24h cooldown
+- [x] `GET /citations` — latest snapshot per directory per location
+- [x] `GET /citations/history` — citation completeness over time
+- [x] `POST /geo-grid` — trigger geo-grid scan; `GET /geo-grid/:id` — results with grid_data JSON
+- [x] `GET /audits/bl` — audit history; `POST /audits/bl/generate` — trigger with 30-day cooldown
+- **Note:** Management API (citation submission to 40+ directories) pending paid plan confirmation from BrightLocal support. See GitHub issue #77.
 
 #### EmbedMyReviews Integration (operator-level)
 - [x] API service wrapper
@@ -164,7 +173,7 @@ Features designed to increase ARPU from $780 → $1,025+ and reduce churn. See [
 | Tier 2 | $700/mo | 3 | +$100/mo each |
 | Tier 3 | $1,200/mo | 5 | +$75/mo each |
 
-**BrightLocal cost per location:** ~$21/mo · **EmbedMyReviews:** $99/mo flat
+**BrightLocal Data API cost per location:** ~$1.82/mo (pay-per-request, no subscription fee) · **EmbedMyReviews:** $99/mo flat
 
 See [docs/PRICING.md](docs/PRICING.md) for full unit economics.
 
@@ -200,6 +209,13 @@ See [docs/PRICING.md](docs/PRICING.md) for full unit economics.
 ---
 
 ## QA & Polish Log
+
+### 2026-05-07
+- **BrightLocal Data API migration** — migrated geo-grid, citation auditing, and audit scoring from Management API to Data API. Removed `brightlocal_campaign_id` requirement from all current features. Rankings were already on Data API; now geo-grid, citations, and scoring follow. See GitHub issues #74, #75, #76.
+- **In-house audit scoring** — `audit_score.service.ts` computes NAP/citation/ranking/composite scores from our own DB data. No BrightLocal dependency for scoring.
+- **Industry-specific directory targeting** — `getDirectoriesForIndustry()` returns curated directory list per industry group for citation auditing.
+- **Citation guided workflow** — GitHub issue #77: `GET /citations/fix-suggestions` returns per-directory fix links (phase 2). Phase 1 citation auditing (checking, not submission) is live.
+- **GitHub issues closed** — #72 (BrightLocal 500 error) closed; root cause was using Management API on free plan. Resolved by Data API migration.
 
 ### 2026-05-02
 - **docs/FEATURES.md** — 2,100-line comprehensive reference covering all 30 feature areas added to repo

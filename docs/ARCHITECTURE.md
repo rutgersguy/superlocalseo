@@ -22,14 +22,18 @@
                     │
             ┌───────▼──────────────────────────────────────────┐
             │               Bull Job Queue                      │
-            │  brightlocal:pull (daily 06:00 UTC)              │
+            │  brightlocal:rankings (daily 06:00)              │
+            │  brightlocal:citations (monthly)                 │
+            │  brightlocal:geogrid (on-demand)                 │
             │  embedmyreviews:pull (every 6h)                  │
             │  reports:generate-monthly (1st of month 08:00)   │
             └──────┬──────────────────────────┬────────────────┘
                    │                          │
        ┌───────────▼────────┐    ┌────────────▼──────────────┐
-       │   BrightLocal API  │    │   EmbedMyReviews API      │
-       │  rankings+citations │    │  reviews + webhooks       │
+       │  BrightLocal Data  │    │   EmbedMyReviews API      │
+       │  API / rankings,   │    │  reviews + webhooks       │
+       │  geo-grid, citation│    │                           │
+       │  auditing          │    │                           │
        └────────────────────┘    └───────────────────────────┘
 
        ┌──────────────────────────────────────────────────────┐
@@ -77,7 +81,7 @@
 | zip | text | |
 | phone | text | NAP |
 | website | text | |
-| brightlocal_campaign_id | text | |
+| brightlocal_campaign_id | text nullable | nullable — no longer required for any current feature; retained for future Management API citation submission |
 | is_primary | boolean | |
 | created_at | timestamptz | |
 
@@ -191,6 +195,25 @@ Pre-aggregated daily rollups for fast dashboard queries.
 | resource_id | uuid | |
 | metadata | jsonb | |
 | created_at | timestamptz | |
+
+---
+
+## External API Architecture
+
+### BrightLocal (two separate APIs)
+
+**Data API** — `api.brightlocal.com` — active, pay-per-request
+- Auth: `x-api-key` header (platform key, not per-client)
+- Rankings: `POST /data/v1/rankings/search` — 5 engines, supports `geo_location.coordinates.lat/lng` for geo-grid
+- Listings: `POST /data/v1/listings/find` — find business by NAP per directory; returns listed status, NAP data, is_claimed, reviews, photos
+- All ranking and citation data flows through this API — no campaign ID required
+- Cost: ~$0.005/request
+
+**Management API** — `tools.brightlocal.com` — planned, not active
+- Auth: `api-key` query param (separate key from Data API)
+- Planned use: citation submission to 40-80+ directories via citation builder endpoints
+- Requires paid BrightLocal plan — currently on free Simply Listings plan
+- Active fallback: guided manual workflow with directory-specific claim URLs
 
 ---
 

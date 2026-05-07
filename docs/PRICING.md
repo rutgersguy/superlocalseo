@@ -16,13 +16,12 @@ All tiers include: daily ranking tracking, 6-hour review sync, citation monitori
 
 | Cost | Amount | Notes |
 |---|---|---|
-| BrightLocal rankings | Included in plan | Growth plan $45/mo covers unlimited campaigns |
-| BrightLocal reviews pull | $6/mo per location | $0.05/pull × 4 pulls/day × 30 days |
-| BrightLocal citations pull | $15/mo per location | $0.05/source × 10 sources × 30 days |
-| **BrightLocal total** | **$21/mo per location** | |
+| BrightLocal Data API — rankings | ~$1.50/mo per location | 5 keywords × 2 engines × $0.005 × 30 days |
+| BrightLocal Data API — citation audit | ~$0.075/mo per location | 15 directories × $0.005, run monthly |
+| BrightLocal Data API — geo-grid | ~$0.245/run per location | 49 requests × $0.005, run monthly or on-demand |
+| **BrightLocal Data API total** | **~$1.82/mo per location** | No subscription fee — pure pay-per-request |
+| BrightLocal Management API | TBD | Citation submission to 40+ dirs; pending paid plan confirmation from BL support |
 | EmbedMyReviews | $99/mo flat | All clients, all locations |
-
-**BrightLocal plan base:** $45/mo (fixed, covers the Growth plan regardless of client count)
 
 ---
 
@@ -30,33 +29,33 @@ All tiers include: daily ranking tracking, 6-hour review sync, citation monitori
 
 ### Tier 1 — 1 location
 - Revenue: $350/mo
-- BrightLocal: $21 + $45 plan = $66
+- BrightLocal Data API: ~$1.82
 - EMR share: ~$10 (prorated)
-- **Net: ~$274/mo (78% margin)**
+- **Net: ~$338/mo (97% margin)**
 
-### Tier 1 — 1 client, 3 additional locations (4 total)
+### Tier 1 — 4 locations (1 included + 3 additional)
 - Revenue: $350 + (3 × $150) = $800/mo
-- BrightLocal: 4 × $21 + $45 = $129
+- BrightLocal Data API: 4 × $1.82 = ~$7.28
 - EMR share: ~$15
-- **Net: ~$656/mo (82% margin)**
+- **Net: ~$778/mo (97% margin)**
 
-### Tier 2 — 3 locations included
+### Tier 2 — 3 locations
 - Revenue: $700/mo
-- BrightLocal: 3 × $21 + $45 = $108
+- BrightLocal Data API: 3 × $1.82 = ~$5.46
 - EMR share: ~$15
-- **Net: ~$577/mo (82% margin)**
+- **Net: ~$680/mo (97% margin)**
 
 ### 10 Clients at Tier 1 (1 location each)
 - Revenue: 10 × $350 = $3,500/mo
-- BrightLocal: 10 × $21 + $45 = $255
+- BrightLocal Data API: 10 × $1.82 = $18.20
 - EMR: $99 flat
-- **Net: ~$3,146/mo (90% margin)**
+- **Net: ~$3,383/mo (97% margin)**
 
 ### 50 Clients at mixed tiers (avg $500/mo, avg 2 locations)
 - Revenue: 50 × $500 = $25,000/mo
-- BrightLocal: 100 × $21 + $45 = $2,145
+- BrightLocal Data API: 100 × $1.82 = $182
 - EMR: $99 flat
-- **Net: ~$22,756/mo (91% margin)**
+- **Net: ~$24,719/mo (99% margin)**
 
 ---
 

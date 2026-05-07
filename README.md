@@ -10,7 +10,7 @@ Enterprise-grade local SEO platform for service businesses (plumbers, HVAC, elec
 
 - **Rankings** — Daily keyword rank tracking via BrightLocal, stored permanently in our DB (BrightLocal provides no history — we do)
 - **Reviews** — Multi-platform review aggregation refreshed every 6 hours, with real-time webhook support
-- **Citations** — Directory listing completeness and NAP accuracy monitoring across 50+ directories
+- **Citations** — Directory listing presence and NAP accuracy monitoring via BrightLocal Data API; guided fix workflow for unlisted/mismatched entries
 - **Reports** — Automated monthly PDF reports generated and emailed on the 1st of each month
 - **Analytics** — Historical ranking charts (30d/90d/all-time), review volume by platform, sentiment trends, CSV exports
 - **Google Business Profile** — OAuth connect for review sync and business info (Yelp/Facebook coming soon)
@@ -28,7 +28,7 @@ Enterprise-grade local SEO platform for service businesses (plumbers, HVAC, elec
 | Email | Resend |
 | Payments | Stripe (subscriptions, per-location billing) |
 | Auth | JWT (access + refresh tokens) + Google OAuth 2.0 |
-| External APIs | BrightLocal (rankings/citations), EmbedMyReviews (reviews) |
+| External APIs | BrightLocal Data API (rankings, geo-grid, citation auditing) · Management API planned (citation submission), EmbedMyReviews (reviews) |
 | DevOps | Docker, Docker Compose, Nginx |
 
 ## Local Development

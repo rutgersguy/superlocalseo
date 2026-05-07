@@ -1,7 +1,7 @@
 # SuperLocalSEO — API Gap Analysis & Implementation Tickets
 
-**Last updated:** 2026-05-01  
-**Scope:** BrightLocal v4 + EmbedMyReviews API coverage vs. current implementation
+**Last updated:** 2026-05-07  
+**Scope:** BrightLocal Data API + Management API coverage vs. current implementation — post Data API migration
 
 ---
 
@@ -12,6 +12,24 @@
 | BrightLocal | 15 | 5 | 7 | 3 |
 | EmbedMyReviews | 10 | 3 | 5 | 2 |
 | **Total** | **25** | **8** | **12** | **5** |
+
+---
+
+## API Architecture Decision (2026-05-07)
+
+After discovering that our Simply Listings account (free plan) cannot access BrightLocal Management API features, and after a conversation with BrightLocal support (Harry), we migrated to a dual-API approach:
+
+**Data API** (`api.brightlocal.com`) — pay-per-request, no subscription required:
+- Rankings across 5 search engines ✅ Active
+- Geo-grid via `geo_location.coordinates.lat/lng` ✅ Active (GitHub #74)
+- Citation auditing per-directory via Listings API ✅ Active (GitHub #75)
+- In-house audit scoring (NAP/citation/ranking/composite) ✅ Active (GitHub #76)
+
+**Management API** (`tools.brightlocal.com`) — requires paid BrightLocal plan:
+- Citation submission to 40-80+ directories — pending paid plan upgrade (GitHub #77)
+- Everything else below that was previously marked as "requiring Management API" is now either (a) implemented via Data API, (b) deferred/irrelevant, or (c) still needs Management API for the specific paid feature
+
+**Key insight:** ~85% of the features originally attributed to the Management API can be fully recreated using the Data API. The only genuine gap is citation *submission* (the Data API is read-only).
 
 ---
 
@@ -54,12 +72,13 @@ BL already returns `rank_type` (organic / local-pack / paid) in every response �
 
 ## BL-1 — Geo-Grid Visibility Maps
 
+**Status:** ✅ IMPLEMENTED via Data API (2026-05-07) — GitHub #74  
 **Priority:** HIGH  
 **Effort:** 3–4 weeks  
 **Dependencies:** None
 
 ### What and why
-BrightLocal's `/v4/gpw/*` endpoints return a geographic grid of ranking positions — e.g. a 7×7 grid of lat/lng points centered on a business, each point showing where the business ranks for a keyword in that cell. This is the single most visually compelling local SEO feature available and is standard in agency-tier tools like BrightLocal's own dashboard and Local Falcon. We currently pull flat rankings (one rank per keyword) with no geographic dimension.
+Implemented via `geo_location.coordinates.lat/lng` in the Data API `POST /data/v1/rankings/search` endpoint — not BL's `/v4/gpw/*` Management API endpoints. A 7×7 or 13×13 grid of lat/lng points is generated centered on the business, each point submitted as a separate ranking request. Results are stored in `geo_grid_reports` with `grid_data` JSON. See `backend/src/controllers/geogrid.controller.ts` for the COMPLETE implementation.
 
 ### Schema
 **Migration:** `20260501900000_geo_grid.ts`
@@ -93,18 +112,9 @@ pollGeoGridReport(reportId): Promise<{ status: 'processing'|'complete'|'failed',
 interface GridPoint { lat: number; lng: number; rank: number | null; url: string | null; }
 ```
 
-**`backend/src/controllers/geogrid.controller.ts`** — new file:
-- `trigger(req, res)` — creates BL report, inserts `geo_grid_reports` row with status `pending`, returns the row. Validates `keyword_id` + `location_id` belong to `req.clientId`.
-- `list(req, res)` — `GET /geo-grid?locationId=&keywordId=` — returns report history newest-first.
-- `get(req, res)` — `GET /geo-grid/:id` — returns report including `grid_data` JSON.
+**`backend/src/controllers/geogrid.controller.ts`** — COMPLETE. Uses Data API coordinates approach.
 
-**`backend/src/jobs/geogrid.job.ts`** — new file:
-- `processGeoGrid(job)` — polls BL for all `geo_grid_reports` with `status = 'processing'`, updates to `complete`/`failed` when BL is done.
-- This job runs every 5 minutes (`*/5 * * * *`) — BL reports take 1–10 min to generate.
-
-**`backend/src/jobs/queue.ts`** — add `geoGridQueue` + `geoGridWorker`, register cron `*/5 * * * *`.
-
-**`backend/src/routes/geogrid.ts`** — new file, mount in `routes/index.ts` at `/geo-grid`.
+**`backend/src/jobs/queue.ts`** — `brightlocal:geogrid` queue registered (on-demand).
 
 ### Frontend
 **`frontend/src/pages/Rankings.tsx`** — add "Visibility Map" tab alongside the existing rankings table:
@@ -115,22 +125,22 @@ interface GridPoint { lat: number; lng: number; rank: number | null; url: string
 - "Run New Scan" shows report history (date + avg rank).
 
 ### Acceptance Criteria
-- [ ] `POST /api/geo-grid` with valid keyword_id + location_id returns 202 with report id
-- [ ] Job polls BL every 5 min and marks report complete when BL responds
-- [ ] Frontend map renders grid cells with correct color coding
-- [ ] Client A cannot access geo-grid reports from Client B
-- [ ] BL error (e.g. campaign not configured) returns 422 with clear message
+- [x] `POST /api/geo-grid` with valid keyword_id + location_id returns 202 with report id
+- [x] Frontend map renders grid cells with correct color coding
+- [x] Client A cannot access geo-grid reports from Client B
+- [x] Location without lat/lng returns 422 with NO_COORDINATES
 
 ---
 
 ## BL-2 — Local Search Audit (Monthly Health Score)
 
+**Status:** ✅ IMPLEMENTED with in-house scoring (2026-05-07) — GitHub #76  
 **Priority:** HIGH  
 **Effort:** 2 weeks  
 **Dependencies:** None
 
 ### What and why
-BrightLocal's `/v4/lscu/*` (Local Search Check-Up) returns a composite audit score across: NAP consistency, citation count, Google Business Profile completeness, review velocity, and on-page signals. We currently have a free one-shot audit at `/audit` powered by Google Places only. This replaces and upgrades that with a monthly tracked BL audit per location, giving clients a score trend that shows improvement over time — the most direct answer to "is my SEO actually working?"
+Implemented with in-house scoring from our own `citation_snapshots` and `ranking_snapshots` data — not BL's `/v4/lscu/*` Management API endpoints. `audit_score.service.ts` computes NAP score (30%), citation score (40%), ranking score (30%), and composite. `review_score` and `google_score` remain null until GBP API integration (GitHub #78) is complete. See `backend/src/services/audit_score.service.ts` for the COMPLETE implementation.
 
 ### Schema
 **Migration:** `20260501910000_location_audits.ts`
@@ -190,11 +200,11 @@ pollAuditReport(reportId: string): Promise<{
 - "Run Audit Now" button (calls `POST /api/audits/bl/generate`, disabled for 30 days after last run).
 
 ### Acceptance Criteria
-- [ ] Monthly cron triggers audit for all locations with a BL campaign ID
-- [ ] Score history chart shows at least 3 months when data is available
-- [ ] Composite score delta (▲/▼ vs. prior month) visible on Home dashboard card
-- [ ] Manual trigger respects 30-day cooldown per location
-- [ ] `GET /api/audits/bl` scoped to requesting client
+- [x] Monthly cron triggers audit for all active locations (no campaign ID required)
+- [x] Score history chart shows at least 3 months when data is available
+- [x] Composite score delta (▲/▼ vs. prior month) visible on Home dashboard card
+- [x] Manual trigger respects 30-day cooldown per location
+- [x] `GET /api/audits/bl` scoped to requesting client
 
 ---
 
@@ -202,7 +212,9 @@ pollAuditReport(reportId: string): Promise<{
 
 **Priority:** HIGH  
 **Effort:** 1.5 weeks  
-**Dependencies:** Locations must have a BL campaign configured
+**Dependencies:** Locations must have a BL campaign configured; requires paid BrightLocal Management API plan
+
+**Note:** `replyToReview()` uses the Management API (`tools.brightlocal.com`) and requires a paid BrightLocal plan. The function exists in `brightlocal.service.ts` but is gated behind `brightlocal_campaign_id`. This feature remains in the backlog as-is until Management API access is confirmed.
 
 ### What and why
 BrightLocal's `/v4/rf/*` (Reputation Manager) endpoints allow fetching and replying to Google reviews using BrightLocal's own GMB-authenticated connection — no per-client Google OAuth required. Currently, our review response feature (`#72`) uses Claude to draft replies but clients must manually copy them to Google. This closes the loop: clients can approve and post replies directly from the dashboard.
@@ -267,12 +279,17 @@ interface BLReview {
 
 ## BL-4 — Citation Builder (Automated Directory Submissions)
 
+**Status:** 🔄 PARTIAL — Part A (guided workflow) implemented; Part B (automated submission) pending Management API paid plan  
 **Priority:** HIGH  
 **Effort:** 2 weeks  
-**Dependencies:** BL Citation Builder API access (separate BL add-on)
+**Dependencies:** BL Citation Builder API access (requires paid BL plan)
 
 ### What and why
-We currently track which directories a client is listed on (Citations page), but we cannot submit them to new directories. BrightLocal's `/v4/cb/*` Citation Builder submits business info to 50+ directories and tracks submission status. This is a natural Tier 2+ upsell: "we don't just track your citations — we build them."
+Two-part approach:
+- **Part A:** `GET /citations/fix-suggestions` returns per-directory fix links with NAP diffs — ships as guided manual workflow (no BL plan needed). ✅ Implemented.
+- **Part B:** Full automated submission via Management API citation builder (`/v4/cb/*`) — requires paid BL plan, pending pricing confirmation from Harry. 🔄 Pending.
+
+Previously: BrightLocal's `/v4/cb/*` Citation Builder submits business info to 50+ directories and tracks submission status. This is a natural Tier 2+ upsell: "we don't just track your citations — we build them."
 
 ### Schema
 **Migration:** `20260501930000_citation_submissions.ts`
@@ -385,12 +402,15 @@ Map `r.rank_type` in the existing `fetchRankings()` results map.
 
 ## BL-6 — Citation Audit Detail (Field-Level NAP Mismatch)
 
+**Status:** ✅ IMPLEMENTED via Data API Listings (2026-05-07) — GitHub #75  
 **Priority:** MEDIUM  
 **Effort:** 3 days  
 **Dependencies:** None
 
 ### What and why
-Currently the Citations page shows a binary "listed / not listed" per directory with an overall completeness score. BrightLocal returns field-level NAP accuracy: was the listed name correct? Address? Phone number? This turns the Citations page from a scorecard into an actionable error list — clients can see exactly which directories have a wrong phone number and go fix it.
+Implemented via the Data API Listings endpoint (`POST /data/v1/listings/find`). The response returns `profile.nap.address`, `profile.nap.telephone`, `profile.title` — we compute name/address/phone match booleans and store them in `citation_snapshots`. All NAP detail columns (`nap_name_match`, `nap_address_match`, `nap_phone_match`, `listed_name`, `listed_address`, `listed_phone`) are now populated from Data API responses.
+
+Previously: BrightLocal returns field-level NAP accuracy — was the listed name correct? Address? Phone number? This turns the Citations page from a scorecard into an actionable error list — clients can see exactly which directories have a wrong phone number and go fix it.
 
 ### Schema
 **Migration:** `20260501950000_citation_nap_detail.ts`
@@ -720,6 +740,8 @@ t.string('bl_scan_frequency', 20).notNullable().defaultTo('daily'); // daily|wee
 **Priority:** LOW  
 **Effort:** 1 week  
 **Dependencies:** EMR-1 (implement alongside for consistent agency architecture)
+
+**Note:** Lower priority now that `brightlocal_campaign_id` is no longer required for any current feature. Still relevant if/when we upgrade to paid Management API plan for citation submission.
 
 ### What and why
 All our locations currently sit under a single BrightLocal account (one operator API key). BL has a client management API (`/v4/clients`) that lets agencies create per-client sub-accounts. Required for the agency/reseller plan: each agency's end-client needs their own BL client ID so their ranking data is isolated at the provider level.
@@ -1294,10 +1316,18 @@ t.string('flag_reason', 50).nullable();
 
 # Implementation Order
 
+## Phase 0 — Completed in Data API Migration (2026-05-07)
+| Ticket | Status |
+|---|---|
+| BL-1 Geo-Grid | ✅ Implemented via Data API coordinates |
+| BL-2 Local Search Audit | ✅ Implemented with in-house scoring |
+| BL-4 Citation Builder Part A | ✅ Guided workflow with fix links |
+| BL-5 Rank Type Splits | ✅ Already implemented |
+| BL-6 Citation NAP Detail | ✅ Implemented via Listings Data API |
+
 ## Phase A — Quick Wins (< 1 week total)
 | Ticket | Why now |
 |---|---|
-| BL-5 Rank Type Splits | 1 day; data already in BL response; high signal value |
 | BL-11 Rank History Uncap | 1 day; query-only change; removes silent limitation |
 | EMR-7 Unsubscribe Management | 2 days; compliance risk mitigation |
 | EMR-9 Private Feedback Inbox | 3 days; completes existing campaign feature |
@@ -1306,18 +1336,17 @@ t.string('flag_reason', 50).nullable();
 | Ticket | Why |
 |---|---|
 | EMR-2 Credit Management | Prevents silent churn from campaigns failing |
-| BL-6 Citation NAP Detail | Turns Citations page from passive to actionable |
 | BL-8 Visibility Score | Single retention KPI for Home dashboard |
 | EMR-5 Widget Advanced Config | Reduces Settings → EMR support tickets |
 | EMR-6 Campaign Templates | Reduces campaign setup friction |
 
 ## Phase C — Major Features (2–4 weeks each)
-| Ticket | Why |
+| Ticket | Status/Why |
 |---|---|
-| BL-2 Local Search Audit | Monthly health score = strongest retention feature |
-| BL-3 Reputation Manager (Google Reply) | Closes review response loop; removes GMB OAuth friction |
-| BL-1 Geo-Grid Visibility Maps | Premium visual feature, upsell-able add-on |
-| BL-4 Citation Builder | Active submissions vs. passive tracking |
+| BL-1 Geo-Grid | ✅ Done (Data API) |
+| BL-2 Local Search Audit | ✅ Done (in-house scoring) |
+| BL-3 Reputation Manager (Google Reply) | Closes review response loop; requires paid Management API plan |
+| BL-4 Citation Builder | 🔄 Part A done; Part B pending paid plan |
 | EMR-4 Review Source Management | Self-serve platform connections |
 
 ## Phase D — Agency Architecture (prerequisite for reseller plan)

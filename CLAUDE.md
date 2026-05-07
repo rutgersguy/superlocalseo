@@ -37,7 +37,8 @@ Monorepo: `backend/` (Express API) + `frontend/` (React SPA) + `nginx.conf` prox
 **Design system:** Tailwind with custom tokens. Use `slate-*` (not `gray-*`), `shadow-card` / `shadow-card-md`, and `brand-*` color tokens. Full-width page layouts — no `max-w-3xl mx-auto` wrappers inside dashboard pages.
 
 **External APIs:**
-- **BrightLocal** — rankings, citations, local SEO audits, location provisioning. All rank/citation data flows through here.
+- **BrightLocal Data API** (`api.brightlocal.com`, `x-api-key` header, pay-per-request) — rankings (5 engines), geo-grid heatmap (coordinate-based), citation auditing (per-directory listing find). No subscription or campaign ID required.
+- **BrightLocal Management API** (`tools.brightlocal.com`) — citation submission to 40+ directories only. Requires paid BL plan — pending confirmation. Not currently in use; guided manual workflow is the active fallback.
 - **EmbedMyReviews** — review aggregation, 6h polling + webhook.
 - **Google OAuth** — sign-in + Business Profile connect (separate scopes).
 - **Stripe** — subscriptions + per-location billing.
@@ -61,6 +62,7 @@ Monorepo: `backend/` (Express API) + `frontend/` (React SPA) + `nginx.conf` prox
 - **Static assets** in `frontend/public/` are served by Vite at `/`. Both `frontend/src` and `frontend/public` are bind-mounted into the web container.
 - **Workers** are enabled by default. Setting `DISABLE_WORKERS=true` in the API environment will silently stop all background jobs (rankings pulls, report generation, etc.).
 - **Rankings cooldown** key: `rankings:sync:cooldown:{clientId}` in Redis — stores the ISO timestamp of last manual trigger, enforces 24h window.
+- **BrightLocal dual-API**: Data API and Management API are completely separate base URLs and auth headers. Data API uses `x-api-key` header on `api.brightlocal.com`. Management API (not currently active) uses `api-key` query param on `tools.brightlocal.com`. Never mix them up.
 - **PDF reports** use `page-break-before: always` CSS for section breaks. Body background must be `#ffffff` (not `#f3f4f6`) to avoid grey bleed areas.
 
 ## GitHub
