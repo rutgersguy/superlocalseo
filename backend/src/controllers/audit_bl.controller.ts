@@ -4,6 +4,7 @@ import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
 import { createAuditReport, pollAuditReport, createRankingRequest, fetchRankingResult } from '../services/brightlocal.service';
 import { getPrimaryKeyword } from '../config/industry.config';
+import { computeAuditScores } from '../services/audit_score.service';
 import { logger } from '../utils/logger';
 
 export async function list(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -81,13 +82,43 @@ export async function trigger(req: Request, res: Response, next: NextFunction): 
       client_id: req.clientId,
       location_id: location.id,
       bl_report_id: reportId,
-      status: reportId ? 'processing' : 'complete',
-      completed_at: reportId ? null : new Date(),
+      status: 'processing',
+      completed_at: null,
     }).returning('*') as Array<Record<string, unknown>>;
+
+    // After the location_audits insert, fire background score computation
+    void computeAndSaveScores(req.clientId as string, location.id as string, client?.industry, row.id as string);
 
     ok(res, { audit: formatAudit(row) }, 202);
   } catch (e) {
     next(e);
+  }
+}
+
+async function computeAndSaveScores(
+  clientId: string,
+  locationId: string,
+  industry: string | undefined,
+  auditId: string,
+): Promise<void> {
+  // Wait for any in-flight ranking/citation data — poll until we have something or 3 min
+  for (let i = 0; i < 36; i++) {
+    await new Promise((r) => setTimeout(r, 5000));
+    const hasCitations = await db('citation_snapshots').where({ location_id: locationId }).first();
+    const hasRankings = await db('ranking_snapshots').where({ location_id: locationId }).first();
+    if (hasCitations || hasRankings) break;
+  }
+  try {
+    const scores = await computeAuditScores(locationId, industry ?? null);
+    await db('location_audits').where({ id: auditId }).update({
+      nap_score: scores.napScore,
+      citation_score: scores.citationScore,
+      composite_score: scores.compositeScore,
+      status: 'complete',
+      completed_at: new Date(),
+    });
+  } catch (e) {
+    logger.warn('Audit score computation failed', { auditId, error: (e as Error).message });
   }
 }
 
@@ -152,9 +183,12 @@ export async function get(req: Request, res: Response, next: NextFunction): Prom
 }
 
 export async function pollPending(): Promise<void> {
-  const pending = await db('location_audits').where({ status: 'processing' }) as Array<Record<string, unknown>>;
-  for (const row of pending) {
-    if (!row.bl_report_id) continue;
+  // Poll BL for audits that have a bl_report_id (legacy Management API audits)
+  const blPending = await db('location_audits')
+    .where({ status: 'processing' })
+    .whereNotNull('bl_report_id') as Array<Record<string, unknown>>;
+
+  for (const row of blPending) {
     try {
       const result = await pollAuditReport(row.bl_report_id as string);
       if (result.status === 'processing') continue;
@@ -171,6 +205,34 @@ export async function pollPending(): Promise<void> {
       });
     } catch (e) {
       logger.warn('Audit poll failed', { id: row.id, error: (e as Error).message });
+    }
+  }
+
+  // Score any Data API audits stuck in processing for > 5 minutes
+  const dataApiPending = await db('location_audits')
+    .where({ status: 'processing' })
+    .whereNull('bl_report_id')
+    .where('created_at', '<', new Date(Date.now() - 5 * 60 * 1000))
+    .join('locations', 'location_audits.location_id', 'locations.id')
+    .join('clients', 'location_audits.client_id', 'clients.id')
+    .select(
+      'location_audits.id as auditId',
+      'location_audits.location_id as locationId',
+      'clients.industry as industry',
+    ) as Array<{ auditId: string; locationId: string; industry: string | null }>;
+
+  for (const row of dataApiPending) {
+    try {
+      const scores = await computeAuditScores(row.locationId, row.industry);
+      await db('location_audits').where({ id: row.auditId }).update({
+        nap_score: scores.napScore,
+        citation_score: scores.citationScore,
+        composite_score: scores.compositeScore,
+        status: 'complete',
+        completed_at: new Date(),
+      });
+    } catch (e) {
+      logger.warn('Data API audit score fallback failed', { auditId: row.auditId, error: (e as Error).message });
     }
   }
 }

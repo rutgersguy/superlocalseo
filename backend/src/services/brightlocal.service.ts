@@ -96,7 +96,8 @@ export type RankingSearchEngine = 'google' | 'google-mobile' | 'google-local-fin
 export async function createRankingRequest(params: {
   keyword: string;
   searchEngine: RankingSearchEngine;
-  geoLocation: string;
+  geoLocation?: string;                        // city string — either this OR coordinates
+  coordinates?: { lat: number; lng: number };  // for geo-grid points
   country?: string;
   websiteUrl?: string | null;
   businessName?: string;
@@ -107,7 +108,7 @@ export async function createRankingRequest(params: {
     search_engine: params.searchEngine,
     search_term: params.keyword,
     country: params.country ?? 'USA',
-    geo_location: { name: params.geoLocation },
+    geo_location: params.coordinates ? { coordinates: params.coordinates } : { name: params.geoLocation ?? '' },
     num_results: 50,
   };
 
@@ -183,6 +184,89 @@ export async function fetchRankingResult(requestId: string): Promise<RankingRequ
   }
 
   return { ready: true, success: data.success ?? false, keyword, searchEngine, rank: null, url: null, rankType: null };
+}
+
+// ─── Listings Data API (api.brightlocal.com) ──────────────────────────────────
+
+export interface ListingProfile {
+  title?: string;
+  urls?: { profile?: string };
+  nap?: { address?: string; telephone?: string };
+  is_claimed?: boolean;
+  reviews?: { count?: number; rating?: number };
+  photos?: { count?: number };
+  categories?: string[];
+}
+
+export interface ListingFindResult {
+  ready: boolean;
+  success: boolean;
+  profile: ListingProfile;
+}
+
+export async function createListingFindRequest(params: {
+  businessNames: string[];
+  country: string;
+  region?: string | null;
+  city?: string | null;
+  postcode?: string | null;
+  directory: string;
+  telephone?: string | null;
+  streetAddress?: string | null;
+}): Promise<string> {
+  const body: Record<string, unknown> = {
+    business_names: params.businessNames,
+    country: params.country,
+    directory: params.directory,
+  };
+  if (params.region) body.region = params.region;
+  if (params.city) body.city = params.city;
+  if (params.postcode) body.postcode = params.postcode;
+  if (params.telephone) body.telephone = params.telephone;
+  if (params.streetAddress) body.street_address = params.streetAddress;
+
+  const res = await blDataFetch('/data/v1/listings/find', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`BrightLocal createListingFindRequest failed: ${res.status} ${text}`);
+  }
+
+  const data = (await res.json()) as { request_id?: string };
+  if (!data.request_id) throw new Error('BrightLocal createListingFindRequest: no request_id');
+  return data.request_id;
+}
+
+export async function fetchListingFindResult(requestId: string): Promise<ListingFindResult> {
+  const res = await blDataFetch(`/data/v1/listings/results/${encodeURIComponent(requestId)}`);
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`BrightLocal fetchListingFindResult failed: ${res.status} ${text}`);
+  }
+
+  const data = (await res.json()) as {
+    ready?: boolean;
+    success?: boolean;
+    profile?: {
+      title?: string;
+      urls?: { profile?: string };
+      nap?: { address?: string; telephone?: string };
+      is_claimed?: boolean;
+      reviews?: { count?: number; rating?: number };
+      photos?: { count?: number };
+      categories?: string[];
+    };
+  };
+
+  return {
+    ready: data.ready ?? false,
+    success: data.success ?? false,
+    profile: data.profile ?? {},
+  };
 }
 
 // ─── Citations (Management API — pending Harry's response on Data API equiv.) ─
@@ -369,63 +453,6 @@ export async function replyToReview(
   }
   const data = (await res.json()) as { response?: { reply_id?: string; success?: boolean } };
   return { success: data?.response?.success ?? true, replyId: data?.response?.reply_id };
-}
-
-// ─── Geo-Grid (Management API — pending Harry's response) ────────────────────
-
-export interface GridPoint {
-  lat: number;
-  lng: number;
-  rank: number | null;
-  url: string | null;
-}
-
-export async function createGeoGridReport(
-  campaignId: string,
-  keyword: string,
-  lat: number,
-  lng: number,
-  gridSize: 7 | 13 = 7,
-): Promise<{ reportId: string }> {
-  const apiKey = config.brightlocal.apiKey;
-  assertApiKey(apiKey);
-  const res = await blFetch('/v4/gpw/create', apiKey, {
-    method: 'POST',
-    body: JSON.stringify({ campaign_id: campaignId, keyword, lat, lng, grid_size: gridSize }),
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`BrightLocal createGeoGridReport failed: ${res.status} ${body}`);
-  }
-  const data = (await res.json()) as { response?: { report_id?: string } };
-  const reportId = data?.response?.report_id;
-  if (!reportId) throw new Error('BrightLocal createGeoGridReport: no report_id in response');
-  return { reportId };
-}
-
-export async function pollGeoGridReport(reportId: string): Promise<{
-  status: 'processing' | 'complete' | 'failed';
-  grid?: GridPoint[];
-}> {
-  const apiKey = config.brightlocal.apiKey;
-  assertApiKey(apiKey);
-  const res = await blFetch(`/v4/gpw/get?report_id=${encodeURIComponent(reportId)}`, apiKey);
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`BrightLocal pollGeoGridReport failed: ${res.status} ${body}`);
-  }
-  const data = (await res.json()) as {
-    response?: {
-      status?: string;
-      grid?: Array<{ lat: number; lng: number; rank: number | null; url: string | null }>;
-    };
-  };
-  const r = data?.response;
-  if (!r) return { status: 'failed' };
-  const statusMap: Record<string, 'processing' | 'complete' | 'failed'> = { complete: 'complete', failed: 'failed' };
-  const status = statusMap[r.status ?? ''] ?? 'processing';
-  if (status !== 'complete') return { status };
-  return { status: 'complete', grid: r.grid ?? [] };
 }
 
 // ─── Citation Builder (Management API — pending Harry's response) ─────────────

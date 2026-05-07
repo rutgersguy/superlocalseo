@@ -197,3 +197,27 @@ export function getPrimaryKeyword(industry: string | null | undefined, city?: st
   const keywords = getIndustryKeywords(industry, city);
   return keywords[0] ?? null;
 }
+
+// Core directories checked for every location
+export const CORE_DIRECTORIES = [
+  'google', 'bing', 'apple', 'yelp', 'facebook', 'bbb', 'yellowpages',
+];
+
+// Additional directories per industry group
+const GROUP_DIRECTORIES: Record<string, string[]> = {
+  'Home Services': ['angi', 'houzz', 'thumbtack'],
+  'Health & Fitness': ['healthgrades', 'zocdoc', 'webmd'],
+  'Legal': ['avvo', 'justia', 'findlaw'],
+  'Food & Beverage': ['tripadvisor', 'opentable'],
+  'Beauty & Personal Care': ['vagaro', 'mindbody'],
+  'Automotive': ['repairpal'],
+  'Professional Services': ['expertise'],
+};
+
+// Returns the curated directory list for a given industry.
+export function getDirectoriesForIndustry(industry: string | null | undefined): string[] {
+  if (!industry) return CORE_DIRECTORIES;
+  const def = INDUSTRY_MAP[industry];
+  const extras = def ? (GROUP_DIRECTORIES[def.group] ?? []) : [];
+  return [...CORE_DIRECTORIES, ...extras];
+}
