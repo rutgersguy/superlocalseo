@@ -16,6 +16,7 @@ if (config.sentry.dsn) {
 }
 
 const app = express();
+app.disable('etag'); // prevent 304s on authenticated API responses
 
 // Stripe webhook needs raw body — must come before json parser
 app.use('/webhooks', express.raw({ type: 'application/json' }), webhookRouter);
