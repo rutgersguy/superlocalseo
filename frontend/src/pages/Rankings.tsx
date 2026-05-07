@@ -549,8 +549,9 @@ export default function Rankings() {
     ? sorted.filter((r) => r.keyword.toLowerCase().includes(search.toLowerCase()))
     : sorted;
 
-  const avgRank = rows.length > 0
-    ? rows.reduce((sum, r) => sum + r.rank, 0) / rows.length
+  const rankedRows = rows.filter((r) => r.rank != null);
+  const avgRank = rankedRows.length > 0
+    ? rankedRows.reduce((sum, r) => sum + (r.rank as number), 0) / rankedRows.length
     : null;
 
   const handleSort = (key: SortKey) => {
@@ -667,8 +668,8 @@ export default function Rankings() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { label: 'AVG RANK', value: avgRank != null ? avgRank.toFixed(1) : '—' },
-            { label: 'KEYWORDS TRACKED', value: String(rows.length + pendingKeywords.length) },
-            { label: 'IN TOP 3', value: String(rows.filter((r) => r.rank <= 3).length) },
+            { label: 'KEYWORDS TRACKED', value: String(new Set(rows.map((r) => r.keywordId)).size + pendingKeywords.length) },
+            { label: 'IN TOP 3', value: String(rows.filter((r) => r.rank != null && r.rank <= 3).length) },
             { label: 'GAINS THIS SCAN', value: String(rows.filter((r) => r.delta != null && r.delta > 0).length) },
           ].map((c) => (
             <div key={c.label} className="bg-white rounded-xl shadow-card p-5">
