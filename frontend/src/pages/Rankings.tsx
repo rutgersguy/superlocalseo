@@ -48,7 +48,7 @@ interface RoiData {
 
 const ENGINE_LABELS: Record<string, string> = {
   'google': 'Google',
-  'google-local-finder': 'Local Pack',
+  'google-local-finder': 'Google - Local',
   'google-mobile': 'Google Mobile',
   'bing': 'Bing',
   'bing-local': 'Bing Local',
