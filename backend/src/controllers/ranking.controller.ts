@@ -57,7 +57,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
         this.on('latest.keyword_id', '=', 'previous.keyword_id')
           .andOn('latest.location_id', '=', 'previous.location_id')
           .andOn('latest.search_engine', '=', 'previous.search_engine')
-          .andOnVal(db.raw('latest.geo_location IS NOT DISTINCT FROM previous.geo_location'));
+          .andOn(db.raw('latest.geo_location IS NOT DISTINCT FROM previous.geo_location'));
       })
       .join('keywords', 'latest.keyword_id', 'keywords.id')
       .join('locations', 'latest.location_id', 'locations.id')
