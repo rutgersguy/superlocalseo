@@ -5,6 +5,7 @@ import { ok, created, noContent, notFound, err } from '../utils/response';
 import { addLocationToSubscription, removeLocationFromSubscription } from '../services/stripe.service';
 import { getIndustryKeywords } from '../config/industry.config';
 import { geocodeAddress } from '../services/geocode.service';
+import { getAggregatedSearchVolumes } from '../services/dataforseo.service';
 import { logger } from '../utils/logger';
 
 async function seedDefaultKeywords(
@@ -153,7 +154,8 @@ export async function update(req: Request, res: Response, next: NextFunction): P
     if (body.phone !== undefined) updates.phone = body.phone;
     if (body.website !== undefined) updates.website = body.website;
     if (body.brightlocalCampaignId !== undefined) updates.brightlocal_campaign_id = body.brightlocalCampaignId || null;
-    if (body.serviceArea !== undefined) updates.service_area = JSON.stringify(body.serviceArea);
+    const serviceAreaChanged = body.serviceArea !== undefined;
+    if (serviceAreaChanged) updates.service_area = JSON.stringify(body.serviceArea);
 
     const [updated] = await db('locations').where({ id }).update(updates).returning('*') as Array<Record<string, unknown>>;
 
@@ -162,6 +164,34 @@ export async function update(req: Request, res: Response, next: NextFunction): P
     if (addressChanged || updated.lat == null) {
       const row = updated;
       void geocodeAndSave(id, row.address as string | null, row.city as string | null, row.state as string | null, row.zip as string | null);
+    }
+
+    // Re-fetch search volumes for all keywords when service area changes
+    if (serviceAreaChanged) {
+      void (async () => {
+        try {
+          const keywords = await db('keywords').where({ location_id: id }).select('id', 'keyword');
+          if (keywords.length === 0) return;
+          const serviceArea = (updated.service_area as string[]) ?? [];
+          const volumes = await getAggregatedSearchVolumes(
+            keywords.map((k) => k.keyword as string),
+            serviceArea,
+            updated.city as string | null,
+            updated.state as string | null,
+          );
+          for (const v of volumes) {
+            if (v.monthlySearchVolume != null) {
+              const kw = keywords.find((k) => (k.keyword as string).toLowerCase() === v.keyword.toLowerCase());
+              if (kw) {
+                await db('keywords').where({ id: kw.id }).update({ monthly_search_volume: v.monthlySearchVolume, updated_at: new Date() });
+              }
+            }
+          }
+          logger.info('Refreshed search volumes after service area change', { locationId: id, keywords: keywords.length });
+        } catch (e) {
+          logger.error('Failed to refresh volumes after service area change', { locationId: id, error: (e as Error).message });
+        }
+      })();
     }
 
     ok(res, formatLocation(updated));
