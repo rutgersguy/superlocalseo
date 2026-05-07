@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db/connection';
 import { redis } from '../db/redis';
-import { ok } from '../utils/response';
+import { ok, err } from '../utils/response';
 import {
   rankingsQueue, citationsQueue, reviewsQueue, reportsQueue,
   competitorsQueue, auditsQueue, geoGridQueue, citationBuilderQueue, trialReminderQueue,
@@ -277,6 +277,32 @@ export async function queues(req: Request, res: Response, next: NextFunction): P
       }),
     );
     ok(res, { queues: results });
+  } catch (e) {
+    next(e);
+  }
+}
+
+const JOB_QUEUE_MAP: Record<string, { queue: typeof rankingsQueue; jobName: string }> = {
+  rankings: { queue: rankingsQueue, jobName: 'manual-trigger' },
+  citations: { queue: citationsQueue, jobName: 'manual-trigger' },
+  reviews: { queue: reviewsQueue, jobName: 'manual-trigger' },
+  competitors: { queue: competitorsQueue, jobName: 'manual-trigger' },
+  audits: { queue: auditsQueue, jobName: 'monthly-fan-out' },
+};
+
+export async function triggerJob(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { job, clientId } = req.body as { job?: string; clientId?: string };
+
+    if (!job || !JOB_QUEUE_MAP[job]) {
+      err(res, `Unknown job "${job ?? ''}". Valid: ${Object.keys(JOB_QUEUE_MAP).join(', ')}`, 400, 'INVALID_JOB');
+      return;
+    }
+
+    const { queue, jobName } = JOB_QUEUE_MAP[job];
+    const added = await queue.add(jobName, clientId ? { clientId } : {});
+
+    ok(res, { queued: true, jobId: added.id, job, clientId: clientId ?? null });
   } catch (e) {
     next(e);
   }

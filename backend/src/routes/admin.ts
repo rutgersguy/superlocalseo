@@ -8,5 +8,6 @@ router.get('/overview', requireAdmin, ctrl.overview);
 router.get('/clients', requireAdmin, ctrl.clients);
 router.get('/queues', requireAdmin, ctrl.queues);
 router.get('/analytics', requireAdmin, ctrl.analytics);
+router.post('/jobs/trigger', requireAdmin, ctrl.triggerJob);
 
 export default router;
