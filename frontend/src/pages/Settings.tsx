@@ -1280,8 +1280,8 @@ function LocationsTab({ isAdmin }: { isAdmin: boolean }) {
                   <p className="text-xs text-slate-400 mt-0.5">
                     {loc.phone && <span className="mr-3">{loc.phone}</span>}
                     {loc.website && (
-                      <a href={loc.website} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                        {loc.website}
+                      <a href={loc.website} target="_blank" rel="noopener noreferrer" className="hover:underline" title={loc.website}>
+                        {(() => { try { return new URL(loc.website).hostname.replace(/^www\./, ''); } catch { return loc.website; } })()}
                       </a>
                     )}
                   </p>
