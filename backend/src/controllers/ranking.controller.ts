@@ -164,13 +164,13 @@ export async function sync(req: Request, res: Response, next: NextFunction): Pro
       ...result,
       message: result.notConfigured
         ? 'BrightLocal is not configured on this server. Contact support.'
-        : result.noCampaignIds
-          ? `Found ${result.locationsFound} location(s) but no BrightLocal campaign IDs are linked yet. Contact support to get your campaigns connected.`
+        : result.noKeywords
+          ? `Found ${result.locationsFound} location(s) but no keywords are set up yet. Add keywords in Settings → Keywords.`
           : result.snapshotsSaved > 0
-            ? `Refreshed ${result.snapshotsSaved} ranking data point(s) across ${result.locationsWithCampaign} location(s).`
+            ? `Refreshed ${result.snapshotsSaved} ranking data point(s) across ${result.locationsWithKeywords} location(s).`
             : result.errors.length > 0
               ? `Could not reach BrightLocal: ${result.errors[0]?.message ?? 'unknown error'}`
-              : `Found ${result.locationsWithCampaign} linked campaign(s) but BrightLocal returned no data yet — campaigns may take 24–48h after creation.`,
+              : `Found ${result.locationsWithKeywords} location(s) with keywords but no ranking data returned yet — check server logs.`,
     });
   } catch (e) {
     next(e);
