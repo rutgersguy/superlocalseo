@@ -1042,6 +1042,8 @@ interface Location {
   website: string | null;
   isPrimary: boolean;
   brightlocalCampaignId: string | null;
+  lat: number | null;
+  lng: number | null;
 }
 
 interface LocForm {
@@ -1263,6 +1265,11 @@ function LocationsTab({ isAdmin }: { isAdmin: boolean }) {
                   {loc.isPrimary && (
                     <span className="text-xs px-2 py-0.5 bg-brand-50 text-brand-600 rounded-full font-medium">Primary</span>
                   )}
+                  {loc.lat != null && loc.lng != null ? (
+                    <span className="text-xs px-2 py-0.5 bg-green-50 text-green-600 rounded-full font-medium" title={`${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`}>Geocoded</span>
+                  ) : (loc.address || loc.city) ? (
+                    <span className="text-xs px-2 py-0.5 bg-slate-100 text-slate-400 rounded-full">No coords</span>
+                  ) : null}
                 </div>
                 {(loc.address || loc.city) && (
                   <p className="text-xs text-slate-500 mt-0.5">

@@ -4,6 +4,7 @@ import { db } from '../db/connection';
 import { ok, created, noContent, notFound, err } from '../utils/response';
 import { addLocationToSubscription, removeLocationFromSubscription } from '../services/stripe.service';
 import { getIndustryKeywords } from '../config/industry.config';
+import { geocodeAddress } from '../services/geocode.service';
 import { logger } from '../utils/logger';
 
 async function seedDefaultKeywords(
@@ -60,6 +61,8 @@ function formatLocation(l: Record<string, unknown>) {
     zip: l.zip,
     phone: l.phone,
     website: l.website,
+    lat: l.lat != null ? Number(l.lat) : null,
+    lng: l.lng != null ? Number(l.lng) : null,
     isPrimary: l.is_primary,
     brightlocalCampaignId: l.brightlocal_campaign_id,
     createdAt: l.created_at,
@@ -113,7 +116,6 @@ export async function create(req: Request, res: Response, next: NextFunction): P
     }
 
     // Seed starter keywords so the rankings job has something to query on first run.
-    // Pull industry from the client record so industry-specific templates are used.
     const industry = (req.client as Record<string, unknown>)?.industry as string | null;
     await seedDefaultKeywords(
       (location as Record<string, unknown>).id as string,
@@ -121,6 +123,9 @@ export async function create(req: Request, res: Response, next: NextFunction): P
       industry,
       body.city ?? null,
     );
+
+    // Auto-geocode in background — non-fatal if it fails.
+    void geocodeAndSave((location as Record<string, unknown>).id as string, body.address, body.city, body.state, body.zip);
 
     created(res, formatLocation(location as Record<string, unknown>));
   } catch (e) {
@@ -146,8 +151,16 @@ export async function update(req: Request, res: Response, next: NextFunction): P
     if (body.website !== undefined) updates.website = body.website;
     if (body.brightlocalCampaignId !== undefined) updates.brightlocal_campaign_id = body.brightlocalCampaignId || null;
 
-    const [updated] = await db('locations').where({ id }).update(updates).returning('*');
-    ok(res, formatLocation(updated as Record<string, unknown>));
+    const [updated] = await db('locations').where({ id }).update(updates).returning('*') as Array<Record<string, unknown>>;
+
+    // Re-geocode in background if any address field changed.
+    const addressChanged = ['address', 'city', 'state', 'zip'].some((f) => body[f as keyof typeof body] !== undefined);
+    if (addressChanged) {
+      const row = updated;
+      void geocodeAndSave(id, row.address as string | null, row.city as string | null, row.state as string | null, row.zip as string | null);
+    }
+
+    ok(res, formatLocation(updated));
   } catch (e) {
     next(e);
   }
@@ -179,6 +192,21 @@ export async function provision(req: Request, res: Response, next: NextFunction)
   } catch (e) {
     next(e);
   }
+}
+
+async function geocodeAndSave(
+  locationId: string,
+  address: string | null | undefined,
+  city: string | null | undefined,
+  state: string | null | undefined,
+  zip: string | null | undefined,
+): Promise<void> {
+  const coords = await geocodeAddress(address, city, state, zip);
+  if (!coords) return;
+  await db('locations').where({ id: locationId }).update({ lat: coords.lat, lng: coords.lng }).catch((e) =>
+    logger.warn('Failed to save geocoded coordinates', { locationId, error: (e as Error).message }),
+  );
+  logger.info('Location geocoded', { locationId, lat: coords.lat, lng: coords.lng });
 }
 
 export async function remove(req: Request, res: Response, next: NextFunction): Promise<void> {
