@@ -210,9 +210,9 @@ export async function pollPending(): Promise<void> {
 
   // Score any Data API audits stuck in processing for > 5 minutes
   const dataApiPending = await db('location_audits')
-    .where({ status: 'processing' })
-    .whereNull('bl_report_id')
-    .where('created_at', '<', new Date(Date.now() - 5 * 60 * 1000))
+    .where({ 'location_audits.status': 'processing' })
+    .whereNull('location_audits.bl_report_id')
+    .where('location_audits.created_at', '<', new Date(Date.now() - 5 * 60 * 1000))
     .join('locations', 'location_audits.location_id', 'locations.id')
     .join('clients', 'location_audits.client_id', 'clients.id')
     .select(
@@ -238,9 +238,9 @@ export async function pollPending(): Promise<void> {
 
   // Backfill composite_score for 'complete' audits that have no score yet
   const nullScoreAudits = await db('location_audits')
-    .where({ status: 'complete' })
-    .whereNull('composite_score')
-    .whereNull('bl_report_id')
+    .where({ 'location_audits.status': 'complete' })
+    .whereNull('location_audits.composite_score')
+    .whereNull('location_audits.bl_report_id')
     .join('locations', 'location_audits.location_id', 'locations.id')
     .join('clients', 'location_audits.client_id', 'clients.id')
     .select(
