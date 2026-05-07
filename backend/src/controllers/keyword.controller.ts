@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, created, noContent, notFound, err } from '../utils/response';
-import { getSearchVolumes, locationCodeForState } from '../services/dataforseo.service';
+import { getSearchVolumes, locationCodeForCity } from '../services/dataforseo.service';
 
 export const keywordSchema = z.object({
   locationId: z.string().uuid(),
@@ -70,7 +70,7 @@ export async function create(req: Request, res: Response, next: NextFunction): P
     }).returning('*');
 
     // Fetch search volume in background — don't block the response
-    void getSearchVolumes([body.keyword], locationCodeForState(location.state as string | null)).then(([result]) => {
+    void getSearchVolumes([body.keyword], locationCodeForCity(location.city as string | null, location.state as string | null)).then(([result]) => {
       if (result?.monthlySearchVolume != null) {
         return db('keywords').where({ id: (keyword as Record<string, unknown>).id }).update({
           monthly_search_volume: result.monthlySearchVolume,

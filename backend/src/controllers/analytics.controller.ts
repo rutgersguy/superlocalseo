@@ -126,13 +126,19 @@ export async function reviewsTrend(req: Request, res: Response, next: NextFuncti
   }
 }
 
-// CTR estimates by rank position (industry standard curve)
-const CTR_BY_RANK: Record<number, number> = {
+// CTR curves — local pack (map pack) clicks are lower-intent than organic
+const CTR_ORGANIC: Record<number, number> = {
   1: 0.285, 2: 0.157, 3: 0.110, 4: 0.080, 5: 0.072,
   6: 0.051, 7: 0.040, 8: 0.032, 9: 0.028, 10: 0.025,
 };
-function ctrForRank(rank: number): number {
-  if (rank <= 10) return CTR_BY_RANK[rank] ?? 0.025;
+const CTR_LOCAL_PACK: Record<number, number> = {
+  1: 0.050, 2: 0.038, 3: 0.028,
+};
+function ctrForRank(rank: number, rankType: string): number {
+  if (rankType === 'local_pack') {
+    return CTR_LOCAL_PACK[rank] ?? 0.010;
+  }
+  if (rank <= 10) return CTR_ORGANIC[rank] ?? 0.025;
   if (rank <= 20) return 0.010;
   return 0.003;
 }
@@ -172,16 +178,17 @@ export async function roi(req: Request, res: Response, next: NextFunction): Prom
             'keywords.id as keywordId',
             'ranking_snapshots.location_id as locationId',
             'ranking_snapshots.rank',
+            'ranking_snapshots.rank_type as rankType',
             'ranking_snapshots.pulled_at as pulledAt',
           )
           .orderBy('ranking_snapshots.pulled_at', 'desc')
       : [];
 
-    // Build a map: keywordId+locationId → latest rank
-    const rankMap: Record<string, number> = {};
-    for (const r of latestRanks as Array<{ keywordId: string; locationId: string; rank: number }>) {
+    // Build a map: keywordId+locationId → { rank, rankType } (first = latest)
+    const rankMap: Record<string, { rank: number; rankType: string }> = {};
+    for (const r of latestRanks as Array<{ keywordId: string; locationId: string; rank: number; rankType: string }>) {
       const key = `${r.keywordId}:${r.locationId}`;
-      if (!(key in rankMap)) rankMap[key] = r.rank;
+      if (!(key in rankMap)) rankMap[key] = { rank: r.rank, rankType: r.rankType ?? 'organic' };
     }
 
     const convRate = (cfg.conversionRate as number) / 100;
@@ -192,9 +199,11 @@ export async function roi(req: Request, res: Response, next: NextFunction): Prom
 
     const keywords = rows.map((r) => {
       const key = `${r.keywordId}:${r.locationId}`;
-      const rank: number = rankMap[key] ?? 0;
+      const rankEntry = rankMap[key];
+      const rank: number = rankEntry?.rank ?? 0;
+      const rankType: string = rankEntry?.rankType ?? 'organic';
       const vol: number = (r.monthlySearchVolume as number) ?? 0;
-      const ctr = rank > 0 ? ctrForRank(rank) : 0;
+      const ctr = rank > 0 ? ctrForRank(rank, rankType) : 0;
       const estClicks = Math.round(vol * ctr);
       const estLeads = Math.round(estClicks * convRate * 10) / 10;
       const estRevenue = Math.round(estLeads * (cfg.avgCustomerValue as number));

@@ -25,6 +25,36 @@ export function locationCodeForState(stateAbbr: string | null | undefined): numb
   return code ?? 2840;
 }
 
+// DMA (metro area) codes for major US markets — more accurate than state-level for local businesses
+// Full list: https://api.dataforseo.com/v3/keywords_data/google_ads/locations (location_type = "DMA Region")
+const US_DMA_CODES: Record<string, number> = {
+  'new york':       501, 'los angeles':    803, 'chicago':        602,
+  'philadelphia':   504, 'dallas':         623, 'san francisco':  807,
+  'boston':         506, 'atlanta':        524, 'washington':     511,
+  'houston':        618, 'seattle':        819, 'tampa':          539,
+  'minneapolis':    613, 'miami':          528, 'denver':         751,
+  'cleveland':      510, 'orlando':        534, 'portland':       820,
+  'st. louis':      609, 'pittsburgh':     508, 'raleigh':        560,
+  'sacramento':     862, 'indianapolis':   527, 'baltimore':      512,
+  'san diego':      825, 'nashville':      659, 'charlotte':      517,
+  'hartford':       533, 'kansas city':    616, 'columbus':       535,
+  'salt lake city': 770, 'san antonio':    641, 'las vegas':      839,
+  'norfolk':        544, 'oklahoma city':  650, 'tulsa':       200671,
+  'memphis':        640, 'austin':         635, 'new orleans':    622,
+  'richmond':       556, 'jacksonville':   561, 'louisville':     529,
+  'birmingham':     630, 'albuquerque':    790, 'tucson':         789,
+  'omaha':          652, 'buffalo':        514, 'fresno':         866,
+};
+
+export function locationCodeForCity(city: string | null | undefined, stateAbbr: string | null | undefined): number {
+  if (city) {
+    const key = city.trim().toLowerCase().replace(/,.*/, '');
+    const dma = US_DMA_CODES[key];
+    if (dma) return dma;
+  }
+  return locationCodeForState(stateAbbr);
+}
+
 function authHeader(): string {
   const { login, password } = config.dataforseo;
   return 'Basic ' + Buffer.from(`${login}:${password}`).toString('base64');
