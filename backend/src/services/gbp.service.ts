@@ -2,7 +2,9 @@ import { db } from '../db/connection';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
-const GBP_BASE = 'https://mybusiness.googleapis.com/v4';
+const GBP_ACCOUNTS_BASE = 'https://mybusinessaccountmanagement.googleapis.com/v1';
+const GBP_INFO_BASE = 'https://mybusinessbusinessinformation.googleapis.com/v1';
+const GBP_REVIEWS_BASE = 'https://mybusiness.googleapis.com/v4';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
 const STAR_RATING_MAP: Record<string, number> = {
@@ -94,7 +96,7 @@ async function getAccounts(accessToken: string): Promise<GBPAccount[]> {
   let pageToken: string | undefined;
 
   do {
-    const url = new URL(`${GBP_BASE}/accounts`);
+    const url = new URL(`${GBP_ACCOUNTS_BASE}/accounts`);
     if (pageToken) url.searchParams.set('pageToken', pageToken);
 
     const res = await fetch(url.toString(), {
@@ -119,8 +121,9 @@ async function getLocations(accountName: string, accessToken: string): Promise<G
   let pageToken: string | undefined;
 
   do {
-    const url = new URL(`${GBP_BASE}/${accountName}/locations`);
+    const url = new URL(`${GBP_INFO_BASE}/${accountName}/locations`);
     if (pageToken) url.searchParams.set('pageToken', pageToken);
+    url.searchParams.set('readMask', 'name,title');
 
     const res = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -144,7 +147,7 @@ async function getReviews(locationName: string, accessToken: string): Promise<GB
   let pageToken: string | undefined;
 
   do {
-    const url = new URL(`${GBP_BASE}/${locationName}/reviews`);
+    const url = new URL(`${GBP_REVIEWS_BASE}/${locationName}/reviews`);
     if (pageToken) url.searchParams.set('pageToken', pageToken);
 
     const res = await fetch(url.toString(), {
