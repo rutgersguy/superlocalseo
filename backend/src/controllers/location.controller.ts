@@ -153,9 +153,9 @@ export async function update(req: Request, res: Response, next: NextFunction): P
 
     const [updated] = await db('locations').where({ id }).update(updates).returning('*') as Array<Record<string, unknown>>;
 
-    // Re-geocode in background if any address field changed.
+    // Re-geocode whenever lat/lng are missing or an address field changed.
     const addressChanged = ['address', 'city', 'state', 'zip'].some((f) => body[f as keyof typeof body] !== undefined);
-    if (addressChanged) {
+    if (addressChanged || updated.lat == null) {
       const row = updated;
       void geocodeAndSave(id, row.address as string | null, row.city as string | null, row.state as string | null, row.zip as string | null);
     }
