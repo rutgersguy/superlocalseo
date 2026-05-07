@@ -185,14 +185,19 @@ export async function roi(req: Request, res: Response, next: NextFunction): Prom
           .orderBy('ranking_snapshots.pulled_at', 'desc')
       : [];
 
-    // Build a map: keywordId+locationId → best { rank, rankType } across all geo_locations
-    const rankMap: Record<string, { rank: number; rankType: string }> = {};
+    // Build a map: keywordId+locationId → average rank across all geo_locations
+    const rankAccum: Record<string, { sum: number; count: number; rankType: string }> = {};
     for (const r of latestRanks as Array<{ keywordId: string; locationId: string; rank: number; rankType: string }>) {
       const key = `${r.keywordId}:${r.locationId}`;
-      const existing = rankMap[key];
-      if (!existing || r.rank < existing.rank) {
-        rankMap[key] = { rank: r.rank, rankType: r.rankType ?? 'organic' };
+      if (!rankAccum[key]) {
+        rankAccum[key] = { sum: 0, count: 0, rankType: r.rankType ?? 'organic' };
       }
+      rankAccum[key].sum += r.rank;
+      rankAccum[key].count += 1;
+    }
+    const rankMap: Record<string, { rank: number; rankType: string }> = {};
+    for (const [key, acc] of Object.entries(rankAccum)) {
+      rankMap[key] = { rank: Math.round(acc.sum / acc.count), rankType: acc.rankType };
     }
 
     const convRate = (cfg.conversionRate as number) / 100;
