@@ -6,6 +6,11 @@ import { pollPending } from '../controllers/audit_bl.controller';
 import { logger } from '../utils/logger';
 
 export async function processAudits(job: Job): Promise<void> {
+  if (job.name === 'poll-pending') {
+    await pollPending();
+    return;
+  }
+
   if (!job.data.locationId) {
     // Monthly fan-out: all active locations, regardless of BL campaign status.
     const locations = await db('locations')
@@ -32,6 +37,13 @@ export async function processAudits(job: Job): Promise<void> {
 
     for (const loc of locations) {
       try {
+        // Skip if an audit was run in the last 25 days (fan-out is monthly, allow 5-day buffer)
+        const recent = await db('location_audits')
+          .where({ location_id: loc.locationId })
+          .where('created_at', '>', new Date(Date.now() - 25 * 24 * 60 * 60 * 1000))
+          .first();
+        if (recent) continue;
+
         // BL audit only when campaign exists (paid plan)
         let reportId: string | null = null;
         if (loc.campaignId) {
@@ -47,8 +59,8 @@ export async function processAudits(job: Job): Promise<void> {
           client_id: loc.clientId,
           location_id: loc.locationId,
           bl_report_id: reportId,
-          status: reportId ? 'processing' : 'complete',
-          completed_at: reportId ? null : new Date(),
+          status: 'processing',
+          completed_at: null,
         });
 
         // Industry keyword ranking check for every location

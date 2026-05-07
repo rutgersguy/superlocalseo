@@ -6,51 +6,59 @@ export async function visibilityScore(req: Request, res: Response, next: NextFun
   try {
     const locationId = req.query.locationId as string | undefined;
 
-    let query = db('metrics_daily')
-      .where({ client_id: req.clientId })
-      .whereRaw(`date >= CURRENT_DATE - INTERVAL '30 days'`)
+    // Daily avg rank from ranking_snapshots over the last 30 days
+    let rankQuery = db('ranking_snapshots')
+      .join('keywords', 'ranking_snapshots.keyword_id', 'keywords.id')
+      .join('locations', 'keywords.location_id', 'locations.id')
+      .where('locations.client_id', req.clientId)
+      .whereNotNull('ranking_snapshots.rank')
+      .whereRaw(`ranking_snapshots.pulled_at >= CURRENT_DATE - INTERVAL '30 days'`)
+      .select(
+        db.raw(`DATE(ranking_snapshots.pulled_at) as date`),
+        db.raw(`AVG(ranking_snapshots.rank::numeric) as avg_rank`),
+      )
+      .groupByRaw(`DATE(ranking_snapshots.pulled_at)`)
       .orderBy('date', 'asc');
 
-    if (locationId) query = query.where({ location_id: locationId });
+    if (locationId) rankQuery = rankQuery.where('locations.id', locationId);
 
-    const rows = await query.select('date', 'avg_ranking', 'citation_completeness', 'avg_rating') as Array<{
-      date: string;
-      avg_ranking: string | null;
-      citation_completeness: string | null;
-      avg_rating: string | null;
-    }>;
+    const rankRows = await rankQuery as Array<{ date: string; avg_rank: string }>;
 
-    function computeScore(row: typeof rows[0]): number | null {
-      const avgRank = row.avg_ranking ? parseFloat(String(row.avg_ranking)) : null;
-      const citScore = row.citation_completeness ? parseFloat(String(row.citation_completeness)) : null;
-      const avgRat = row.avg_rating ? parseFloat(String(row.avg_rating)) : null;
+    // Overall avg rating (used as a constant across all days)
+    let ratingQuery = db('reviews')
+      .where('client_id', req.clientId)
+      .whereNotNull('rating')
+      .select(db.raw(`AVG(rating::numeric) as avg_rating`));
 
-      if (avgRank === null && citScore === null && avgRat === null) return null;
+    const ratingRow = await ratingQuery.first() as { avg_rating: string | null } | undefined;
+    const avgRating = ratingRow?.avg_rating ? parseFloat(ratingRow.avg_rating) : null;
+    const reviewScore = avgRating !== null ? Math.min(100, Math.max(0, (avgRating - 1) / 4 * 100)) : 50;
 
-      const rankingScore = avgRank !== null ? 100 - Math.min(99, Math.max(0, avgRank - 1)) : 50;
-      const citationScore = citScore !== null ? Math.min(100, Math.max(0, citScore)) : 50;
-      const reviewScore = avgRat !== null ? Math.min(100, Math.max(0, (avgRat - 1) / 4 * 100)) : 50;
+    // Latest citation completeness
+    let citQuery = db('citation_snapshots')
+      .join('locations', 'citation_snapshots.location_id', 'locations.id')
+      .where('locations.client_id', req.clientId);
 
-      return Math.round(rankingScore * 0.5 + citationScore * 0.3 + reviewScore * 0.2);
-    }
+    if (locationId) citQuery = citQuery.where('citation_snapshots.location_id', locationId);
 
-    const byDate = new Map<string, number[]>();
-    for (const row of rows) {
-      const score = computeScore(row);
-      if (score === null) continue;
-      const d = String(row.date).slice(0, 10);
-      if (!byDate.has(d)) byDate.set(d, []);
-      byDate.get(d)!.push(score);
-    }
+    const citRows = await citQuery.select('citation_snapshots.listed') as Array<{ listed: boolean }>;
+    const citScore = citRows.length > 0
+      ? Math.min(100, Math.max(0, (citRows.filter((c) => c.listed).length / citRows.length) * 100))
+      : 50;
 
-    const series = Array.from(byDate.entries()).map(([date, scores]) => ({
-      date,
-      score: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
-    }));
+    // Build daily score series
+    const series = rankRows.map((r) => {
+      const avgRank = parseFloat(r.avg_rank);
+      const rankingScore = Math.max(0, 100 - Math.min(99, avgRank - 1));
+      return {
+        date: String(r.date).slice(0, 10),
+        score: Math.round(rankingScore * 0.5 + citScore * 0.3 + reviewScore * 0.2),
+      };
+    });
 
     const current = series[series.length - 1]?.score ?? null;
-    const prior30 = series[0]?.score ?? null;
-    const delta = current !== null && prior30 !== null ? current - prior30 : null;
+    const prior = series[0]?.score ?? null;
+    const delta = current !== null && prior !== null && series.length > 1 ? current - prior : null;
 
     ok(res, { current, delta, series });
   } catch (e) { next(e); }

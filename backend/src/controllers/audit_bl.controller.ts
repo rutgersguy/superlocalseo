@@ -235,6 +235,34 @@ export async function pollPending(): Promise<void> {
       logger.warn('Data API audit score fallback failed', { auditId: row.auditId, error: (e as Error).message });
     }
   }
+
+  // Backfill composite_score for 'complete' audits that have no score yet
+  const nullScoreAudits = await db('location_audits')
+    .where({ status: 'complete' })
+    .whereNull('composite_score')
+    .whereNull('bl_report_id')
+    .join('locations', 'location_audits.location_id', 'locations.id')
+    .join('clients', 'location_audits.client_id', 'clients.id')
+    .select(
+      'location_audits.id as auditId',
+      'location_audits.location_id as locationId',
+      'clients.industry as industry',
+    )
+    .limit(50) as Array<{ auditId: string; locationId: string; industry: string | null }>;
+
+  for (const row of nullScoreAudits) {
+    try {
+      const scores = await computeAuditScores(row.locationId, row.industry);
+      await db('location_audits').where({ id: row.auditId }).update({
+        nap_score: scores.napScore,
+        citation_score: scores.citationScore,
+        composite_score: scores.compositeScore,
+        completed_at: db.raw('COALESCE(completed_at, NOW())'),
+      });
+    } catch (e) {
+      logger.warn('Null-score audit backfill failed', { auditId: row.auditId, error: (e as Error).message });
+    }
+  }
 }
 
 function formatAudit(row: Record<string, unknown>) {
