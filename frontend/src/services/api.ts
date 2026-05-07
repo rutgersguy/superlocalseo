@@ -60,6 +60,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}, rawRespo
   }
 
   if (rawResponse) return res;
+  if (res.status === 204) return null as T;
 
   const ct = res.headers.get('content-type') ?? '';
   if (!ct.includes('application/json')) {
