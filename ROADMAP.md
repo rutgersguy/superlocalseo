@@ -149,6 +149,29 @@ Features designed to increase ARPU from $780 → $1,025+ and reduce churn. See [
 
 ---
 
+## DataForSEO Integration (Planned)
+
+**Status:** Pending account signup — credentials to be added to `.env` as `DATAFORSEO_LOGIN` and `DATAFORSEO_PASSWORD`.
+
+### Phase 1 — Keyword Search Volume (immediate need)
+- [ ] `dataforseo.service.ts` — wrapper around DataForSEO Keywords Data API (`/keywords_data/google_ads/search_volume/live`)
+- [ ] Auto-fetch `monthly_search_volume` when a keyword is created or when it's null at rankings sync time
+- [ ] Backfill existing keywords that have null search volume on service activation
+- [ ] Cost: ~$0.001/keyword — negligible
+
+### Phase 2 — On-Page SEO & Local Ranking Factors (to be scoped)
+DataForSEO offers several APIs worth evaluating for impact on local ranking features:
+- **On-Page API** — crawl a location's website: Core Web Vitals, meta tags, schema markup, internal links, duplicate content, broken links. Could power a new "Website Health" score in the audit.
+- **SERP API** — pull full SERP data for any keyword/location. More granular than BrightLocal ranking data; could replace or supplement BrightLocal for ranking checks.
+- **Google Business Profile API** — fetch GBP data (categories, attributes, Q&A, posts) without OAuth. Could power GBP health scoring.
+- **Backlinks API** — domain authority and backlink profile. Local ranking signal.
+- **Content Analysis API** — NLP keyword analysis of competitor pages. Could drive content recommendations in audit reports.
+- **Local Pack API** — extract map pack results directly. Direct local ranking signal.
+
+> **Review session needed** before scoping Phase 2 items. Evaluate cost, overlap with BrightLocal, and which signals have the highest impact on local rankings.
+
+---
+
 ## Phase 4 — Hardening & Scale (Weeks 13–16)
 
 ### Deliverables
