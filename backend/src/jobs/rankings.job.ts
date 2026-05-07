@@ -43,6 +43,9 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
     return result;
   }
 
+  const clientRow = await db('clients').where({ id: clientId }).select('business_name').first();
+  const clientBusinessName = (clientRow as Record<string, unknown> | undefined)?.business_name as string | undefined;
+
   const locations = await db('locations')
     .where({ client_id: clientId })
     .select('id', 'name', 'city', 'state', 'zip', 'phone', 'website');
@@ -60,6 +63,9 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
       .filter(Boolean)
       .join(', ') || (location.name as string);
 
+    // Use the client's business name for NAP matching; fall back to the location label.
+    const businessName = clientBusinessName ?? (location.name as string);
+
     // Fire all requests for this location upfront, then poll in parallel
     const pending: Array<{ requestId: string; keywordId: string; keyword: string; engine: string }> = [];
 
@@ -71,7 +77,7 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
             searchEngine: engine,
             geoLocation,
             websiteUrl: location.website as string | null,
-            businessName: location.name as string,
+            businessName,
             phone: location.phone as string | null,
             postcode: location.zip as string | null,
           });

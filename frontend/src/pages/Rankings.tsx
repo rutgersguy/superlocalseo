@@ -19,6 +19,7 @@ interface RankingRow {
   rank: number;
   delta: number | null;
   pulledAt: string;
+  searchEngine: string;
 }
 
 interface TrendPoint {
@@ -44,6 +45,14 @@ interface RoiData {
   keywords: RoiKeyword[];
   totals: { estClicks: number; estLeads: number; estRevenue: number };
 }
+
+const ENGINE_LABELS: Record<string, string> = {
+  'google': 'Google',
+  'google-local-finder': 'Local Pack',
+  'google-mobile': 'Google Mobile',
+  'bing': 'Bing',
+  'bing-local': 'Bing Local',
+};
 
 type SortKey = keyof Pick<RankingRow, 'keyword' | 'location' | 'rank' | 'delta' | 'pulledAt'>;
 type TrendRange = 30 | 90 | 0;
@@ -727,6 +736,7 @@ export default function Rankings() {
                     </th>
                   );
                 })}
+                <th className="hidden sm:table-cell px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest text-left">Engine</th>
                 {showRoi && (
                   <th className="hidden sm:table-cell px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest text-right">Search Vol.</th>
                 )}
@@ -741,7 +751,7 @@ export default function Rankings() {
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 && pendingKeywords.length === 0 ? (
                 <tr>
-                  <td colSpan={showRoi ? 7 : 6} className="px-6 py-10 text-center text-slate-400">
+                  <td colSpan={showRoi ? 8 : 7} className="px-6 py-10 text-center text-slate-400">
                     No keywords yet. Click <strong>Keywords</strong> above to add some.
                   </td>
                 </tr>
@@ -752,9 +762,9 @@ export default function Rankings() {
                   const localVol = row.keywordId in localVolumes ? localVolumes[row.keywordId] : roi?.monthlySearchVolume ?? null;
                   return (
                     <tr
-                      key={row.keywordId}
+                      key={`${row.keywordId}-${row.searchEngine}`}
                       onClick={() => setSelectedRow(row)}
-                      className={`cursor-pointer transition-colors ${effectiveSelected?.keywordId === row.keywordId ? 'bg-brand-50' : 'hover:bg-slate-50/80'}`}
+                      className={`cursor-pointer transition-colors ${effectiveSelected?.keywordId === row.keywordId && effectiveSelected?.searchEngine === row.searchEngine ? 'bg-brand-50' : 'hover:bg-slate-50/80'}`}
                     >
                       <td className="px-6 py-3 font-medium text-slate-900">{row.keyword}</td>
                       <td className="hidden sm:table-cell px-6 py-3 text-slate-500">{row.location ?? '—'}</td>
@@ -764,6 +774,9 @@ export default function Rankings() {
                       </td>
                       <td className="hidden sm:table-cell px-6 py-3 text-slate-500">
                         {row.pulledAt ? timeAgo(row.pulledAt) : '—'}
+                      </td>
+                      <td className="hidden sm:table-cell px-6 py-3 text-slate-500">
+                        {ENGINE_LABELS[row.searchEngine] ?? row.searchEngine}
                       </td>
                       {showRoi && (
                         <td className="hidden sm:table-cell px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
