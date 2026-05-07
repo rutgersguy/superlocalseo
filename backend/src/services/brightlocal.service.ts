@@ -1,33 +1,14 @@
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
-const BASE_URL = 'https://tools.brightlocal.com/seo-tools/api';
+// ─── Legacy Management API (tools.brightlocal.com) ───────────────────────────
+// Used by citations, audit, reputation, geo-grid until Harry confirms Data API
+// equivalents. Rankings has been migrated to the Data API below.
 
-export interface BLRankingResult {
-  keyword: string;
-  rank: number | null;
-  url: string | null;
-  searchEngine: 'google' | 'bing';
-  rankType: 'organic' | 'local_pack' | 'paid';
-}
-
-export interface BLCitationResult {
-  directory: string;
-  listed: boolean;
-  napMatch: boolean;
-  listingUrl: string | null;
-  napDetail?: {
-    nameMatch: boolean;
-    addressMatch: boolean;
-    phoneMatch: boolean;
-    listedName?: string;
-    listedAddress?: string;
-    listedPhone?: string;
-  };
-}
+const MGMT_BASE_URL = 'https://tools.brightlocal.com/seo-tools/api';
 
 async function blFetch(path: string, apiKey: string, options: RequestInit = {}): Promise<Response> {
-  const url = `${BASE_URL}${path}`;
+  const url = `${MGMT_BASE_URL}${path}`;
   const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
@@ -54,29 +35,6 @@ async function blFetch(path: string, apiKey: string, options: RequestInit = {}):
   throw new Error('BrightLocal: max retry attempts exceeded after rate limiting');
 }
 
-// v2 API uses api-key as query param (not Bearer header) and multipart form data
-async function blV2Post(path: string, apiKey: string, fields: Record<string, string | string[]>): Promise<Response> {
-  const url = `${BASE_URL}${path}?api-key=${encodeURIComponent(apiKey)}`;
-  const form = new URLSearchParams();
-  for (const [k, v] of Object.entries(fields)) {
-    if (Array.isArray(v)) {
-      v.forEach((item) => form.append(`${k}[]`, item));
-    } else {
-      form.append(k, v);
-    }
-  }
-  return fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: form.toString(),
-  });
-}
-
-async function blV2Get(path: string, apiKey: string, params?: Record<string, string>): Promise<Response> {
-  const qs = new URLSearchParams({ 'api-key': apiKey, ...params });
-  return fetch(`${BASE_URL}${path}?${qs.toString()}`);
-}
-
 function assertApiKey(key: string): void {
   if (!key) {
     const err = new Error('BrightLocal API key is not configured') as Error & { code: string };
@@ -85,27 +43,163 @@ function assertApiKey(key: string): void {
   }
 }
 
-export async function fetchRankings(campaignId: string): Promise<BLRankingResult[]> {
+export async function validateApiKey(apiKey: string): Promise<boolean> {
+  try {
+    const res = await blFetch('/v4/clients/search', apiKey);
+    return res.status === 200;
+  } catch (e) {
+    logger.warn('BrightLocal validateApiKey error', { error: (e as Error).message });
+    return false;
+  }
+}
+
+// ─── Data API (api.brightlocal.com) ──────────────────────────────────────────
+// Rankings endpoint: POST /data/v1/rankings/search
+// Auth: x-api-key header (platform key, no per-client key needed)
+
+const DATA_API_BASE = 'https://api.brightlocal.com';
+
+async function blDataFetch(path: string, options: RequestInit = {}): Promise<Response> {
   const apiKey = config.brightlocal.apiKey;
   assertApiKey(apiKey);
 
-  const res = await blFetch(`/v4/rankings/get-latest?campaign_id=${encodeURIComponent(campaignId)}`, apiKey);
+  let attempts = 0;
+  const maxAttempts = 3;
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`BrightLocal fetchRankings failed: ${res.status} ${body}`);
+  while (attempts < maxAttempts) {
+    const res = await fetch(`${DATA_API_BASE}${path}`, {
+      ...options,
+      headers: {
+        'x-api-key': apiKey,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...(options.headers as Record<string, string> | undefined),
+      },
+    });
+
+    if (res.status === 429) {
+      const retryAfter = parseInt(res.headers.get('retry-after') ?? '10', 10);
+      logger.warn('BrightLocal Data API rate limited, backing off', { retryAfter });
+      await new Promise((r) => setTimeout(r, retryAfter * 1000));
+      attempts++;
+      continue;
+    }
+
+    return res;
   }
 
-  const data = (await res.json()) as { response?: { results?: Array<{ keyword: string; rank: number | null; url: string | null; search_engine: string; rank_type?: string }> } };
-  const results = data?.response?.results ?? [];
+  throw new Error('BrightLocal Data API: max retry attempts exceeded after rate limiting');
+}
 
-  return results.map((r) => ({
-    keyword: r.keyword,
-    rank: r.rank,
-    url: r.url,
-    searchEngine: r.search_engine === 'bing' ? 'bing' : 'google',
-    rankType: (r.rank_type === 'local_pack' || r.rank_type === 'paid') ? r.rank_type : 'organic',
-  }));
+export type RankingSearchEngine = 'google' | 'google-mobile' | 'google-local-finder' | 'bing' | 'bing-local';
+
+export async function createRankingRequest(params: {
+  keyword: string;
+  searchEngine: RankingSearchEngine;
+  geoLocation: string;
+  country?: string;
+  websiteUrl?: string | null;
+  businessName?: string;
+  phone?: string | null;
+  postcode?: string | null;
+}): Promise<string> {
+  const body: Record<string, unknown> = {
+    search_engine: params.searchEngine,
+    search_term: params.keyword,
+    country: params.country ?? 'USA',
+    geo_location: { name: params.geoLocation },
+    num_results: 50,
+  };
+
+  const matchCriteria: Record<string, unknown> = {};
+  if (params.websiteUrl) matchCriteria.website_urls = [params.websiteUrl];
+
+  const nap: Record<string, unknown> = {};
+  if (params.businessName) nap.names = [params.businessName];
+  if (params.phone) nap.telephone = params.phone;
+  if (params.postcode) nap.postcode = params.postcode;
+  if (Object.keys(nap).length) matchCriteria.nap = nap;
+
+  if (Object.keys(matchCriteria).length) body.match_criteria = matchCriteria;
+
+  const res = await blDataFetch('/data/v1/rankings/search', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`BrightLocal createRankingRequest failed: ${res.status} ${text}`);
+  }
+
+  const data = (await res.json()) as { request_id?: string };
+  if (!data.request_id) throw new Error('BrightLocal createRankingRequest: no request_id in response');
+  return data.request_id;
+}
+
+export interface RankingRequestResult {
+  ready: boolean;
+  success: boolean;
+  keyword: string;
+  searchEngine: string;
+  rank: number | null;
+  url: string | null;
+  rankType: 'organic' | 'local_pack' | null;
+}
+
+export async function fetchRankingResult(requestId: string): Promise<RankingRequestResult> {
+  const res = await blDataFetch(`/data/v1/rankings/results/${encodeURIComponent(requestId)}`);
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`BrightLocal fetchRankingResult failed: ${res.status} ${text}`);
+  }
+
+  const data = (await res.json()) as {
+    ready?: boolean;
+    success?: boolean;
+    request_payload?: { search_term?: string; search_engine?: string };
+    rankings?: {
+      local?: Array<{ rank: number; serp?: { website_url?: string } }>;
+      organic?: Array<{ rank: number; serp?: { website_url?: string } }>;
+    };
+  };
+
+  const keyword = data.request_payload?.search_term ?? '';
+  const searchEngine = data.request_payload?.search_engine ?? '';
+
+  if (!data.ready) {
+    return { ready: false, success: false, keyword, searchEngine, rank: null, url: null, rankType: null };
+  }
+
+  const localMatch = data.rankings?.local?.[0];
+  const organicMatch = data.rankings?.organic?.[0];
+
+  if (localMatch) {
+    return { ready: true, success: data.success ?? false, keyword, searchEngine, rank: localMatch.rank, url: localMatch.serp?.website_url ?? null, rankType: 'local_pack' };
+  }
+  if (organicMatch) {
+    return { ready: true, success: data.success ?? false, keyword, searchEngine, rank: organicMatch.rank, url: organicMatch.serp?.website_url ?? null, rankType: 'organic' };
+  }
+
+  return { ready: true, success: data.success ?? false, keyword, searchEngine, rank: null, url: null, rankType: null };
+}
+
+// ─── Citations (Management API — pending Harry's response on Data API equiv.) ─
+
+export interface BLCitationResult {
+  directory: string;
+  listed: boolean;
+  napMatch: boolean;
+  listingUrl: string | null;
+  napDetail?: {
+    nameMatch: boolean;
+    addressMatch: boolean;
+    phoneMatch: boolean;
+    listedName?: string;
+    listedAddress?: string;
+    listedPhone?: string;
+  };
 }
 
 export async function fetchCitations(campaignId: string): Promise<BLCitationResult[]> {
@@ -138,17 +232,7 @@ export async function fetchCitations(campaignId: string): Promise<BLCitationResu
   }));
 }
 
-export async function validateApiKey(apiKey: string): Promise<boolean> {
-  try {
-    const res = await blFetch('/v4/clients/search', apiKey);
-    return res.status === 200;
-  } catch (e) {
-    logger.warn('BrightLocal validateApiKey error', { error: (e as Error).message });
-    return false;
-  }
-}
-
-// ─── BL-2: Local Search Audit ─────────────────────────────────────────────────
+// ─── Local Search Audit (Management API — pending Harry's response) ───────────
 
 export async function createAuditReport(campaignId: string): Promise<{ reportId: string }> {
   const apiKey = config.brightlocal.apiKey;
@@ -213,7 +297,7 @@ export async function pollAuditReport(reportId: string): Promise<BLAuditResult> 
   };
 }
 
-// ─── BL-3: Reputation Manager ─────────────────────────────────────────────────
+// ─── Reputation Manager (Management API — pending Harry's response) ────────────
 
 export interface BLReview {
   blReviewId: string;
@@ -287,7 +371,7 @@ export async function replyToReview(
   return { success: data?.response?.success ?? true, replyId: data?.response?.reply_id };
 }
 
-// ─── BL-1: Geo-Grid ───────────────────────────────────────────────────────────
+// ─── Geo-Grid (Management API — pending Harry's response) ────────────────────
 
 export interface GridPoint {
   lat: number;
@@ -344,7 +428,7 @@ export async function pollGeoGridReport(reportId: string): Promise<{
   return { status: 'complete', grid: r.grid ?? [] };
 }
 
-// ─── BL-4: Citation Builder ───────────────────────────────────────────────────
+// ─── Citation Builder (Management API — pending Harry's response) ─────────────
 
 export interface SubmissionStatus {
   directory: string;
@@ -397,130 +481,4 @@ export async function getCitationSubmissions(jobId: string): Promise<SubmissionS
     listingUrl: s.listing_url,
     rejectionReason: s.rejection_reason,
   }));
-}
-
-// ─── BL-5: Campaign Management ────────────────────────────────────────────────
-
-export interface BLLocationInput {
-  name: string;
-  url: string;
-  address1: string;
-  city: string;
-  region: string;
-  postcode: string;
-  telephone: string;
-  country?: string;
-  businessCategoryId?: number;
-}
-
-export async function createBrightLocalLocation(input: BLLocationInput): Promise<number> {
-  const apiKey = config.brightlocal.apiKey;
-  assertApiKey(apiKey);
-
-  const locationRef = input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50)
-    + '-' + Date.now().toString(36);
-
-  const res = await blV2Post('/v2/clients-and-locations/locations/', apiKey, {
-    name: input.name,
-    url: input.url || 'http://example.com',
-    'business-category-id': String(input.businessCategoryId ?? 605),
-    country: input.country ?? 'USA',
-    address1: input.address1,
-    city: input.city,
-    region: input.region,
-    postcode: input.postcode,
-    telephone: input.telephone,
-    'location-reference': locationRef,
-  });
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`BrightLocal createLocation failed: ${res.status} ${body}`);
-  }
-
-  const data = (await res.json()) as { 'location-id'?: number; success?: boolean; errors?: unknown };
-  const locationId = data['location-id'];
-  if (!locationId) {
-    throw new Error(`BrightLocal createLocation: no location-id in response: ${JSON.stringify(data)}`);
-  }
-  return locationId;
-}
-
-export async function createLsrcCampaign(params: {
-  name: string;
-  locationId: number;
-  googleLocation: string;
-  keywords: string[];
-  country?: string;
-}): Promise<string> {
-  const apiKey = config.brightlocal.apiKey;
-  assertApiKey(apiKey);
-
-  const res = await blV2Post('/v2/lsrc/add', apiKey, {
-    name: params.name,
-    country: params.country ?? 'USA',
-    language: 'en',
-    'google-location': params.googleLocation,
-    'location-id': String(params.locationId),
-    'time-zone': '3',
-    'search-engines': ['google', 'google-local'],
-    keywords: params.keywords,
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`BrightLocal createLsrcCampaign failed: ${res.status} ${body}`);
-  }
-
-  const data = (await res.json()) as { 'campaign-id'?: string | number; success?: boolean; errors?: Record<string, string> };
-
-  if (data.errors && Object.keys(data.errors).length > 0) {
-    throw new Error(`BrightLocal createLsrcCampaign validation error: ${JSON.stringify(data.errors)}`);
-  }
-
-  const campaignId = data['campaign-id'];
-  if (!campaignId) {
-    throw new Error(`BrightLocal createLsrcCampaign: no campaign-id in response: ${JSON.stringify(data)}`);
-  }
-  return String(campaignId);
-}
-
-export async function provisionBrightLocalCampaign(locationData: {
-  name: string;
-  website: string | null;
-  address: string | null;
-  city: string | null;
-  state: string | null;
-  zip: string | null;
-  phone: string | null;
-}): Promise<string> {
-  const { name, website, address, city, state, zip, phone } = locationData;
-
-  // BrightLocal requires address data — skip provisioning if we have nothing useful to send.
-  if (!address && !city && !state && !zip) {
-    throw new Error(`BrightLocal provisioning skipped for "${name}": no address data available`);
-  }
-
-  const blLocationId = await createBrightLocalLocation({
-    name,
-    url: website ?? 'http://example.com',
-    address1: address ?? '',
-    city: city ?? '',
-    region: state ?? '',
-    postcode: zip ?? '',
-    telephone: phone ?? '',
-  });
-
-  const googleLocation = [city, state].filter(Boolean).join(', ') || name;
-  // Generic keywords based on business name — callers can override via createLsrcCampaign directly.
-  const keywords = [name.toLowerCase(), `${name.toLowerCase()} near me`];
-
-  const campaignId = await createLsrcCampaign({
-    name,
-    locationId: blLocationId,
-    googleLocation,
-    keywords,
-  });
-
-  return campaignId;
 }

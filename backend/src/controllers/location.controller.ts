@@ -3,8 +3,22 @@ import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, created, noContent, notFound, err } from '../utils/response';
 import { addLocationToSubscription, removeLocationFromSubscription } from '../services/stripe.service';
-import { provisionBrightLocalCampaign } from '../services/brightlocal.service';
 import { logger } from '../utils/logger';
+
+async function seedDefaultKeywords(locationId: string, businessName: string): Promise<void> {
+  const defaults = [businessName.toLowerCase(), `${businessName.toLowerCase()} near me`];
+  for (const keyword of defaults) {
+    const exists = await db('keywords').where({ location_id: locationId, keyword }).first();
+    if (!exists) {
+      await db('keywords').insert({
+        location_id: locationId,
+        keyword,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+    }
+  }
+}
 
 // How many locations are included in each tier before extra charges apply
 const INCLUDED_PER_TIER: Record<number, number> = { 1: 1, 2: 3, 3: Infinity };
@@ -87,30 +101,8 @@ export async function create(req: Request, res: Response, next: NextFunction): P
       }
     }
 
-    // Auto-provision BrightLocal campaign if no campaign ID already provided
-    const loc = location as Record<string, unknown>;
-    if (!loc.brightlocal_campaign_id) {
-      provisionBrightLocalCampaign({
-        name: body.name,
-        website: body.website ?? null,
-        address: body.address ?? null,
-        city: body.city ?? null,
-        state: body.state ?? null,
-        zip: body.zip ?? null,
-        phone: body.phone ?? null,
-      }).then(async (campaignId) => {
-        await db('locations').where({ id: loc.id }).update({
-          brightlocal_campaign_id: campaignId,
-          updated_at: new Date(),
-        });
-        logger.info('BrightLocal campaign auto-provisioned', { locationId: loc.id, campaignId });
-      }).catch((e) => {
-        logger.error('Failed to auto-provision BrightLocal campaign', {
-          locationId: loc.id,
-          error: (e as Error).message,
-        });
-      });
-    }
+    // Seed starter keywords so the rankings job has something to query on first run
+    await seedDefaultKeywords((location as Record<string, unknown>).id as string, body.name);
 
     created(res, formatLocation(location as Record<string, unknown>));
   } catch (e) {
@@ -143,30 +135,27 @@ export async function update(req: Request, res: Response, next: NextFunction): P
   }
 }
 
+// Repurposed: seeds default keywords for locations that have none (e.g. locations
+// created before this migration, or locations where keywords were deleted).
 export async function provision(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { id } = req.params;
     const location = await db('locations').where({ id, client_id: req.clientId }).first();
     if (!location) { notFound(res, 'Location not found'); return; }
 
-    if (location.brightlocal_campaign_id) {
-      ok(res, { campaignId: location.brightlocal_campaign_id, alreadyProvisioned: true });
+    const countRow = await db('keywords').where({ location_id: id }).count('id as cnt').first();
+    const count = parseInt(String((countRow as Record<string, unknown>)?.cnt ?? 0), 10);
+
+    if (count > 0) {
+      ok(res, { seeded: false, keywordCount: count });
       return;
     }
 
-    const campaignId = await provisionBrightLocalCampaign({
-      name: location.name as string,
-      website: location.website as string | null,
-      address: location.address as string | null,
-      city: location.city as string | null,
-      state: location.state as string | null,
-      zip: location.zip as string | null,
-      phone: location.phone as string | null,
-    });
-
-    await db('locations').where({ id }).update({ brightlocal_campaign_id: campaignId, updated_at: new Date() });
-    logger.info('BrightLocal campaign provisioned via manual trigger', { locationId: id, campaignId });
-    ok(res, { campaignId, alreadyProvisioned: false });
+    await seedDefaultKeywords(id, location.name as string);
+    const newCountRow = await db('keywords').where({ location_id: id }).count('id as cnt').first();
+    const newCount = parseInt(String((newCountRow as Record<string, unknown>)?.cnt ?? 0), 10);
+    logger.info('Default keywords seeded for location', { locationId: id, count: newCount });
+    ok(res, { seeded: true, keywordCount: newCount });
   } catch (e) {
     next(e);
   }
