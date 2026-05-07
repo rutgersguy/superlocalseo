@@ -1,7 +1,7 @@
 import { Job } from 'bullmq';
 import { db } from '../db/connection';
 import { createRankingRequest, fetchRankingResult, RankingSearchEngine } from '../services/brightlocal.service';
-import { getSearchVolumes } from '../services/dataforseo.service';
+import { getSearchVolumes, locationCodeForState } from '../services/dataforseo.service';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
@@ -60,10 +60,11 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
     if (keywords.length === 0) continue;
     result.locationsWithKeywords++;
 
-    // Backfill missing search volumes from DataForSEO
+    // Backfill missing search volumes from DataForSEO (state-scoped for accuracy)
     const missingVolume = keywords.filter((k) => k.monthly_search_volume == null);
     if (missingVolume.length > 0) {
-      const volumes = await getSearchVolumes(missingVolume.map((k) => k.keyword as string));
+      const locCode = locationCodeForState(location.state as string | null);
+      const volumes = await getSearchVolumes(missingVolume.map((k) => k.keyword as string), locCode);
       for (const v of volumes) {
         if (v.monthlySearchVolume != null) {
           const kw = missingVolume.find((k) => (k.keyword as string).toLowerCase() === v.keyword.toLowerCase());
