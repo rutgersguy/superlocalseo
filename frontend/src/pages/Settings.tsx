@@ -1,4 +1,4 @@
-import { useState, useRef, type ChangeEvent } from 'react';
+import { useState, useRef, useEffect, type ChangeEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useSWR, { mutate as swrMutate } from 'swr';
 import { QrCode, Download, Trash2, Plus, AlertCircle, CheckCircle2, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
@@ -1075,6 +1075,8 @@ function locFormFromLocation(loc: Location): LocForm {
   };
 }
 
+interface CitySuggestion { city: string; state: string | null; label: string; }
+
 function LocationForm({
   initial, onSave, onCancel, saving, error,
 }: {
@@ -1086,14 +1088,64 @@ function LocationForm({
 }) {
   const [form, setForm] = useState<LocForm>(initial);
   const [cityInput, setCityInput] = useState('');
+  const [suggestions, setSuggestions] = useState<CitySuggestion[]>([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
   const set = (k: keyof LocForm) => (e: ChangeEvent<HTMLInputElement>) =>
     setForm((p) => ({ ...p, [k]: e.target.value }));
 
-  function addCity() {
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setSuggestionsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
+
+  function onCityInputChange(e: ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value;
+    setCityInput(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (val.trim().length < 2) { setSuggestions([]); setSuggestionsOpen(false); return; }
+    debounceRef.current = setTimeout(async () => {
+      setLoadingSuggestions(true);
+      try {
+        const res = await apiFetch<{ success: boolean; data: CitySuggestion[] }>(`/places/cities?q=${encodeURIComponent(val.trim())}`);
+        if (res.success && res.data.length > 0) {
+          setSuggestions(res.data);
+          setSuggestionsOpen(true);
+        } else {
+          setSuggestions([]);
+          setSuggestionsOpen(false);
+        }
+      } catch { /* ignore */ } finally {
+        setLoadingSuggestions(false);
+      }
+    }, 300);
+  }
+
+  function selectSuggestion(s: CitySuggestion) {
+    const label = s.label;
+    if (!form.serviceArea.includes(label)) {
+      setForm((p) => ({ ...p, serviceArea: [...p.serviceArea, label] }));
+    }
+    setCityInput('');
+    setSuggestions([]);
+    setSuggestionsOpen(false);
+  }
+
+  function addCityManual() {
     const trimmed = cityInput.trim();
     if (!trimmed || form.serviceArea.includes(trimmed)) { setCityInput(''); return; }
     setForm((p) => ({ ...p, serviceArea: [...p.serviceArea, trimmed] }));
     setCityInput('');
+    setSuggestions([]);
+    setSuggestionsOpen(false);
   }
 
   function removeCity(city: string) {
@@ -1152,20 +1204,41 @@ function LocationForm({
               ))}
             </div>
           )}
-          <div className="flex gap-2">
-            <input
-              value={cityInput}
-              onChange={(e) => setCityInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addCity(); } }}
-              placeholder="e.g. Broken Arrow, Owasso…"
-              className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-            />
-            <button type="button" onClick={addCity}
-              className="px-3 py-2 bg-slate-100 text-slate-600 text-sm rounded-lg hover:bg-slate-200 transition-colors whitespace-nowrap">
-              Add city
-            </button>
+          <div ref={wrapperRef} className="relative">
+            <div className="flex gap-2">
+              <input
+                value={cityInput}
+                onChange={onCityInputChange}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); suggestionsOpen && suggestions[0] ? selectSuggestion(suggestions[0]) : addCityManual(); } if (e.key === 'Escape') setSuggestionsOpen(false); }}
+                placeholder="Search for a city…"
+                className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                autoComplete="off"
+              />
+              {!suggestionsOpen && (
+                <button type="button" onClick={addCityManual}
+                  className="px-3 py-2 bg-slate-100 text-slate-600 text-sm rounded-lg hover:bg-slate-200 transition-colors whitespace-nowrap">
+                  Add
+                </button>
+              )}
+            </div>
+            {suggestionsOpen && suggestions.length > 0 && (
+              <ul className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
+                {suggestions.map((s) => (
+                  <li key={s.label}>
+                    <button type="button" onMouseDown={(e) => { e.preventDefault(); selectSuggestion(s); }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-brand-50 flex items-center justify-between gap-2">
+                      <span className="font-medium text-slate-800">{s.city}</span>
+                      {s.state && <span className="text-xs text-slate-400 shrink-0">{s.state}</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {loadingSuggestions && (
+              <p className="absolute right-3 top-2.5 text-xs text-slate-400">Searching…</p>
+            )}
           </div>
-          <p className="text-xs text-slate-400 mt-1">Press Enter or comma to add. Leave blank to use the primary city only.</p>
+          <p className="text-xs text-slate-400 mt-1">Type to search verified cities. Press Enter to select the first result.</p>
         </div>
       </div>
       {error && (

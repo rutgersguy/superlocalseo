@@ -22,6 +22,7 @@ import auditsBlRouter from './audits_bl';
 import reputationRouter from './reputation';
 import geoGridRouter from './geogrid';
 import adminRouter from './admin';
+import placesRouter from './places';
 
 const router = Router();
 
@@ -48,5 +49,6 @@ router.use('/audits/bl', auditsBlRouter);
 router.use('/reputation', reputationRouter);
 router.use('/geo-grid', geoGridRouter);
 router.use('/admin', adminRouter);
+router.use('/places', placesRouter);
 
 export default router;
