@@ -44,12 +44,41 @@ const US_DMA_CODES: Record<string, number> = {
   'richmond':       556, 'jacksonville':   561, 'louisville':     529,
   'birmingham':     630, 'albuquerque':    790, 'tucson':         789,
   'omaha':          652, 'buffalo':        514, 'fresno':         866,
+  'phoenix':        753,
 };
+
+const CITY_ALIASES: Record<string, string> = {
+  'saint louis': 'st. louis', 'st louis': 'st. louis',
+  'saint paul': 'minneapolis', 'st paul': 'minneapolis',
+  'fort worth': 'dallas', 'ft worth': 'dallas',
+  'fort lauderdale': 'miami', 'ft lauderdale': 'miami',
+  'saint petersburg': 'tampa', 'st pete': 'tampa', 'st petersburg': 'tampa',
+  'new york city': 'new york', 'nyc': 'new york', 'brooklyn': 'new york', 'queens': 'new york', 'bronx': 'new york',
+  'la': 'los angeles',
+  'dc': 'washington', 'd.c.': 'washington', 'washington dc': 'washington', 'washington d.c.': 'washington',
+  'sf': 'san francisco', 'bay area': 'san francisco',
+  'philly': 'philadelphia',
+  'scottsdale': 'phoenix', 'mesa': 'phoenix', 'tempe': 'phoenix', 'chandler': 'phoenix',
+  'henderson': 'las vegas',
+  'arlington': 'dallas',
+  'aurora': 'denver',
+  'broken arrow': 'tulsa', 'owasso': 'tulsa', 'sand springs': 'tulsa', 'bixby': 'tulsa',
+  'norman': 'oklahoma city', 'edmond': 'oklahoma city', 'moore': 'oklahoma city', 'midwest city': 'oklahoma city',
+};
+
+function normalizeCityKey(raw: string): string {
+  return raw.trim().toLowerCase()
+    .replace(/,.*/, '')       // strip ", state" suffix
+    .replace(/\./g, '')       // strip periods (st. louis → st louis)
+    .replace(/\s+/g, ' ');   // collapse whitespace
+}
 
 export function locationCodeForCity(city: string | null | undefined, stateAbbr: string | null | undefined): number {
   if (city) {
-    const key = city.trim().toLowerCase().replace(/,.*/, '');
-    const dma = US_DMA_CODES[key];
+    const key = normalizeCityKey(city);
+    const resolved = CITY_ALIASES[key] ?? key;
+    // Try resolved key first, then with periods stripped from map keys
+    const dma = US_DMA_CODES[resolved] ?? US_DMA_CODES[resolved.replace(/\./g, '')] ?? US_DMA_CODES[key];
     if (dma) return dma;
   }
   return locationCodeForState(stateAbbr);
