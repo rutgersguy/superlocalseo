@@ -63,7 +63,7 @@ export async function googleCallback(req: Request, res: Response, next: NextFunc
       return;
     }
 
-    const clientId = Number(state);
+    const clientId = state;
     const clientSecret = config.google?.clientSecret;
     const googleClientId = config.google?.clientId;
     if (!googleClientId || !clientSecret) {
@@ -155,7 +155,7 @@ export async function facebookCallback(req: Request, res: Response, next: NextFu
       return;
     }
 
-    const clientId = Number(state);
+    const clientId = state;
     const appId = config.facebook?.appId;
     const appSecret = config.facebook?.appSecret;
     if (!appId || !appSecret) {
