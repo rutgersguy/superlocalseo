@@ -152,14 +152,14 @@ export default function Landing() {
           <div className="relative z-10 max-w-4xl mx-auto px-6 pt-16 sm:pt-24 pb-16 text-center">
             <div className="inline-flex items-center gap-2 bg-brand-50 text-brand-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-6 border border-brand-100">
               <span className="w-1.5 h-1.5 rounded-full bg-brand-500 inline-block" />
-              Built for home service businesses
+              Built for local businesses
             </div>
             <h1 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-6 leading-tight">
               Local SEO that actually<br className="hidden sm:block" />{' '}shows up on the map
             </h1>
             <p className="text-lg sm:text-xl text-slate-600 mb-10 max-w-2xl mx-auto">
               Rankings, reviews, and citations in one dashboard. Automated monthly PDF reports
-              delivered to your inbox. Built for plumbers, HVAC, and electricians.
+              delivered to your inbox. Built for any local business that needs to rank.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link
@@ -181,7 +181,7 @@ export default function Landing() {
 
         {/* Social proof strip */}
         <div className="border-y border-slate-100 bg-slate-50/60 py-5 px-6 text-center text-sm text-slate-500">
-          Trusted by plumbers, HVAC contractors, and electricians to track their local rankings every day.
+          Trusted by local businesses across every industry to track their rankings every day.
         </div>
 
         {/* Value props */}
