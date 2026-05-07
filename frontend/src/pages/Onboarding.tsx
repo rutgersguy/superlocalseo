@@ -55,7 +55,16 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-const INDUSTRIES = ['Plumbing', 'HVAC', 'Electrical', 'Landscaping', 'Cleaning', 'Other'];
+const INDUSTRY_GROUPS: Array<{ group: string; options: string[] }> = [
+  { group: 'Home Services', options: ['Plumbing', 'HVAC', 'Electrical', 'Roofing', 'Landscaping', 'Cleaning', 'Pest Control', 'Painting', 'Flooring', 'Moving', 'General Contractor'] },
+  { group: 'Health & Fitness', options: ['Personal Training', 'Gym / Fitness Studio', 'Physical Therapy', 'Chiropractic', 'Massage Therapy', 'Dental'] },
+  { group: 'Legal', options: ['Law Firm', 'Family Law', 'Personal Injury'] },
+  { group: 'Food & Beverage', options: ['Restaurant', 'Coffee Shop', 'Food Truck', 'Bakery'] },
+  { group: 'Beauty & Personal Care', options: ['Hair Salon', 'Barbershop', 'Nail Salon', 'Med Spa'] },
+  { group: 'Automotive', options: ['Auto Repair', 'Auto Detailing'] },
+  { group: 'Professional Services', options: ['Accounting / CPA', 'Real Estate', 'Insurance', 'Veterinary', 'Photography', 'Tutoring'] },
+  { group: 'Other', options: ['Other'] },
+];
 
 export default function Onboarding() {
   const navigate = useNavigate();
@@ -235,7 +244,7 @@ export default function Onboarding() {
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  placeholder="Acme Plumbing"
+                  placeholder="e.g. Sunrise Fitness, Metro Law Group"
                 />
               </div>
               <div>
@@ -246,8 +255,12 @@ export default function Onboarding() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 >
                   <option value="">Select an industry</option>
-                  {INDUSTRIES.map((ind) => (
-                    <option key={ind} value={ind}>{ind}</option>
+                  {INDUSTRY_GROUPS.map(({ group, options }) => (
+                    <optgroup key={group} label={group}>
+                      {options.map((ind) => (
+                        <option key={ind} value={ind}>{ind}</option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </div>
@@ -335,7 +348,7 @@ export default function Onboarding() {
                         onChange={(e) => setKwInput((p) => ({ ...p, [locIdx]: e.target.value }))}
                         onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addKeyword(locIdx))}
                         className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                        placeholder="e.g. plumber near me"
+                        placeholder="e.g. personal trainer in Brooklyn"
                       />
                       <button
                         onClick={() => addKeyword(locIdx)}

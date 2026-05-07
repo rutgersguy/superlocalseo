@@ -2,7 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
-import { createAuditReport, pollAuditReport } from '../services/brightlocal.service';
+import { createAuditReport, pollAuditReport, createRankingRequest, fetchRankingResult } from '../services/brightlocal.service';
+import { getPrimaryKeyword } from '../config/industry.config';
 import { logger } from '../utils/logger';
 
 export async function list(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -39,13 +40,12 @@ export async function trigger(req: Request, res: Response, next: NextFunction): 
 
     const location = await db('locations')
       .where({ id: parsed.data.locationId, client_id: req.clientId })
-      .first() as { id: string; brightlocal_campaign_id?: string } | undefined;
+      .first() as Record<string, unknown> | undefined;
     if (!location) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
-    if (!location.brightlocal_campaign_id) { err(res, 'Location has no BrightLocal campaign configured', 422, 'NO_BL_CAMPAIGN'); return; }
 
     // 30-day cooldown
     const recent = await db('location_audits')
-      .where({ location_id: location.id, client_id: req.clientId })
+      .where({ location_id: location.id as string, client_id: req.clientId })
       .whereIn('status', ['complete', 'processing', 'pending'])
       .orderBy('created_at', 'desc')
       .first() as { created_at: Date } | undefined;
@@ -58,17 +58,85 @@ export async function trigger(req: Request, res: Response, next: NextFunction): 
       }
     }
 
-    const { reportId } = await createAuditReport(location.brightlocal_campaign_id);
+    // BrightLocal NAP/citation audit — only runs if location has a campaign ID (Management API, paid plan).
+    let reportId: string | null = null;
+    if (location.brightlocal_campaign_id) {
+      try {
+        const result = await createAuditReport(location.brightlocal_campaign_id as string);
+        reportId = result.reportId;
+      } catch (e) {
+        logger.warn('BrightLocal audit skipped', { locationId: location.id, error: (e as Error).message });
+      }
+    }
+
+    // Always fire a Data API ranking request for the primary industry keyword.
+    // This captures fresh ranking data at audit time regardless of BL plan tier.
+    const client = await db('clients').where({ id: req.clientId }).select('industry').first() as { industry?: string } | undefined;
+    const primaryKeyword = getPrimaryKeyword(client?.industry, location.city as string | null);
+    if (primaryKeyword) {
+      void fireAuditRankingRequest(location.id as string, primaryKeyword, location);
+    }
+
     const [row] = await db('location_audits').insert({
       client_id: req.clientId,
       location_id: location.id,
       bl_report_id: reportId,
-      status: 'processing',
+      status: reportId ? 'processing' : 'complete',
+      completed_at: reportId ? null : new Date(),
     }).returning('*') as Array<Record<string, unknown>>;
 
     ok(res, { audit: formatAudit(row) }, 202);
   } catch (e) {
     next(e);
+  }
+}
+
+// Fires a ranking request for the primary industry keyword and stores the snapshot.
+// Runs in the background — does not block the API response.
+async function fireAuditRankingRequest(
+  locationId: string,
+  keyword: string,
+  location: Record<string, unknown>,
+): Promise<void> {
+  try {
+    const exists = await db('keywords').where({ location_id: locationId, keyword }).first();
+    if (!exists) {
+      await db('keywords').insert({ location_id: locationId, keyword, created_at: new Date(), updated_at: new Date() });
+    }
+
+    const geoLocation = [location.city, location.state, 'United States'].filter(Boolean).join(', ') || (location.name as string);
+    const requestId = await createRankingRequest({
+      keyword,
+      searchEngine: 'google-local-finder',
+      geoLocation,
+      websiteUrl: location.website as string | null,
+      businessName: location.name as string,
+      phone: location.phone as string | null,
+      postcode: location.zip as string | null,
+    });
+
+    let result = await fetchRankingResult(requestId);
+    for (let i = 0; i < 24 && !result.ready; i++) {
+      await new Promise((r) => setTimeout(r, 5000));
+      result = await fetchRankingResult(requestId);
+    }
+    if (!result.ready) { logger.warn('Audit ranking request timed out', { locationId, keyword }); return; }
+
+    const kw = await db('keywords').where({ location_id: locationId, keyword }).first() as { id: string } | undefined;
+    if (kw) {
+      await db('ranking_snapshots').insert({
+        keyword_id: kw.id,
+        location_id: locationId,
+        rank: result.rank,
+        url_ranked: result.url,
+        search_engine: result.searchEngine,
+        rank_type: result.rankType ?? 'organic',
+        pulled_at: new Date(),
+      });
+      logger.info('Audit ranking snapshot saved', { locationId, keyword, rank: result.rank });
+    }
+  } catch (e) {
+    logger.warn('Audit ranking request failed', { locationId, keyword, error: (e as Error).message });
   }
 }
 

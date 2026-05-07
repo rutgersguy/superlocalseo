@@ -3,10 +3,21 @@ import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, created, noContent, notFound, err } from '../utils/response';
 import { addLocationToSubscription, removeLocationFromSubscription } from '../services/stripe.service';
+import { getIndustryKeywords } from '../config/industry.config';
 import { logger } from '../utils/logger';
 
-async function seedDefaultKeywords(locationId: string, businessName: string): Promise<void> {
-  const defaults = [businessName.toLowerCase(), `${businessName.toLowerCase()} near me`];
+async function seedDefaultKeywords(
+  locationId: string,
+  businessName: string,
+  industry?: string | null,
+  city?: string | null,
+): Promise<void> {
+  const industryKeywords = getIndustryKeywords(industry, city);
+  // Industry keywords first; fall back to brand-name seeds if none available.
+  const defaults = industryKeywords.length > 0
+    ? industryKeywords.slice(0, 5)
+    : [businessName.toLowerCase(), `${businessName.toLowerCase()} near me`];
+
   for (const keyword of defaults) {
     const exists = await db('keywords').where({ location_id: locationId, keyword }).first();
     if (!exists) {
@@ -101,8 +112,15 @@ export async function create(req: Request, res: Response, next: NextFunction): P
       }
     }
 
-    // Seed starter keywords so the rankings job has something to query on first run
-    await seedDefaultKeywords((location as Record<string, unknown>).id as string, body.name);
+    // Seed starter keywords so the rankings job has something to query on first run.
+    // Pull industry from the client record so industry-specific templates are used.
+    const industry = (req.client as Record<string, unknown>)?.industry as string | null;
+    await seedDefaultKeywords(
+      (location as Record<string, unknown>).id as string,
+      body.name,
+      industry,
+      body.city ?? null,
+    );
 
     created(res, formatLocation(location as Record<string, unknown>));
   } catch (e) {
@@ -151,7 +169,9 @@ export async function provision(req: Request, res: Response, next: NextFunction)
       return;
     }
 
-    await seedDefaultKeywords(id, location.name as string);
+    const clientRow = await db('clients').where({ id: req.clientId }).first();
+    const industry = (clientRow as Record<string, unknown> | undefined)?.industry as string | null;
+    await seedDefaultKeywords(id, location.name as string, industry, location.city as string | null);
     const newCountRow = await db('keywords').where({ location_id: id }).count('id as cnt').first();
     const newCount = parseInt(String((newCountRow as Record<string, unknown>)?.cnt ?? 0), 10);
     logger.info('Default keywords seeded for location', { locationId: id, count: newCount });

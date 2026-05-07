@@ -26,7 +26,16 @@ interface ClientResponse {
   data: ClientData;
 }
 
-const INDUSTRIES = ['Plumbing', 'HVAC', 'Electrical', 'Landscaping', 'Cleaning', 'Other'];
+const INDUSTRY_GROUPS: Array<{ group: string; options: string[] }> = [
+  { group: 'Home Services', options: ['Plumbing', 'HVAC', 'Electrical', 'Roofing', 'Landscaping', 'Cleaning', 'Pest Control', 'Painting', 'Flooring', 'Moving', 'General Contractor'] },
+  { group: 'Health & Fitness', options: ['Personal Training', 'Gym / Fitness Studio', 'Physical Therapy', 'Chiropractic', 'Massage Therapy', 'Dental'] },
+  { group: 'Legal', options: ['Law Firm', 'Family Law', 'Personal Injury'] },
+  { group: 'Food & Beverage', options: ['Restaurant', 'Coffee Shop', 'Food Truck', 'Bakery'] },
+  { group: 'Beauty & Personal Care', options: ['Hair Salon', 'Barbershop', 'Nail Salon', 'Med Spa'] },
+  { group: 'Automotive', options: ['Auto Repair', 'Auto Detailing'] },
+  { group: 'Professional Services', options: ['Accounting / CPA', 'Real Estate', 'Insurance', 'Veterinary', 'Photography', 'Tutoring'] },
+  { group: 'Other', options: ['Other'] },
+];
 type Tab = 'account' | 'locations' | 'keywords' | 'integrations' | 'billing' | 'team' | 'widgets' | 'qrcodes';
 
 // ─── Team types ───────────────────────────────────────────────────────────────
@@ -1448,7 +1457,7 @@ function KeywordsTab({ isAdmin }: { isAdmin: boolean }) {
               value={newKeyword}
               onChange={(e) => { setNewKeyword(e.target.value); setAddError(null); }}
               onKeyDown={(e) => { if (e.key === 'Enter') void handleAdd(); }}
-              placeholder="e.g. plumber near me"
+              placeholder="e.g. personal trainer near me"
               className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
             <button
@@ -1939,7 +1948,11 @@ export default function Settings() {
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 >
                   <option value="">Select industry</option>
-                  {INDUSTRIES.map((ind) => <option key={ind} value={ind}>{ind}</option>)}
+                  {INDUSTRY_GROUPS.map(({ group, options }) => (
+                    <optgroup key={group} label={group}>
+                      {options.map((ind) => <option key={ind} value={ind}>{ind}</option>)}
+                    </optgroup>
+                  ))}
                 </select>
               )}
             </div>
