@@ -118,7 +118,7 @@ export async function googleCallback(req: Request, res: Response, next: NextFunc
       });
     }
 
-    res.redirect(`${config.appUrl}/settings?tab=integrations&connected=google`);
+    res.redirect(`${config.appUrl}/dashboard/settings?tab=integrations&connected=google`);
   } catch (e) {
     next(e);
   }
