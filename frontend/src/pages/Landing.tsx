@@ -259,7 +259,9 @@ export default function Landing() {
       {/* Footer */}
       <footer className="border-t border-slate-100 py-8 px-6 text-center text-sm text-slate-500">
         <p>© {new Date().getFullYear()} SuperLocalSEO. All rights reserved.</p>
-        <p className="mt-2">
+        <p className="mt-2 flex items-center justify-center gap-4">
+          <Link to="/privacy" className="hover:text-slate-900">Privacy Policy</Link>
+          <Link to="/terms" className="hover:text-slate-900">Terms of Service</Link>
           <a href="mailto:support@superlocalseo.com" className="hover:text-slate-900">support@superlocalseo.com</a>
         </p>
       </footer>

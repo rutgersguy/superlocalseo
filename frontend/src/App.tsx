@@ -22,6 +22,8 @@ import Campaigns from './pages/Campaigns';
 import Competitors from './pages/Competitors';
 import AuditHistory from './pages/AuditHistory';
 import Admin from './pages/Admin';
+import Privacy from './pages/Privacy';
+import Terms from './pages/Terms';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -44,6 +46,8 @@ function App() {
           <Route path="/auth/google/success" element={<AuthGoogleSuccess />} />
           <Route path="/audit" element={<Audit />} />
           <Route path="/team/accept" element={<TeamAccept />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
 
           {/* Protected routes */}
           <Route element={<ProtectedRoute />}>
