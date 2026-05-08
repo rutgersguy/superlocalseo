@@ -9,6 +9,7 @@ export const scanSchema = z.object({
   businessName: z.string().min(1).max(255),
   city: z.string().min(1).max(255),
   keyword: z.string().max(255).optional(),
+  source: z.string().max(100).optional(),
 });
 
 export const captureSchema = z.object({
@@ -133,7 +134,7 @@ function buildAuditData(place: PlaceResult | null, keyword?: string) {
 
 export async function scan(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { businessName, city, keyword } = scanSchema.parse(req.body);
+    const { businessName, city, keyword, source } = scanSchema.parse(req.body);
 
     const place = await findBusiness(businessName, city);
     const auditData = buildAuditData(place, keyword);
@@ -144,6 +145,7 @@ export async function scan(req: Request, res: Response, next: NextFunction): Pro
       keyword: keyword ?? null,
       google_place_id: place?.placeId ?? null,
       audit_data: JSON.stringify(auditData),
+      source: source ?? null,
     }).returning('id');
 
     ok(res, { scanId: lead.id, audit: auditData });

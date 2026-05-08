@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -74,6 +74,9 @@ function CategoryCard({ cat }: { cat: CategoryScore }) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Audit() {
+  const [searchParams] = useSearchParams();
+  const source = searchParams.get('ref') ?? undefined;
+
   const [step, setStep] = useState<Step>('form');
   const [businessName, setBusinessName] = useState('');
   const [city, setCity] = useState('');
@@ -91,7 +94,7 @@ export default function Audit() {
     try {
       const res = await apiFetch<ScanResponse>('/audit/scan', {
         method: 'POST',
-        body: JSON.stringify({ businessName, city, keyword: keyword || undefined }),
+        body: JSON.stringify({ businessName, city, keyword: keyword || undefined, source }),
       });
       setScanId(res.data.scanId);
       setAudit(res.data.audit);
