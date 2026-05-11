@@ -586,11 +586,24 @@ export async function createCbCampaign(
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
+    // BL returns 400 if the location already has a campaign — find and reuse it
+    if (res.status === 400 && text.includes('already has assigned CB campaign')) {
+      const existing = await findExistingCbCampaign(blLocationId);
+      if (existing) return existing;
+    }
     throw new Error(`BrightLocal createCbCampaign failed: ${res.status} ${text}`);
   }
   const data = (await res.json()) as { campaign_id?: number };
   if (!data.campaign_id) throw new Error('BrightLocal createCbCampaign: no campaign_id in response');
   return String(data.campaign_id);
+}
+
+async function findExistingCbCampaign(blLocationId: number): Promise<string | null> {
+  const res = await blDataFetch(`/manage/v1/citation-builder?location_id=${blLocationId}`);
+  if (!res.ok) return null;
+  const data = (await res.json()) as { items?: Array<{ campaign_id: number }> };
+  const match = data.items?.[0];
+  return match ? String(match.campaign_id) : null;
 }
 
 export async function getCbCampaignLookup(campaignId: string): Promise<CbLookupResult> {
