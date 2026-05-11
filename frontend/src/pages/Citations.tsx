@@ -251,7 +251,9 @@ function CitationBuilderModal({ locations, onClose, onDone }: CitationBuilderMod
   // Configure step state
   const [packageId, setPackageId] = useState<string>('cb25');
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
-  const [selectedPublishers, setSelectedPublishers] = useState<Set<string>>(new Set());
+  const [selectedPublishers, setSelectedPublishers] = useState<Set<string>>(
+    new Set(['dataaxle', 'neustar', 'foursquare', 'ypnetwork', 'gpsnetwork']),
+  );
   const [removeDuplicates, setRemoveDuplicates] = useState(true);
   const [confirming, setConfirming] = useState(false);
 
