@@ -131,7 +131,7 @@ export default function AuditHistory() {
           <button
             onClick={() => void handleTrigger()}
             disabled={triggering || !canTrigger}
-            title={cooldownDaysLeft ? `Next audit in ${cooldownDaysLeft} days` : ''}
+            title={!canTrigger ? 'Your audit runs automatically every day. You can also run one manually again tomorrow.' : ''}
             className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {triggering ? 'Starting…' : 'Run Audit'}
