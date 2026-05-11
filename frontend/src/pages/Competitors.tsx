@@ -599,6 +599,15 @@ function DiscoverKeywords({ competitors }: { competitors: Competitor[] }) {
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 
+interface ScanStatusResponse { success: boolean; data: { available: boolean; retryAfterSeconds: number } }
+
+function formatCooldown(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
 type Tab = 'overview' | 'rankings' | 'discover';
 
 export default function Competitors() {
@@ -607,9 +616,13 @@ export default function Competitors() {
   const [scanning, setScanning] = useState(false);
   const [scanQueued, setScanQueued] = useState(false);
   const { data, isLoading, error } = useSWR<CompetitorsResponse>('/competitors', fetcher);
+  const { data: scanStatusData, mutate: mutateScanStatus } = useSWR<ScanStatusResponse>('/competitors/scan-status', fetcher, { refreshInterval: 60000 });
 
   const competitors = data?.data?.competitors ?? [];
   const stats = data?.data?.clientStats;
+  const scanAvailable = scanStatusData?.data?.available ?? true;
+  const retryAfter = scanStatusData?.data?.retryAfterSeconds ?? 0;
+
   function refresh() { void mutate('/competitors'); }
 
   async function handleScanRankings() {
@@ -617,6 +630,7 @@ export default function Competitors() {
     try {
       await apiFetch('/competitors/sync-rankings', { method: 'POST' });
       setScanQueued(true);
+      void mutateScanStatus();
       setTimeout(() => setScanQueued(false), 4000);
     } catch { /* ignore */ } finally { setScanning(false); }
   }
@@ -646,11 +660,12 @@ export default function Competitors() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => void handleScanRankings()}
-            disabled={scanning}
+            disabled={scanning || !scanAvailable}
+            title={!scanAvailable ? `Next scan available in ${formatCooldown(retryAfter)}` : undefined}
             className={`whitespace-nowrap flex items-center gap-2 px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium rounded-lg border transition-colors disabled:opacity-50 ${scanQueued ? 'border-green-300 text-green-600 bg-green-50' : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50'}`}
           >
             {scanning ? <Loader2 size={15} className="animate-spin" /> : scanQueued ? <Check size={15} /> : <RefreshCw size={15} />}
-            {scanning ? 'Queuing…' : scanQueued ? 'Queued!' : 'Run scan'}
+            {scanning ? 'Queuing…' : scanQueued ? 'Queued!' : !scanAvailable ? `Next scan in ${formatCooldown(retryAfter)}` : 'Run scan'}
           </button>
           <button
             onClick={() => setShowAdd(true)}

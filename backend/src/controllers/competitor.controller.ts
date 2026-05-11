@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { Queue } from 'bullmq';
 import { db } from '../db/connection';
+import { redis } from '../db/redis';
 import { ok, err } from '../utils/response';
 import { config } from '../config';
 import { logger } from '../utils/logger';
@@ -410,14 +411,39 @@ export async function discoverKeywords(req: Request, res: Response, next: NextFu
   }
 }
 
-// ─── syncRankings: manual trigger ────────────────────────────────────────────
+// ─── syncRankings: manual trigger (24-hour cooldown) ─────────────────────────
+
+const SCAN_COOLDOWN_TTL = 24 * 60 * 60; // 24 hours in seconds
+function scanCooldownKey(clientId: string) { return `rankings:cooldown:${clientId}`; }
+
+export async function scanStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const ttl = await redis.ttl(scanCooldownKey(req.clientId));
+    if (ttl > 0) {
+      ok(res, { available: false, retryAfterSeconds: ttl });
+    } else {
+      ok(res, { available: true, retryAfterSeconds: 0 });
+    }
+  } catch (e) {
+    next(e);
+  }
+}
 
 export async function syncRankings(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
+    const ttl = await redis.ttl(scanCooldownKey(req.clientId));
+    if (ttl > 0) {
+      err(res, 'Rankings scan already ran recently. Try again later.', 429, 'RATE_LIMITED');
+      return;
+    }
+
     const redisHost = process.env.REDIS_HOST ?? 'redis';
     const q = new Queue('rankings', { connection: { host: redisHost, port: 6379 } });
     const job = await q.add('sync', { clientId: req.clientId }, { jobId: `manual-${req.clientId}-${Date.now()}` });
     await q.close();
+
+    await redis.setex(scanCooldownKey(req.clientId), SCAN_COOLDOWN_TTL, '1');
+
     logger.info('Manual rankings sync queued', { clientId: req.clientId, jobId: job.id });
     ok(res, { queued: true, jobId: job.id });
   } catch (e) {
