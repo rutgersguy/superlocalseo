@@ -547,6 +547,7 @@ export interface CbLookupResult {
   lookupStatus: 'complete' | 'processing';
   lookupCompletedAt: string | null;
   citations: CbLookupCitation[];
+  availableCitations: string[];
 }
 
 export interface CbCampaignStatus {
@@ -593,12 +594,16 @@ export async function createCbCampaign(
 }
 
 export async function getCbCampaignLookup(campaignId: string): Promise<CbLookupResult> {
-  const res = await blDataFetch(`/manage/v1/citation-builder/${encodeURIComponent(campaignId)}/lookup`);
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`BrightLocal getCbCampaignLookup failed: ${res.status} ${text}`);
+  const [lookupRes, campaignRes] = await Promise.all([
+    blDataFetch(`/manage/v1/citation-builder/${encodeURIComponent(campaignId)}/lookup`),
+    blDataFetch(`/manage/v1/citation-builder?query=${encodeURIComponent(campaignId)}`),
+  ]);
+
+  if (!lookupRes.ok) {
+    const text = await lookupRes.text().catch(() => '');
+    throw new Error(`BrightLocal getCbCampaignLookup failed: ${lookupRes.status} ${text}`);
   }
-  const data = (await res.json()) as {
+  const data = (await lookupRes.json()) as {
     lookup_status?: string;
     lookup_completed_at?: string;
     citations?: Array<{
@@ -607,6 +612,16 @@ export async function getCbCampaignLookup(campaignId: string): Promise<CbLookupR
       nap?: { name?: string; address?: string; phone?: string; postcode?: string };
     }>;
   };
+
+  let availableCitations: string[] = [];
+  if (campaignRes.ok) {
+    const campaignList = (await campaignRes.json()) as {
+      items?: Array<{ campaign_id: number; available_citations?: string[] }>;
+    };
+    const match = campaignList.items?.find((i) => String(i.campaign_id) === String(campaignId));
+    availableCitations = match?.available_citations ?? [];
+  }
+
   return {
     lookupStatus: (data.lookup_status as 'complete' | 'processing') ?? 'processing',
     lookupCompletedAt: data.lookup_completed_at ?? null,
@@ -615,6 +630,7 @@ export async function getCbCampaignLookup(campaignId: string): Promise<CbLookupR
       profileUrl: c.profile_url ?? '',
       nap: c.nap ?? {},
     })),
+    availableCitations,
   };
 }
 

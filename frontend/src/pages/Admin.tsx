@@ -584,7 +584,9 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
   const [removeDuplicates, setRemoveDuplicates] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lookupElapsed, setLookupElapsed] = useState(0);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const filteredLocations = allLocations.filter((l) => l.clientId === selectedClientId);
 
@@ -607,10 +609,14 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     if (step !== 'lookup' || !campaignId) return;
+    setLookupElapsed(0);
+    timerRef.current = setInterval(() => setLookupElapsed((s) => s + 1), 1000);
+
     const poll = async () => {
       try {
-        const res = await apiFetch<{ success: boolean; data: { lookupStatus: string; citations: LookupCitation[] } }>(`/admin/citations/campaign/${encodeURIComponent(campaignId)}/lookup`);
+        const res = await apiFetch<{ success: boolean; data: { lookupStatus: string; citations: LookupCitation[]; availableCitations: string[] } }>(`/admin/citations/campaign/${encodeURIComponent(campaignId)}/lookup`);
         if (res.data.lookupStatus === 'complete') {
+          if (timerRef.current) clearInterval(timerRef.current);
           setLookupCitations(res.data.citations);
           setSelectedDomains(new Set(res.data.citations.map((c) => c.domain)));
           setStep('configure');
@@ -620,8 +626,26 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
       pollRef.current = setTimeout(poll, 4000);
     };
     void poll();
-    return () => { if (pollRef.current) clearTimeout(pollRef.current); };
+    return () => {
+      if (pollRef.current) clearTimeout(pollRef.current);
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
   }, [step, campaignId]);
+
+  const proceedWithAvailable = async () => {
+    if (!campaignId) return;
+    if (pollRef.current) clearTimeout(pollRef.current);
+    if (timerRef.current) clearInterval(timerRef.current);
+    try {
+      const res = await apiFetch<{ success: boolean; data: { lookupStatus: string; citations: LookupCitation[]; availableCitations: string[] } }>(`/admin/citations/campaign/${encodeURIComponent(campaignId)}/lookup`);
+      const domains = res.data.availableCitations.length > 0
+        ? res.data.availableCitations
+        : res.data.citations.map((c) => c.domain);
+      setLookupCitations(domains.map((d) => ({ domain: d, profileUrl: '', nap: {} })));
+      setSelectedDomains(new Set(domains));
+    } catch { /* proceed with empty */ }
+    setStep('configure');
+  };
 
   const handleConfirm = async () => {
     if (!campaignId) return;
@@ -697,9 +721,29 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
           )}
 
           {(step === 'creating' || step === 'lookup') && (
-            <div className="p-12 flex flex-col items-center gap-4">
+            <div className="p-12 flex flex-col items-center gap-4 text-center">
               <div className="w-10 h-10 border-4 border-red-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm text-gray-500">{step === 'creating' ? 'Setting up campaign…' : 'Scanning opportunities — may take a minute…'}</p>
+              {step === 'creating' ? (
+                <p className="text-sm text-gray-500">Setting up campaign…</p>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-500">
+                    BrightLocal is scanning the web for existing citations.
+                    <br />
+                    <span className="text-gray-400">This usually takes 5–15 minutes.</span>
+                  </p>
+                  <p className="text-xs text-gray-400">{Math.floor(lookupElapsed / 60)}:{String(lookupElapsed % 60).padStart(2, '0')} elapsed</p>
+                  {lookupElapsed >= 90 && (
+                    <div className="mt-2 space-y-2">
+                      <p className="text-xs text-amber-600">Lookup is still running — you can proceed now and submit to all available directories.</p>
+                      <button onClick={() => void proceedWithAvailable()}
+                        className="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700">
+                        Proceed anyway
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
 
