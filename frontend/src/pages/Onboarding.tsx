@@ -387,6 +387,19 @@ export default function Onboarding() {
                 <p className="text-sm text-gray-500 mt-1">Link your review profiles so we can monitor and manage them for you.</p>
               </div>
 
+              {/* Citation scan notice */}
+              <div className="bg-brand-50 border border-brand-100 rounded-xl p-4 flex gap-3">
+                <div className="flex-shrink-0 mt-0.5">
+                  <svg className="w-5 h-5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-brand-800">Citation scan starting automatically</p>
+                  <p className="text-xs text-brand-600 mt-0.5">We'll scan your business across Google, Yelp, Facebook, Bing, Apple Maps, BBB, and more — results will appear in your Citations page within a few minutes.</p>
+                </div>
+              </div>
+
               {/* Google Business Profile */}
               <div className="border border-gray-200 rounded-xl p-5">
                 <div className="flex items-center justify-between mb-4">

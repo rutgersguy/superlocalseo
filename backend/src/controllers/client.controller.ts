@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok } from '../utils/response';
 import { provisionClient } from '../services/emr_provisioning';
+import { citationsQueue } from '../jobs/queue';
 import { logger } from '../utils/logger';
 
 export const patchSchema = z.object({
@@ -125,6 +126,16 @@ export async function completeOnboarding(req: Request, res: Response, next: Next
         error: (e as Error).message,
       });
       await db('clients').where({ id: req.clientId }).update({ emr_provisioning_status: 'failed' });
+    }
+
+    // Kick off citation scan immediately so data appears within minutes, not the next day
+    try {
+      await citationsQueue.add('onboarding-pull', { clientId: req.clientId });
+    } catch (e) {
+      logger.warn('Failed to enqueue citations job on onboarding', {
+        clientId: req.clientId,
+        error: (e as Error).message,
+      });
     }
 
     ok(res, { provisioned });
