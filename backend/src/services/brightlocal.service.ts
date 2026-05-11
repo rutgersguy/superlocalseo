@@ -455,6 +455,69 @@ export async function replyToReview(
   return { success: data?.response?.success ?? true, replyId: data?.response?.reply_id };
 }
 
+// ─── Locations Management API v1 ─────────────────────────────────────────────
+// Base: https://api.brightlocal.com/manage/v1/locations
+// Find or auto-create a BL location (integer location_id) for our internal location UUID.
+// Used to obtain the location_id required by Citation Builder campaigns.
+
+async function findBlLocationByReference(reference: string): Promise<number | null> {
+  const res = await blDataFetch(`/manage/v1/locations?query=${encodeURIComponent(reference)}`);
+  if (!res.ok) return null;
+  const data = (await res.json()) as {
+    items?: Array<{ location: { location_id: number; location_reference?: string } }>;
+  };
+  const match = data.items?.find((item) => item.location.location_reference === reference);
+  return match?.location.location_id ?? null;
+}
+
+export async function findOrProvisionBlLocation(loc: {
+  id: string;
+  name: string;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  phone?: string | null;
+  website?: string | null;
+}): Promise<number> {
+  // Our UUID is a valid BL location_reference (letters, numbers, hyphens only)
+  const reference = loc.id;
+
+  const existing = await findBlLocationByReference(reference);
+  if (existing) return existing;
+
+  // Validate required fields before attempting to create
+  if (!loc.address) throw new Error('Location requires an address to register with BrightLocal');
+  if (!loc.phone) throw new Error('Location requires a phone number to register with BrightLocal');
+  if (!loc.website) throw new Error('Location requires a website URL to register with BrightLocal');
+
+  const body: Record<string, unknown> = {
+    business_name: loc.name,
+    location_reference: reference,
+    country: 'USA',
+    address: { address1: loc.address },
+    telephone: loc.phone,
+    // 1 = General / Other; fetch /manage/v1/business-categories for full list
+    business_category_id: 1,
+    urls: { website_url: loc.website },
+  };
+  if (loc.city) body.city = loc.city;
+  if (loc.state) body.state = loc.state;
+  if (loc.zip) body.postcode = loc.zip;
+
+  const res = await blDataFetch('/manage/v1/locations', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`BrightLocal createBlLocation failed: ${res.status} ${text}`);
+  }
+  const data = (await res.json()) as { location_id?: number };
+  if (!data.location_id) throw new Error('BrightLocal createBlLocation: no location_id in response');
+  return data.location_id;
+}
+
 // ─── Citation Builder (Management API v1) ────────────────────────────────────
 // Base: https://api.brightlocal.com/manage/v1/citation-builder
 // Auth: x-api-key (same key as blDataFetch)

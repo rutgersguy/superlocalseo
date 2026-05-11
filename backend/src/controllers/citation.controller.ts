@@ -8,6 +8,7 @@ import {
   getCbCampaignLookup,
   confirmCbCampaign,
   getCbCampaign,
+  findOrProvisionBlLocation,
   type CbPackageId,
   type CbPublisher,
 } from '../services/brightlocal.service';
@@ -124,14 +125,31 @@ export async function createCampaign(req: Request, res: Response, next: NextFunc
     const { locationId } = parsed.data;
     const location = await db('locations')
       .where({ id: locationId, client_id: req.clientId })
-      .first() as { id: string; brightlocal_location_id?: number | null } | undefined;
+      .first() as {
+        id: string;
+        name: string;
+        address: string | null;
+        city: string | null;
+        state: string | null;
+        zip: string | null;
+        phone: string | null;
+        website: string | null;
+        brightlocal_location_id?: number | null;
+      } | undefined;
     if (!location) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
-    if (!location.brightlocal_location_id) {
-      err(res, 'Location has no BrightLocal location ID configured. Add it in Location settings.', 422, 'NO_BL_LOCATION_ID');
-      return;
+
+    let blLocationId = location.brightlocal_location_id;
+    if (!blLocationId) {
+      try {
+        blLocationId = await findOrProvisionBlLocation(location);
+        await db('locations').where({ id: locationId }).update({ brightlocal_location_id: blLocationId });
+      } catch (provErr) {
+        err(res, `Could not register location with BrightLocal: ${(provErr as Error).message}`, 422, 'BL_PROVISION_FAILED');
+        return;
+      }
     }
 
-    const campaignId = await createCbCampaign(location.brightlocal_location_id);
+    const campaignId = await createCbCampaign(blLocationId);
     ok(res, { campaignId }, 201);
   } catch (e) {
     next(e);
