@@ -700,7 +700,7 @@ export function renderReportHtml(data: ReportData): string {
 
   <!-- ROI Estimates -->
   ${roi ? `
-  <div style="padding:0 40px 32px">
+  <div style="padding:0 40px 32px;page-break-inside:avoid">
     <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">ROI &amp; Revenue Attribution</h2>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
       ${statBox('Est. Monthly Clicks', roi.estClicks.toLocaleString(), brandColor)}
