@@ -22,16 +22,20 @@ interface AuditRow {
 interface AuditsResponse { success: boolean; data: { audits: AuditRow[] }; }
 interface HistoryResponse { success: boolean; data: { audits: AuditRow[] }; }
 
-function ScoreCard({ label, value }: { label: string; value: number | null }) {
+function ScoreCard({ label, value, tooltip }: { label: string; value: number | null; tooltip: string }) {
   const color = value == null ? 'text-gray-400'
     : value >= 80 ? 'text-green-600'
     : value >= 60 ? 'text-yellow-600'
     : 'text-red-500';
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center">
+    <div className="relative group bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center">
       <p className="text-xs text-gray-500 mb-1">{label}</p>
       <p className={`text-2xl font-bold ${color}`}>{value != null ? value.toFixed(0) : '—'}</p>
       <p className="text-xs text-gray-400">/ 100</p>
+      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-lg bg-gray-900 px-3 py-2 text-xs text-gray-100 opacity-0 group-hover:opacity-100 transition-opacity z-10 text-left shadow-lg">
+        {tooltip}
+        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+      </div>
     </div>
   );
 }
@@ -124,11 +128,11 @@ export default function AuditHistory() {
 
       {/* Score cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-        <ScoreCard label="Overall" value={latestAudit?.compositeScore ?? null} />
-        <ScoreCard label="NAP" value={latestAudit?.napScore ?? null} />
-        <ScoreCard label="Citations" value={latestAudit?.citationScore ?? null} />
-        <ScoreCard label="Reviews" value={latestAudit?.reviewScore ?? null} />
-        <ScoreCard label="Google" value={latestAudit?.googleScore ?? null} />
+        <ScoreCard label="Overall" value={latestAudit?.compositeScore ?? null} tooltip="Weighted average: Citations 40%, NAP consistency 30%, Keyword rankings 30%." />
+        <ScoreCard label="NAP" value={latestAudit?.napScore ?? null} tooltip="% of directory listings where your business name, address, and phone number all match exactly." />
+        <ScoreCard label="Citations" value={latestAudit?.citationScore ?? null} tooltip="% of key directories for your industry where your business is listed." />
+        <ScoreCard label="Reviews" value={latestAudit?.reviewScore ?? null} tooltip="Average rating and review volume score. Requires Google Business Profile connection (coming soon)." />
+        <ScoreCard label="Google" value={latestAudit?.googleScore ?? null} tooltip="Google Business Profile completeness — claimed status, photos, hours, and posts. Requires GBP connection (coming soon)." />
       </div>
 
       {/* History chart */}
