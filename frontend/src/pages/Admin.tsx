@@ -578,6 +578,7 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState<WizardStep>('select');
   const [campaignId, setCampaignId] = useState<string | null>(null);
   const [lookupCitations, setLookupCitations] = useState<LookupCitation[]>([]);
+  const [existingDomains, setExistingDomains] = useState<Set<string>>(new Set());
   const [packageId, setPackageId] = useState('cb25');
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
   const [selectedPublishers, setSelectedPublishers] = useState<Set<string>>(new Set(['dataaxle', 'neustar', 'foursquare', 'ypnetwork', 'gpsnetwork']));
@@ -613,14 +614,21 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
     setLookupElapsed(0);
     timerRef.current = setInterval(() => setLookupElapsed((s) => s + 1), 1000);
 
+    const applyLookupResult = (data: { citations: LookupCitation[]; availableCitations: string[] }) => {
+      const existing = new Set(data.citations.map((c) => c.domain));
+      const allDomains = data.availableCitations.length > 0 ? data.availableCitations : data.citations.map((c) => c.domain);
+      setExistingDomains(existing);
+      setLookupCitations(allDomains.map((d) => ({ domain: d, profileUrl: data.citations.find((c) => c.domain === d)?.profileUrl ?? '', nap: {} })));
+      setSelectedDomains(new Set(allDomains));
+      setStep('configure');
+    };
+
     const poll = async () => {
       try {
         const res = await apiFetch<{ success: boolean; data: { lookupStatus: string; citations: LookupCitation[]; availableCitations: string[] } }>(`/admin/citations/campaign/${encodeURIComponent(campaignId)}/lookup`);
         if (res.data.lookupStatus === 'complete') {
           if (timerRef.current) clearInterval(timerRef.current);
-          setLookupCitations(res.data.citations);
-          setSelectedDomains(new Set(res.data.citations.map((c) => c.domain)));
-          setStep('configure');
+          applyLookupResult(res.data);
           return;
         }
       } catch { /* keep polling */ }
@@ -639,11 +647,11 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
     if (timerRef.current) clearInterval(timerRef.current);
     try {
       const res = await apiFetch<{ success: boolean; data: { lookupStatus: string; citations: LookupCitation[]; availableCitations: string[] } }>(`/admin/citations/campaign/${encodeURIComponent(campaignId)}/lookup`);
-      const domains = res.data.availableCitations.length > 0
-        ? res.data.availableCitations
-        : res.data.citations.map((c) => c.domain);
-      setLookupCitations(domains.map((d) => ({ domain: d, profileUrl: '', nap: {} })));
-      setSelectedDomains(new Set(domains));
+      const existing = new Set(res.data.citations.map((c) => c.domain));
+      const allDomains = res.data.availableCitations.length > 0 ? res.data.availableCitations : res.data.citations.map((c) => c.domain);
+      setExistingDomains(existing);
+      setLookupCitations(allDomains.map((d) => ({ domain: d, profileUrl: res.data.citations.find((c) => c.domain === d)?.profileUrl ?? '', nap: {} })));
+      setSelectedDomains(new Set(allDomains));
     } catch { /* proceed with empty */ }
     setStep('configure');
   };
@@ -689,7 +697,7 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
               {step === 'select' && 'Select a client and location'}
               {step === 'creating' && 'Creating campaign…'}
               {step === 'lookup' && 'Scanning citation opportunities…'}
-              {step === 'configure' && `${lookupCitations.length} opportunities found`}
+              {step === 'configure' && `${lookupCitations.length} directories · ${existingDomains.size} already listed`}
               {step === 'done' && 'Campaign confirmed'}
             </p>
           </div>
@@ -766,7 +774,10 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
               {lookupCitations.length > 0 && packageId !== 'cb0' && (
                 <div className="px-6 py-4">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-semibold text-gray-800">Directories <span className="text-xs font-normal text-gray-400">{selectedDomains.size} selected</span></h3>
+                    <h3 className="text-sm font-semibold text-gray-800">
+                      Directories
+                      <span className="text-xs font-normal text-gray-400 ml-1">{selectedDomains.size} selected · {existingDomains.size} already listed</span>
+                    </h3>
                     <div className="flex gap-2 text-xs">
                       <button onClick={() => setSelectedDomains(new Set(lookupCitations.map((c) => c.domain)))} className="text-red-500 hover:underline">All</button>
                       <button onClick={() => setSelectedDomains(new Set())} className="text-gray-400 hover:underline">None</button>
@@ -779,13 +790,14 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
                     onChange={(e) => setDirFilter(e.target.value)}
                     className="w-full mb-2 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-400"
                   />
-                  <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
+                  <div className="max-h-56 overflow-y-auto space-y-0.5 pr-1">
                     {lookupCitations
                       .filter((c) => !dirFilter || c.domain.toLowerCase().includes(dirFilter.toLowerCase()))
                       .map((c) => (
                         <label key={c.domain} className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
                           <input type="checkbox" checked={selectedDomains.has(c.domain)} onChange={() => toggle(selectedDomains, setSelectedDomains as React.Dispatch<React.SetStateAction<Set<string>>>, c.domain)} className="rounded border-gray-300" />
                           <span className="text-sm text-gray-700 flex-1">{c.domain}</span>
+                          {existingDomains.has(c.domain) && <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">listed</span>}
                           {c.profileUrl && <a href={c.profileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline">↗</a>}
                         </label>
                       ))}
