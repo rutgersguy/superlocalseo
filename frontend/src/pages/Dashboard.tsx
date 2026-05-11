@@ -240,7 +240,7 @@ function SubscribeCTA({ billing }: { billing: BillingStatusResponse['data'] | un
           )}
 
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm" style={{ color: '#94a3b8' }}>
-            {['Daily rank tracking', 'Review monitoring + AI replies', 'Monthly PDF reports', 'Citation builder'].map((f) => (
+            {['Daily Rank Tracking', 'Review Monitoring + AI Replies', 'Competitor Analysis', 'Citation Builder'].map((f) => (
               <li key={f} className="flex items-center gap-2">
                 <span className="w-4 h-4 rounded-full flex items-center justify-center shrink-0 text-xs font-bold" style={{ background: 'rgba(99,102,241,0.3)', color: '#a5b4fc' }}>✓</span>
                 {f}
