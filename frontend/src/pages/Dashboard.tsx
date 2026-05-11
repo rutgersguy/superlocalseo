@@ -195,72 +195,82 @@ function SubscribeCTA({ billing }: { billing: BillingStatusResponse['data'] | un
   };
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white p-6 sm:p-8">
-      {/* Background accent */}
-      <div className="absolute -top-8 -right-8 w-48 h-48 rounded-full bg-brand-500/20 blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-12 -left-4 w-40 h-40 rounded-full bg-brand-400/10 blur-2xl pointer-events-none" />
+    <div
+      className="relative overflow-hidden rounded-2xl text-white p-6 sm:p-8"
+      style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0f172a 100%)' }}
+    >
+      {/* Glow accents */}
+      <div className="absolute -top-10 -right-10 w-56 h-56 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.25) 0%, transparent 70%)' }} />
+      <div className="absolute -bottom-14 -left-6 w-48 h-48 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%)' }} />
 
-      <div className="relative flex flex-col sm:flex-row sm:items-center gap-6">
+      <div className="relative flex flex-col sm:flex-row sm:items-start gap-6">
         {/* Copy */}
-        <div className="flex-1 space-y-3">
+        <div className="flex-1 space-y-4">
           {expired ? (
             <>
-              <div className="inline-flex items-center gap-1.5 text-xs font-semibold bg-red-500/20 text-red-300 border border-red-500/30 px-2.5 py-1 rounded-full">
+              <div className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.35)', color: '#fca5a5' }}>
                 <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
                 Trial ended
               </div>
-              <h2 className="text-xl sm:text-2xl font-bold leading-snug">
+              <h2 className="text-xl sm:text-2xl font-bold leading-snug text-white">
                 Your data is waiting.<br className="hidden sm:block" /> Pick up where you left off.
               </h2>
-              <p className="text-sm text-slate-300 leading-relaxed">
+              <p className="text-sm leading-relaxed" style={{ color: '#cbd5e1' }}>
                 All your rankings, reviews, and citation data are saved. Subscribe to reactivate access in seconds.
               </p>
             </>
           ) : (
             <>
-              <div className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${
-                urgent
-                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                  : 'bg-brand-500/20 text-brand-300 border-brand-500/30'
-              }`}>
-                <span className={`w-1.5 h-1.5 rounded-full inline-block ${urgent ? 'bg-amber-400' : 'bg-brand-400'}`} />
+              <div
+                className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
+                style={urgent
+                  ? { background: 'rgba(245,158,11,0.2)', border: '1px solid rgba(245,158,11,0.35)', color: '#fcd34d' }
+                  : { background: 'rgba(99,102,241,0.25)', border: '1px solid rgba(99,102,241,0.4)', color: '#a5b4fc' }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: urgent ? '#fbbf24' : '#818cf8' }} />
                 {days === 1 ? '1 day left in trial' : `${days ?? '15'} days left in trial`}
               </div>
-              <h2 className="text-xl sm:text-2xl font-bold leading-snug">
+              <h2 className="text-xl sm:text-2xl font-bold leading-snug text-white">
                 Turn your trial into results.<br className="hidden sm:block" /> Subscribe today.
               </h2>
-              <p className="text-sm text-slate-300 leading-relaxed">
+              <p className="text-sm leading-relaxed" style={{ color: '#cbd5e1' }}>
                 Lock in your rankings tracker, review monitoring, and citation health — all in one platform built to get you found locally.
               </p>
             </>
           )}
 
-          <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm" style={{ color: '#94a3b8' }}>
             {['Daily rank tracking', 'Review monitoring + AI replies', 'Monthly PDF reports', 'Citation builder'].map((f) => (
-              <li key={f} className="flex items-center gap-1"><span className="text-brand-400">✓</span> {f}</li>
+              <li key={f} className="flex items-center gap-2">
+                <span className="w-4 h-4 rounded-full flex items-center justify-center shrink-0 text-xs font-bold" style={{ background: 'rgba(99,102,241,0.3)', color: '#a5b4fc' }}>✓</span>
+                {f}
+              </li>
             ))}
           </ul>
         </div>
 
         {/* Pricing + CTA */}
-        <div className="sm:text-right space-y-3 shrink-0">
+        <div className="sm:text-right space-y-4 shrink-0 sm:min-w-[180px]">
           <div>
             <div className="flex items-baseline gap-1 sm:justify-end">
-              <span className="text-4xl font-bold">$349</span>
-              <span className="text-slate-400 text-sm">/mo</span>
+              <span className="text-4xl font-bold text-white">$349</span>
+              <span className="text-sm" style={{ color: '#94a3b8' }}>/mo</span>
             </div>
-            <p className="text-xs text-slate-500">+ $499 one-time setup</p>
+            <p className="text-xs mt-0.5" style={{ color: '#64748b' }}>+ $499 one-time setup</p>
           </div>
           {error && <p className="text-xs text-red-400">{error}</p>}
           <button
             onClick={() => void startCheckout()}
             disabled={loading}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-brand-500 hover:bg-brand-400 text-white font-semibold text-sm transition-colors disabled:opacity-60 shadow-lg shadow-brand-500/30"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-60"
+            style={{ background: '#6366f1', color: '#fff', boxShadow: '0 4px 20px rgba(99,102,241,0.45)' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#4f46e5'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#6366f1'; }}
           >
             {loading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
             {expired ? 'Reactivate now →' : 'Subscribe now →'}
           </button>
-          <p className="text-xs text-slate-500">Cancel anytime. No hidden fees.</p>
+          <p className="text-xs" style={{ color: '#475569' }}>Cancel anytime. No hidden fees.</p>
         </div>
       </div>
     </div>
@@ -360,6 +370,7 @@ export default function Dashboard() {
       )}
       <EMRProvisionBanner />
       <PastDueBanner billing={billing} />
+      <SubscribeCTA billing={billing} />
 
       {metricsError && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
@@ -381,8 +392,6 @@ export default function Dashboard() {
         <MetricCard label="Citation Score" value={metrics?.citationScore != null ? `${metrics.citationScore}/100` : '—'} loading={metricsLoading} />
         <VisibilityCard vis={vis} loading={!visData} />
       </div>
-
-      <SubscribeCTA billing={billing} />
 
       {/* ROI section */}
       {roiConfigured && roi ? (
