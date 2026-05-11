@@ -130,6 +130,7 @@ export async function gatherReportData(
     .where('locations.client_id', clientId)
     .where('ranking_snapshots.pulled_at', '>=', periodStart)
     .where('ranking_snapshots.pulled_at', '<=', periodEnd)
+    .whereNotNull('ranking_snapshots.rank')
     .select(
       db.raw(`DISTINCT ON (ranking_snapshots.keyword_id, ranking_snapshots.location_id)
         ranking_snapshots.keyword_id,
@@ -152,6 +153,7 @@ export async function gatherReportData(
     .where('locations.client_id', clientId)
     .where('ranking_snapshots.pulled_at', '>=', priorStart)
     .where('ranking_snapshots.pulled_at', '<=', priorEnd)
+    .whereNotNull('ranking_snapshots.rank')
     .select(
       db.raw(`DISTINCT ON (ranking_snapshots.keyword_id, ranking_snapshots.location_id)
         ranking_snapshots.keyword_id,
@@ -285,6 +287,7 @@ export async function gatherReportData(
          JOIN keywords k ON rs.keyword_id = k.id
          JOIN locations l ON rs.location_id = l.id
          WHERE l.client_id = ?
+           AND rs.rank IS NOT NULL
          ORDER BY rs.keyword_id, rs.location_id, rs.pulled_at DESC`,
         [clientId],
       ).then((r) => r.rows)
