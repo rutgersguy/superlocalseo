@@ -221,7 +221,7 @@ export async function gap(req: Request, res: Response, next: NextFunction): Prom
       SELECT DISTINCT ON (cr.competitor_id, cr.keyword_id, cr.location_id, COALESCE(cr.geo_location, ''))
         cr.competitor_id, cr.keyword_id, cr.location_id, cr.geo_location, cr.rank
       FROM competitor_rankings cr
-      WHERE cr.location_id = ANY(?)
+      WHERE cr.location_id = ANY(?) AND cr.rank IS NOT NULL
       ORDER BY cr.competitor_id, cr.keyword_id, cr.location_id, COALESCE(cr.geo_location, ''), cr.pulled_at DESC
     `, [locIds]).then((r) => r.rows);
 
