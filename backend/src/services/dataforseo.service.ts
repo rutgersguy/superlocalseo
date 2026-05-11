@@ -426,7 +426,7 @@ export async function getCompetitorRankedKeywords(params: {
     location_code: params.locationCode ?? 2840,
     language_code: 'en',
     limit: params.limit ?? 100,
-    order_by: [['keyword_data.keyword_info.search_volume', 'desc']],
+    order_by: ['keyword_data.keyword_info.search_volume,desc'],
     filters: [['keyword_data.keyword_info.search_volume', '>', 0]],
   }]) as {
     tasks?: Array<{
