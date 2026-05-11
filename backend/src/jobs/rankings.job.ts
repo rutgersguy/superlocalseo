@@ -1,6 +1,6 @@
 import { Job } from 'bullmq';
 import { db } from '../db/connection';
-import { getRankForKeyword, getAggregatedSearchVolumes, buildLocationName } from '../services/dataforseo.service';
+import { getSerpRanks, getAggregatedSearchVolumes, buildLocationName } from '../services/dataforseo.service';
 import { logger } from '../utils/logger';
 
 export interface SyncResult {
@@ -27,6 +27,12 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
   const clientRow = await db('clients').where({ id: clientId }).select('business_name').first();
   const businessName = (clientRow as Record<string, unknown> | undefined)?.business_name as string | undefined;
   if (!businessName) return result;
+
+  // Competitors with a website can be matched against SERP results at no extra cost
+  const competitors = await db('competitors')
+    .where({ client_id: clientId })
+    .whereNotNull('website')
+    .select('id', 'name', 'website') as Array<{ id: string; name: string; website: string }>;
 
   const locations = await db('locations')
     .where({ client_id: clientId })
@@ -79,12 +85,13 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
       for (const kw of keywords) {
         try {
           result.requestsFired++;
-          const rankResult = await getRankForKeyword({
+          const { client: rankResult, competitors: compRanks } = await getSerpRanks({
             keyword: kw.keyword as string,
             locationName,
             businessName,
             websiteUrl: location.website as string | null,
             phone: location.phone as string | null,
+            competitors,
           });
 
           await db('ranking_snapshots').insert({
@@ -98,6 +105,20 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
             pulled_at: new Date(),
           });
           result.snapshotsSaved++;
+
+          if (compRanks.length > 0) {
+            await db('competitor_rankings').insert(
+              compRanks.map((c) => ({
+                competitor_id: c.id,
+                keyword_id: kw.id,
+                location_id: location.id,
+                rank: c.rank,
+                url: c.url,
+                search_engine: 'google',
+                pulled_at: new Date(),
+              })),
+            );
+          }
         } catch (e) {
           result.errors.push({
             locationId: location.id as string,

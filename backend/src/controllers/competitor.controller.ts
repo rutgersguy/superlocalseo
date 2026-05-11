@@ -4,6 +4,7 @@ import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
 import { config } from '../config';
 import { logger } from '../utils/logger';
+import { getCompetitorRankedKeywords, locationCodeForCity } from '../services/dataforseo.service';
 
 const createSchema = z.object({
   name: z.string().min(1).max(255),
@@ -232,6 +233,123 @@ export async function gap(req: Request, res: Response, next: NextFunction): Prom
         googleReviewCount: c.google_review_count,
       })),
     });
+  } catch (e) {
+    next(e);
+  }
+}
+
+// ─── headToHead ───────────────────────────────────────────────────────────────
+
+export async function headToHead(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const locationRows = await db('locations')
+      .where({ client_id: req.clientId })
+      .select('id', 'name') as Array<{ id: string; name: string }>;
+
+    if (locationRows.length === 0) {
+      ok(res, { keywords: [], competitors: [] });
+      return;
+    }
+
+    const locIds = locationRows.map((l) => l.id);
+    const locNameMap = new Map(locationRows.map((l) => [l.id, l.name]));
+
+    const competitors = await db('competitors')
+      .where({ client_id: req.clientId })
+      .select('id', 'name') as Array<{ id: string; name: string }>;
+
+    // Latest client rank per keyword+location
+    const clientRows = await db.raw<{ rows: Array<{ keyword: string; keyword_id: string; location_id: string; rank: number | null; pulled_at: string }> }>(`
+      SELECT DISTINCT ON (rs.keyword_id, rs.location_id)
+        k.keyword, rs.keyword_id, rs.location_id, rs.rank, rs.pulled_at
+      FROM ranking_snapshots rs
+      JOIN keywords k ON rs.keyword_id = k.id
+      WHERE rs.location_id = ANY(?) AND rs.rank IS NOT NULL
+      ORDER BY rs.keyword_id, rs.location_id, rs.pulled_at DESC
+    `, [locIds]).then((r) => r.rows);
+
+    // Latest competitor rank per competitor+keyword+location
+    const compRows = await db.raw<{ rows: Array<{ competitor_id: string; keyword_id: string; location_id: string; rank: number | null }> }>(`
+      SELECT DISTINCT ON (cr.competitor_id, cr.keyword_id, cr.location_id)
+        cr.competitor_id, cr.keyword_id, cr.location_id, cr.rank
+      FROM competitor_rankings cr
+      WHERE cr.location_id = ANY(?)
+      ORDER BY cr.competitor_id, cr.keyword_id, cr.location_id, cr.pulled_at DESC
+    `, [locIds]).then((r) => r.rows);
+
+    // Index competitor ranks: "compId:kwId:locId" → rank
+    const compRankMap = new Map<string, number | null>();
+    for (const r of compRows) {
+      compRankMap.set(`${r.competitor_id}:${r.keyword_id}:${r.location_id}`, r.rank);
+    }
+
+    const keywords = clientRows.map((r) => ({
+      keyword: r.keyword,
+      keywordId: r.keyword_id,
+      location: locNameMap.get(r.location_id) ?? r.location_id,
+      locationId: r.location_id,
+      yourRank: r.rank,
+      competitorRanks: competitors.map((c) => ({
+        competitorId: c.id,
+        rank: compRankMap.get(`${c.id}:${r.keyword_id}:${r.location_id}`) ?? null,
+      })),
+    }));
+
+    ok(res, { keywords, competitors });
+  } catch (e) {
+    next(e);
+  }
+}
+
+// ─── discoverKeywords ─────────────────────────────────────────────────────────
+
+export async function discoverKeywords(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const competitor = await db('competitors')
+      .where({ id: req.params.id, client_id: req.clientId })
+      .first() as { id: string; name: string; website: string | null } | undefined;
+
+    if (!competitor?.website) {
+      err(res, 'Competitor has no website set', 400, 'NO_WEBSITE');
+      return;
+    }
+
+    if (!config.dataforseo.login || !config.dataforseo.password) {
+      err(res, 'DataForSEO not configured', 503, 'NOT_CONFIGURED');
+      return;
+    }
+
+    // Use the client's primary location for the location code
+    const primaryLoc = await db('locations')
+      .where({ client_id: req.clientId })
+      .select('city', 'state')
+      .first() as { city: string | null; state: string | null } | undefined;
+
+    const locationCode = locationCodeForCity(primaryLoc?.city, primaryLoc?.state);
+
+    // Fetch competitor's ranked keywords from DataForSEO Labs
+    const discovered = await getCompetitorRankedKeywords({
+      domain: competitor.website,
+      locationCode,
+      limit: 100,
+    });
+
+    // Find keywords the client already tracks (any location)
+    const trackedRows = await db('keywords')
+      .join('locations', 'keywords.location_id', 'locations.id')
+      .where('locations.client_id', req.clientId)
+      .select('keywords.keyword') as Array<{ keyword: string }>;
+
+    const trackedSet = new Set(trackedRows.map((r) => r.keyword.toLowerCase()));
+
+    // Get client's locations for the "add to location" picker
+    const locations = await db('locations')
+      .where({ client_id: req.clientId })
+      .select('id', 'name') as Array<{ id: string; name: string }>;
+
+    const newKeywords = discovered.filter((k) => !trackedSet.has(k.keyword.toLowerCase()));
+
+    ok(res, { keywords: newKeywords, locations });
   } catch (e) {
     next(e);
   }

@@ -317,6 +317,140 @@ export async function getRankForKeyword(params: {
   return { rank: null, url: null, rankType: null };
 }
 
+// ─── getSerpRanks: one SERP call → client + competitor ranks ─────────────────
+
+export interface CompetitorSerpRank {
+  id: string;
+  rank: number | null;
+  url: string | null;
+  rankType: 'organic' | 'local_pack' | null;
+}
+
+export interface SerpRanksResult {
+  client: SerpRankResult;
+  competitors: CompetitorSerpRank[];
+}
+
+type RawItem = {
+  type: string;
+  rank_group?: number;
+  title?: string;
+  url?: string;
+  phone?: string;
+  items?: Array<{ type: string; rank_group?: number; title?: string; url?: string; phone?: string }>;
+};
+
+function matchInItems(
+  items: RawItem[],
+  name: string,
+  website: string | null | undefined,
+  phone: string | null | undefined,
+): SerpRankResult {
+  for (const item of items) {
+    if (item.type === 'local_pack' && item.items) {
+      for (const sub of item.items) {
+        if (businessMatches(sub.title, sub.url, sub.phone, name, website, phone)) {
+          return { rank: sub.rank_group ?? null, url: sub.url ?? null, rankType: 'local_pack' };
+        }
+      }
+    }
+  }
+  for (const item of items) {
+    if (item.type === 'organic') {
+      if (businessMatches(item.title, item.url, null, name, website, phone)) {
+        return { rank: item.rank_group ?? null, url: item.url ?? null, rankType: 'organic' };
+      }
+    }
+  }
+  return { rank: null, url: null, rankType: null };
+}
+
+export async function getSerpRanks(params: {
+  keyword: string;
+  locationName: string;
+  businessName: string;
+  websiteUrl?: string | null;
+  phone?: string | null;
+  competitors?: Array<{ id: string; name: string; website: string | null }>;
+}): Promise<SerpRanksResult> {
+  if (!config.dataforseo.login || !config.dataforseo.password) {
+    throw new Error('DataForSEO credentials not configured');
+  }
+
+  const data = await dfsPost('/serp/google/organic/live/advanced', [{
+    keyword: params.keyword,
+    location_name: params.locationName,
+    language_name: 'English',
+    device: 'desktop',
+    os: 'windows',
+    depth: 30,
+  }]) as { tasks?: Array<{ result?: Array<{ items?: RawItem[] }> }> };
+
+  const items = data.tasks?.[0]?.result?.[0]?.items ?? [];
+
+  const client = matchInItems(items, params.businessName, params.websiteUrl, params.phone);
+
+  const competitors: CompetitorSerpRank[] = (params.competitors ?? []).map((c) => ({
+    id: c.id,
+    ...matchInItems(items, c.name, c.website, null),
+  }));
+
+  return { client, competitors };
+}
+
+// ─── getCompetitorRankedKeywords: DataForSEO Labs keyword discovery ───────────
+
+export interface DiscoveredKeyword {
+  keyword: string;
+  competitorRank: number;
+  competitorUrl: string | null;
+  searchVolume: number | null;
+}
+
+export async function getCompetitorRankedKeywords(params: {
+  domain: string;
+  locationCode?: number;
+  limit?: number;
+}): Promise<DiscoveredKeyword[]> {
+  if (!config.dataforseo.login || !config.dataforseo.password) {
+    throw new Error('DataForSEO credentials not configured');
+  }
+
+  const target = params.domain
+    .replace(/^https?:\/\/(www\.)?/, '')
+    .split('/')[0]
+    .split('?')[0];
+
+  const data = await dfsPost('/dataforseo_labs/google/ranked_keywords/live', [{
+    target,
+    location_code: params.locationCode ?? 2840,
+    language_code: 'en',
+    limit: params.limit ?? 100,
+    order_by: [['keyword_data.keyword_info.search_volume', 'desc']],
+    filters: [['keyword_data.keyword_info.search_volume', '>', 0]],
+  }]) as {
+    tasks?: Array<{
+      result?: Array<{
+        items?: Array<{
+          keyword_data?: { keyword?: string; keyword_info?: { search_volume?: number } };
+          ranked_serp_element?: { serp_item?: { rank_group?: number; url?: string } };
+        }>;
+      }>;
+    }>;
+  };
+
+  const items = data.tasks?.[0]?.result?.[0]?.items ?? [];
+
+  return items
+    .map((item) => ({
+      keyword: item.keyword_data?.keyword ?? '',
+      competitorRank: item.ranked_serp_element?.serp_item?.rank_group ?? null,
+      competitorUrl: item.ranked_serp_element?.serp_item?.url ?? null,
+      searchVolume: item.keyword_data?.keyword_info?.search_volume ?? null,
+    }))
+    .filter((k): k is DiscoveredKeyword => !!k.keyword && k.competitorRank != null);
+}
+
 // ─── Search volumes ───────────────────────────────────────────────────────────
 
 interface SearchVolumeResult {
