@@ -22,7 +22,7 @@ interface AuditRow {
 interface AuditsResponse { success: boolean; data: { audits: AuditRow[] }; }
 interface HistoryResponse { success: boolean; data: { audits: AuditRow[] }; }
 
-function ScoreCard({ label, value, tooltip }: { label: string; value: number | null; tooltip: string }) {
+function ScoreCard({ label, value, delta, tooltip }: { label: string; value: number | null; delta: number | null; tooltip: string }) {
   const color = value == null ? 'text-gray-400'
     : value >= 80 ? 'text-green-600'
     : value >= 60 ? 'text-yellow-600'
@@ -31,7 +31,15 @@ function ScoreCard({ label, value, tooltip }: { label: string; value: number | n
     <div className="relative group bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center">
       <p className="text-xs text-gray-500 mb-1">{label}</p>
       <p className={`text-2xl font-bold ${color}`}>{value != null ? value.toFixed(0) : '—'}</p>
-      <p className="text-xs text-gray-400">/ 100</p>
+      <div className="flex items-center justify-center gap-1 mt-0.5">
+        <p className="text-xs text-gray-400">/ 100</p>
+        {delta !== null && delta !== 0 && (
+          <span className={`text-xs font-semibold ${delta > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+            {delta > 0 ? '▲' : '▼'} {Math.abs(delta)}
+          </span>
+        )}
+        {delta === 0 && <span className="text-xs text-gray-300">—</span>}
+      </div>
       <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-lg bg-gray-900 px-3 py-2 text-xs text-gray-100 opacity-0 group-hover:opacity-100 transition-opacity z-10 text-left shadow-lg">
         {tooltip}
         <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
@@ -60,6 +68,15 @@ export default function AuditHistory() {
   const historyAudits = historyData?.data?.audits ?? [];
 
   const latestAudit = allAudits.find((a) => a.locationId === effectiveLocationId && a.status === 'complete');
+  const completeHistory = historyAudits.filter((a) => a.status === 'complete');
+  const previousAudit = completeHistory.length >= 2 ? completeHistory[completeHistory.length - 2] : null;
+  const delta = (key: keyof AuditRow) => {
+    if (!latestAudit || !previousAudit) return null;
+    const curr = latestAudit[key] as number | null;
+    const prev = previousAudit[key] as number | null;
+    if (curr == null || prev == null) return null;
+    return Math.round(curr - prev);
+  };
   const recentAuditDaysAgo = (() => {
     const recent = allAudits.find((a) => a.locationId === effectiveLocationId);
     if (!recent) return null;
@@ -130,11 +147,11 @@ export default function AuditHistory() {
 
       {/* Score cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-        <ScoreCard label="Overall" value={latestAudit?.compositeScore ?? null} tooltip="Weighted average: Citations 40%, NAP consistency 30%, Keyword rankings 30%." />
-        <ScoreCard label="NAP" value={latestAudit?.napScore ?? null} tooltip="Percentage of directory listings where your business name, address, and phone number all match exactly." />
-        <ScoreCard label="Citations" value={latestAudit?.citationScore ?? null} tooltip="Percentage of key directories for your industry where your business is listed." />
-        <ScoreCard label="Reviews" value={latestAudit?.reviewScore ?? null} tooltip="Average rating and review volume score. Requires Google Business Profile connection." />
-        <ScoreCard label="Google" value={latestAudit?.googleScore ?? null} tooltip="Google Business Profile completeness — claimed status, photos, hours, and posts. Requires GBP connection." />
+        <ScoreCard label="Overall" value={latestAudit?.compositeScore ?? null} delta={delta('compositeScore')} tooltip="Weighted average: Citations 40%, NAP consistency 30%, Keyword rankings 30%." />
+        <ScoreCard label="NAP" value={latestAudit?.napScore ?? null} delta={delta('napScore')} tooltip="Percentage of directory listings where your business name, address, and phone number all match exactly." />
+        <ScoreCard label="Citations" value={latestAudit?.citationScore ?? null} delta={delta('citationScore')} tooltip="Percentage of key directories for your industry where your business is listed." />
+        <ScoreCard label="Reviews" value={latestAudit?.reviewScore ?? null} delta={delta('reviewScore')} tooltip="Average rating and review volume score. Requires Google Business Profile connection." />
+        <ScoreCard label="Google" value={latestAudit?.googleScore ?? null} delta={delta('googleScore')} tooltip="Google Business Profile completeness — claimed status, photos, hours, and posts. Requires GBP connection." />
       </div>
 
       {/* History chart */}
