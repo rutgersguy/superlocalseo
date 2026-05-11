@@ -1747,12 +1747,35 @@ function WhiteLabelSection() {
   );
 }
 
-function BillingTab({ onGoToLocations }: { onGoToLocations: () => void }) {
-  const { data, isLoading } = useSWR<BillingResponse>('/billing/status', fetcher, { refreshInterval: 30000 });
+function BillingTab({ onGoToLocations, isAdmin }: { onGoToLocations: () => void; isAdmin: boolean }) {
+  const { data, isLoading, mutate: mutateBilling } = useSWR<BillingResponse>('/billing/status', fetcher, { refreshInterval: 30000 });
+  const { data: locData, mutate: mutateLocs } = useSWR<{ success: boolean; data: Location[] }>('/locations', fetcher);
   const billing = data?.data;
+  const locations = locData?.data ?? [];
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [showAddLoc, setShowAddLoc] = useState(false);
+  const [addLocSaving, setAddLocSaving] = useState(false);
+  const [addLocError, setAddLocError] = useState<string | null>(null);
+
+  async function handleAddLocation(form: LocForm) {
+    setAddLocSaving(true);
+    setAddLocError(null);
+    try {
+      const res = await apiFetch<{ success: boolean; error?: { message: string } }>('/locations', {
+        method: 'POST',
+        body: JSON.stringify(form),
+      });
+      if (!res.success) { setAddLocError(res.error?.message ?? 'Failed to add location'); return; }
+      await Promise.all([mutateLocs(), mutateBilling()]);
+      setShowAddLoc(false);
+    } catch {
+      setAddLocError('Network error');
+    } finally {
+      setAddLocSaving(false);
+    }
+  }
 
   const startCheckout = async () => {
     setCheckoutLoading(true);
@@ -1852,23 +1875,68 @@ function BillingTab({ onGoToLocations }: { onGoToLocations: () => void }) {
           </div>
         )}
 
-        {/* Locations usage */}
-        <div className="flex items-center justify-between text-sm py-3 border-t border-slate-100">
-          <span className="text-slate-600">Locations</span>
-          <span className="font-medium text-slate-900">
-            {billing.locationCount} / {billing.locationsLimit} included
-            {extraLocations > 0 && (
-              <span className="text-amber-600 ml-1.5 text-xs">+{extraLocations} extra (${extraLocations * 125}/mo)</span>
+        {/* Locations section */}
+        <div className="pt-1 border-t border-slate-100 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-700">Locations</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {billing.locationCount} / {billing.locationsLimit} included
+                {extraLocations > 0 && <span className="text-amber-600 ml-1"> · {extraLocations} extra (+${extraLocations * 125}/mo)</span>}
+              </p>
+            </div>
+            {isAdmin && !showAddLoc && (
+              <button
+                onClick={() => setShowAddLoc(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                <Plus size={13} /> Add location
+              </button>
             )}
-          </span>
+          </div>
+
+          {/* Current locations list */}
+          {locations.length > 0 && (
+            <div className="space-y-1.5">
+              {locations.map((loc) => (
+                <div key={loc.id} className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg">
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">{loc.name}</p>
+                    {loc.address && <p className="text-xs text-slate-400">{[loc.address, loc.city, loc.state].filter(Boolean).join(', ')}</p>}
+                  </div>
+                  <button
+                    onClick={() => onGoToLocations()}
+                    className="text-xs text-brand-500 hover:underline shrink-0 ml-3"
+                  >
+                    Manage →
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add location inline form */}
+          {showAddLoc && isAdmin && (
+            <div className="border border-brand-200 bg-brand-50/30 rounded-xl p-4 space-y-3">
+              {billing.locationCount >= billing.locationsLimit && (
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
+                  <AlertCircle size={13} className="mt-0.5 shrink-0" />
+                  <span>
+                    You've used all {billing.locationsLimit} included location{billing.locationsLimit !== 1 ? 's' : ''}. Adding another will be billed at an additional <strong>$125/mo</strong>, charged immediately on a prorated basis.
+                  </span>
+                </div>
+              )}
+              <p className="text-sm font-medium text-slate-700">New location</p>
+              <LocationForm
+                initial={EMPTY_LOC_FORM}
+                onSave={(form) => void handleAddLocation(form)}
+                onCancel={() => { setShowAddLoc(false); setAddLocError(null); }}
+                saving={addLocSaving}
+                error={addLocError}
+              />
+            </div>
+          )}
         </div>
-        {extraLocations > 0 && (
-          <p className="text-xs text-slate-400 -mt-3">
-            Remove locations in{' '}
-            <button className="underline text-brand-500" onClick={onGoToLocations}>Settings → Locations</button>{' '}
-            to reduce charges.
-          </p>
-        )}
 
         {/* Action buttons */}
         {needsSubscription ? (
@@ -2082,7 +2150,7 @@ export default function Settings() {
         {activeTab === 'team' && <TeamTab />}
 
         {/* Billing tab */}
-        {activeTab === 'billing' && <BillingTab onGoToLocations={() => setActiveTab('locations')} />}
+        {activeTab === 'billing' && <BillingTab onGoToLocations={() => setActiveTab('locations')} isAdmin={isAdmin} />}
       </div>
     </div>
   );
