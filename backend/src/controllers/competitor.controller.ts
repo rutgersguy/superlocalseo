@@ -4,7 +4,7 @@ import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
 import { config } from '../config';
 import { logger } from '../utils/logger';
-import { getCompetitorRankedKeywords, locationCodeForCity } from '../services/dataforseo.service';
+import { getCompetitorRankedKeywords } from '../services/dataforseo.service';
 
 const createSchema = z.object({
   name: z.string().min(1).max(255),
@@ -328,18 +328,11 @@ export async function discoverKeywords(req: Request, res: Response, next: NextFu
       return;
     }
 
-    // Use the client's primary location for the location code
-    const primaryLoc = await db('locations')
-      .where({ client_id: req.clientId })
-      .select('city', 'state')
-      .first() as { city: string | null; state: string | null } | undefined;
-
-    const locationCode = locationCodeForCity(primaryLoc?.city, primaryLoc?.state);
-
-    // Fetch competitor's ranked keywords from DataForSEO Labs
+    // DataForSEO Labs ranked_keywords only accepts country-level codes (2840 = US national).
+    // DMA and state codes are rejected by this endpoint.
     const discovered = await getCompetitorRankedKeywords({
       domain: competitor.website,
-      locationCode,
+      locationCode: 2840,
       limit: 100,
     });
 
