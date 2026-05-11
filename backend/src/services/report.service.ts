@@ -584,6 +584,49 @@ export function renderReportHtml(data: ReportData): string {
   const citationBarColor =
     citations.score >= 80 ? '#16a34a' : citations.score >= 60 ? '#f59e0b' : '#dc2626';
 
+  const gapSection = (gap.winning + gap.competing + gap.vulnerable + gap.absent) > 0 ? `
+  <div style="page-break-before:always;padding:40px 40px 32px">
+    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Keyword Position Breakdown</h2>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:${gap.atRisk.length > 0 ? '20px' : '0'}">
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;text-align:center">
+        <div style="font-size:24px;font-weight:700;color:#16a34a">${gap.winning}</div>
+        <div style="font-size:11px;font-weight:600;color:#15803d;margin-top:4px;text-transform:uppercase;letter-spacing:0.05em">Winning (1–3)</div>
+      </div>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px;text-align:center">
+        <div style="font-size:24px;font-weight:700;color:#2563eb">${gap.competing}</div>
+        <div style="font-size:11px;font-weight:600;color:#1d4ed8;margin-top:4px;text-transform:uppercase;letter-spacing:0.05em">Competing (4–10)</div>
+      </div>
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px;text-align:center">
+        <div style="font-size:24px;font-weight:700;color:#d97706">${gap.vulnerable}</div>
+        <div style="font-size:11px;font-weight:600;color:#b45309;margin-top:4px;text-transform:uppercase;letter-spacing:0.05em">Vulnerable (11+)</div>
+      </div>
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;text-align:center">
+        <div style="font-size:24px;font-weight:700;color:#dc2626">${gap.absent}</div>
+        <div style="font-size:11px;font-weight:600;color:#b91c1c;margin-top:4px;text-transform:uppercase;letter-spacing:0.05em">Not Ranking</div>
+      </div>
+    </div>
+    ${gap.atRisk.length > 0 ? `
+    <p style="font-size:12px;font-weight:600;color:#374151;margin-bottom:10px">Keywords needing attention:</p>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+      <table>
+        <thead><tr><th>Keyword</th><th>Location</th><th class="center">Current Rank</th><th class="center">Status</th></tr></thead>
+        <tbody>
+          ${gap.atRisk.map((k, i) => `
+            <tr style="background:${i % 2 === 0 ? '#ffffff' : '#f9fafb'}">
+              <td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#111827">${escHtml(k.keyword)}</td>
+              <td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">${escHtml(k.location)}</td>
+              <td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center;color:#111827">${k.rank ?? '—'}</td>
+              <td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center">
+                <span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;${k.status === 'absent' ? 'background:#fef2f2;color:#dc2626' : 'background:#fffbeb;color:#d97706'}">
+                  ${k.status === 'absent' ? 'Not ranking' : 'Vulnerable'}
+                </span>
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : ''}
+  </div>` : '';
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -633,8 +676,10 @@ export function renderReportHtml(data: ReportData): string {
     </div>
   </div>
 
+  ${gapSection}
+
   <!-- Rankings -->
-  <div style="padding:0 40px 32px">
+  <div style="page-break-before:always;padding:40px 40px 32px">
     <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Keyword Rankings</h2>
     <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
       <div style="padding:14px 16px;background:#f0f4ff;border-bottom:1px solid #e5e7eb;display:flex;gap:32px">
@@ -659,7 +704,7 @@ export function renderReportHtml(data: ReportData): string {
   </div>
 
   <!-- Reviews -->
-  <div style="padding:0 40px 32px">
+  <div style="page-break-before:always;padding:40px 40px 32px">
     <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Reviews</h2>
     <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
       <div style="padding:14px 16px;background:#f0f4ff;border-bottom:1px solid #e5e7eb;display:flex;gap:32px;flex-wrap:wrap">
@@ -684,7 +729,7 @@ export function renderReportHtml(data: ReportData): string {
   </div>
 
   <!-- Citations -->
-  <div style="padding:0 40px 32px">
+  <div style="page-break-before:always;padding:40px 40px 32px">
     <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Citation Health</h2>
     <div style="border:1px solid #e5e7eb;border-radius:8px;padding:20px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
@@ -738,7 +783,7 @@ export function renderReportHtml(data: ReportData): string {
 
   <!-- ROI Estimates -->
   ${roi ? `
-  <div style="padding:0 40px 32px">
+  <div style="page-break-before:always;padding:40px 40px 32px">
     <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">ROI &amp; Revenue Attribution</h2>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
       ${statBox('Est. Monthly Clicks', roi.estClicks.toLocaleString(), brandColor)}
@@ -746,50 +791,6 @@ export function renderReportHtml(data: ReportData): string {
       ${statBox('Est. Monthly Revenue', `$${roi.estRevenue >= 1000 ? (roi.estRevenue / 1000).toFixed(1) + 'k' : roi.estRevenue.toLocaleString()}`, '#16a34a')}
     </div>
     <p style="margin-top:10px;font-size:11px;color:#9ca3af">Estimates based on your configured average customer value and keyword rankings. Actual results may vary.</p>
-  </div>` : ''}
-
-  <!-- Keyword Gap Analysis -->
-  ${(gap.winning + gap.competing + gap.vulnerable + gap.absent) > 0 ? `
-  <div style="padding:0 40px 32px">
-    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Keyword Position Breakdown</h2>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:${gap.atRisk.length > 0 ? '20px' : '0'}">
-      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;text-align:center">
-        <div style="font-size:24px;font-weight:700;color:#16a34a">${gap.winning}</div>
-        <div style="font-size:11px;font-weight:600;color:#15803d;margin-top:4px;text-transform:uppercase;letter-spacing:0.05em">Winning (1–3)</div>
-      </div>
-      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px;text-align:center">
-        <div style="font-size:24px;font-weight:700;color:#2563eb">${gap.competing}</div>
-        <div style="font-size:11px;font-weight:600;color:#1d4ed8;margin-top:4px;text-transform:uppercase;letter-spacing:0.05em">Competing (4–10)</div>
-      </div>
-      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px;text-align:center">
-        <div style="font-size:24px;font-weight:700;color:#d97706">${gap.vulnerable}</div>
-        <div style="font-size:11px;font-weight:600;color:#b45309;margin-top:4px;text-transform:uppercase;letter-spacing:0.05em">Vulnerable (11+)</div>
-      </div>
-      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;text-align:center">
-        <div style="font-size:24px;font-weight:700;color:#dc2626">${gap.absent}</div>
-        <div style="font-size:11px;font-weight:600;color:#b91c1c;margin-top:4px;text-transform:uppercase;letter-spacing:0.05em">Not Ranking</div>
-      </div>
-    </div>
-    ${gap.atRisk.length > 0 ? `
-    <p style="font-size:12px;font-weight:600;color:#374151;margin-bottom:10px">Keywords needing attention:</p>
-    <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
-      <table>
-        <thead><tr><th>Keyword</th><th>Location</th><th class="center">Current Rank</th><th class="center">Status</th></tr></thead>
-        <tbody>
-          ${gap.atRisk.map((k, i) => `
-            <tr style="background:${i % 2 === 0 ? '#ffffff' : '#f9fafb'}">
-              <td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#111827">${escHtml(k.keyword)}</td>
-              <td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">${escHtml(k.location)}</td>
-              <td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center;color:#111827">${k.rank ?? '—'}</td>
-              <td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center">
-                <span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;${k.status === 'absent' ? 'background:#fef2f2;color:#dc2626' : 'background:#fffbeb;color:#d97706'}">
-                  ${k.status === 'absent' ? 'Not ranking' : 'Vulnerable'}
-                </span>
-              </td>
-            </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>` : ''}
   </div>` : ''}
 
   <!-- Recommendations (new page) -->
