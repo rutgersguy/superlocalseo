@@ -558,7 +558,7 @@ const CB_PACKAGES = [
 const CB_PUBLISHERS = [
   { id: 'dataaxle', label: 'Data Axle' }, { id: 'neustar', label: 'Neustar' },
   { id: 'foursquare', label: 'Foursquare' }, { id: 'ypnetwork', label: 'YP Network' },
-  { id: 'gpsnetwork', label: 'GPS Network' },
+  { id: 'gpsnetwork', label: 'GPS Network' }, { id: 'locafynetwork', label: 'Locafy' },
 ];
 
 interface AdminLocation { locationId: string; locationName: string; clientId: string; clientName: string; blLocationId: number | null; }
@@ -585,6 +585,7 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lookupElapsed, setLookupElapsed] = useState(0);
+  const [dirFilter, setDirFilter] = useState('');
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -764,21 +765,30 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
 
               {lookupCitations.length > 0 && packageId !== 'cb0' && (
                 <div className="px-6 py-4">
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-2">
                     <h3 className="text-sm font-semibold text-gray-800">Directories <span className="text-xs font-normal text-gray-400">{selectedDomains.size} selected</span></h3>
                     <div className="flex gap-2 text-xs">
                       <button onClick={() => setSelectedDomains(new Set(lookupCitations.map((c) => c.domain)))} className="text-red-500 hover:underline">All</button>
                       <button onClick={() => setSelectedDomains(new Set())} className="text-gray-400 hover:underline">None</button>
                     </div>
                   </div>
+                  <input
+                    type="text"
+                    placeholder="Filter directories…"
+                    value={dirFilter}
+                    onChange={(e) => setDirFilter(e.target.value)}
+                    className="w-full mb-2 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-400"
+                  />
                   <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
-                    {lookupCitations.map((c) => (
-                      <label key={c.domain} className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
-                        <input type="checkbox" checked={selectedDomains.has(c.domain)} onChange={() => toggle(selectedDomains, setSelectedDomains as React.Dispatch<React.SetStateAction<Set<string>>>, c.domain)} className="rounded border-gray-300" />
-                        <span className="text-sm text-gray-700 flex-1">{c.domain}</span>
-                        {c.profileUrl && <a href={c.profileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline">↗</a>}
-                      </label>
-                    ))}
+                    {lookupCitations
+                      .filter((c) => !dirFilter || c.domain.toLowerCase().includes(dirFilter.toLowerCase()))
+                      .map((c) => (
+                        <label key={c.domain} className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
+                          <input type="checkbox" checked={selectedDomains.has(c.domain)} onChange={() => toggle(selectedDomains, setSelectedDomains as React.Dispatch<React.SetStateAction<Set<string>>>, c.domain)} className="rounded border-gray-300" />
+                          <span className="text-sm text-gray-700 flex-1">{c.domain}</span>
+                          {c.profileUrl && <a href={c.profileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline">↗</a>}
+                        </label>
+                      ))}
                   </div>
                 </div>
               )}
