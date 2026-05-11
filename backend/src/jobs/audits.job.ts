@@ -1,6 +1,7 @@
 import { Job } from 'bullmq';
 import { db } from '../db/connection';
-import { createAuditReport, createRankingRequest, fetchRankingResult } from '../services/brightlocal.service';
+import { createAuditReport } from '../services/brightlocal.service';
+import { getRankForKeyword, buildLocationName } from '../services/dataforseo.service';
 import { getPrimaryKeyword } from '../config/industry.config';
 import { pollPending } from '../controllers/audit_bl.controller';
 import { logger } from '../utils/logger';
@@ -25,12 +26,12 @@ export async function processAudits(job: Job): Promise<void> {
         'locations.zip as zip',
         'locations.phone as phone',
         'locations.website as website',
-        'locations.brightlocal_campaign_id as campaignId',
         'clients.industry as industry',
+        'clients.business_name as businessName',
       ) as Array<{
         locationId: string; clientId: string; name: string; city: string | null;
         state: string | null; zip: string | null; phone: string | null; website: string | null;
-        campaignId: string | null; industry: string | null;
+        industry: string | null; businessName: string | null;
       }>;
 
     logger.info(`Audit fan-out: ${locations.length} locations`);
@@ -44,15 +45,8 @@ export async function processAudits(job: Job): Promise<void> {
           .first();
         if (recent) continue;
 
-        // BL audit only when campaign exists (paid plan)
-        let reportId: string | null = null;
-        if (loc.campaignId) {
-          try {
-            const result = await createAuditReport(loc.campaignId);
-            reportId = result.reportId;
-          } catch (e) {
-            logger.warn('Audit fan-out: BL audit skipped', { locationId: loc.locationId, error: (e as Error).message });
-          }
+        const reportId: string | null = null;
+        {
         }
 
         await db('location_audits').insert({
@@ -79,7 +73,7 @@ export async function processAudits(job: Job): Promise<void> {
 }
 
 async function fireRankingCheck(
-  loc: { locationId: string; name: string; city: string | null; state: string | null; zip: string | null; phone: string | null; website: string | null },
+  loc: { locationId: string; name: string; city: string | null; state: string | null; phone: string | null; website: string | null; businessName: string | null },
   keyword: string,
 ): Promise<void> {
   try {
@@ -88,23 +82,14 @@ async function fireRankingCheck(
       await db('keywords').insert({ location_id: loc.locationId, keyword, created_at: new Date(), updated_at: new Date() });
     }
 
-    const geoLocation = [loc.city, loc.state, 'United States'].filter(Boolean).join(', ') || loc.name;
-    const requestId = await createRankingRequest({
+    const locationName = buildLocationName(loc.city, loc.state);
+    const result = await getRankForKeyword({
       keyword,
-      searchEngine: 'google-local-finder',
-      geoLocation,
+      locationName,
+      businessName: loc.businessName ?? loc.name,
       websiteUrl: loc.website,
-      businessName: loc.name,
       phone: loc.phone,
-      postcode: loc.zip,
     });
-
-    let result = await fetchRankingResult(requestId);
-    for (let i = 0; i < 24 && !result.ready; i++) {
-      await new Promise((r) => setTimeout(r, 5000));
-      result = await fetchRankingResult(requestId);
-    }
-    if (!result.ready) { logger.warn('Audit ranking timed out', { locationId: loc.locationId, keyword }); return; }
 
     const kw = await db('keywords').where({ location_id: loc.locationId, keyword }).first() as { id: string } | undefined;
     if (kw) {
@@ -113,7 +98,7 @@ async function fireRankingCheck(
         location_id: loc.locationId,
         rank: result.rank,
         url_ranked: result.url,
-        search_engine: result.searchEngine,
+        search_engine: 'google',
         rank_type: result.rankType ?? 'organic',
         pulled_at: new Date(),
       });

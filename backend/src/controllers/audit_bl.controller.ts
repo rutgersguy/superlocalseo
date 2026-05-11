@@ -2,9 +2,10 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
-import { createAuditReport, pollAuditReport, createRankingRequest, fetchRankingResult } from '../services/brightlocal.service';
+import { createAuditReport, pollAuditReport } from '../services/brightlocal.service';
 import { getPrimaryKeyword } from '../config/industry.config';
 import { computeAuditScores } from '../services/audit_score.service';
+import { getRankForKeyword, buildLocationName } from '../services/dataforseo.service';
 import { logger } from '../utils/logger';
 
 export async function list(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -72,10 +73,10 @@ export async function trigger(req: Request, res: Response, next: NextFunction): 
 
     // Always fire a Data API ranking request for the primary industry keyword.
     // This captures fresh ranking data at audit time regardless of BL plan tier.
-    const client = await db('clients').where({ id: req.clientId }).select('industry').first() as { industry?: string } | undefined;
+    const client = await db('clients').where({ id: req.clientId }).select('industry', 'business_name').first() as { industry?: string; business_name?: string } | undefined;
     const primaryKeyword = getPrimaryKeyword(client?.industry, location.city as string | null);
     if (primaryKeyword) {
-      void fireAuditRankingRequest(location.id as string, primaryKeyword, location);
+      void fireAuditRankingRequest(location.id as string, primaryKeyword, location, client?.business_name ?? (location.name as string));
     }
 
     const [row] = await db('location_audits').insert({
@@ -122,12 +123,13 @@ async function computeAndSaveScores(
   }
 }
 
-// Fires a ranking request for the primary industry keyword and stores the snapshot.
+// Fires a ranking check for the primary industry keyword via DataForSEO and stores the snapshot.
 // Runs in the background — does not block the API response.
 async function fireAuditRankingRequest(
   locationId: string,
   keyword: string,
   location: Record<string, unknown>,
+  businessName: string,
 ): Promise<void> {
   try {
     const exists = await db('keywords').where({ location_id: locationId, keyword }).first();
@@ -135,23 +137,14 @@ async function fireAuditRankingRequest(
       await db('keywords').insert({ location_id: locationId, keyword, created_at: new Date(), updated_at: new Date() });
     }
 
-    const geoLocation = [location.city, location.state, 'United States'].filter(Boolean).join(', ') || (location.name as string);
-    const requestId = await createRankingRequest({
+    const locationName = buildLocationName(location.city as string | null, location.state as string | null);
+    const result = await getRankForKeyword({
       keyword,
-      searchEngine: 'google-local-finder',
-      geoLocation,
+      locationName,
+      businessName,
       websiteUrl: location.website as string | null,
-      businessName: location.name as string,
       phone: location.phone as string | null,
-      postcode: location.zip as string | null,
     });
-
-    let result = await fetchRankingResult(requestId);
-    for (let i = 0; i < 24 && !result.ready; i++) {
-      await new Promise((r) => setTimeout(r, 5000));
-      result = await fetchRankingResult(requestId);
-    }
-    if (!result.ready) { logger.warn('Audit ranking request timed out', { locationId, keyword }); return; }
 
     const kw = await db('keywords').where({ location_id: locationId, keyword }).first() as { id: string } | undefined;
     if (kw) {
@@ -160,7 +153,7 @@ async function fireAuditRankingRequest(
         location_id: locationId,
         rank: result.rank,
         url_ranked: result.url,
-        search_engine: result.searchEngine,
+        search_engine: 'google',
         rank_type: result.rankType ?? 'organic',
         pulled_at: new Date(),
       });

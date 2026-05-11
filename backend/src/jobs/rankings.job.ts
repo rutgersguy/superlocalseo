@@ -1,8 +1,6 @@
 import { Job } from 'bullmq';
 import { db } from '../db/connection';
-import { createRankingRequest, fetchRankingResult, RankingSearchEngine } from '../services/brightlocal.service';
-import { getAggregatedSearchVolumes } from '../services/dataforseo.service';
-import { config } from '../config';
+import { getRankForKeyword, getAggregatedSearchVolumes, buildLocationName } from '../services/dataforseo.service';
 import { logger } from '../utils/logger';
 
 export interface SyncResult {
@@ -13,19 +11,6 @@ export interface SyncResult {
   errors: Array<{ locationId: string; message: string }>;
   noKeywords: boolean;
   notConfigured: boolean;
-}
-
-const SEARCH_ENGINES: RankingSearchEngine[] = ['google', 'google-local-finder'];
-const POLL_MAX_ATTEMPTS = 24;  // 24 × 5s = 2 min max per request
-const POLL_INTERVAL_MS = 5000;
-
-async function pollUntilReady(requestId: string) {
-  for (let i = 0; i < POLL_MAX_ATTEMPTS; i++) {
-    const result = await fetchRankingResult(requestId);
-    if (result.ready) return result;
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-  }
-  throw new Error(`Request ${requestId} did not complete within ${(POLL_MAX_ATTEMPTS * POLL_INTERVAL_MS) / 1000}s`);
 }
 
 export async function syncRankingsForClient(clientId: string): Promise<SyncResult> {
@@ -39,13 +24,9 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
     notConfigured: false,
   };
 
-  if (!config.brightlocal.apiKey) {
-    result.notConfigured = true;
-    return result;
-  }
-
   const clientRow = await db('clients').where({ id: clientId }).select('business_name').first();
-  const clientBusinessName = (clientRow as Record<string, unknown> | undefined)?.business_name as string | undefined;
+  const businessName = (clientRow as Record<string, unknown> | undefined)?.business_name as string | undefined;
+  if (!businessName) return result;
 
   const locations = await db('locations')
     .where({ client_id: clientId })
@@ -60,7 +41,7 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
     if (keywords.length === 0) continue;
     result.locationsWithKeywords++;
 
-    // Backfill missing search volumes from DataForSEO (state-scoped for accuracy)
+    // Backfill missing search volumes
     const missingVolume = keywords.filter((k) => k.monthly_search_volume == null);
     if (missingVolume.length > 0) {
       const serviceArea = (location.service_area as string[]) ?? [];
@@ -83,84 +64,52 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
       }
     }
 
-    const primaryGeo = [location.city, location.state, 'United States']
-      .filter(Boolean)
-      .join(', ') || (location.name as string);
-
-    // Build list of geos to check: primary city (geo_location=null) + service area cities (capped at 4 extra)
+    // Build list of geos: primary city + service area cities (capped at 4 extra)
     const serviceArea = (location.service_area as string[]) ?? [];
-    const extraGeos: Array<{ geoStr: string; geoLabel: string }> = serviceArea.slice(0, 4).map((city) => {
-      // city is stored as "Broken Arrow, OK" — append country for BrightLocal
-      const parts = city.split(',').map((s) => s.trim());
-      return { geoStr: [...parts, 'United States'].join(', '), geoLabel: city };
-    });
-    const allGeos: Array<{ geoStr: string; geoLabel: string | null }> = [
-      { geoStr: primaryGeo, geoLabel: null },
-      ...extraGeos,
+    const primaryLocationName = buildLocationName(location.city as string | null, location.state as string | null);
+    const allGeos: Array<{ locationName: string; geoLabel: string | null }> = [
+      { locationName: primaryLocationName, geoLabel: null },
+      ...serviceArea.slice(0, 4).map((city) => {
+        const [cityPart, statePart] = city.split(',').map((s) => s.trim());
+        return { locationName: buildLocationName(cityPart, statePart), geoLabel: city };
+      }),
     ];
 
-    // Use the client's business name for NAP matching; fall back to the location label.
-    const businessName = clientBusinessName ?? (location.name as string);
-
-    // Fire all requests for this location upfront, then poll in parallel
-    const pending: Array<{ requestId: string; keywordId: string; keyword: string; engine: string; geoLabel: string | null }> = [];
-
-    for (const { geoStr, geoLabel } of allGeos) {
+    for (const { locationName, geoLabel } of allGeos) {
       for (const kw of keywords) {
-        for (const engine of SEARCH_ENGINES) {
-          try {
-            const requestId = await createRankingRequest({
-              keyword: kw.keyword as string,
-              searchEngine: engine,
-              geoLocation: geoStr,
-              websiteUrl: location.website as string | null,
-              businessName,
-              phone: location.phone as string | null,
-              postcode: location.zip as string | null,
-            });
-            pending.push({ requestId, keywordId: kw.id as string, keyword: kw.keyword as string, engine, geoLabel });
-            result.requestsFired++;
-          } catch (e) {
-            result.errors.push({
-              locationId: location.id as string,
-              message: `createRankingRequest "${kw.keyword as string}"/${engine}/${geoLabel ?? 'primary'}: ${(e as Error).message}`,
-            });
-          }
+        try {
+          result.requestsFired++;
+          const rankResult = await getRankForKeyword({
+            keyword: kw.keyword as string,
+            locationName,
+            businessName,
+            websiteUrl: location.website as string | null,
+            phone: location.phone as string | null,
+          });
+
+          await db('ranking_snapshots').insert({
+            keyword_id: kw.id,
+            location_id: location.id,
+            rank: rankResult.rank,
+            url_ranked: rankResult.url,
+            search_engine: 'google',
+            rank_type: rankResult.rankType ?? 'organic',
+            geo_location: geoLabel,
+            pulled_at: new Date(),
+          });
+          result.snapshotsSaved++;
+        } catch (e) {
+          result.errors.push({
+            locationId: location.id as string,
+            message: `getRankForKeyword "${kw.keyword as string}"/${geoLabel ?? 'primary'}: ${(e as Error).message}`,
+          });
         }
       }
     }
 
-    const settled = await Promise.allSettled(pending.map((p) => pollUntilReady(p.requestId)));
-
-    for (let i = 0; i < pending.length; i++) {
-      const { keywordId, keyword: kw, geoLabel } = pending[i];
-      const outcome = settled[i];
-
-      if (outcome.status === 'rejected') {
-        result.errors.push({
-          locationId: location.id as string,
-          message: `poll "${kw}"/${geoLabel ?? 'primary'}: ${(outcome.reason as Error).message}`,
-        });
-        continue;
-      }
-
-      const r = outcome.value;
-      await db('ranking_snapshots').insert({
-        keyword_id: keywordId,
-        location_id: location.id,
-        rank: r.rank,
-        url_ranked: r.url,
-        search_engine: r.searchEngine,
-        rank_type: r.rankType ?? 'organic',
-        geo_location: geoLabel,
-        pulled_at: new Date(),
-      });
-      result.snapshotsSaved++;
-    }
-
     logger.info('Rankings synced for location', {
       locationId: location.id,
-      requests: pending.length,
+      requests: result.requestsFired,
       snapshots: result.snapshotsSaved,
     });
   }
@@ -172,32 +121,23 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
 export async function processRankings(job: Job): Promise<void> {
   const clientId: string | undefined = job.data?.clientId;
 
-  let query = db('integrations')
-    .where({ provider: 'brightlocal', status: 'connected' })
-    .select('client_id as clientId', 'id as integrationId');
+  let query = db('clients')
+    .whereNotIn('subscription_status', ['canceled', 'past_due'])
+    .select('id as clientId');
 
-  if (clientId) {
-    query = query.where('client_id', clientId);
-  }
+  if (clientId) query = query.where('id', clientId);
 
-  const integrations = await query;
+  const clients = await query as Array<{ clientId: string }>;
 
-  for (const integration of integrations) {
+  for (const { clientId: cid } of clients) {
     try {
-      const syncResult = await syncRankingsForClient(integration.clientId as string);
-      await db('integrations')
-        .where({ id: integration.integrationId })
-        .update({ last_pull_at: new Date() });
-      logger.info('Rankings sync complete', { clientId: integration.clientId, ...syncResult });
+      const syncResult = await syncRankingsForClient(cid);
+      logger.info('Rankings sync complete', { clientId: cid, ...syncResult });
     } catch (e) {
       logger.error('Failed to sync rankings for client', {
-        clientId: integration.clientId,
+        clientId: cid,
         error: (e as Error).message,
       });
-      await db('integrations')
-        .where({ id: integration.integrationId })
-        .update({ error_message: (e as Error).message })
-        .catch(() => undefined);
     }
   }
 }

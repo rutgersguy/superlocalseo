@@ -158,6 +158,127 @@ async function dfsPost(path: string, body: unknown): Promise<unknown> {
   return res.json();
 }
 
+// ─── SERP rank lookup ─────────────────────────────────────────────────────────
+
+const STATE_NAMES: Record<string, string> = {
+  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
+  CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida', GA: 'Georgia',
+  HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa',
+  KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
+  MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri',
+  MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey',
+  NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio',
+  OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina',
+  SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont',
+  VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
+  DC: 'District of Columbia',
+};
+
+export function buildLocationName(city: string | null | undefined, state: string | null | undefined): string {
+  const parts: string[] = [];
+  if (city) parts.push(city.split(',')[0].trim());
+  if (state) parts.push(STATE_NAMES[state.trim().toUpperCase()] ?? state.trim());
+  parts.push('United States');
+  return parts.join(',');
+}
+
+export interface SerpRankResult {
+  rank: number | null;
+  url: string | null;
+  rankType: 'organic' | 'local_pack' | null;
+}
+
+function normalizeDomain(url: string | null | undefined): string {
+  if (!url) return '';
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; }
+}
+
+function normalizeNameForMatch(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function businessMatches(
+  resultTitle: string | null | undefined,
+  resultUrl: string | null | undefined,
+  resultPhone: string | null | undefined,
+  businessName: string,
+  websiteUrl: string | null | undefined,
+  phone: string | null | undefined,
+): boolean {
+  if (websiteUrl && resultUrl) {
+    const a = normalizeDomain(websiteUrl), b = normalizeDomain(resultUrl);
+    if (a && b && (a.includes(b) || b.includes(a))) return true;
+  }
+  if (resultTitle) {
+    const a = normalizeNameForMatch(businessName), b = normalizeNameForMatch(resultTitle);
+    if (a && b && (a.includes(b) || b.includes(a))) return true;
+  }
+  if (phone && resultPhone) {
+    const a = phone.replace(/\D/g, ''), b = resultPhone.replace(/\D/g, '');
+    if (a.length >= 7 && b.includes(a.slice(-7))) return true;
+  }
+  return false;
+}
+
+export async function getRankForKeyword(params: {
+  keyword: string;
+  locationName: string;
+  businessName: string;
+  websiteUrl?: string | null;
+  phone?: string | null;
+}): Promise<SerpRankResult> {
+  if (!config.dataforseo.login || !config.dataforseo.password) {
+    throw new Error('DataForSEO credentials not configured');
+  }
+
+  const data = await dfsPost('/serp/google/organic/live/advanced', [{
+    keyword: params.keyword,
+    location_name: params.locationName,
+    language_name: 'English',
+    device: 'desktop',
+    os: 'windows',
+    depth: 30,
+  }]) as {
+    tasks?: Array<{
+      result?: Array<{
+        items?: Array<{
+          type: string;
+          rank_group?: number;
+          url?: string;
+          title?: string;
+          items?: Array<{ type: string; rank_group?: number; title?: string; url?: string; phone?: string }>;
+        }>;
+      }>;
+    }>;
+  };
+
+  const items = data.tasks?.[0]?.result?.[0]?.items ?? [];
+
+  // Local pack first (higher value for local SEO)
+  for (const item of items) {
+    if (item.type === 'local_pack' && item.items) {
+      for (const sub of item.items) {
+        if (businessMatches(sub.title, sub.url, sub.phone, params.businessName, params.websiteUrl, params.phone)) {
+          return { rank: sub.rank_group ?? null, url: sub.url ?? null, rankType: 'local_pack' };
+        }
+      }
+    }
+  }
+
+  // Organic fallback
+  for (const item of items) {
+    if (item.type === 'organic') {
+      if (businessMatches(item.title, item.url, null, params.businessName, params.websiteUrl, params.phone)) {
+        return { rank: item.rank_group ?? null, url: item.url ?? null, rankType: 'organic' };
+      }
+    }
+  }
+
+  return { rank: null, url: null, rankType: null };
+}
+
+// ─── Search volumes ───────────────────────────────────────────────────────────
+
 interface SearchVolumeResult {
   keyword: string;
   monthlySearchVolume: number | null;
