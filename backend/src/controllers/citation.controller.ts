@@ -2,7 +2,15 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
-import { submitCitations, getCitationSubmissions } from '../services/brightlocal.service';
+import {
+  getCbCredits,
+  createCbCampaign,
+  getCbCampaignLookup,
+  confirmCbCampaign,
+  getCbCampaign,
+  type CbPackageId,
+  type CbPublisher,
+} from '../services/brightlocal.service';
 import { logger } from '../utils/logger';
 
 export const listQuerySchema = z.object({
@@ -91,60 +99,121 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
   }
 }
 
-// ─── BL-4: Citation Builder ───────────────────────────────────────────────────
+// ─── Citation Builder (Management API v1) ────────────────────────────────────
+// Multi-step flow: create campaign → poll lookup → confirm with package
+// Requires brightlocal_location_id (integer) set on the location record.
 
-const submitSchema = z.object({
-  locationId: z.string().uuid(),
-  directories: z.array(z.string().min(1)).optional(),
-});
-
-export async function submit(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function getCbCreditsHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const parsed = submitSchema.safeParse(req.body);
-    if (!parsed.success) { err(res, parsed.error.errors[0]?.message ?? 'Validation error', 400, 'VALIDATION_ERROR'); return; }
-
-    const { locationId, directories } = parsed.data;
-    const location = await db('locations')
-      .where({ id: locationId, client_id: req.clientId })
-      .first() as { id: string; brightlocal_campaign_id?: string } | undefined;
-    if (!location) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
-    if (!location.brightlocal_campaign_id) { err(res, 'Location has no BrightLocal campaign configured', 422, 'NO_BL_CAMPAIGN'); return; }
-
-    let targetDirs: string[];
-    if (directories && directories.length > 0) {
-      targetDirs = directories;
-    } else {
-      const unlistedRows = await db('citation_snapshots')
-        .where({ location_id: locationId, listed: false })
-        .select('directory')
-        .groupBy('directory') as Array<{ directory: string }>;
-      targetDirs = unlistedRows.map((r) => r.directory);
-    }
-
-    if (targetDirs.length === 0) { ok(res, { submitted: 0, message: 'No unlisted directories found' }); return; }
-
-    const { jobId } = await submitCitations(location.brightlocal_campaign_id, targetDirs);
-
-    const rows = targetDirs.map((dir) => ({
-      client_id: req.clientId,
-      location_id: locationId,
-      directory: dir,
-      status: 'pending',
-      bl_submission_id: jobId,
-      submitted_at: new Date(),
-    }));
-
-    await db('citation_submissions')
-      .insert(rows)
-      .onConflict(['location_id', 'directory'])
-      .merge(['status', 'bl_submission_id', 'submitted_at']);
-
-    ok(res, { submitted: targetDirs.length, jobId }, 202);
+    const credits = await getCbCredits();
+    ok(res, { credits });
   } catch (e) {
     next(e);
   }
 }
 
+const createCampaignSchema = z.object({
+  locationId: z.string().uuid(),
+});
+
+export async function createCampaign(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const parsed = createCampaignSchema.safeParse(req.body);
+    if (!parsed.success) { err(res, parsed.error.errors[0]?.message ?? 'Validation error', 400, 'VALIDATION_ERROR'); return; }
+
+    const { locationId } = parsed.data;
+    const location = await db('locations')
+      .where({ id: locationId, client_id: req.clientId })
+      .first() as { id: string; brightlocal_location_id?: number | null } | undefined;
+    if (!location) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
+    if (!location.brightlocal_location_id) {
+      err(res, 'Location has no BrightLocal location ID configured. Add it in Location settings.', 422, 'NO_BL_LOCATION_ID');
+      return;
+    }
+
+    const campaignId = await createCbCampaign(location.brightlocal_location_id);
+    ok(res, { campaignId }, 201);
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function getCampaignLookup(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { campaignId } = req.params;
+    const result = await getCbCampaignLookup(campaignId);
+    ok(res, result);
+  } catch (e) {
+    next(e);
+  }
+}
+
+const confirmCampaignSchema = z.object({
+  packageId: z.enum(['cb0', 'cb10', 'cb15', 'cb25', 'cb30', 'cb50', 'cb75', 'cb100']),
+  citations: z.array(z.string()).default([]),
+  publishers: z.array(z.enum(['dataaxle', 'neustar', 'foursquare', 'gpsnetwork', 'ypnetwork', 'locafynetwork'])).default([]),
+  autoSelect: z.boolean().default(false),
+  removeDuplicates: z.boolean().default(false),
+  notes: z.string().optional(),
+  express: z.boolean().default(false),
+  locationId: z.string().uuid(),
+});
+
+export async function confirmCampaign(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const parsed = confirmCampaignSchema.safeParse(req.body);
+    if (!parsed.success) { err(res, parsed.error.errors[0]?.message ?? 'Validation error', 400, 'VALIDATION_ERROR'); return; }
+
+    const { campaignId } = req.params;
+    const { locationId, ...opts } = parsed.data;
+
+    const location = await db('locations').where({ id: locationId, client_id: req.clientId }).first();
+    if (!location) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
+
+    await confirmCbCampaign(campaignId, {
+      packageId: opts.packageId as CbPackageId,
+      citations: opts.citations,
+      publishers: opts.publishers as CbPublisher[],
+      autoSelect: opts.autoSelect,
+      removeDuplicates: opts.removeDuplicates,
+      notes: opts.notes,
+      express: opts.express,
+    });
+
+    // Record confirmed citations as pending submissions for tracking
+    const now = new Date();
+    const rows = opts.citations.map((domain) => ({
+      client_id: req.clientId as string,
+      location_id: locationId,
+      directory: domain,
+      status: 'pending',
+      bl_submission_id: campaignId,
+      submitted_at: now,
+    }));
+    if (rows.length > 0) {
+      await db('citation_submissions')
+        .insert(rows)
+        .onConflict(['location_id', 'directory'])
+        .merge(['status', 'bl_submission_id', 'submitted_at']);
+    }
+
+    ok(res, { message: 'Campaign confirmed' });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function getCampaignStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { campaignId } = req.params;
+    const campaign = await getCbCampaign(campaignId);
+    ok(res, campaign);
+  } catch (e) {
+    next(e);
+  }
+}
+
+// Legacy no-op — kept for route compatibility; new submissions tracked via getCampaignStatus
 export async function listSubmissions(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { locationId } = req.query as Record<string, string>;
@@ -236,6 +305,8 @@ export async function history(req: Request, res: Response, next: NextFunction): 
   }
 }
 
+// Polls active CB campaigns (stored in bl_submission_id) via Management API v1
+// and syncs per-citation status back to citation_submissions.
 export async function pollSubmissions(): Promise<void> {
   const pending = await db('citation_submissions')
     .whereIn('status', ['pending', 'submitted'])
@@ -245,19 +316,18 @@ export async function pollSubmissions(): Promise<void> {
 
   for (const row of pending) {
     try {
-      const statuses = await getCitationSubmissions(row.bl_submission_id);
-      for (const s of statuses) {
+      const campaign = await getCbCampaign(row.bl_submission_id);
+      for (const c of campaign.citations) {
         await db('citation_submissions')
-          .where({ location_id: row.location_id, directory: s.directory, bl_submission_id: row.bl_submission_id })
+          .where({ location_id: row.location_id, directory: c.domain, bl_submission_id: row.bl_submission_id })
           .update({
-            status: s.status,
-            listing_url: s.listingUrl ?? null,
-            rejection_reason: s.rejectionReason ?? null,
-            live_at: s.status === 'live' ? new Date() : null,
+            status: c.status ?? 'pending',
+            listing_url: c.listingUrl ?? null,
+            live_at: c.liveAt ? new Date(c.liveAt) : null,
           });
       }
     } catch (e) {
-      logger.warn('Citation submission poll failed', { jobId: row.bl_submission_id, error: (e as Error).message });
+      logger.warn('Citation campaign poll failed', { campaignId: row.bl_submission_id, error: (e as Error).message });
     }
   }
 }

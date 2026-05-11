@@ -455,57 +455,164 @@ export async function replyToReview(
   return { success: data?.response?.success ?? true, replyId: data?.response?.reply_id };
 }
 
-// ─── Citation Builder (Management API — pending Harry's response) ─────────────
+// ─── Citation Builder (Management API v1) ────────────────────────────────────
+// Base: https://api.brightlocal.com/manage/v1/citation-builder
+// Auth: x-api-key (same key as blDataFetch)
+// Cost: credits deducted at Confirm step — cb10=$2/site, cb15=$2/site, ..., cb100=$2/site
+//       Aggregator publishers: $30 each (dataaxle, neustar, foursquare, gpsnetwork, ypnetwork)
+// Docs: https://developer.brightlocal.com/docs/management-apis/agjq3z0pfs6nk-citation-builder
+//
+// Flow:
+//   1. createCbCampaign(blLocationId) → campaign_id
+//   2. poll getCbCampaignLookup(campaign_id) until lookup_status === 'complete'
+//   3. Present lookup citations to user; user picks package + domains + publishers
+//   4. confirmCbCampaign(campaign_id, { packageId, citations, publishers, ... })
+//   5. Track via getCbCampaign(campaign_id)
 
-export interface SubmissionStatus {
-  directory: string;
-  status: 'pending' | 'submitted' | 'live' | 'rejected' | 'duplicate';
-  listingUrl?: string;
-  rejectionReason?: string;
+export type CbPackageId = 'cb0' | 'cb10' | 'cb15' | 'cb25' | 'cb30' | 'cb50' | 'cb75' | 'cb100';
+export type CbPublisher = 'dataaxle' | 'neustar' | 'foursquare' | 'gpsnetwork' | 'ypnetwork' | 'locafynetwork';
+
+export interface CbLookupCitation {
+  domain: string;
+  profileUrl: string;
+  nap: { name?: string; address?: string; phone?: string; postcode?: string };
 }
 
-export async function submitCitations(
-  campaignId: string,
-  directories: string[],
-): Promise<{ jobId: string }> {
-  const apiKey = config.brightlocal.apiKey;
-  assertApiKey(apiKey);
-  const res = await blFetch('/v4/cb/create', apiKey, {
+export interface CbLookupResult {
+  lookupStatus: 'complete' | 'processing';
+  lookupCompletedAt: string | null;
+  citations: CbLookupCitation[];
+}
+
+export interface CbCampaignStatus {
+  campaignId: string | number;
+  status: string;
+  locationId: number;
+  citations: Array<{
+    domain: string;
+    status: string;
+    listingUrl?: string;
+    submittedAt?: string;
+    liveAt?: string;
+  }>;
+}
+
+export async function getCbCredits(): Promise<number> {
+  const res = await blDataFetch('/manage/v1/citation-builder/credits');
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`BrightLocal getCbCredits failed: ${res.status} ${text}`);
+  }
+  const data = (await res.json()) as { credits?: number };
+  return data.credits ?? 0;
+}
+
+export async function createCbCampaign(
+  blLocationId: number,
+  emailAlerts?: { enabled: boolean; addresses?: string[] },
+): Promise<string> {
+  const body: Record<string, unknown> = { location_id: blLocationId };
+  if (emailAlerts) body.email_alerts = emailAlerts;
+
+  const res = await blDataFetch('/manage/v1/citation-builder', {
     method: 'POST',
-    body: JSON.stringify({ campaign_id: campaignId, directories }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`BrightLocal submitCitations failed: ${res.status} ${body}`);
+    const text = await res.text().catch(() => '');
+    throw new Error(`BrightLocal createCbCampaign failed: ${res.status} ${text}`);
   }
-  const data = (await res.json()) as { response?: { job_id?: string } };
-  const jobId = data?.response?.job_id;
-  if (!jobId) throw new Error('BrightLocal submitCitations: no job_id in response');
-  return { jobId };
+  const data = (await res.json()) as { campaign_id?: number };
+  if (!data.campaign_id) throw new Error('BrightLocal createCbCampaign: no campaign_id in response');
+  return String(data.campaign_id);
 }
 
-export async function getCitationSubmissions(jobId: string): Promise<SubmissionStatus[]> {
-  const apiKey = config.brightlocal.apiKey;
-  assertApiKey(apiKey);
-  const res = await blFetch(`/v4/cb/get?job_id=${encodeURIComponent(jobId)}`, apiKey);
+export async function getCbCampaignLookup(campaignId: string): Promise<CbLookupResult> {
+  const res = await blDataFetch(`/manage/v1/citation-builder/${encodeURIComponent(campaignId)}/lookup`);
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`BrightLocal getCitationSubmissions failed: ${res.status} ${body}`);
+    const text = await res.text().catch(() => '');
+    throw new Error(`BrightLocal getCbCampaignLookup failed: ${res.status} ${text}`);
   }
   const data = (await res.json()) as {
-    response?: {
-      submissions?: Array<{
-        directory: string;
-        status: string;
-        listing_url?: string;
-        rejection_reason?: string;
-      }>;
-    };
+    lookup_status?: string;
+    lookup_completed_at?: string;
+    citations?: Array<{
+      domain?: string;
+      profile_url?: string;
+      nap?: { name?: string; address?: string; phone?: string; postcode?: string };
+    }>;
   };
-  return (data?.response?.submissions ?? []).map((s) => ({
-    directory: s.directory,
-    status: (s.status as SubmissionStatus['status']) ?? 'pending',
-    listingUrl: s.listing_url,
-    rejectionReason: s.rejection_reason,
-  }));
+  return {
+    lookupStatus: (data.lookup_status as 'complete' | 'processing') ?? 'processing',
+    lookupCompletedAt: data.lookup_completed_at ?? null,
+    citations: (data.citations ?? []).map((c) => ({
+      domain: c.domain ?? '',
+      profileUrl: c.profile_url ?? '',
+      nap: c.nap ?? {},
+    })),
+  };
+}
+
+export async function confirmCbCampaign(
+  campaignId: string,
+  opts: {
+    packageId: CbPackageId;
+    citations: string[];
+    publishers: CbPublisher[];
+    autoSelect?: boolean;
+    removeDuplicates?: boolean;
+    notes?: string;
+    express?: boolean;
+  },
+): Promise<void> {
+  const res = await blDataFetch(`/manage/v1/citation-builder/${encodeURIComponent(campaignId)}/confirm`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      package_id: opts.packageId,
+      citations: opts.citations,
+      publishers: opts.publishers,
+      auto_select: opts.autoSelect ?? false,
+      remove_duplicates: opts.removeDuplicates ?? false,
+      notes: opts.notes,
+      express: opts.express ?? false,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`BrightLocal confirmCbCampaign failed: ${res.status} ${text}`);
+  }
+}
+
+export async function getCbCampaign(campaignId: string, page = 1): Promise<CbCampaignStatus> {
+  const res = await blDataFetch(
+    `/manage/v1/citation-builder/${encodeURIComponent(campaignId)}?page=${page}`,
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`BrightLocal getCbCampaign failed: ${res.status} ${text}`);
+  }
+  const data = (await res.json()) as {
+    campaign_id?: number;
+    status?: string;
+    location_id?: number;
+    citations?: Array<{
+      domain?: string;
+      status?: string;
+      listing_url?: string;
+      submitted_at?: string;
+      live_at?: string;
+    }>;
+  };
+  return {
+    campaignId: data.campaign_id ?? campaignId,
+    status: data.status ?? 'unknown',
+    locationId: data.location_id ?? 0,
+    citations: (data.citations ?? []).map((c) => ({
+      domain: c.domain ?? '',
+      status: c.status ?? '',
+      listingUrl: c.listing_url,
+      submittedAt: c.submitted_at,
+      liveAt: c.live_at,
+    })),
+  };
 }
