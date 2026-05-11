@@ -220,6 +220,46 @@ function businessMatches(
   return false;
 }
 
+export async function getRankForCoordinate(params: {
+  keyword: string;
+  lat: number;
+  lng: number;
+  businessName: string;
+  websiteUrl?: string | null;
+  phone?: string | null;
+}): Promise<SerpRankResult> {
+  if (!config.dataforseo.login || !config.dataforseo.password) {
+    throw new Error('DataForSEO credentials not configured');
+  }
+
+  const data = await dfsPost('/serp/google/maps/live/advanced', [{
+    keyword: params.keyword,
+    location_coordinate: `${params.lat},${params.lng}`,
+    language_name: 'English',
+    device: 'desktop',
+  }]) as {
+    tasks?: Array<{
+      result?: Array<{
+        items?: Array<{
+          type: string;
+          rank_group?: number;
+          title?: string;
+          url?: string;
+          phone?: string;
+        }>;
+      }>;
+    }>;
+  };
+
+  const items = data.tasks?.[0]?.result?.[0]?.items ?? [];
+  for (const item of items) {
+    if (businessMatches(item.title, item.url, item.phone, params.businessName, params.websiteUrl, params.phone)) {
+      return { rank: item.rank_group ?? null, url: item.url ?? null, rankType: 'local_pack' };
+    }
+  }
+  return { rank: null, url: null, rankType: null };
+}
+
 export async function getRankForKeyword(params: {
   keyword: string;
   locationName: string;

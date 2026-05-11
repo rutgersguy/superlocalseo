@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
 import { createRankingRequest, fetchRankingResult } from '../services/brightlocal.service';
+import { getRankForCoordinate } from '../services/dataforseo.service';
 import { logger } from '../utils/logger';
 
 const DEGREE_PER_MILE = 0.0145;
@@ -81,31 +82,57 @@ async function runGeoGrid(
       }
     }
 
-    // Fire all ranking requests
-    const fired = (
-      await Promise.allSettled(
-        points.map((pt) =>
-          createRankingRequest({
-            keyword,
-            searchEngine: 'google-local-finder',
-            coordinates: { lat: pt.lat, lng: pt.lng },
-            country: 'USA',
-            websiteUrl: locationMeta.website,
-            businessName: locationMeta.name,
-            phone: locationMeta.phone,
-            postcode: locationMeta.zip,
-          }).then((requestId) => ({ ...pt, requestId })),
-        ),
-      )
-    )
+    type GridResult = typeof points[0] & { rank: number | null; url: string | null };
+    const results: GridResult[] = [];
+
+    // Attempt BrightLocal for all points; fall back to DataForSEO per point on any error.
+    const blAttempts = await Promise.allSettled(
+      points.map((pt) =>
+        createRankingRequest({
+          keyword,
+          searchEngine: 'google-local-finder',
+          coordinates: { lat: pt.lat, lng: pt.lng },
+          country: 'USA',
+          websiteUrl: locationMeta.website,
+          businessName: locationMeta.name,
+          phone: locationMeta.phone,
+          postcode: locationMeta.zip,
+        }).then((requestId) => ({ ...pt, requestId })),
+      ),
+    );
+
+    // Points where BrightLocal succeeded — poll these
+    const fired = blAttempts
       .filter((r): r is PromiseFulfilledResult<typeof points[0] & { requestId: string }> => r.status === 'fulfilled')
       .map((r) => r.value);
 
-    // Poll until all results are ready
-    type GridResult = typeof points[0] & { rank: number | null; url: string | null };
-    const results: GridResult[] = [];
-    const done = new Set<string>();
+    // Points where BrightLocal failed — fall back to DataForSEO immediately
+    const dfsPoints = points.filter((_, i) => blAttempts[i].status === 'rejected');
+    if (dfsPoints.length > 0) {
+      logger.info('Geo-grid: BrightLocal unavailable for some points, using DataForSEO fallback', {
+        reportId,
+        fallbackCount: dfsPoints.length,
+      });
+      const dfsResults = await Promise.allSettled(
+        dfsPoints.map(async (pt) => {
+          const r = await getRankForCoordinate({
+            keyword,
+            lat: pt.lat,
+            lng: pt.lng,
+            businessName: locationMeta.name,
+            websiteUrl: locationMeta.website,
+            phone: locationMeta.phone,
+          });
+          results.push({ gridRow: pt.gridRow, gridCol: pt.gridCol, lat: pt.lat, lng: pt.lng, rank: r.rank, url: r.url });
+        }),
+      );
+      for (const r of dfsResults) {
+        if (r.status === 'rejected') logger.warn('Geo-grid DataForSEO fallback point failed', { reportId, error: (r.reason as Error).message });
+      }
+    }
 
+    // Poll BrightLocal for the successfully queued points
+    const done = new Set<string>();
     for (let attempt = 0; attempt < POLL_MAX && done.size < fired.length; attempt++) {
       if (attempt > 0) await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
 
@@ -121,7 +148,7 @@ async function runGeoGrid(
       );
     }
 
-    // Include timed-out points as null rank
+    // BrightLocal points that timed out — mark as null
     for (const p of fired) {
       if (!done.has(p.requestId)) {
         results.push({ gridRow: p.gridRow, gridCol: p.gridCol, lat: p.lat, lng: p.lng, rank: null, url: null });
