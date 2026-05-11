@@ -793,8 +793,8 @@ export function renderReportHtml(data: ReportData): string {
     </div>
   </div>` : ''}
 
-  <!-- Recommendations (new page) -->
-  <div style="page-break-before:always;padding:40px 40px 40px">
+  <!-- Recommendations -->
+  <div style="padding:0 40px 20px">
     <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Recommendations</h2>
     <div style="background:#f0f4ff;border:1px solid #dbeafe;border-radius:8px;padding:20px">
       <ul style="padding-left:18px">
