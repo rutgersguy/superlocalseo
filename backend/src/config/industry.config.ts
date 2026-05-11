@@ -198,20 +198,22 @@ export function getPrimaryKeyword(industry: string | null | undefined, city?: st
   return keywords[0] ?? null;
 }
 
-// Core directories checked for every location
+// Core directories checked for every location (universal — all industries)
 export const CORE_DIRECTORIES = [
   'google', 'bing', 'apple', 'yelp', 'facebook', 'bbb', 'yellowpages',
+  'foursquare', 'nextdoor', 'manta', 'merchantcircle', 'trustpilot', 'linkedin',
 ];
 
 // Additional directories per industry group
 const GROUP_DIRECTORIES: Record<string, string[]> = {
-  'Home Services': ['angi', 'houzz', 'thumbtack'],
-  'Health & Fitness': ['healthgrades', 'zocdoc', 'webmd'],
-  'Legal': ['avvo', 'justia', 'findlaw'],
-  'Food & Beverage': ['tripadvisor', 'opentable'],
-  'Beauty & Personal Care': ['vagaro', 'mindbody'],
-  'Automotive': ['repairpal'],
-  'Professional Services': ['expertise'],
+  'Home Services': ['angi', 'houzz', 'thumbtack', 'porch', 'homeadvisor', 'bark'],
+  'Health & Fitness': ['healthgrades', 'zocdoc', 'webmd', 'vitals', 'ratemds'],
+  'Legal': ['avvo', 'justia', 'findlaw', 'lawyers'],
+  'Food & Beverage': ['tripadvisor', 'opentable', 'zomato', 'happycow'],
+  'Beauty & Personal Care': ['vagaro', 'mindbody', 'styleseat'],
+  'Automotive': ['repairpal', 'carwise'],
+  'Professional Services': ['expertise', 'zoominfo', 'bark'],
+  'Real Estate': ['zillow', 'realtor', 'trulia'],
 };
 
 // Returns the curated directory list for a given industry.

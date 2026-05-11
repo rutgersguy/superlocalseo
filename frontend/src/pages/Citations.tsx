@@ -86,9 +86,62 @@ interface LookupResponse {
   };
 }
 
+const DIRECTORY_NAMES: Record<string, string> = {
+  google:        'Google Business Profile',
+  bing:          'Bing Places',
+  apple:         'Apple Maps',
+  yelp:          'Yelp',
+  facebook:      'Facebook',
+  bbb:           'Better Business Bureau',
+  yellowpages:   'Yellow Pages',
+  foursquare:    'Foursquare',
+  nextdoor:      'Nextdoor',
+  manta:         'Manta',
+  merchantcircle:'Merchant Circle',
+  trustpilot:    'Trustpilot',
+  linkedin:      'LinkedIn',
+  tripadvisor:   'TripAdvisor',
+  angi:          'Angi',
+  houzz:         'Houzz',
+  thumbtack:     'Thumbtack',
+  porch:         'Porch',
+  homeadvisor:   'HomeAdvisor',
+  bark:          'Bark',
+  healthgrades:  'Healthgrades',
+  zocdoc:        'ZocDoc',
+  webmd:         'WebMD',
+  vitals:        'Vitals',
+  ratemds:       'RateMDs',
+  avvo:          'Avvo',
+  justia:        'Justia',
+  findlaw:       'FindLaw',
+  lawyers:       'Lawyers.com',
+  opentable:     'OpenTable',
+  zomato:        'Zomato',
+  happycow:      'HappyCow',
+  vagaro:        'Vagaro',
+  mindbody:      'Mindbody',
+  styleseat:     'StyleSeat',
+  repairpal:     'RepairPal',
+  carwise:       'CarWise',
+  expertise:     'Expertise.com',
+  zoominfo:      'ZoomInfo',
+  zillow:        'Zillow',
+  realtor:       'Realtor.com',
+  trulia:        'Trulia',
+};
+
+function directoryDisplayName(key: string): string {
+  return DIRECTORY_NAMES[key.toLowerCase()] ?? key.charAt(0).toUpperCase() + key.slice(1);
+}
+
 const DIRECTORY_PRIORITY: Record<string, number> = {
   google: 0, yelp: 1, facebook: 2, bing: 3, apple: 4,
-  yellowpages: 5, houzz: 6, bbb: 7, angi: 8, thumbtack: 9,
+  yellowpages: 5, bbb: 6, foursquare: 7, nextdoor: 8, trustpilot: 9,
+  linkedin: 10, manta: 11, merchantcircle: 12,
+  tripadvisor: 13, houzz: 14, angi: 15, thumbtack: 16, homeadvisor: 17,
+  porch: 18, bark: 19, healthgrades: 20, zocdoc: 21, webmd: 22,
+  avvo: 23, justia: 24, findlaw: 25, zillow: 26,
 };
 
 function sortDirectories<T extends { name: string }>(dirs: T[]): T[] {
@@ -777,7 +830,7 @@ export default function Citations() {
                   }}
                 >
                   <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-gray-900 text-sm">{dir.name}</h3>
+                    <h3 className="font-semibold text-gray-900 text-sm">{directoryDisplayName(dir.name)}</h3>
                     {hasDetail && (
                       <span className="text-gray-400 text-xs">{isExpanded ? '▲' : '▼'}</span>
                     )}
