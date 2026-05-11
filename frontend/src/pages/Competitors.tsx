@@ -19,7 +19,7 @@ interface PlatformStat { platform: string; avgRating: number; count: number; }
 interface ClientStats { avgRating: number | null; reviewCount: number; byPlatform: PlatformStat[]; }
 interface CompetitorsResponse { success: boolean; data: { competitors: Competitor[]; clientStats: ClientStats }; }
 
-interface BattlegroundRow { keyword: string; location: string; city: string; yourRank: number; bestCompetitorRank: number | null; bestCompetitor: string | null; status: 'winning' | 'losing' | 'uncontested'; lastChecked: string; }
+interface BattlegroundRow { keyword: string; location: string; area: string; yourRank: number; bestCompetitorRank: number | null; bestCompetitor: string | null; status: 'winning' | 'losing' | 'uncontested'; lastChecked: string; }
 interface BattlegroundSummary { winning: number; losing: number; uncontested: number; }
 interface GapResponse { success: boolean; data: { rows: BattlegroundRow[]; summary: BattlegroundSummary; competitors: Array<{ id: string; name: string }> }; }
 
@@ -241,15 +241,46 @@ const BATTLE_STATUS = {
   uncontested: { label: 'Uncontested', color: 'text-slate-600 bg-slate-100', dot: 'bg-slate-300' },
 };
 
+type SortCol = 'yourRank' | 'bestCompetitorRank';
+type SortDir = 'asc' | 'desc';
+
+function SortIcon({ col, active, dir }: { col: SortCol; active: boolean; dir: SortDir }) {
+  return (
+    <span className={`ml-1 inline-flex flex-col leading-none ${active ? 'text-brand-500' : 'text-slate-300'}`}>
+      <span className={`text-[8px] ${active && dir === 'asc' ? 'text-brand-500' : ''}`}>▲</span>
+      <span className={`text-[8px] ${active && dir === 'desc' ? 'text-brand-500' : ''}`}>▼</span>
+    </span>
+  );
+}
+
 function Battleground() {
   const { data, isLoading } = useSWR<GapResponse>('/competitors/gap', fetcher);
   const [filter, setFilter] = useState<'all' | 'losing' | 'winning' | 'uncontested'>('all');
+  const [keywordSearch, setKeywordSearch] = useState('');
+  const [sort, setSort] = useState<{ col: SortCol; dir: SortDir } | null>(null);
   const gapData = data?.data;
   const allRows = gapData?.rows ?? [];
   const summary = gapData?.summary ?? { winning: 0, losing: 0, uncontested: 0 };
   const hasCompetitors = (gapData?.competitors ?? []).length > 0;
 
-  const visible = filter === 'all' ? allRows : allRows.filter((r) => r.status === filter);
+  function toggleSort(col: SortCol) {
+    setSort((prev) =>
+      prev?.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' }
+    );
+  }
+
+  let visible = filter === 'all' ? allRows : allRows.filter((r) => r.status === filter);
+  if (keywordSearch.trim()) {
+    const q = keywordSearch.trim().toLowerCase();
+    visible = visible.filter((r) => r.keyword.toLowerCase().includes(q));
+  }
+  if (sort) {
+    visible = [...visible].sort((a, b) => {
+      const av = a[sort.col] ?? 999;
+      const bv = b[sort.col] ?? 999;
+      return sort.dir === 'asc' ? av - bv : bv - av;
+    });
+  }
 
   if (isLoading) return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-card p-6">
@@ -277,22 +308,38 @@ function Battleground() {
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-card overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h3 className="text-sm font-semibold text-slate-900">Keyword Battleground</h3>
-          <p className="text-xs text-slate-500 mt-0.5">
-            {summary.losing > 0
-              ? `${summary.losing} keyword${summary.losing !== 1 ? 's' : ''} where a competitor outranks you`
-              : hasCompetitors ? 'You\'re winning every tracked keyword' : 'Add competitors to see competitive data'}
-          </p>
+      <div className="px-5 py-4 border-b border-slate-100 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Keyword Battleground</h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {summary.losing > 0
+                ? `${summary.losing} keyword${summary.losing !== 1 ? 's' : ''} where a competitor outranks you`
+                : hasCompetitors ? 'You\'re winning every tracked keyword' : 'Add competitors to see competitive data'}
+            </p>
+          </div>
+          <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium">
+            {filters.map(({ id, label, count }) => (
+              <button key={id} onClick={() => setFilter(id)}
+                className={`px-3 py-1.5 transition-colors ${filter === id ? 'bg-brand-500 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+                {label} ({count})
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium">
-          {filters.map(({ id, label, count }) => (
-            <button key={id} onClick={() => setFilter(id)}
-              className={`px-3 py-1.5 transition-colors ${filter === id ? 'bg-brand-500 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
-              {label} ({count})
+        <div className="relative">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            value={keywordSearch}
+            onChange={(e) => setKeywordSearch(e.target.value)}
+            placeholder="Filter by keyword…"
+            className="w-full sm:w-64 pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+          {keywordSearch && (
+            <button onClick={() => setKeywordSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+              <X size={13} />
             </button>
-          ))}
+          )}
         </div>
       </div>
 
@@ -304,9 +351,13 @@ function Battleground() {
             <thead>
               <tr className="text-xs font-semibold text-slate-400 uppercase tracking-wide bg-slate-50">
                 <th className="text-left px-5 py-2.5">Keyword</th>
-                <th className="text-left px-3 py-2.5">City</th>
-                <th className="text-center px-3 py-2.5 text-brand-600">You</th>
-                <th className="text-center px-3 py-2.5">Best competitor</th>
+                <th className="text-left px-3 py-2.5">Area</th>
+                <th className="text-center px-3 py-2.5 text-brand-600 cursor-pointer select-none hover:text-brand-700" onClick={() => toggleSort('yourRank')}>
+                  <span className="inline-flex items-center">You <SortIcon col="yourRank" active={sort?.col === 'yourRank'} dir={sort?.dir ?? 'asc'} /></span>
+                </th>
+                <th className="text-center px-3 py-2.5 cursor-pointer select-none hover:text-slate-600" onClick={() => toggleSort('bestCompetitorRank')}>
+                  <span className="inline-flex items-center">Best competitor <SortIcon col="bestCompetitorRank" active={sort?.col === 'bestCompetitorRank'} dir={sort?.dir ?? 'asc'} /></span>
+                </th>
                 <th className="text-left px-3 py-2.5">Status</th>
               </tr>
             </thead>
@@ -319,7 +370,7 @@ function Battleground() {
                 return (
                   <tr key={i} className="hover:bg-slate-50 transition-colors">
                     <td className="px-5 py-3 font-medium text-slate-800">{row.keyword}</td>
-                    <td className="px-3 py-3 text-xs text-slate-500">{row.city}</td>
+                    <td className="px-3 py-3 text-xs text-slate-500">{row.area}</td>
                     <td className="px-3 py-3 text-center"><RankBadge rank={row.yourRank} isYou /></td>
                     <td className="px-3 py-3 text-center">
                       {row.bestCompetitorRank != null ? (

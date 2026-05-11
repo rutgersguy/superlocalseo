@@ -189,8 +189,8 @@ export async function search(req: Request, res: Response, next: NextFunction): P
 export async function gap(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const locationRows = (
-      await db('locations').where({ client_id: req.clientId }).select('id', 'name')
-    ) as Array<{ id: string; name: string }>;
+      await db('locations').where({ client_id: req.clientId }).select('id', 'name', 'city', 'state')
+    ) as Array<{ id: string; name: string; city: string | null; state: string | null }>;
 
     if (locationRows.length === 0) {
       ok(res, { rows: [], summary: { winning: 0, losing: 0, uncontested: 0 }, competitors: [] });
@@ -199,6 +199,10 @@ export async function gap(req: Request, res: Response, next: NextFunction): Prom
 
     const locIds = locationRows.map((l) => l.id);
     const locNameMap = new Map(locationRows.map((l) => [l.id, l.name]));
+    const locAreaMap = new Map(locationRows.map((l) => [
+      l.id,
+      [l.city, l.state].filter(Boolean).join(', ') || l.name,
+    ]));
 
     const competitors = await db('competitors')
       .where({ client_id: req.clientId })
@@ -257,7 +261,7 @@ export async function gap(req: Request, res: Response, next: NextFunction): Prom
       return {
         keyword: r.keyword,
         location: locNameMap.get(r.location_id) ?? r.location_id,
-        city: r.geo_location ?? locNameMap.get(r.location_id) ?? r.location_id,
+        area: r.geo_location ?? locAreaMap.get(r.location_id) ?? r.location_id,
         yourRank: r.rank,
         bestCompetitorRank: best?.rank ?? null,
         bestCompetitor: best ? (compNameMap.get(best.competitorId) ?? null) : null,
