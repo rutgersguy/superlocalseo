@@ -661,7 +661,7 @@ export default function Competitors() {
           <button
             onClick={() => void handleScanRankings()}
             disabled={scanning || !scanAvailable}
-            title={!scanAvailable ? `Next scan available in ${formatCooldown(retryAfter)}` : undefined}
+            title={!scanAvailable ? 'Next scan available tomorrow' : undefined}
             className={`whitespace-nowrap flex items-center gap-2 px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium rounded-lg border transition-colors disabled:opacity-50 ${scanQueued ? 'border-green-300 text-green-600 bg-green-50' : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50'}`}
           >
             {scanning ? <Loader2 size={15} className="animate-spin" /> : scanQueued ? <Check size={15} /> : <RefreshCw size={15} />}
