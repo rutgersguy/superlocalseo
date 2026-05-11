@@ -359,8 +359,13 @@ export async function adminCreateCampaign(req: Request, res: Response, next: Nex
 
     let blLocationId = location.brightlocal_location_id;
     if (!blLocationId) {
-      blLocationId = await findOrProvisionBlLocation(location);
-      await db('locations').where({ id: locationId }).update({ brightlocal_location_id: blLocationId });
+      try {
+        blLocationId = await findOrProvisionBlLocation(location);
+        await db('locations').where({ id: locationId }).update({ brightlocal_location_id: blLocationId });
+      } catch (provErr) {
+        err(res, `Could not register location with BrightLocal: ${(provErr as Error).message}`, 422, 'BL_PROVISION_FAILED');
+        return;
+      }
     }
 
     const campaignId = await createCbCampaign(blLocationId);

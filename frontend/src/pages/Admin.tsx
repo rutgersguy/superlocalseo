@@ -592,10 +592,11 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
     setError(null);
     setStep('creating');
     try {
-      const res = await apiFetch<{ success: boolean; data: { campaignId: string } }>('/admin/citations/campaign', {
+      const res = await apiFetch<{ success: boolean; data?: { campaignId: string }; error?: { message: string } }>('/admin/citations/campaign', {
         method: 'POST',
         body: JSON.stringify({ clientId: selectedClientId, locationId: selectedLocationId }),
       });
+      if (!res.success || !res.data?.campaignId) throw new Error(res.error?.message ?? 'Failed to create campaign');
       setCampaignId(res.data.campaignId);
       setStep('lookup');
     } catch (e) {
@@ -627,7 +628,7 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
     setConfirming(true);
     setError(null);
     try {
-      await apiFetch(`/admin/citations/campaign/${encodeURIComponent(campaignId)}/confirm`, {
+      const res = await apiFetch<{ success: boolean; error?: string }>(`/admin/citations/campaign/${encodeURIComponent(campaignId)}/confirm`, {
         method: 'POST',
         body: JSON.stringify({
           clientId: selectedClientId, locationId: selectedLocationId,
@@ -636,6 +637,7 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
           removeDuplicates, autoSelect: false, express: false,
         }),
       });
+      if (!res.success) throw new Error(res.error ?? 'Confirmation failed');
       await mutate('/admin/citations');
       setStep('done');
     } catch (e) {

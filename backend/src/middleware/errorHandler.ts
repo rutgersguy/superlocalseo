@@ -17,7 +17,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   const message = status < 500 ? (err as any).message : 'Internal server error';
 
   if (status >= 500) {
-    logger.error('Unhandled error', { error: err, path: req.path, method: req.method });
+    logger.error('Unhandled error', { error: (err as Error)?.message ?? String(err), stack: (err as Error)?.stack, path: req.path, method: req.method });
   }
 
   const extra = (err as any)?.hint ? { hint: (err as any).hint } : {};
