@@ -186,60 +186,105 @@ export async function search(req: Request, res: Response, next: NextFunction): P
 
 export async function gap(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const locationIds = (
+    const locationRows = (
       await db('locations').where({ client_id: req.clientId }).select('id', 'name')
     ) as Array<{ id: string; name: string }>;
 
-    if (locationIds.length === 0) {
-      ok(res, { keywords: [], opportunities: 0, competitors: [] });
+    if (locationRows.length === 0) {
+      ok(res, { rows: [], summary: { winning: 0, losing: 0, uncontested: 0 }, competitors: [] });
       return;
     }
 
-    const locIdList = locationIds.map((l) => l.id);
-    const locNameMap = new Map(locationIds.map((l) => [l.id, l.name]));
-
-    // Latest snapshot per keyword+location using DISTINCT ON
-    const latestSnapshots = await db.raw<{ rows: Array<{ keyword: string; location_id: string; rank: number | null; pulled_at: string }> }>(
-      `SELECT DISTINCT ON (rs.keyword_id, rs.location_id)
-         k.keyword, rs.location_id, rs.rank, rs.pulled_at
-       FROM ranking_snapshots rs
-       JOIN keywords k ON rs.keyword_id = k.id
-       WHERE rs.location_id = ANY(?)
-       ORDER BY rs.keyword_id, rs.location_id, rs.pulled_at DESC`,
-      [locIdList],
-    ).then((r) => r.rows);
-
-    const keywords = latestSnapshots.map((s) => {
-      const rank = s.rank;
-      const status =
-        rank === null ? 'absent'
-        : rank <= 3 ? 'winning'
-        : rank <= 10 ? 'competing'
-        : 'vulnerable';
-      return {
-        keyword: s.keyword,
-        location: locNameMap.get(s.location_id) ?? s.location_id,
-        yourRank: rank,
-        status,
-        lastChecked: s.pulled_at,
-      };
-    });
-
-    const opportunities = keywords.filter((k) => k.status === 'vulnerable' || k.status === 'absent').length;
+    const locIds = locationRows.map((l) => l.id);
+    const locNameMap = new Map(locationRows.map((l) => [l.id, l.name]));
 
     const competitors = await db('competitors')
       .where({ client_id: req.clientId })
-      .orderBy('name', 'asc');
+      .select('id', 'name') as Array<{ id: string; name: string }>;
+
+    const compNameMap = new Map(competitors.map((c) => [c.id, c.name]));
+
+    // Latest client rank per keyword + location + geo
+    const clientRows = await db.raw<{ rows: Array<{ keyword: string; keyword_id: string; location_id: string; geo_location: string | null; rank: number; pulled_at: string }> }>(`
+      SELECT DISTINCT ON (rs.keyword_id, rs.location_id, COALESCE(rs.geo_location, ''))
+        k.keyword, rs.keyword_id, rs.location_id, rs.geo_location, rs.rank, rs.pulled_at
+      FROM ranking_snapshots rs
+      JOIN keywords k ON rs.keyword_id = k.id
+      WHERE rs.location_id = ANY(?) AND rs.rank IS NOT NULL
+      ORDER BY rs.keyword_id, rs.location_id, COALESCE(rs.geo_location, ''), rs.pulled_at DESC
+    `, [locIds]).then((r) => r.rows);
+
+    // Latest competitor rank per competitor + keyword + location + geo
+    const compRows = await db.raw<{ rows: Array<{ competitor_id: string; keyword_id: string; location_id: string; geo_location: string | null; rank: number | null }> }>(`
+      SELECT DISTINCT ON (cr.competitor_id, cr.keyword_id, cr.location_id, COALESCE(cr.geo_location, ''))
+        cr.competitor_id, cr.keyword_id, cr.location_id, cr.geo_location, cr.rank
+      FROM competitor_rankings cr
+      WHERE cr.location_id = ANY(?)
+      ORDER BY cr.competitor_id, cr.keyword_id, cr.location_id, COALESCE(cr.geo_location, ''), cr.pulled_at DESC
+    `, [locIds]).then((r) => r.rows);
+
+    // For each keyword+location+geo, find the best (lowest) competitor rank and who holds it.
+    // Fall back to matching on keyword+location when geo_location isn't populated yet.
+    type BestComp = { rank: number; competitorId: string };
+    const bestCompMap = new Map<string, BestComp>();
+    for (const r of compRows) {
+      if (r.rank == null) continue;
+      // Try geo-specific key first, then location-only fallback key
+      for (const key of [
+        `${r.keyword_id}:${r.location_id}:${r.geo_location ?? ''}`,
+        `${r.keyword_id}:${r.location_id}:__any__`,
+      ]) {
+        const existing = bestCompMap.get(key);
+        if (!existing || r.rank < existing.rank) {
+          bestCompMap.set(key, { rank: r.rank, competitorId: r.competitor_id });
+        }
+      }
+    }
+
+    function getBestComp(kwId: string, locId: string, geo: string | null): BestComp | undefined {
+      return bestCompMap.get(`${kwId}:${locId}:${geo ?? ''}`)
+        ?? bestCompMap.get(`${kwId}:${locId}:__any__`);
+    }
+
+    const rows = clientRows.map((r) => {
+      const best = getBestComp(r.keyword_id, r.location_id, r.geo_location);
+      const status: 'winning' | 'losing' | 'uncontested' =
+        !best ? 'uncontested'
+        : r.rank <= best.rank ? 'winning'
+        : 'losing';
+      return {
+        keyword: r.keyword,
+        location: locNameMap.get(r.location_id) ?? r.location_id,
+        city: r.geo_location ?? locNameMap.get(r.location_id) ?? r.location_id,
+        yourRank: r.rank,
+        bestCompetitorRank: best?.rank ?? null,
+        bestCompetitor: best ? (compNameMap.get(best.competitorId) ?? null) : null,
+        status,
+        lastChecked: r.pulled_at,
+      };
+    });
+
+    rows.sort((a, b) => {
+      const order = { losing: 0, winning: 1, uncontested: 2 };
+      return order[a.status] - order[b.status];
+    });
+
+    const summary = {
+      winning: rows.filter((r) => r.status === 'winning').length,
+      losing: rows.filter((r) => r.status === 'losing').length,
+      uncontested: rows.filter((r) => r.status === 'uncontested').length,
+    };
 
     ok(res, {
-      keywords,
-      opportunities,
+      rows,
+      summary,
       competitors: competitors.map((c) => ({
         id: c.id,
         name: c.name,
-        website: c.website,
-        googleRating: c.google_rating ? parseFloat(String(c.google_rating)) : null,
-        googleReviewCount: c.google_review_count,
+        // legacy fields kept so existing callers don't break
+        website: null,
+        googleRating: null,
+        googleReviewCount: null,
       })),
     });
   } catch (e) {

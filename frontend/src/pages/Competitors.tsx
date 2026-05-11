@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import useSWR, { mutate } from 'swr';
-import { Plus, RefreshCw, Trash2, Star, MessageSquare, ExternalLink, Search, AlertCircle, X, TrendingDown, TrendingUp, Minus, Target, BarChart2, Lightbulb, ChevronDown, Check, Loader2 } from 'lucide-react';
+import { Plus, RefreshCw, Trash2, Star, MessageSquare, ExternalLink, Search, AlertCircle, X, TrendingDown, TrendingUp, Target, BarChart2, Lightbulb, ChevronDown, Check, Loader2 } from 'lucide-react';
 import { fetcher, apiFetch } from '../services/api';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -19,9 +19,9 @@ interface PlatformStat { platform: string; avgRating: number; count: number; }
 interface ClientStats { avgRating: number | null; reviewCount: number; byPlatform: PlatformStat[]; }
 interface CompetitorsResponse { success: boolean; data: { competitors: Competitor[]; clientStats: ClientStats }; }
 
-interface GapKeyword { keyword: string; location: string; yourRank: number | null; status: 'winning' | 'competing' | 'vulnerable' | 'absent'; lastChecked: string; }
-interface GapCompetitor { id: string; name: string; website: string | null; googleRating: number | null; googleReviewCount: number | null; }
-interface GapResponse { success: boolean; data: { keywords: GapKeyword[]; opportunities: number; competitors: GapCompetitor[] }; }
+interface BattlegroundRow { keyword: string; location: string; city: string; yourRank: number; bestCompetitorRank: number | null; bestCompetitor: string | null; status: 'winning' | 'losing' | 'uncontested'; lastChecked: string; }
+interface BattlegroundSummary { winning: number; losing: number; uncontested: number; }
+interface GapResponse { success: boolean; data: { rows: BattlegroundRow[]; summary: BattlegroundSummary; competitors: Array<{ id: string; name: string }> }; }
 
 interface H2HKeyword {
   keyword: string; keywordId: string; location: string; locationId: string;
@@ -233,23 +233,23 @@ function CompetitorRow({ c, onDelete, onSync }: { c: Competitor; onDelete: () =>
   );
 }
 
-// ── Status config for gap report ───────────────────────────────────────────────
+// ── Keyword Battleground ───────────────────────────────────────────────────────
 
-const STATUS_CONFIG = {
-  winning:    { label: 'Top 3',      color: 'text-green-700 bg-green-50',  icon: TrendingUp },
-  competing:  { label: 'Top 10',     color: 'text-blue-700 bg-blue-50',    icon: Minus },
-  vulnerable: { label: 'Rank 11+',   color: 'text-amber-700 bg-amber-50',  icon: TrendingDown },
-  absent:     { label: 'Not ranked', color: 'text-red-700 bg-red-50',      icon: TrendingDown },
+const BATTLE_STATUS = {
+  losing:      { label: 'Losing',      color: 'text-red-700 bg-red-50',      dot: 'bg-red-400' },
+  winning:     { label: 'Winning',     color: 'text-green-700 bg-green-50',  dot: 'bg-green-400' },
+  uncontested: { label: 'Uncontested', color: 'text-slate-600 bg-slate-100', dot: 'bg-slate-300' },
 };
 
-// ── Gap report (existing) ──────────────────────────────────────────────────────
-
-function GapReport() {
+function Battleground() {
   const { data, isLoading } = useSWR<GapResponse>('/competitors/gap', fetcher);
-  const [filter, setFilter] = useState<'all' | 'opportunities'>('all');
+  const [filter, setFilter] = useState<'all' | 'losing' | 'winning' | 'uncontested'>('all');
   const gapData = data?.data;
-  const keywords = gapData?.keywords ?? [];
-  const visible = filter === 'opportunities' ? keywords.filter((k) => k.status === 'vulnerable' || k.status === 'absent') : keywords;
+  const allRows = gapData?.rows ?? [];
+  const summary = gapData?.summary ?? { winning: 0, losing: 0, uncontested: 0 };
+  const hasCompetitors = (gapData?.competitors ?? []).length > 0;
+
+  const visible = filter === 'all' ? allRows : allRows.filter((r) => r.status === filter);
 
   if (isLoading) return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-card p-6">
@@ -258,28 +258,44 @@ function GapReport() {
     </div>
   );
 
-  if (!gapData || keywords.length === 0) return (
+  if (allRows.length === 0) return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-card p-6 text-center">
       <Target size={32} className="mx-auto text-slate-300 mb-3" />
       <h3 className="font-semibold text-slate-700 mb-1">No ranking data yet</h3>
-      <p className="text-sm text-slate-400">Connect your integrations to start tracking keyword rankings.</p>
+      <p className="text-sm text-slate-400">
+        {hasCompetitors ? 'Rankings will populate on the next sync.' : 'Add competitors with websites to see head-to-head data.'}
+      </p>
     </div>
   );
+
+  const filters: Array<{ id: typeof filter; label: string; count: number }> = [
+    { id: 'all',        label: 'All',         count: allRows.length },
+    { id: 'losing',     label: 'Losing',      count: summary.losing },
+    { id: 'winning',    label: 'Winning',     count: summary.winning },
+    { id: 'uncontested',label: 'Uncontested', count: summary.uncontested },
+  ];
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-card overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">Keyword Gap Report</h3>
+          <h3 className="text-sm font-semibold text-slate-900">Keyword Battleground</h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            {gapData.opportunities > 0 ? `${gapData.opportunities} keyword${gapData.opportunities !== 1 ? 's' : ''} need attention` : 'All tracked keywords are in the top 10'}
+            {summary.losing > 0
+              ? `${summary.losing} keyword${summary.losing !== 1 ? 's' : ''} where a competitor outranks you`
+              : hasCompetitors ? 'You\'re winning every tracked keyword' : 'Add competitors to see competitive data'}
           </p>
         </div>
         <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium">
-          <button onClick={() => setFilter('all')} className={`px-3 py-1.5 transition-colors ${filter === 'all' ? 'bg-brand-500 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>All ({keywords.length})</button>
-          <button onClick={() => setFilter('opportunities')} className={`px-3 py-1.5 transition-colors ${filter === 'opportunities' ? 'bg-brand-500 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Opportunities ({gapData.opportunities})</button>
+          {filters.map(({ id, label, count }) => (
+            <button key={id} onClick={() => setFilter(id)}
+              className={`px-3 py-1.5 transition-colors ${filter === id ? 'bg-brand-500 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+              {label} ({count})
+            </button>
+          ))}
         </div>
       </div>
+
       {visible.length === 0 ? (
         <div className="py-8 text-center text-sm text-slate-400">No keywords match this filter.</div>
       ) : (
@@ -288,29 +304,38 @@ function GapReport() {
             <thead>
               <tr className="text-xs font-semibold text-slate-400 uppercase tracking-wide bg-slate-50">
                 <th className="text-left px-5 py-2.5">Keyword</th>
-                <th className="text-left px-3 py-2.5">Location</th>
-                <th className="text-center px-3 py-2.5">Your rank</th>
+                <th className="text-left px-3 py-2.5">City</th>
+                <th className="text-center px-3 py-2.5 text-brand-600">You</th>
+                <th className="text-center px-3 py-2.5">Best competitor</th>
                 <th className="text-left px-3 py-2.5">Status</th>
-                <th className="text-left px-3 py-2.5">Last checked</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {visible.map((k, i) => {
-                const cfg = STATUS_CONFIG[k.status];
-                const Icon = cfg.icon;
+              {visible.map((row, i) => {
+                const cfg = BATTLE_STATUS[row.status];
+                const gap = row.bestCompetitorRank != null
+                  ? row.yourRank - row.bestCompetitorRank
+                  : null;
                 return (
                   <tr key={i} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-5 py-3 font-medium text-slate-800">{k.keyword}</td>
-                    <td className="px-3 py-3 text-slate-500 text-xs">{k.location}</td>
+                    <td className="px-5 py-3 font-medium text-slate-800">{row.keyword}</td>
+                    <td className="px-3 py-3 text-xs text-slate-500">{row.city}</td>
+                    <td className="px-3 py-3 text-center"><RankBadge rank={row.yourRank} isYou /></td>
                     <td className="px-3 py-3 text-center">
-                      {k.yourRank !== null ? <span className="font-bold text-slate-800">#{k.yourRank}</span> : <span className="text-slate-400">—</span>}
+                      {row.bestCompetitorRank != null ? (
+                        <span className="flex flex-col items-center gap-0.5">
+                          <RankBadge rank={row.bestCompetitorRank} />
+                          {row.bestCompetitor && <span className="text-xs text-slate-400 truncate max-w-[100px]">{row.bestCompetitor}</span>}
+                        </span>
+                      ) : <span className="text-slate-300 text-xs">no data</span>}
                     </td>
                     <td className="px-3 py-3">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>
-                        <Icon size={11} />{cfg.label}
+                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                        {cfg.label}
+                        {gap != null && gap > 0 && <span className="opacity-60">+{gap}</span>}
                       </span>
                     </td>
-                    <td className="px-3 py-3 text-xs text-slate-400">{new Date(k.lastChecked).toLocaleDateString()}</td>
                   </tr>
                 );
               })}
@@ -711,7 +736,7 @@ export default function Competitors() {
             </div>
           )}
 
-          <GapReport />
+          <Battleground />
         </div>
       )}
 

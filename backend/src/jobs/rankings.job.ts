@@ -112,6 +112,7 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
                 competitor_id: c.id,
                 keyword_id: kw.id,
                 location_id: location.id,
+                geo_location: geoLabel,
                 rank: c.rank,
                 url: c.url,
                 search_engine: 'google',
