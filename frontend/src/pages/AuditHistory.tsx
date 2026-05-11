@@ -131,8 +131,8 @@ export default function AuditHistory() {
         <ScoreCard label="Overall" value={latestAudit?.compositeScore ?? null} tooltip="Weighted average: Citations 40%, NAP consistency 30%, Keyword rankings 30%." />
         <ScoreCard label="NAP" value={latestAudit?.napScore ?? null} tooltip="% of directory listings where your business name, address, and phone number all match exactly." />
         <ScoreCard label="Citations" value={latestAudit?.citationScore ?? null} tooltip="% of key directories for your industry where your business is listed." />
-        <ScoreCard label="Reviews" value={latestAudit?.reviewScore ?? null} tooltip="Average rating and review volume score. Requires Google Business Profile connection (coming soon)." />
-        <ScoreCard label="Google" value={latestAudit?.googleScore ?? null} tooltip="Google Business Profile completeness — claimed status, photos, hours, and posts. Requires GBP connection (coming soon)." />
+        <ScoreCard label="Reviews" value={latestAudit?.reviewScore ?? null} tooltip="Average rating and review volume score. Requires Google Business Profile connection." />
+        <ScoreCard label="Google" value={latestAudit?.googleScore ?? null} tooltip="Google Business Profile completeness — claimed status, photos, hours, and posts. Requires GBP connection." />
       </div>
 
       {/* History chart */}
