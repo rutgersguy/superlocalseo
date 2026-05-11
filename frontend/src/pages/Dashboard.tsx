@@ -146,59 +146,123 @@ interface ClientResponse {
 
 interface BillingStatusResponse {
   success: boolean;
-  data: { status: string | null; graceDaysRemaining: number | null; trialDaysRemaining: number | null };
+  data: { status: string; trialDaysLeft: number | null; trialEndsAt: string | null; locationsLimit: number; locationCount: number };
 }
 
-function TrialBanner() {
-  const { data } = useSWR<BillingStatusResponse>('/billing', fetcher);
-  const billing = data?.data;
-  if (!billing || billing.status !== 'trialing') return null;
-
-  const days = billing.trialDaysRemaining;
-  const expired = days !== null && days <= 0;
-  const urgent = days !== null && days <= 3 && !expired;
-
-  if (days === null || days > 5) return null;
-
+function PastDueBanner({ billing }: { billing: BillingStatusResponse['data'] | undefined }) {
+  const [loading, setLoading] = useState(false);
+  if (!billing || billing.status !== 'past_due') return null;
+  const openPortal = async () => {
+    setLoading(true);
+    try {
+      const res = await apiFetch<{ success: boolean; data: { url: string } }>('/billing/portal', { method: 'POST' });
+      if (res.success && res.data?.url) window.location.href = res.data.url;
+    } finally { setLoading(false); }
+  };
   return (
-    <div className={`flex items-center justify-between p-4 rounded-lg text-sm border ${
-      expired
-        ? 'bg-red-50 border-red-200 text-red-800'
-        : urgent
-        ? 'bg-amber-50 border-amber-200 text-amber-800'
-        : 'bg-blue-50 border-blue-200 text-blue-800'
-    }`}>
-      <span>
-        {expired
-          ? <><strong>Your free trial has ended.</strong> Subscribe to keep access to your data.</>
-          : <><strong>{days} day{days !== 1 ? 's' : ''} left in your trial.</strong> Subscribe to keep your rankings, reviews, and citation data after the trial.</>}
-      </span>
-      <a
-        href="/dashboard/settings?tab=billing"
-        className="ml-4 shrink-0 font-semibold underline hover:no-underline"
-      >
-        {expired ? 'Subscribe now' : 'Choose a plan'}
-      </a>
+    <div className="flex items-center justify-between p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+      <span><strong>Payment overdue.</strong> Update your payment method to keep access.</span>
+      <button onClick={() => void openPortal()} disabled={loading}
+        className="ml-4 shrink-0 font-medium underline hover:no-underline disabled:opacity-50">
+        {loading ? 'Redirecting…' : 'Update payment'}
+      </button>
     </div>
   );
 }
 
-function PastDueBanner() {
-  const { data } = useSWR<BillingStatusResponse>('/billing', fetcher);
-  const billing = data?.data;
-  if (!billing || billing.status !== 'past_due') return null;
-  const days = billing.graceDaysRemaining;
+function SubscribeCTA({ billing }: { billing: BillingStatusResponse['data'] | undefined }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  if (!billing || (billing.status !== 'trialing' && billing.status !== 'canceled')) return null;
+
+  const days = billing.trialDaysLeft;
+  const expired = billing.status === 'canceled' || (days !== null && days <= 0);
+  const urgent = !expired && days !== null && days <= 3;
+
+  const startCheckout = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await apiFetch<{ success: boolean; data: { url: string }; error?: { message: string } }>('/billing/checkout', {
+        method: 'POST',
+        body: JSON.stringify({ extraLocations: 0 }),
+      });
+      if (res.success && res.data?.url) { window.location.href = res.data.url; return; }
+      setError(res.error?.message ?? 'Something went wrong');
+    } catch { setError('Network error — please try again'); }
+    setLoading(false);
+  };
+
   return (
-    <div className="flex items-center justify-between p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-      <span>
-        <strong>Payment overdue.</strong>{' '}
-        {days != null && days > 0
-          ? `Access will be restricted in ${days} day${days !== 1 ? 's' : ''} if payment isn't resolved.`
-          : 'Please update your payment method to avoid losing access.'}
-      </span>
-      <a href="/dashboard/settings?tab=billing" className="ml-4 shrink-0 font-medium underline hover:no-underline">
-        Update payment
-      </a>
+    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white p-6 sm:p-8">
+      {/* Background accent */}
+      <div className="absolute -top-8 -right-8 w-48 h-48 rounded-full bg-brand-500/20 blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-12 -left-4 w-40 h-40 rounded-full bg-brand-400/10 blur-2xl pointer-events-none" />
+
+      <div className="relative flex flex-col sm:flex-row sm:items-center gap-6">
+        {/* Copy */}
+        <div className="flex-1 space-y-3">
+          {expired ? (
+            <>
+              <div className="inline-flex items-center gap-1.5 text-xs font-semibold bg-red-500/20 text-red-300 border border-red-500/30 px-2.5 py-1 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
+                Trial ended
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold leading-snug">
+                Your data is waiting.<br className="hidden sm:block" /> Pick up where you left off.
+              </h2>
+              <p className="text-sm text-slate-300 leading-relaxed">
+                All your rankings, reviews, and citation data are saved. Subscribe to reactivate access in seconds.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${
+                urgent
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                  : 'bg-brand-500/20 text-brand-300 border-brand-500/30'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full inline-block ${urgent ? 'bg-amber-400' : 'bg-brand-400'}`} />
+                {days === 1 ? '1 day left in trial' : `${days ?? '15'} days left in trial`}
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold leading-snug">
+                Turn your trial into results.<br className="hidden sm:block" /> Subscribe today.
+              </h2>
+              <p className="text-sm text-slate-300 leading-relaxed">
+                Lock in your rankings tracker, review monitoring, and citation health — all in one platform built to get you found locally.
+              </p>
+            </>
+          )}
+
+          <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+            {['Daily rank tracking', 'Review monitoring + AI replies', 'Monthly PDF reports', 'Citation builder'].map((f) => (
+              <li key={f} className="flex items-center gap-1"><span className="text-brand-400">✓</span> {f}</li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Pricing + CTA */}
+        <div className="sm:text-right space-y-3 shrink-0">
+          <div>
+            <div className="flex items-baseline gap-1 sm:justify-end">
+              <span className="text-4xl font-bold">$349</span>
+              <span className="text-slate-400 text-sm">/mo</span>
+            </div>
+            <p className="text-xs text-slate-500">+ $499 one-time setup</p>
+          </div>
+          {error && <p className="text-xs text-red-400">{error}</p>}
+          <button
+            onClick={() => void startCheckout()}
+            disabled={loading}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-brand-500 hover:bg-brand-400 text-white font-semibold text-sm transition-colors disabled:opacity-60 shadow-lg shadow-brand-500/30"
+          >
+            {loading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+            {expired ? 'Reactivate now →' : 'Subscribe now →'}
+          </button>
+          <p className="text-xs text-slate-500">Cancel anytime. No hidden fees.</p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -259,6 +323,9 @@ export default function Dashboard() {
     setSearchParams((p) => { p.delete('linked'); return p; }, { replace: true });
   };
 
+  const { data: billingData } = useSWR<BillingStatusResponse>('/billing/status', fetcher, { refreshInterval: 60000 });
+  const billing = billingData?.data;
+
   const { data: metricsData, isLoading: metricsLoading, error: metricsError } =
     useSWR<MetricsResponse>('/metrics', fetcher);
 
@@ -292,8 +359,7 @@ export default function Dashboard() {
         </div>
       )}
       <EMRProvisionBanner />
-      <TrialBanner />
-      <PastDueBanner />
+      <PastDueBanner billing={billing} />
 
       {metricsError && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
@@ -315,6 +381,8 @@ export default function Dashboard() {
         <MetricCard label="Citation Score" value={metrics?.citationScore != null ? `${metrics.citationScore}/100` : '—'} loading={metricsLoading} />
         <VisibilityCard vis={vis} loading={!visData} />
       </div>
+
+      <SubscribeCTA billing={billing} />
 
       {/* ROI section */}
       {roiConfigured && roi ? (

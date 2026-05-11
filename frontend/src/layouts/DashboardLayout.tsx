@@ -236,14 +236,14 @@ export default function DashboardLayout() {
 
         {/* Main area */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          {/* Top bar */}
-          <header className="bg-white border-b border-slate-200/80 px-4 sm:px-6 h-14 flex items-center shrink-0">
+          {/* Mobile-only top bar */}
+          <header className="lg:hidden bg-white border-b border-slate-200/80 px-4 h-10 flex items-center shrink-0">
             <button
-              className="lg:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100"
+              className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100"
               onClick={() => setSidebarOpen(true)}
               aria-label="Open sidebar"
             >
-              <Menu size={19} aria-hidden="true" />
+              <Menu size={18} aria-hidden="true" />
             </button>
           </header>
 
