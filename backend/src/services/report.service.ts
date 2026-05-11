@@ -710,6 +710,16 @@ export function renderReportHtml(data: ReportData): string {
     <p style="margin-top:6px;font-size:10px;color:#9ca3af">Estimates based on your configured average customer value and keyword rankings. Actual results may vary.</p>
   </div>` : ''}
 
+  <!-- Recommendations -->
+  <div style="padding:0 40px 20px">
+    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Recommendations</h2>
+    <div style="background:#f0f4ff;border:1px solid #dbeafe;border-radius:8px;padding:20px">
+      <ul style="padding-left:18px">
+        ${recommendationItems}
+      </ul>
+    </div>
+  </div>
+
   <!-- Rankings -->
   <div style="page-break-before:always;padding:40px 40px 32px">
     <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Keyword Rankings</h2>
@@ -792,16 +802,6 @@ export function renderReportHtml(data: ReportData): string {
       </table>
     </div>
   </div>` : ''}
-
-  <!-- Recommendations -->
-  <div style="padding:0 40px 20px">
-    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Recommendations</h2>
-    <div style="background:#f0f4ff;border:1px solid #dbeafe;border-radius:8px;padding:20px">
-      <ul style="padding-left:18px">
-        ${recommendationItems}
-      </ul>
-    </div>
-  </div>
 
 
 </div>
