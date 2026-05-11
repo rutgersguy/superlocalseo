@@ -56,16 +56,13 @@ export default function AuditHistory() {
   const historyAudits = historyData?.data?.audits ?? [];
 
   const latestAudit = allAudits.find((a) => a.locationId === effectiveLocationId && a.status === 'complete');
-  const selectedLocation = locations.find((l) => l.id === effectiveLocationId);
-  const hasBLCampaign = !!selectedLocation?.blCampaignId;
-
   const recentAuditDaysAgo = (() => {
     const recent = allAudits.find((a) => a.locationId === effectiveLocationId);
     if (!recent) return null;
     return Math.floor((Date.now() - new Date(recent.createdAt).getTime()) / (1000 * 60 * 60 * 24));
   })();
 
-  const canTrigger = hasBLCampaign && (recentAuditDaysAgo === null || recentAuditDaysAgo >= 30);
+  const canTrigger = recentAuditDaysAgo === null || recentAuditDaysAgo >= 30;
   const cooldownDaysLeft = recentAuditDaysAgo !== null && recentAuditDaysAgo < 30 ? 30 - recentAuditDaysAgo : null;
 
   const chartData = historyAudits
@@ -111,7 +108,7 @@ export default function AuditHistory() {
           <button
             onClick={() => void handleTrigger()}
             disabled={triggering || !canTrigger}
-            title={!hasBLCampaign ? 'No campaign configured for this location' : cooldownDaysLeft ? `Next audit in ${cooldownDaysLeft} days` : ''}
+            title={cooldownDaysLeft ? `Next audit in ${cooldownDaysLeft} days` : ''}
             className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {triggering ? 'Starting…' : 'Run Audit'}
@@ -123,12 +120,6 @@ export default function AuditHistory() {
 
       {triggerError && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{triggerError}</div>
-      )}
-
-      {!hasBLCampaign && selectedLocation && (
-        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-          This location doesn't have a campaign configured yet. Connect your integrations to enable audits.
-        </div>
       )}
 
       {/* Score cards */}
