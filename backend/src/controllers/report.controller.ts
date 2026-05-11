@@ -395,10 +395,10 @@ export async function generate(req: Request, res: Response, next: NextFunction):
 
     const clientId = body.clientId ?? req.clientId;
 
-    // Default to previous month
+    // Default to current month
     const now = new Date();
-    const defaultMonth = now.getMonth() === 0 ? 12 : now.getMonth();
-    const defaultYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+    const defaultMonth = now.getMonth() + 1;
+    const defaultYear = now.getFullYear();
 
     const month = body.month ?? defaultMonth;
     const year = body.year ?? defaultYear;
