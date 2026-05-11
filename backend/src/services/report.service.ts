@@ -585,24 +585,24 @@ export function renderReportHtml(data: ReportData): string {
     citations.score >= 80 ? '#16a34a' : citations.score >= 60 ? '#f59e0b' : '#dc2626';
 
   const gapSection = (gap.winning + gap.competing + gap.vulnerable + gap.absent) > 0 ? `
-  <div style="padding:24px 40px 32px">
-    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Keyword Position Breakdown</h2>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:${gap.atRisk.length > 0 ? '20px' : '0'}">
-      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;text-align:center">
-        <div style="font-size:24px;font-weight:700;color:#16a34a">${gap.winning}</div>
-        <div style="font-size:11px;font-weight:600;color:#15803d;margin-top:4px;text-transform:uppercase;letter-spacing:0.05em">Winning (1–3)</div>
+  <div style="padding:12px 40px 14px">
+    <h2 style="font-size:14px;font-weight:700;color:${brandColor};margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em">Keyword Position Breakdown</h2>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:${gap.atRisk.length > 0 ? '14px' : '0'}">
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 8px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:#16a34a">${gap.winning}</div>
+        <div style="font-size:10px;font-weight:600;color:#15803d;margin-top:2px;text-transform:uppercase;letter-spacing:0.05em">Winning (1–3)</div>
       </div>
-      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px;text-align:center">
-        <div style="font-size:24px;font-weight:700;color:#2563eb">${gap.competing}</div>
-        <div style="font-size:11px;font-weight:600;color:#1d4ed8;margin-top:4px;text-transform:uppercase;letter-spacing:0.05em">Competing (4–10)</div>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px 8px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:#2563eb">${gap.competing}</div>
+        <div style="font-size:10px;font-weight:600;color:#1d4ed8;margin-top:2px;text-transform:uppercase;letter-spacing:0.05em">Competing (4–10)</div>
       </div>
-      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px;text-align:center">
-        <div style="font-size:24px;font-weight:700;color:#d97706">${gap.vulnerable}</div>
-        <div style="font-size:11px;font-weight:600;color:#b45309;margin-top:4px;text-transform:uppercase;letter-spacing:0.05em">Vulnerable (11+)</div>
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:10px 8px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:#d97706">${gap.vulnerable}</div>
+        <div style="font-size:10px;font-weight:600;color:#b45309;margin-top:2px;text-transform:uppercase;letter-spacing:0.05em">Vulnerable (11+)</div>
       </div>
-      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;text-align:center">
-        <div style="font-size:24px;font-weight:700;color:#dc2626">${gap.absent}</div>
-        <div style="font-size:11px;font-weight:600;color:#b91c1c;margin-top:4px;text-transform:uppercase;letter-spacing:0.05em">Not Ranking</div>
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:10px 8px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:#dc2626">${gap.absent}</div>
+        <div style="font-size:10px;font-weight:600;color:#b91c1c;margin-top:2px;text-transform:uppercase;letter-spacing:0.05em">Not Ranking</div>
       </div>
     </div>
     ${gap.atRisk.length > 0 ? `
@@ -649,23 +649,23 @@ export function renderReportHtml(data: ReportData): string {
 <div class="page">
 
   <!-- Header -->
-  <div style="background:${brandColor};color:#ffffff;padding:36px 40px 28px">
+  <div style="background:${brandColor};color:#ffffff;padding:18px 40px 14px">
     ${brandLogoUrl
-      ? `<img src="${brandLogoUrl}" alt="${escHtml(brandName)}" style="height:32px;margin-bottom:12px;object-fit:contain;display:block" />`
-      : `<div style="font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;opacity:0.7;margin-bottom:4px">${escHtml(brandName)}</div>`}
-    <h1 style="font-size:26px;font-weight:700;margin-bottom:6px">${escHtml(client.businessName)}</h1>
-    <div style="font-size:15px;opacity:0.85">Monthly SEO Performance Report &mdash; ${escHtml(period.label)}</div>
+      ? `<img src="${brandLogoUrl}" alt="${escHtml(brandName)}" style="height:26px;margin-bottom:8px;object-fit:contain;display:block" />`
+      : `<div style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;opacity:0.7;margin-bottom:2px">${escHtml(brandName)}</div>`}
+    <h1 style="font-size:20px;font-weight:700;margin-bottom:4px">${escHtml(client.businessName)}</h1>
+    <div style="font-size:12px;opacity:0.85">Monthly SEO Performance Report &mdash; ${escHtml(period.label)}</div>
   </div>
 
   <!-- Executive Summary -->
-  <div style="padding:32px 40px 24px">
-    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:20px;text-transform:uppercase;letter-spacing:0.05em">Executive Summary</h2>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px">
+  <div style="padding:16px 40px 12px">
+    <h2 style="font-size:14px;font-weight:700;color:${brandColor};margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em">Executive Summary</h2>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px">
       ${statBox('Avg. Rank', rankings.avgRank != null ? String(rankings.avgRank) : 'N/A', brandColor)}
       ${statBox('Keywords in Top 10', String(rankings.keywordsInTop10), brandColor)}
       ${statBox('Keywords in Top 3', String(rankings.keywordsInTop3), brandColor)}
     </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
       ${statBox('New Reviews', String(reviews.newThisMonth), brandColor)}
       ${statBox('Citation Score', `${citations.score}%`, citationScoreColor(citations.score))}
       ${visibility.current != null
@@ -679,17 +679,17 @@ export function renderReportHtml(data: ReportData): string {
   ${gapSection}
 
   <!-- Citations -->
-  <div style="padding:0 40px 32px">
-    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Citation Health</h2>
-    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:20px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <span style="font-size:14px;font-weight:600;color:#111827">Citation Score</span>
-        <span style="font-size:20px;font-weight:700;color:${citationBarColor}">${citations.score}%</span>
+  <div style="padding:0 40px 14px">
+    <h2 style="font-size:14px;font-weight:700;color:${brandColor};margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em">Citation Health</h2>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:13px;font-weight:600;color:#111827">Citation Score</span>
+        <span style="font-size:16px;font-weight:700;color:${citationBarColor}">${citations.score}%</span>
       </div>
-      <div style="background:#e5e7eb;border-radius:999px;height:10px;overflow:hidden;margin-bottom:20px">
-        <div style="background:${citationBarColor};width:${citationBarWidth}%;height:100%;border-radius:999px;transition:width 0.3s"></div>
+      <div style="background:#e5e7eb;border-radius:999px;height:8px;overflow:hidden;margin-bottom:10px">
+        <div style="background:${citationBarColor};width:${citationBarWidth}%;height:100%;border-radius:999px"></div>
       </div>
-      <div style="display:flex;gap:24px;flex-wrap:wrap">
+      <div style="display:flex;gap:20px;flex-wrap:wrap">
         ${citationStatPill('Listed', citations.listed, '#16a34a')}
         ${citationStatPill('Not Listed', citations.total - citations.listed, '#dc2626')}
         ${citationStatPill('NAP Accurate', citations.napAccurate, brandColor)}
@@ -700,14 +700,14 @@ export function renderReportHtml(data: ReportData): string {
 
   <!-- ROI Estimates -->
   ${roi ? `
-  <div style="padding:0 40px 32px;page-break-inside:avoid">
-    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">ROI &amp; Revenue Attribution</h2>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+  <div style="padding:0 40px 14px">
+    <h2 style="font-size:14px;font-weight:700;color:${brandColor};margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em">ROI &amp; Revenue Attribution</h2>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
       ${statBox('Est. Monthly Clicks', roi.estClicks.toLocaleString(), brandColor)}
       ${statBox('Est. Monthly Leads', roi.estLeads.toLocaleString(), brandColor)}
       ${statBox('Est. Monthly Revenue', `$${roi.estRevenue >= 1000 ? (roi.estRevenue / 1000).toFixed(1) + 'k' : roi.estRevenue.toLocaleString()}`, '#16a34a')}
     </div>
-    <p style="margin-top:10px;font-size:11px;color:#9ca3af">Estimates based on your configured average customer value and keyword rankings. Actual results may vary.</p>
+    <p style="margin-top:6px;font-size:10px;color:#9ca3af">Estimates based on your configured average customer value and keyword rankings. Actual results may vary.</p>
   </div>` : ''}
 
   <!-- Rankings -->
@@ -820,9 +820,9 @@ function escHtml(str: string): string {
 }
 
 function statBox(label: string, value: string, color: string): string {
-  return `<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:20px;text-align:center">
-    <div style="font-size:26px;font-weight:700;color:${color};margin-bottom:6px">${escHtml(value)}</div>
-    <div style="font-size:12px;color:#6b7280;font-weight:500">${escHtml(label)}</div>
+  return `<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px;text-align:center">
+    <div style="font-size:20px;font-weight:700;color:${color};margin-bottom:3px">${escHtml(value)}</div>
+    <div style="font-size:11px;color:#6b7280;font-weight:500">${escHtml(label)}</div>
   </div>`;
 }
 
