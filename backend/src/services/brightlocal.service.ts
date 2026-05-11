@@ -491,19 +491,21 @@ export async function findOrProvisionBlLocation(loc: {
   if (!loc.phone) throw new Error('Location requires a phone number to register with BrightLocal');
   if (!loc.website) throw new Error('Location requires a website URL to register with BrightLocal');
 
+  const address: Record<string, string> = { address1: loc.address };
+  if (loc.city) address.city = loc.city;
+  if (loc.state) address.region_code = loc.state;
+  if (loc.zip) address.postcode = loc.zip;
+
   const body: Record<string, unknown> = {
     business_name: loc.name,
     location_reference: reference,
     country: 'USA',
-    address: { address1: loc.address },
+    address,
     telephone: loc.phone,
-    // 1 = General / Other; fetch /manage/v1/business-categories for full list
-    business_category_id: 1,
+    // 740 = valid general category in BL management API (confirmed via API)
+    business_category_id: 740,
     urls: { website_url: loc.website },
   };
-  if (loc.city) body.city = loc.city;
-  if (loc.state) body.state = loc.state;
-  if (loc.zip) body.postcode = loc.zip;
 
   const res = await blDataFetch('/manage/v1/locations', {
     method: 'POST',
