@@ -10,5 +10,10 @@ router.get('/queues', requireAdmin, ctrl.queues);
 router.get('/analytics', requireAdmin, ctrl.analytics);
 router.post('/jobs/trigger', requireAdmin, ctrl.triggerJob);
 router.get('/citations', requireAdmin, ctrl.citationsOverview);
+router.get('/citations/locations', requireAdmin, ctrl.adminCitationLocations);
+router.post('/citations/campaign', requireAdmin, ctrl.adminCreateCampaign);
+router.get('/citations/campaign/:campaignId/lookup', requireAdmin, ctrl.adminGetCampaignLookup);
+router.post('/citations/campaign/:campaignId/confirm', requireAdmin, ctrl.adminConfirmCampaign);
+router.get('/citations/campaign/:campaignId', requireAdmin, ctrl.adminGetCampaign);
 
 export default router;

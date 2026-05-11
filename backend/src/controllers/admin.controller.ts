@@ -6,7 +6,13 @@ import {
   rankingsQueue, citationsQueue, reviewsQueue, reportsQueue,
   competitorsQueue, auditsQueue, geoGridQueue, citationBuilderQueue, trialReminderQueue,
 } from '../jobs/queue';
-import { getCbCredits } from '../services/brightlocal.service';
+import {
+  getCbCredits, createCbCampaign, getCbCampaignLookup,
+  confirmCbCampaign, getCbCampaign,
+  findOrProvisionBlLocation,
+  type CbPackageId, type CbPublisher,
+} from '../services/brightlocal.service';
+import { z } from 'zod';
 
 const TIER_PRICES: Record<number, number> = { 1: 350, 2: 700, 3: 1200 };
 
@@ -317,6 +323,92 @@ export async function citationsOverview(req: Request, res: Response, next: NextF
   } catch (e) {
     next(e);
   }
+}
+
+// ─── Admin Citation Builder endpoints ────────────────────────────────────────
+// Same logic as citation.controller.ts but clientId comes from request body,
+// not from req.clientId (which is the admin's own account).
+
+export async function adminCitationLocations(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const rows = await db('locations')
+      .join('clients', 'locations.client_id', 'clients.id')
+      .select(
+        'locations.id as locationId',
+        'locations.name as locationName',
+        'locations.address', 'locations.city', 'locations.state',
+        'locations.brightlocal_location_id as blLocationId',
+        'clients.id as clientId',
+        'clients.business_name as clientName',
+      )
+      .orderBy('clients.business_name')
+      .orderBy('locations.name');
+    ok(res, { locations: rows });
+  } catch (e) { next(e); }
+}
+
+export async function adminCreateCampaign(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { clientId, locationId } = z.object({ clientId: z.string().uuid(), locationId: z.string().uuid() }).parse(req.body);
+    const location = await db('locations').where({ id: locationId, client_id: clientId }).first() as {
+      id: string; name: string; address: string | null; city: string | null;
+      state: string | null; zip: string | null; phone: string | null; website: string | null;
+      brightlocal_location_id?: number | null;
+    } | undefined;
+    if (!location) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
+
+    let blLocationId = location.brightlocal_location_id;
+    if (!blLocationId) {
+      blLocationId = await findOrProvisionBlLocation(location);
+      await db('locations').where({ id: locationId }).update({ brightlocal_location_id: blLocationId });
+    }
+
+    const campaignId = await createCbCampaign(blLocationId);
+    ok(res, { campaignId }, 201);
+  } catch (e) { next(e); }
+}
+
+export async function adminGetCampaignLookup(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await getCbCampaignLookup(req.params.campaignId!);
+    ok(res, result);
+  } catch (e) { next(e); }
+}
+
+const adminConfirmSchema = z.object({
+  clientId: z.string().uuid(),
+  locationId: z.string().uuid(),
+  packageId: z.enum(['cb0', 'cb10', 'cb15', 'cb25', 'cb30', 'cb50', 'cb75', 'cb100']),
+  citations: z.array(z.string()).default([]),
+  publishers: z.array(z.enum(['dataaxle', 'neustar', 'foursquare', 'gpsnetwork', 'ypnetwork', 'locafynetwork'])).default([]),
+  autoSelect: z.boolean().default(false),
+  removeDuplicates: z.boolean().default(false),
+  notes: z.string().optional(),
+  express: z.boolean().default(false),
+});
+
+export async function adminConfirmCampaign(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const parsed = adminConfirmSchema.parse({ ...req.body, ...req.params });
+    const { campaignId } = req.params as { campaignId: string };
+    const { clientId, locationId, packageId, citations, publishers, autoSelect, removeDuplicates, notes, express } = parsed;
+
+    await confirmCbCampaign(campaignId, { packageId: packageId as CbPackageId, citations, publishers: publishers as CbPublisher[], autoSelect, removeDuplicates, notes, express });
+
+    const now = new Date();
+    const rows = citations.map((domain) => ({ client_id: clientId, location_id: locationId, directory: domain, status: 'pending', bl_submission_id: campaignId, submitted_at: now }));
+    if (rows.length > 0) {
+      await db('citation_submissions').insert(rows).onConflict(['location_id', 'directory']).merge(['status', 'bl_submission_id', 'submitted_at']);
+    }
+    ok(res, { message: 'Campaign confirmed' });
+  } catch (e) { next(e); }
+}
+
+export async function adminGetCampaign(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const campaign = await getCbCampaign(req.params.campaignId!);
+    ok(res, campaign);
+  } catch (e) { next(e); }
 }
 
 export async function triggerJob(req: Request, res: Response, next: NextFunction): Promise<void> {
