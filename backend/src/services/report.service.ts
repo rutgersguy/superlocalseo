@@ -585,7 +585,7 @@ export function renderReportHtml(data: ReportData): string {
     citations.score >= 80 ? '#16a34a' : citations.score >= 60 ? '#f59e0b' : '#dc2626';
 
   const gapSection = (gap.winning + gap.competing + gap.vulnerable + gap.absent) > 0 ? `
-  <div style="page-break-before:always;padding:40px 40px 32px">
+  <div style="padding:24px 40px 32px">
     <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Keyword Position Breakdown</h2>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:${gap.atRisk.length > 0 ? '20px' : '0'}">
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;text-align:center">
@@ -678,6 +678,38 @@ export function renderReportHtml(data: ReportData): string {
 
   ${gapSection}
 
+  <!-- Citations -->
+  <div style="padding:0 40px 32px">
+    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Citation Health</h2>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <span style="font-size:14px;font-weight:600;color:#111827">Citation Score</span>
+        <span style="font-size:20px;font-weight:700;color:${citationBarColor}">${citations.score}%</span>
+      </div>
+      <div style="background:#e5e7eb;border-radius:999px;height:10px;overflow:hidden;margin-bottom:20px">
+        <div style="background:${citationBarColor};width:${citationBarWidth}%;height:100%;border-radius:999px;transition:width 0.3s"></div>
+      </div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap">
+        ${citationStatPill('Listed', citations.listed, '#16a34a')}
+        ${citationStatPill('Not Listed', citations.total - citations.listed, '#dc2626')}
+        ${citationStatPill('NAP Accurate', citations.napAccurate, brandColor)}
+        ${citationStatPill('Total Directories', citations.total, '#6b7280')}
+      </div>
+    </div>
+  </div>
+
+  <!-- ROI Estimates -->
+  ${roi ? `
+  <div style="padding:0 40px 32px">
+    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">ROI &amp; Revenue Attribution</h2>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+      ${statBox('Est. Monthly Clicks', roi.estClicks.toLocaleString(), brandColor)}
+      ${statBox('Est. Monthly Leads', roi.estLeads.toLocaleString(), brandColor)}
+      ${statBox('Est. Monthly Revenue', `$${roi.estRevenue >= 1000 ? (roi.estRevenue / 1000).toFixed(1) + 'k' : roi.estRevenue.toLocaleString()}`, '#16a34a')}
+    </div>
+    <p style="margin-top:10px;font-size:11px;color:#9ca3af">Estimates based on your configured average customer value and keyword rankings. Actual results may vary.</p>
+  </div>` : ''}
+
   <!-- Rankings -->
   <div style="page-break-before:always;padding:40px 40px 32px">
     <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Keyword Rankings</h2>
@@ -728,26 +760,6 @@ export function renderReportHtml(data: ReportData): string {
     </div>
   </div>
 
-  <!-- Citations -->
-  <div style="page-break-before:always;padding:40px 40px 32px">
-    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Citation Health</h2>
-    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:20px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <span style="font-size:14px;font-weight:600;color:#111827">Citation Score</span>
-        <span style="font-size:20px;font-weight:700;color:${citationBarColor}">${citations.score}%</span>
-      </div>
-      <div style="background:#e5e7eb;border-radius:999px;height:10px;overflow:hidden;margin-bottom:20px">
-        <div style="background:${citationBarColor};width:${citationBarWidth}%;height:100%;border-radius:999px;transition:width 0.3s"></div>
-      </div>
-      <div style="display:flex;gap:24px;flex-wrap:wrap">
-        ${citationStatPill('Listed', citations.listed, '#16a34a')}
-        ${citationStatPill('Not Listed', citations.total - citations.listed, '#dc2626')}
-        ${citationStatPill('NAP Accurate', citations.napAccurate, brandColor)}
-        ${citationStatPill('Total Directories', citations.total, '#6b7280')}
-      </div>
-    </div>
-  </div>
-
   <!-- Competitors -->
   ${competitors.length > 0 ? `
   <div style="padding:0 40px 32px">
@@ -779,18 +791,6 @@ export function renderReportHtml(data: ReportData): string {
         </tbody>
       </table>
     </div>
-  </div>` : ''}
-
-  <!-- ROI Estimates -->
-  ${roi ? `
-  <div style="page-break-before:always;padding:40px 40px 32px">
-    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">ROI &amp; Revenue Attribution</h2>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
-      ${statBox('Est. Monthly Clicks', roi.estClicks.toLocaleString(), brandColor)}
-      ${statBox('Est. Monthly Leads', roi.estLeads.toLocaleString(), brandColor)}
-      ${statBox('Est. Monthly Revenue', `$${roi.estRevenue >= 1000 ? (roi.estRevenue / 1000).toFixed(1) + 'k' : roi.estRevenue.toLocaleString()}`, '#16a34a')}
-    </div>
-    <p style="margin-top:10px;font-size:11px;color:#9ca3af">Estimates based on your configured average customer value and keyword rankings. Actual results may vary.</p>
   </div>` : ''}
 
   <!-- Recommendations (new page) -->
