@@ -70,8 +70,6 @@ interface SubmissionsResponse { success: boolean; data: { submissions: Submissio
 interface LocationOption { id: string; name: string; city?: string; state?: string; }
 interface LocationsResponse { success: boolean; data: LocationOption[]; }
 
-interface CreditsResponse { success: boolean; data: { credits: number }; }
-
 interface LookupCitation {
   domain: string;
   profileUrl: string;
@@ -588,14 +586,12 @@ export default function Citations() {
   );
   const { data: submissionsData } = useSWR<SubmissionsResponse>('/citations/submissions', fetcher);
   const { data: locData } = useSWR<LocationsResponse>('/locations', fetcher);
-  const { data: creditsData } = useSWR<CreditsResponse>('/citations/credits', fetcher);
 
   const summary = data?.data;
   const directories = summary?.directories ?? [];
   const trendSeries = trendData?.data?.history ?? [];
   const submissions = submissionsData?.data?.submissions ?? [];
   const locations = locData?.data ?? [];
-  const credits = creditsData?.data?.credits;
 
   const napErrorCount = directories.filter(hasNapError).length;
 
@@ -623,9 +619,6 @@ export default function Citations() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Citations</h1>
-            {credits !== undefined && (
-              <p className="text-xs text-gray-400 mt-0.5">{credits} CB credit{credits !== 1 ? 's' : ''} remaining</p>
-            )}
           </div>
           <div className="flex gap-2">
             {isAdmin && (
