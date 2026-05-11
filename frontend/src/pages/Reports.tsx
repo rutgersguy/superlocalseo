@@ -370,14 +370,16 @@ function DataExports() {
     setLoading(key);
     try {
       const response = await apiFetch<never>(`/reports/export/${key}`, {}, true);
-      if (!response.ok) { setLoading(null); return; }
+      if (!response.ok) return;
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = filename;
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
     } finally {
       setLoading(null);
     }

@@ -3,6 +3,9 @@ import { db } from '../db/connection';
 
 export async function requireActiveSubscription(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
+    // Not authenticated yet — let requireAuth in the route handler deal with it
+    if (!req.userId) { next(); return; }
+
     // Admins are never blocked
     const user = await db('users').where({ id: req.userId }).first();
     if (user?.role === 'admin') { next(); return; }
