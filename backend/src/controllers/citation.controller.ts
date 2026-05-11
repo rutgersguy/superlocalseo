@@ -25,34 +25,13 @@ interface CitationRow {
   listed_phone: string | null;
 }
 
-interface LocationCitationSummary {
-  locationId: string;
-  totalDirectories: number;
-  listed: number;
-  notListed: number;
-  napAccurate: number;
-  citations: Array<{
-    directory: string;
-    listed: boolean;
-    napMatch: boolean;
-    listingUrl: string | null;
-    napDetail: {
-      nameMatch: boolean | null;
-      addressMatch: boolean | null;
-      phoneMatch: boolean | null;
-      listedName: string | null;
-      listedAddress: string | null;
-      listedPhone: string | null;
-    };
-  }>;
-}
 
 export async function list(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const query = req.query as unknown as ListQuery;
     const { locationId } = query;
 
-    // Get latest citation snapshot per directory per location using DISTINCT ON
+    // Latest snapshot per directory per location (DISTINCT ON)
     let baseQuery = db
       .from(
         db('citation_snapshots')
@@ -72,42 +51,41 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
 
     const rows = (await baseQuery) as CitationRow[];
 
-    // Group by location
-    const byLocation = new Map<string, CitationRow[]>();
+    // Aggregate across locations: if any location is listed for a directory, count it as listed.
+    const byDirectory = new Map<string, CitationRow>();
     for (const row of rows) {
-      if (!byLocation.has(row.location_id)) byLocation.set(row.location_id, []);
-      byLocation.get(row.location_id)!.push(row);
+      const existing = byDirectory.get(row.directory);
+      if (!existing || (!existing.listed && row.listed)) {
+        byDirectory.set(row.directory, row);
+      }
     }
 
-    const result: LocationCitationSummary[] = [];
-    for (const [locId, citations] of byLocation) {
-      const listedCount = citations.filter((c) => c.listed).length;
-      const napAccurateCount = citations.filter((c) => c.listed && c.nap_match).length;
+    const directories = Array.from(byDirectory.values()).map((c) => ({
+      id: c.directory,
+      name: c.directory,
+      listed: c.listed,
+      napMatch: c.nap_match,
+      listingUrl: c.listing_url,
+      napDetail: {
+        nameMatch: c.nap_name_match,
+        addressMatch: c.nap_address_match,
+        phoneMatch: c.nap_phone_match,
+        listedName: c.listed_name,
+        listedAddress: c.listed_address,
+        listedPhone: c.listed_phone,
+      },
+    }));
 
-      result.push({
-        locationId: locId,
-        totalDirectories: citations.length,
-        listed: listedCount,
-        notListed: citations.length - listedCount,
-        napAccurate: napAccurateCount,
-        citations: citations.map((c) => ({
-          directory: c.directory,
-          listed: c.listed,
-          napMatch: c.nap_match,
-          listingUrl: c.listing_url,
-          napDetail: {
-            nameMatch: c.nap_name_match,
-            addressMatch: c.nap_address_match,
-            phoneMatch: c.nap_phone_match,
-            listedName: c.listed_name,
-            listedAddress: c.listed_address,
-            listedPhone: c.listed_phone,
-          },
-        })),
-      });
-    }
+    const listedCount = directories.filter((d) => d.listed).length;
+    const napAccurateCount = directories.filter((d) => d.listed && d.napMatch).length;
+    const napAccuratePercent = listedCount > 0 ? Math.round((napAccurateCount / listedCount) * 100) : 0;
 
-    ok(res, result);
+    ok(res, {
+      directories,
+      totalDirectories: directories.length,
+      listedCount,
+      napAccuratePercent,
+    });
   } catch (e) {
     next(e);
   }
