@@ -603,7 +603,8 @@ interface ScanStatusResponse { success: boolean; data: { available: boolean; ret
 
 function formatNextScanTime(retryAfterSeconds: number): string {
   const t = new Date(Date.now() + retryAfterSeconds * 1000);
-  return t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' });
+  const time = t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' });
+  return `${time} EST`;
 }
 
 type Tab = 'overview' | 'rankings' | 'discover';
