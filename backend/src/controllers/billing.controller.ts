@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
-import { getOrCreateStripeCustomer, createCheckoutSession, getBillingPortalUrl, handleWebhookEvent } from '../services/stripe.service';
+import { getOrCreateStripeCustomer, createCheckoutSession, createSubscriptionIntent, getBillingPortalUrl, handleWebhookEvent } from '../services/stripe.service';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
@@ -38,6 +38,17 @@ export async function checkout(req: Request, res: Response, next: NextFunction):
     const session = await createCheckoutSession(customerId, extraLocations, successUrl, cancelUrl, req.userId!);
 
     ok(res, { url: session.url });
+  } catch (e) { next(e); }
+}
+
+export async function subscriptionIntent(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const extraLocations = Math.max(0, parseInt(req.body.extraLocations ?? '0', 10));
+    const user = await db('users').where({ id: req.userId }).first();
+    if (!user) { err(res, 'User not found', 404, 'NOT_FOUND'); return; }
+    const customerId = await getOrCreateStripeCustomer(req.userId!, user.email as string);
+    const { clientSecret, subscriptionId } = await createSubscriptionIntent(customerId, extraLocations, req.userId!);
+    ok(res, { clientSecret, subscriptionId, publishableKey: config.stripe.publishableKey });
   } catch (e) { next(e); }
 }
 

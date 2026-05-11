@@ -171,28 +171,11 @@ function PastDueBanner({ billing }: { billing: BillingStatusResponse['data'] | u
 }
 
 function SubscribeCTA({ billing }: { billing: BillingStatusResponse['data'] | undefined }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
   if (!billing || (billing.status !== 'trialing' && billing.status !== 'canceled')) return null;
 
   const days = billing.trialDaysLeft;
   const expired = billing.status === 'canceled' || (days !== null && days <= 0);
   const urgent = !expired && days !== null && days <= 3;
-
-  const startCheckout = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await apiFetch<{ success: boolean; data: { url: string }; error?: { message: string } }>('/billing/checkout', {
-        method: 'POST',
-        body: JSON.stringify({ extraLocations: 0 }),
-      });
-      if (res.success && res.data?.url) { window.location.href = res.data.url; return; }
-      setError(res.error?.message ?? 'Something went wrong');
-    } catch { setError('Network error — please try again'); }
-    setLoading(false);
-  };
 
   return (
     <div
@@ -258,18 +241,13 @@ function SubscribeCTA({ billing }: { billing: BillingStatusResponse['data'] | un
             </div>
             <p className="text-xs mt-0.5" style={{ color: '#64748b' }}>+ $499 one-time setup</p>
           </div>
-          {error && <p className="text-xs text-red-400">{error}</p>}
-          <button
-            onClick={() => void startCheckout()}
-            disabled={loading}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-60"
+          <a
+            href="/billing"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm transition-all"
             style={{ background: '#6366f1', color: '#fff', boxShadow: '0 4px 20px rgba(99,102,241,0.45)' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#4f46e5'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#6366f1'; }}
           >
-            {loading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
             {expired ? 'Reactivate now →' : 'Subscribe now →'}
-          </button>
+          </a>
           <p className="text-xs" style={{ color: '#475569' }}>Cancel anytime. No hidden fees.</p>
         </div>
       </div>

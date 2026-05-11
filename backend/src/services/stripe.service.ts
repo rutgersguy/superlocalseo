@@ -68,6 +68,36 @@ export async function createCheckoutSession(
   });
 }
 
+export async function createSubscriptionIntent(
+  customerId: string,
+  extraLocations: number,
+  userId: string,
+): Promise<{ clientSecret: string; subscriptionId: string }> {
+  const items: Stripe.SubscriptionCreateParams.Item[] = [
+    { price: config.stripe.prices.base! },
+  ];
+  if (extraLocations > 0 && config.stripe.prices.location) {
+    items.push({ price: config.stripe.prices.location, quantity: extraLocations });
+  }
+
+  const sub = await stripe.subscriptions.create({
+    customer: customerId,
+    items,
+    add_invoice_items: config.stripe.prices.setup
+      ? [{ price: config.stripe.prices.setup }]
+      : [],
+    payment_behavior: 'default_incomplete',
+    payment_settings: { save_default_payment_method: 'on_subscription' },
+    expand: ['latest_invoice.payment_intent'],
+    metadata: { userId, extraLocations: String(extraLocations) },
+  });
+
+  const invoice = sub.latest_invoice as Stripe.Invoice;
+  const pi = invoice.payment_intent as Stripe.PaymentIntent;
+
+  return { clientSecret: pi.client_secret!, subscriptionId: sub.id };
+}
+
 export async function getBillingPortalUrl(customerId: string, returnUrl: string): Promise<string> {
   const session = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: returnUrl });
   return session.url;
