@@ -604,11 +604,22 @@ type Tab = 'overview' | 'rankings' | 'discover';
 export default function Competitors() {
   const [tab, setTab] = useState<Tab>('overview');
   const [showAdd, setShowAdd] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanQueued, setScanQueued] = useState(false);
   const { data, isLoading, error } = useSWR<CompetitorsResponse>('/competitors', fetcher);
 
   const competitors = data?.data?.competitors ?? [];
   const stats = data?.data?.clientStats;
   function refresh() { void mutate('/competitors'); }
+
+  async function handleScanRankings() {
+    setScanning(true); setScanQueued(false);
+    try {
+      await apiFetch('/competitors/sync-rankings', { method: 'POST' });
+      setScanQueued(true);
+      setTimeout(() => setScanQueued(false), 4000);
+    } catch { /* ignore */ } finally { setScanning(false); }
+  }
 
   if (error) return (
     <div className="flex items-center gap-2 text-red-600 text-sm mt-8 justify-center">
@@ -632,12 +643,22 @@ export default function Competitors() {
           <h1 className="text-xl font-bold text-slate-900">Competitors</h1>
           <p className="text-sm text-slate-500 mt-0.5">Benchmark ratings, track keyword rankings head-to-head, and find new keyword opportunities.</p>
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="whitespace-nowrap flex items-center gap-2 px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors"
-        >
-          <Plus size={15} /> Add competitor
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => void handleScanRankings()}
+            disabled={scanning}
+            className={`whitespace-nowrap flex items-center gap-2 px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium rounded-lg border transition-colors disabled:opacity-50 ${scanQueued ? 'border-green-300 text-green-600 bg-green-50' : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50'}`}
+          >
+            {scanning ? <Loader2 size={15} className="animate-spin" /> : scanQueued ? <Check size={15} /> : <RefreshCw size={15} />}
+            {scanning ? 'Queuing…' : scanQueued ? 'Queued!' : 'Run scan'}
+          </button>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="whitespace-nowrap flex items-center gap-2 px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors"
+          >
+            <Plus size={15} /> Add competitor
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}

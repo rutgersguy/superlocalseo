@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import { Queue } from 'bullmq';
 import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
 import { config } from '../config';
@@ -404,6 +405,21 @@ export async function discoverKeywords(req: Request, res: Response, next: NextFu
         label: [l.name, l.city && l.state ? `${l.city}, ${l.state}` : l.city ?? l.state].filter(Boolean).join(' — '),
       })),
     });
+  } catch (e) {
+    next(e);
+  }
+}
+
+// ─── syncRankings: manual trigger ────────────────────────────────────────────
+
+export async function syncRankings(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const redisHost = process.env.REDIS_HOST ?? 'redis';
+    const q = new Queue('rankings', { connection: { host: redisHost, port: 6379 } });
+    const job = await q.add('sync', { clientId: req.clientId }, { jobId: `manual-${req.clientId}-${Date.now()}` });
+    await q.close();
+    logger.info('Manual rankings sync queued', { clientId: req.clientId, jobId: job.id });
+    ok(res, { queued: true, jobId: job.id });
   } catch (e) {
     next(e);
   }
