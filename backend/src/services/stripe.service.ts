@@ -68,10 +68,85 @@ export async function createCheckoutSession(
   });
 }
 
+// ─── Promo codes ─────────────────────────────────────────────────────────────
+
+export async function listPromoCodes(): Promise<Array<{
+  id: string; code: string; active: boolean;
+  discount: string; duration: string; redemptions: number; maxRedemptions: number | null;
+  expiresAt: number | null;
+}>> {
+  const promos = await stripe.promotionCodes.list({ limit: 100, expand: ['data.coupon'] });
+  return promos.data.map((p) => {
+    const c = p.coupon;
+    let discount = '';
+    if (c.percent_off) discount = `${c.percent_off}% off`;
+    else if (c.amount_off) discount = `$${(c.amount_off / 100).toFixed(0)} off`;
+    const duration = c.duration === 'forever' ? 'forever'
+      : c.duration === 'once' ? 'first invoice only'
+      : `${c.duration_in_months ?? '?'} months`;
+    return {
+      id: p.id, code: p.code, active: p.active,
+      discount, duration,
+      redemptions: p.times_redeemed,
+      maxRedemptions: p.max_redemptions ?? null,
+      expiresAt: p.expires_at ?? null,
+    };
+  });
+}
+
+export interface CreatePromoParams {
+  code: string;
+  type: 'percent' | 'amount';
+  value: number;
+  applyTo: 'all' | 'setup' | 'monthly';
+  duration: 'once' | 'forever' | 'repeating';
+  durationMonths?: number;
+  maxRedemptions?: number;
+  expiresAt?: string;
+}
+
+export async function createPromoCode(params: CreatePromoParams): Promise<{ id: string; code: string }> {
+  const couponParams: Stripe.CouponCreateParams = {
+    duration: params.duration,
+    ...(params.duration === 'repeating' ? { duration_in_months: params.durationMonths ?? 3 } : {}),
+    ...(params.type === 'percent' ? { percent_off: params.value } : { amount_off: Math.round(params.value * 100), currency: 'usd' }),
+    ...(params.applyTo === 'setup' && config.stripe.prices.setup ? { applies_to: { products: [] } } : {}),
+    metadata: { applyTo: params.applyTo },
+  };
+  const coupon = await stripe.coupons.create(couponParams);
+  const promoParams: Stripe.PromotionCodeCreateParams = {
+    coupon: coupon.id,
+    code: params.code.toUpperCase(),
+    ...(params.maxRedemptions ? { max_redemptions: params.maxRedemptions } : {}),
+    ...(params.expiresAt ? { expires_at: Math.floor(new Date(params.expiresAt).getTime() / 1000) } : {}),
+  };
+  const promo = await stripe.promotionCodes.create(promoParams);
+  return { id: promo.id, code: promo.code };
+}
+
+export async function deactivatePromoCode(promoId: string): Promise<void> {
+  await stripe.promotionCodes.update(promoId, { active: false });
+}
+
+export async function validatePromoCode(code: string): Promise<{ id: string; discount: string; duration: string } | null> {
+  const results = await stripe.promotionCodes.list({ code: code.toUpperCase(), active: true, limit: 1 });
+  if (!results.data.length) return null;
+  const p = results.data[0];
+  const c = p.coupon as Stripe.Coupon;
+  let discount = '';
+  if (c.percent_off) discount = `${c.percent_off}% off`;
+  else if (c.amount_off) discount = `$${(c.amount_off / 100).toFixed(0)} off`;
+  const duration = c.duration === 'forever' ? 'forever'
+    : c.duration === 'once' ? 'first invoice only'
+    : `${c.duration_in_months ?? '?'} months`;
+  return { id: p.id, discount, duration };
+}
+
 export async function createSubscriptionIntent(
   customerId: string,
   extraLocations: number,
   userId: string,
+  promotionCodeId?: string,
 ): Promise<{ clientSecret: string; subscriptionId: string }> {
   const items: Stripe.SubscriptionCreateParams.Item[] = [
     { price: config.stripe.prices.base! },
@@ -90,6 +165,7 @@ export async function createSubscriptionIntent(
     payment_settings: { save_default_payment_method: 'on_subscription' },
     expand: ['latest_invoice.payment_intent'],
     metadata: { userId, extraLocations: String(extraLocations) },
+    ...(promotionCodeId ? { promotion_code: promotionCodeId } : {}),
   });
 
   const invoice = sub.latest_invoice as Stripe.Invoice;

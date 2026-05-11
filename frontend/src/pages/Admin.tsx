@@ -107,13 +107,14 @@ function HealthDot({ ok, label, detail }: { ok: boolean; label: string; detail?:
 
 // ─── Tab bar ──────────────────────────────────────────────────────────────────
 
-type Tab = 'overview' | 'clients' | 'queues' | 'analytics' | 'citations' | 'customers';
+type Tab = 'overview' | 'clients' | 'queues' | 'analytics' | 'citations' | 'customers' | 'promos';
 
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'overview', label: 'Overview' },
     { key: 'clients', label: 'Clients' },
     { key: 'customers', label: 'Customers' },
+    { key: 'promos', label: 'Promo Codes' },
     { key: 'queues', label: 'Job Queues' },
     { key: 'analytics', label: 'Analytics' },
     { key: 'citations', label: 'Citations' },
@@ -1244,6 +1245,260 @@ function CustomersTab() {
   );
 }
 
+// ─── Promo Codes tab ──────────────────────────────────────────────────────────
+
+interface PromoCode {
+  id: string;
+  code: string;
+  active: boolean;
+  discount: string;
+  duration: string;
+  redemptions: number;
+  maxRedemptions: number | null;
+  expiresAt: number | null;
+}
+
+function PromoCodesTab() {
+  const { data, isLoading, mutate: revalidate } = useSWR<{ success: boolean; data: PromoCode[] }>(
+    '/admin/promos',
+    fetcher,
+  );
+  const promos = data?.data ?? [];
+
+  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
+
+  const [form, setForm] = useState({
+    code: '',
+    type: 'percent' as 'percent' | 'amount',
+    value: '',
+    applyTo: 'all' as 'all' | 'setup' | 'monthly',
+    duration: 'once' as 'once' | 'forever' | 'repeating',
+    durationMonths: '',
+    maxRedemptions: '',
+    expiresAt: '',
+  });
+
+  const handleCreate = async () => {
+    if (!form.code || !form.value) return;
+    setCreating(true);
+    setCreateError('');
+    try {
+      const body: Record<string, unknown> = {
+        code: form.code,
+        type: form.type,
+        value: parseFloat(form.value),
+        applyTo: form.applyTo,
+        duration: form.duration,
+      };
+      if (form.duration === 'repeating' && form.durationMonths) body.durationMonths = parseInt(form.durationMonths, 10);
+      if (form.maxRedemptions) body.maxRedemptions = parseInt(form.maxRedemptions, 10);
+      if (form.expiresAt) body.expiresAt = form.expiresAt;
+
+      const res = await apiFetch<{ success: boolean; error?: { message: string } }>('/admin/promos', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      if (!res.success) { setCreateError((res as any).error?.message ?? 'Failed to create'); return; }
+      setShowCreate(false);
+      setForm({ code: '', type: 'percent', value: '', applyTo: 'all', duration: 'once', durationMonths: '', maxRedemptions: '', expiresAt: '' });
+      void revalidate();
+    } catch { setCreateError('Network error'); }
+    finally { setCreating(false); }
+  };
+
+  const handleDeactivate = async (promoId: string) => {
+    await apiFetch(`/admin/promos/${promoId}`, { method: 'DELETE' });
+    void revalidate();
+  };
+
+  if (isLoading) return <div className="py-12 text-center text-sm text-gray-400">Loading…</div>;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-base font-semibold text-gray-900">Promo Codes</h3>
+          <p className="text-xs text-gray-400 mt-0.5">Create and manage discount codes for new subscribers</p>
+        </div>
+        <button
+          onClick={() => setShowCreate(!showCreate)}
+          className="px-3.5 py-2 text-sm font-medium text-white rounded-lg transition-colors"
+          style={{ background: '#6366f1' }}
+        >
+          + New code
+        </button>
+      </div>
+
+      {showCreate && (
+        <div className="border border-indigo-100 bg-indigo-50/40 rounded-xl p-5 space-y-4">
+          <h4 className="text-sm font-semibold text-gray-800">Create promo code</h4>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Code</label>
+              <input
+                value={form.code}
+                onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
+                placeholder="SUMMER25"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 uppercase tracking-wider"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Discount type</label>
+              <select
+                value={form.type}
+                onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as 'percent' | 'amount' }))}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400"
+              >
+                <option value="percent">% off</option>
+                <option value="amount">$ off</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Value</label>
+              <input
+                type="number"
+                value={form.value}
+                onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
+                placeholder={form.type === 'percent' ? '25' : '100'}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Apply to</label>
+              <select
+                value={form.applyTo}
+                onChange={(e) => setForm((f) => ({ ...f, applyTo: e.target.value as 'all' | 'setup' | 'monthly' }))}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400"
+              >
+                <option value="all">All charges</option>
+                <option value="setup">Setup fee only</option>
+                <option value="monthly">Monthly only</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Duration</label>
+              <select
+                value={form.duration}
+                onChange={(e) => setForm((f) => ({ ...f, duration: e.target.value as 'once' | 'forever' | 'repeating' }))}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400"
+              >
+                <option value="once">Once (first invoice)</option>
+                <option value="forever">Forever</option>
+                <option value="repeating">Repeating (N months)</option>
+              </select>
+            </div>
+            {form.duration === 'repeating' && (
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Months</label>
+                <input
+                  type="number"
+                  value={form.durationMonths}
+                  onChange={(e) => setForm((f) => ({ ...f, durationMonths: e.target.value }))}
+                  placeholder="3"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400"
+                />
+              </div>
+            )}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Max redemptions</label>
+              <input
+                type="number"
+                value={form.maxRedemptions}
+                onChange={(e) => setForm((f) => ({ ...f, maxRedemptions: e.target.value }))}
+                placeholder="Unlimited"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Expires</label>
+              <input
+                type="date"
+                value={form.expiresAt}
+                onChange={(e) => setForm((f) => ({ ...f, expiresAt: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400"
+              />
+            </div>
+          </div>
+
+          {createError && <p className="text-xs text-red-600">{createError}</p>}
+
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={() => void handleCreate()}
+              disabled={creating || !form.code || !form.value}
+              className="px-4 py-2 text-sm font-medium text-white rounded-lg disabled:opacity-50 transition-colors"
+              style={{ background: '#6366f1' }}
+            >
+              {creating ? 'Creating…' : 'Create code'}
+            </button>
+            <button
+              onClick={() => { setShowCreate(false); setCreateError(''); }}
+              className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {promos.length === 0 ? (
+        <p className="text-sm text-gray-400 text-center py-8">No promo codes yet.</p>
+      ) : (
+        <div className="rounded-xl border border-gray-100 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+              <tr>
+                <th className="px-4 py-3 text-left">Code</th>
+                <th className="px-4 py-3 text-left">Discount</th>
+                <th className="px-4 py-3 text-left">Duration</th>
+                <th className="px-4 py-3 text-left">Redemptions</th>
+                <th className="px-4 py-3 text-left">Expires</th>
+                <th className="px-4 py-3 text-left">Status</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {promos.map((p) => (
+                <tr key={p.id} className="hover:bg-gray-50/50">
+                  <td className="px-4 py-3 font-mono font-semibold text-gray-900 tracking-wider">{p.code}</td>
+                  <td className="px-4 py-3 text-gray-700">{p.discount}</td>
+                  <td className="px-4 py-3 text-gray-600">{p.duration}</td>
+                  <td className="px-4 py-3 text-gray-600">
+                    {p.redemptions}{p.maxRedemptions ? ` / ${p.maxRedemptions}` : ''}
+                  </td>
+                  <td className="px-4 py-3 text-gray-500 text-xs">
+                    {p.expiresAt ? new Date(p.expiresAt * 1000).toLocaleDateString() : '—'}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                      p.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                    }`}>
+                      {p.active ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {p.active && (
+                      <button
+                        onClick={() => void handleDeactivate(p.id)}
+                        className="text-xs text-red-500 hover:text-red-700 font-medium"
+                      >
+                        Deactivate
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Admin() {
@@ -1264,6 +1519,7 @@ export default function Admin() {
         {tab === 'overview' && <OverviewTab />}
         {tab === 'clients' && <ClientsTab />}
         {tab === 'customers' && <CustomersTab />}
+        {tab === 'promos' && <PromoCodesTab />}
         {tab === 'queues' && <QueuesTab />}
         {tab === 'analytics' && <AnalyticsTab />}
         {tab === 'citations' && <CitationsTab />}

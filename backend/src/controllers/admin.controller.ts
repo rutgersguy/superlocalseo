@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { db } from '../db/connection';
 import { redis } from '../db/redis';
 import { ok, err } from '../utils/response';
+import { listPromoCodes, createPromoCode, deactivatePromoCode } from '../services/stripe.service';
 import {
   rankingsQueue, citationsQueue, reviewsQueue, reportsQueue,
   competitorsQueue, auditsQueue, geoGridQueue, citationBuilderQueue, trialReminderQueue,
@@ -508,5 +509,41 @@ export async function adminDeleteCustomer(req: Request, res: Response, next: Nex
     // Cascade: delete user (clients cascade from users)
     await db('users').where({ id: client.user_id }).delete();
     ok(res, { deleted: true });
+  } catch (e) { next(e); }
+}
+
+// ─── Promo codes ─────────────────────────────────────────────────────────────
+
+export async function adminListPromoCodes(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const promos = await listPromoCodes();
+    ok(res, promos);
+  } catch (e) { next(e); }
+}
+
+const createPromoSchema = z.object({
+  code: z.string().min(1).max(32),
+  type: z.enum(['percent', 'amount']),
+  value: z.number().positive(),
+  applyTo: z.enum(['all', 'setup', 'monthly']),
+  duration: z.enum(['once', 'forever', 'repeating']),
+  durationMonths: z.number().int().min(1).optional(),
+  maxRedemptions: z.number().int().min(1).optional(),
+  expiresAt: z.string().optional(),
+});
+
+export async function adminCreatePromoCode(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const params = createPromoSchema.parse(req.body);
+    const result = await createPromoCode(params);
+    ok(res, result);
+  } catch (e) { next(e); }
+}
+
+export async function adminDeactivatePromoCode(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { promoId } = req.params as { promoId: string };
+    await deactivatePromoCode(promoId);
+    ok(res, { deactivated: true });
   } catch (e) { next(e); }
 }

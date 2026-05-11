@@ -11,6 +11,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), ctrl.webhook)
 
 router.get('/status', requireAuth, requireClient, ctrl.status);
 router.post('/subscription-intent', requireAuth, requireClient, ctrl.subscriptionIntent);
+router.post('/validate-promo', requireAuth, ctrl.validatePromo);
 router.post('/checkout', requireAuth, requireClient, ctrl.checkout);
 router.post('/portal', requireAuth, requireClient, ctrl.portal);
 

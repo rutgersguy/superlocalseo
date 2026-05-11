@@ -24,7 +24,6 @@ import AuditHistory from './pages/AuditHistory';
 import Admin from './pages/Admin';
 import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
-import BillingWall from './pages/BillingWall';
 import BillingPage from './pages/BillingPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';

@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
-import { getOrCreateStripeCustomer, createCheckoutSession, createSubscriptionIntent, getBillingPortalUrl, handleWebhookEvent } from '../services/stripe.service';
+import { getOrCreateStripeCustomer, createCheckoutSession, createSubscriptionIntent, getBillingPortalUrl, handleWebhookEvent, validatePromoCode } from '../services/stripe.service';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
@@ -44,11 +44,22 @@ export async function checkout(req: Request, res: Response, next: NextFunction):
 export async function subscriptionIntent(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const extraLocations = Math.max(0, parseInt(req.body.extraLocations ?? '0', 10));
+    const promotionCodeId = typeof req.body.promotionCodeId === 'string' ? req.body.promotionCodeId : undefined;
     const user = await db('users').where({ id: req.userId }).first();
     if (!user) { err(res, 'User not found', 404, 'NOT_FOUND'); return; }
     const customerId = await getOrCreateStripeCustomer(req.userId!, user.email as string);
-    const { clientSecret, subscriptionId } = await createSubscriptionIntent(customerId, extraLocations, req.userId!);
+    const { clientSecret, subscriptionId } = await createSubscriptionIntent(customerId, extraLocations, req.userId!, promotionCodeId);
     ok(res, { clientSecret, subscriptionId, publishableKey: config.stripe.publishableKey });
+  } catch (e) { next(e); }
+}
+
+export async function validatePromo(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const code = typeof req.body.code === 'string' ? req.body.code.trim() : '';
+    if (!code) { err(res, 'Code is required', 400, 'INVALID_INPUT'); return; }
+    const result = await validatePromoCode(code);
+    if (!result) { err(res, 'Invalid or expired promo code', 404, 'PROMO_NOT_FOUND'); return; }
+    ok(res, result);
   } catch (e) { next(e); }
 }
 

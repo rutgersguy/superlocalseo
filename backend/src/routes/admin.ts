@@ -20,4 +20,8 @@ router.get('/customers', requireAdmin, ctrl.adminListCustomers);
 router.patch('/customers/:clientId', requireAdmin, ctrl.adminUpdateCustomer);
 router.delete('/customers/:clientId', requireAdmin, ctrl.adminDeleteCustomer);
 
+router.get('/promos', requireAdmin, ctrl.adminListPromoCodes);
+router.post('/promos', requireAdmin, ctrl.adminCreatePromoCode);
+router.delete('/promos/:promoId', requireAdmin, ctrl.adminDeactivatePromoCode);
+
 export default router;

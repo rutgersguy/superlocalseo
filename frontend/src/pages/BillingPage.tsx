@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { BarChart2, CheckCircle2, ShieldCheck, Lock } from 'lucide-react';
+import { BarChart2, CheckCircle2, ShieldCheck, Lock, Tag, X } from 'lucide-react';
 import useSWR from 'swr';
 import { fetcher, apiFetch } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
@@ -24,9 +24,15 @@ interface IntentResponse {
   error?: { message: string };
 }
 
+interface PromoResponse {
+  success: boolean;
+  data: { id: string; discount: string; duration: string };
+  error?: { message: string };
+}
+
 // ─── Checkout form (inside Elements context) ─────────────────────────────────
 
-function CheckoutForm({ onSuccess }: { onSuccess: () => void }) {
+function CheckoutForm({ onSuccess: _onSuccess }: { onSuccess: () => void }) {
   const stripe = useStripe();
   const elements = useElements();
   const [submitting, setSubmitting] = useState(false);
@@ -110,6 +116,11 @@ export default function BillingPage() {
   const [loadingIntent, setLoadingIntent] = useState(false);
   const [success, setSuccess] = useState(false);
 
+  const [promoInput, setPromoInput] = useState('');
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoApplied, setPromoApplied] = useState<{ id: string; discount: string; duration: string } | null>(null);
+  const [promoError, setPromoError] = useState('');
+
   // Check for success return from Stripe
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -128,7 +139,7 @@ export default function BillingPage() {
     setLoadingIntent(true);
     apiFetch<IntentResponse>('/billing/subscription-intent', {
       method: 'POST',
-      body: JSON.stringify({ extraLocations: 0 }),
+      body: JSON.stringify({ extraLocations: 0, promotionCodeId: promoApplied?.id }),
     })
       .then((res) => {
         if (!res.success || !res.data?.clientSecret) {
@@ -141,6 +152,37 @@ export default function BillingPage() {
       .catch(() => setIntentError('Network error — please refresh'))
       .finally(() => setLoadingIntent(false));
   }, [billing, clientSecret]);
+
+  const applyPromo = async () => {
+    const code = promoInput.trim();
+    if (!code) return;
+    setPromoLoading(true);
+    setPromoError('');
+    try {
+      const res = await apiFetch<PromoResponse>('/billing/validate-promo', {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      });
+      if (!res.success || !res.data) {
+        setPromoError(res.error?.message ?? 'Invalid or expired promo code');
+        return;
+      }
+      setPromoApplied(res.data);
+      // Reset intent so it recreates with promo applied
+      setClientSecret(null);
+    } catch {
+      setPromoError('Network error — please try again');
+    } finally {
+      setPromoLoading(false);
+    }
+  };
+
+  const removePromo = () => {
+    setPromoApplied(null);
+    setPromoInput('');
+    setPromoError('');
+    setClientSecret(null);
+  };
 
   const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
 
@@ -288,7 +330,48 @@ export default function BillingPage() {
         {/* ── Right: Payment Form ────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8">
           <h2 className="text-base font-semibold text-slate-900 mb-1">Payment details</h2>
-          <p className="text-xs text-slate-400 mb-8">Your card will be charged $848 today, then $349/mo.</p>
+          <p className="text-xs text-slate-400 mb-5">Your card will be charged $848 today, then $349/mo.</p>
+
+          {/* Promo code */}
+          {!promoApplied ? (
+            <div className="mb-6">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Tag size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={promoInput}
+                    onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void applyPromo(); } }}
+                    placeholder="Promo code"
+                    className="w-full pl-8 pr-3 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-300 tracking-wide"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void applyPromo()}
+                  disabled={!promoInput.trim() || promoLoading}
+                  className="px-4 py-2.5 text-sm font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 disabled:opacity-50 whitespace-nowrap transition-colors"
+                >
+                  {promoLoading ? '…' : 'Apply'}
+                </button>
+              </div>
+              {promoError && <p className="mt-1.5 text-xs text-red-600">{promoError}</p>}
+            </div>
+          ) : (
+            <div className="mb-6 flex items-center justify-between px-3 py-2.5 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-green-500 shrink-0" />
+                <div>
+                  <span className="text-sm font-medium text-green-800">{promoInput} applied</span>
+                  <span className="ml-2 text-xs text-green-600">{promoApplied.discount} · {promoApplied.duration}</span>
+                </div>
+              </div>
+              <button type="button" onClick={removePromo} className="text-green-500 hover:text-green-700 ml-2">
+                <X size={14} />
+              </button>
+            </div>
+          )}
 
           {loadingIntent && (
             <div className="space-y-3 animate-pulse">
