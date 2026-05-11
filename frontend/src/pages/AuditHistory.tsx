@@ -69,16 +69,15 @@ export default function AuditHistory() {
   const canTrigger = recentAuditDaysAgo === null || recentAuditDaysAgo >= 1;
   const cooldownDaysLeft = recentAuditDaysAgo !== null && recentAuditDaysAgo < 1 ? 1 - recentAuditDaysAgo : null;
 
-  const chartData = historyAudits
-    .filter((a) => a.status === 'complete')
-    .map((a) => ({
-      date: a.completedAt ? new Date(a.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '',
-      NAP: a.napScore,
-      Citations: a.citationScore,
-      Reviews: a.reviewScore,
-      Google: a.googleScore,
-      Overall: a.compositeScore,
-    }));
+  const chartData = Object.values(
+    historyAudits
+      .filter((a) => a.status === 'complete' && a.completedAt)
+      .reduce<Record<string, { date: string; NAP: number | null; Citations: number | null; Reviews: number | null; Google: number | null; Overall: number | null }>>((acc, a) => {
+        const day = new Date(a.completedAt!).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        acc[day] = { date: day, NAP: a.napScore, Citations: a.citationScore, Reviews: a.reviewScore, Google: a.googleScore, Overall: a.compositeScore };
+        return acc;
+      }, {}),
+  );
 
   const handleTrigger = async () => {
     if (!effectiveLocationId) return;
