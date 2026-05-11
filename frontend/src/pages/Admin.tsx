@@ -107,7 +107,7 @@ function HealthDot({ ok, label, detail }: { ok: boolean; label: string; detail?:
 
 // ─── Tab bar ──────────────────────────────────────────────────────────────────
 
-type Tab = 'overview' | 'clients' | 'queues' | 'analytics';
+type Tab = 'overview' | 'clients' | 'queues' | 'analytics' | 'citations';
 
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   const tabs: { key: Tab; label: string }[] = [
@@ -115,6 +115,7 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
     { key: 'clients', label: 'Clients' },
     { key: 'queues', label: 'Job Queues' },
     { key: 'analytics', label: 'Analytics' },
+    { key: 'citations', label: 'Citations' },
   ];
   return (
     <div className="flex gap-1 border-b border-gray-200 mb-6">
@@ -544,6 +545,116 @@ function AnalyticsTab() {
   );
 }
 
+// ─── Citations tab ────────────────────────────────────────────────────────────
+
+interface CitationSubmissionRow {
+  id: string;
+  directory: string;
+  status: string;
+  listingUrl: string | null;
+  submittedAt: string;
+  liveAt: string | null;
+  blSubmissionId: string | null;
+  clientName: string;
+  locationName: string;
+}
+
+interface CitationsOverview {
+  credits: number;
+  byStatus: Record<string, number>;
+  submissions: CitationSubmissionRow[];
+}
+
+const SUB_STATUS_STYLES: Record<string, string> = {
+  pending:   'bg-gray-100 text-gray-600',
+  submitted: 'bg-blue-100 text-blue-700',
+  live:      'bg-green-100 text-green-700',
+  rejected:  'bg-red-100 text-red-600',
+  duplicate: 'bg-yellow-100 text-yellow-700',
+};
+
+function CitationsTab() {
+  const { data, isLoading } = useSWR<{ success: boolean; data: CitationsOverview }>(
+    '/admin/citations',
+    fetcher,
+    { refreshInterval: 60_000 },
+  );
+  const d = data?.data;
+
+  return (
+    <div className="space-y-6">
+      {/* Credit balance + status breakdown */}
+      {isLoading || !d ? (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 animate-pulse">
+          {Array.from({ length: 4 }, (_, i) => <div key={i} className="h-24 bg-gray-100 rounded-xl" />)}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <StatCard label="CB Credits Remaining" value={d.credits} sub="BrightLocal account" />
+          <StatCard label="Live" value={d.byStatus['live'] ?? 0} sub="citations live" />
+          <StatCard label="Pending / Submitted" value={(d.byStatus['pending'] ?? 0) + (d.byStatus['submitted'] ?? 0)} sub="in progress" />
+          <StatCard label="Total Submissions" value={d.submissions.length} sub="all time" />
+        </div>
+      )}
+
+      {/* Submissions table */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <h3 className="text-sm font-semibold text-gray-900">All Citation Submissions</h3>
+          <p className="text-xs text-gray-400 mt-0.5">Across all clients — most recent first</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Client</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Location</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Directory</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Submitted</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Live</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {isLoading ? (
+                Array.from({ length: 8 }, (_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    {Array.from({ length: 6 }, (_, j) => (
+                      <td key={j} className="px-4 py-3"><div className="h-4 bg-gray-100 rounded" /></td>
+                    ))}
+                  </tr>
+                ))
+              ) : !d || d.submissions.length === 0 ? (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400 text-sm">No submissions yet.</td></tr>
+              ) : (
+                d.submissions.map((s) => (
+                  <tr key={s.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-medium text-gray-900 max-w-[140px] truncate">{s.clientName}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs max-w-[120px] truncate">{s.locationName}</td>
+                    <td className="px-4 py-3 text-gray-700">
+                      {s.directory}
+                      {s.listingUrl && (
+                        <a href={s.listingUrl} target="_blank" rel="noopener noreferrer" className="ml-1.5 text-xs text-blue-400 hover:underline">↗</a>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${SUB_STATUS_STYLES[s.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                        {s.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-400 text-xs">{fmtDate(s.submittedAt)}</td>
+                    <td className="px-4 py-3 text-gray-400 text-xs">{s.liveAt ? fmtDate(s.liveAt) : '—'}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Admin() {
@@ -565,6 +676,7 @@ export default function Admin() {
         {tab === 'clients' && <ClientsTab />}
         {tab === 'queues' && <QueuesTab />}
         {tab === 'analytics' && <AnalyticsTab />}
+        {tab === 'citations' && <CitationsTab />}
       </div>
     </div>
   );

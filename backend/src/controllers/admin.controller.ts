@@ -6,6 +6,7 @@ import {
   rankingsQueue, citationsQueue, reviewsQueue, reportsQueue,
   competitorsQueue, auditsQueue, geoGridQueue, citationBuilderQueue, trialReminderQueue,
 } from '../jobs/queue';
+import { getCbCredits } from '../services/brightlocal.service';
 
 const TIER_PRICES: Record<number, number> = { 1: 350, 2: 700, 3: 1200 };
 
@@ -289,6 +290,34 @@ const JOB_QUEUE_MAP: Record<string, { queue: typeof rankingsQueue; jobName: stri
   competitors: { queue: competitorsQueue, jobName: 'manual-trigger' },
   audits: { queue: auditsQueue, jobName: 'monthly-fan-out' },
 };
+
+export async function citationsOverview(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const [credits, submissions] = await Promise.all([
+      getCbCredits(),
+      db('citation_submissions as cs')
+        .join('clients as cl', 'cs.client_id', 'cl.id')
+        .join('locations as l', 'cs.location_id', 'l.id')
+        .select(
+          'cs.id', 'cs.directory', 'cs.status', 'cs.listing_url',
+          'cs.submitted_at', 'cs.live_at', 'cs.bl_submission_id',
+          'cl.business_name as clientName',
+          'l.name as locationName',
+        )
+        .orderBy('cs.submitted_at', 'desc')
+        .limit(200),
+    ]);
+
+    const byStatus = (submissions as Array<{ status: string }>).reduce<Record<string, number>>((acc, s) => {
+      acc[s.status] = (acc[s.status] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    ok(res, { credits, submissions, byStatus });
+  } catch (e) {
+    next(e);
+  }
+}
 
 export async function triggerJob(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
