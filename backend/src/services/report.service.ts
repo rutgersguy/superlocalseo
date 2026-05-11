@@ -42,6 +42,12 @@ export interface ReportData {
     total: number;
     napAccurate: number;
   };
+  competitors: Array<{
+    name: string;
+    website: string | null;
+    googleRating: number | null;
+    googleReviewCount: number | null;
+  }>;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -238,6 +244,16 @@ export async function gatherReportData(
   const citationScore =
     citationTotal > 0 ? Math.round((citationListed / citationTotal) * 100) : 0;
 
+  const competitorRows = await db('competitors')
+    .where({ client_id: clientId })
+    .select('name', 'website', 'google_rating', 'google_review_count')
+    .orderBy('google_review_count', 'desc') as Array<{
+      name: string;
+      website: string | null;
+      google_rating: string | null;
+      google_review_count: number | null;
+    }>;
+
   const whiteLabel: WhiteLabel | undefined =
     client.subscription_tier >= 3 &&
     (client.white_label_company_name || client.white_label_logo_url || client.white_label_color)
@@ -282,13 +298,19 @@ export async function gatherReportData(
       total: citationTotal,
       napAccurate: citationNapAccurate,
     },
+    competitors: competitorRows.map((c) => ({
+      name: c.name,
+      website: c.website,
+      googleRating: c.google_rating != null ? parseFloat(c.google_rating) : null,
+      googleReviewCount: c.google_review_count,
+    })),
   };
 }
 
 // ─── renderReportHtml ───────────────────────────────────────────────────────────
 
 export function renderReportHtml(data: ReportData): string {
-  const { client, period, rankings, reviews, citations } = data;
+  const { client, period, rankings, reviews, citations, competitors } = data;
   const brandColor = client.whiteLabel?.color ?? '#0052CC';
   const brandName = client.whiteLabel?.companyName ?? 'SuperLocalSEO';
   const brandLogoUrl = client.whiteLabel?.logoUrl ?? null;
@@ -498,6 +520,33 @@ export function renderReportHtml(data: ReportData): string {
       </div>
     </div>
   </div>
+
+  <!-- Competitors -->
+  ${competitors.length > 0 ? `
+  <div style="padding:0 40px 32px">
+    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Competitor Benchmarking</h2>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+      <table>
+        <thead>
+          <tr>
+            <th>Competitor</th>
+            <th>Website</th>
+            <th class="center">Google Rating</th>
+            <th class="center">Reviews</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${competitors.map((c, i) => `
+            <tr style="background:${i % 2 === 0 ? '#ffffff' : '#f9fafb'}">
+              <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:600;color:#111827">${escHtml(c.name)}</td>
+              <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">${c.website ? `<a href="${escHtml(c.website)}" style="color:${brandColor}">${escHtml(c.website)}</a>` : '—'}</td>
+              <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center;color:#f59e0b">${c.googleRating != null ? `★ ${c.googleRating.toFixed(1)}` : '—'}</td>
+              <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center;color:#111827">${c.googleReviewCount != null ? c.googleReviewCount.toLocaleString() : '—'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>` : ''}
 
   <!-- Recommendations (new page) -->
   <div style="page-break-before:always;padding:40px 40px 40px">

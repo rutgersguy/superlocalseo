@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import useSWR from 'swr';
-import { Eye, X } from 'lucide-react';
+import { Eye, X, Download, FileText, Star, MapPin, TrendingUp } from 'lucide-react';
 import { fetcher, apiFetch } from '../services/api';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -330,6 +330,92 @@ function SkeletonRow() {
   );
 }
 
+// ─── Data Exports ─────────────────────────────────────────────────────────────
+
+const EXPORTS = [
+  {
+    key: 'rankings',
+    label: 'Rankings History',
+    description: 'All keyword rank snapshots over time with dates and URLs',
+    icon: TrendingUp,
+    filename: 'rankings-history.csv',
+  },
+  {
+    key: 'keywords',
+    label: 'Keywords',
+    description: 'All tracked keywords with current rank and last checked date',
+    icon: FileText,
+    filename: 'keywords.csv',
+  },
+  {
+    key: 'reviews',
+    label: 'Reviews',
+    description: 'Full review history with ratings, sentiment, and text',
+    icon: Star,
+    filename: 'reviews.csv',
+  },
+  {
+    key: 'citations',
+    label: 'Citations',
+    description: 'Latest citation snapshot per directory with NAP accuracy detail',
+    icon: MapPin,
+    filename: 'citations.csv',
+  },
+] as const;
+
+function DataExports() {
+  const [loading, setLoading] = useState<string | null>(null);
+
+  const handleDownload = async (key: string, filename: string) => {
+    setLoading(key);
+    try {
+      const response = await apiFetch<never>(`/reports/export/${key}`, {}, true);
+      if (!response.ok) { setLoading(null); return; }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+      <div className="flex items-center gap-2 mb-1">
+        <Download size={16} className="text-brand-500" />
+        <h2 className="text-base font-semibold text-gray-900">Data Exports</h2>
+      </div>
+      <p className="text-xs text-gray-400 mb-5">Download your raw data as spreadsheets. Opens directly in Excel or Google Sheets.</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {EXPORTS.map(({ key, label, description, icon: Icon, filename }) => (
+          <button
+            key={key}
+            onClick={() => void handleDownload(key, filename)}
+            disabled={loading === key}
+            className="text-left p-4 rounded-xl border border-gray-100 hover:border-brand-200 hover:bg-brand-50/40 transition-all group disabled:opacity-60"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-8 h-8 rounded-lg bg-brand-50 flex items-center justify-center group-hover:bg-brand-100 transition-colors">
+                {loading === key
+                  ? <span className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                  : <Icon size={15} className="text-brand-500" />
+                }
+              </div>
+              <Download size={13} className="text-gray-300 group-hover:text-brand-400 transition-colors" />
+            </div>
+            <p className="text-sm font-semibold text-gray-900 mb-0.5">{label}</p>
+            <p className="text-xs text-gray-400 leading-relaxed">{description}</p>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Reports() {
@@ -363,6 +449,9 @@ export default function Reports() {
         </div>
         <p className="text-sm text-gray-500 mt-1">Monthly PDF reports are generated automatically on the 1st of each month.</p>
       </div>
+
+      {/* Data exports */}
+      <DataExports />
 
       {/* Error */}
       {error && (
