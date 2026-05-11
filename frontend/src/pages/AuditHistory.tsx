@@ -88,7 +88,10 @@ export default function AuditHistory() {
         method: 'POST',
         body: JSON.stringify({ locationId: effectiveLocationId }),
       });
-      await mutate('/audits/bl');
+      await Promise.all([
+        mutate('/audits/bl'),
+        mutate(`/audits/bl/location/${effectiveLocationId}/history`),
+      ]);
     } catch (e) {
       setTriggerError((e as Error).message ?? 'Failed to trigger audit');
     } finally {
