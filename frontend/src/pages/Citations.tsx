@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import useSWR, { mutate } from 'swr';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -43,9 +43,7 @@ interface TrendPoint {
 
 interface TrendResponse {
   success: boolean;
-  data: {
-    history: TrendPoint[];
-  };
+  data: { history: TrendPoint[] };
 }
 
 type TrendDays = 30 | 90;
@@ -68,6 +66,26 @@ interface SubmissionRow {
 }
 interface SubmissionsResponse { success: boolean; data: { submissions: SubmissionRow[] }; }
 
+interface LocationOption { id: string; name: string; city?: string; state?: string; }
+interface LocationsResponse { success: boolean; data: LocationOption[]; }
+
+interface CreditsResponse { success: boolean; data: { credits: number }; }
+
+interface LookupCitation {
+  domain: string;
+  profileUrl: string;
+  nap: { name?: string; address?: string; phone?: string };
+}
+
+interface LookupResponse {
+  success: boolean;
+  data: {
+    lookupStatus: 'complete' | 'processing';
+    lookupCompletedAt: string | null;
+    citations: LookupCitation[];
+  };
+}
+
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-gray-100 text-gray-600',
   submitted: 'bg-blue-100 text-blue-700',
@@ -76,7 +94,27 @@ const STATUS_COLORS: Record<string, string> = {
   duplicate: 'bg-yellow-100 text-yellow-700',
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+const CB_PACKAGES: { id: string; label: string; count: number; note?: string }[] = [
+  { id: 'cb0',   label: 'Aggregators only', count: 0, note: 'No individual directories' },
+  { id: 'cb10',  label: '10 citations',  count: 10 },
+  { id: 'cb15',  label: '15 citations',  count: 15 },
+  { id: 'cb25',  label: '25 citations',  count: 25 },
+  { id: 'cb30',  label: '30 citations',  count: 30 },
+  { id: 'cb50',  label: '50 citations',  count: 50 },
+  { id: 'cb75',  label: '75 citations',  count: 75 },
+  { id: 'cb100', label: '100 citations', count: 100 },
+];
+
+const CB_PUBLISHERS: { id: string; label: string }[] = [
+  { id: 'dataaxle',    label: 'Data Axle' },
+  { id: 'neustar',     label: 'Neustar' },
+  { id: 'foursquare',  label: 'Foursquare' },
+  { id: 'gpsnetwork',  label: 'GPS Network' },
+  { id: 'ypnetwork',   label: 'YP Network' },
+  { id: 'locafynetwork', label: 'Locafy Network' },
+];
+
+// ─── Icon helpers ─────────────────────────────────────────────────────────────
 
 function CheckIcon() {
   return (
@@ -110,6 +148,15 @@ function SmallXIcon() {
   );
 }
 
+function Spinner({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg className={`${className} animate-spin text-brand-600`} fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+    </svg>
+  );
+}
+
 function hasNapError(dir: Directory): boolean {
   if (!dir.listed) return false;
   const d = dir.napDetail;
@@ -117,83 +164,350 @@ function hasNapError(dir: Directory): boolean {
   return d.nameMatch === false || d.addressMatch === false || d.phoneMatch === false;
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Citation Builder Wizard ──────────────────────────────────────────────────
 
-function SubmitModal({ directories, onClose }: { directories: string[]; onClose: () => void }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set(directories));
-  const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState(false);
+type WizardStep = 'location' | 'creating' | 'lookup' | 'configure' | 'done';
+
+interface CitationBuilderModalProps {
+  locations: LocationOption[];
+  onClose: () => void;
+  onDone: () => void;
+}
+
+function CitationBuilderModal({ locations, onClose, onDone }: CitationBuilderModalProps) {
+  const [step, setStep] = useState<WizardStep>(locations.length === 1 ? 'creating' : 'location');
+  const [locationId, setLocationId] = useState<string>(locations.length === 1 ? locations[0]!.id : '');
+  const [campaignId, setCampaignId] = useState<string | null>(null);
+  const [lookupCitations, setLookupCitations] = useState<LookupCitation[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const toggle = (dir: string) => {
-    setSelected((s) => {
+  // Configure step state
+  const [packageId, setPackageId] = useState<string>('cb25');
+  const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
+  const [selectedPublishers, setSelectedPublishers] = useState<Set<string>>(new Set());
+  const [removeDuplicates, setRemoveDuplicates] = useState(true);
+  const [confirming, setConfirming] = useState(false);
+
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const createCampaign = async (locId: string) => {
+    setError(null);
+    setStep('creating');
+    try {
+      const res = await apiFetch<{ success: boolean; data: { campaignId: string } }>('/citations/campaign', {
+        method: 'POST',
+        body: JSON.stringify({ locationId: locId }),
+      });
+      setCampaignId(res.data.campaignId);
+      setStep('lookup');
+    } catch (e) {
+      setError((e as Error).message ?? 'Failed to create campaign');
+      setStep('location');
+    }
+  };
+
+  // Auto-create when step jumps straight to 'creating' (single location)
+  useEffect(() => {
+    if (step === 'creating' && locationId) {
+      void createCampaign(locationId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Poll lookup until complete
+  useEffect(() => {
+    if (step !== 'lookup' || !campaignId) return;
+
+    const poll = async () => {
+      try {
+        const res = await apiFetch<LookupResponse>(`/citations/campaign/${encodeURIComponent(campaignId)}/lookup`);
+        if (res.data.lookupStatus === 'complete') {
+          const citations = res.data.citations;
+          setLookupCitations(citations);
+          setSelectedDomains(new Set(citations.map((c) => c.domain)));
+          setStep('configure');
+          return;
+        }
+      } catch {
+        // keep polling
+      }
+      pollRef.current = setTimeout(poll, 4000);
+    };
+
+    void poll();
+    return () => { if (pollRef.current) clearTimeout(pollRef.current); };
+  }, [step, campaignId]);
+
+  const handleConfirm = async () => {
+    if (!campaignId || !locationId) return;
+    setConfirming(true);
+    setError(null);
+    try {
+      await apiFetch('/citations/campaign/' + encodeURIComponent(campaignId) + '/confirm', {
+        method: 'POST',
+        body: JSON.stringify({
+          packageId,
+          citations: Array.from(selectedDomains),
+          publishers: Array.from(selectedPublishers),
+          autoSelect: false,
+          removeDuplicates,
+          express: false,
+          locationId,
+        }),
+      });
+      await mutate('/citations/submissions');
+      setStep('done');
+    } catch (e) {
+      setError((e as Error).message ?? 'Confirmation failed');
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const toggleDomain = (domain: string) => {
+    setSelectedDomains((s) => {
       const n = new Set(s);
-      if (n.has(dir)) n.delete(dir); else n.add(dir);
+      if (n.has(domain)) n.delete(domain); else n.add(domain);
       return n;
     });
   };
 
-  const handleSubmit = async () => {
-    setSubmitting(true);
-    setError(null);
-    try {
-      await apiFetch('/citations/submit', {
-        method: 'POST',
-        body: JSON.stringify({ directories: Array.from(selected) }),
-      });
-      await mutate('/citations/submissions');
-      setDone(true);
-    } catch (e) {
-      setError((e as Error).message ?? 'Submission failed');
-    } finally {
-      setSubmitting(false);
-    }
+  const togglePublisher = (pub: string) => {
+    setSelectedPublishers((s) => {
+      const n = new Set(s);
+      if (n.has(pub)) n.delete(pub); else n.add(pub);
+      return n;
+    });
   };
+
+  const selectedPkg = CB_PACKAGES.find((p) => p.id === packageId);
+  const overLimit = selectedPkg && selectedPkg.count > 0 && selectedDomains.size > selectedPkg.count;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-900">Submit Missing Citations</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 font-bold text-xl">×</button>
-        </div>
-        {done ? (
-          <div className="p-6 text-center">
-            <p className="text-green-600 font-medium mb-2">Submitted {selected.size} directories</p>
-            <p className="text-sm text-gray-500 mb-4">Track progress in the Submissions tab.</p>
-            <button onClick={onClose} className="px-4 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700">Close</button>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Citation Builder</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {step === 'location' && 'Select a location'}
+              {step === 'creating' && 'Creating campaign…'}
+              {step === 'lookup' && 'Looking up existing citations…'}
+              {step === 'configure' && `${lookupCitations.length} opportunities found — configure your submission`}
+              {step === 'done' && 'Campaign confirmed'}
+            </p>
           </div>
-        ) : (
-          <>
-            <div className="flex-1 overflow-y-auto px-6 py-3 space-y-1">
-              {directories.map((dir) => (
-                <label key={dir} className="flex items-center gap-3 py-1.5 cursor-pointer hover:bg-gray-50 rounded px-1">
-                  <input type="checkbox" checked={selected.has(dir)} onChange={() => toggle(dir)} className="rounded border-gray-300" />
-                  <span className="text-sm text-gray-700">{dir}</span>
-                </label>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none">×</button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto">
+
+          {/* Step: location picker */}
+          {step === 'location' && (
+            <div className="p-6 space-y-3">
+              {error && <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">{error}</div>}
+              <p className="text-sm text-gray-600 mb-2">Which location do you want to build citations for?</p>
+              {locations.map((loc) => (
+                <button
+                  key={loc.id}
+                  onClick={() => setLocationId(loc.id)}
+                  className={`w-full text-left px-4 py-3 rounded-lg border transition-colors ${
+                    locationId === loc.id
+                      ? 'border-brand-500 bg-brand-50 text-brand-800'
+                      : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                  }`}
+                >
+                  <span className="font-medium text-sm">{loc.name}</span>
+                  {(loc.city || loc.state) && (
+                    <span className="text-xs text-gray-400 ml-2">{[loc.city, loc.state].filter(Boolean).join(', ')}</span>
+                  )}
+                </button>
               ))}
             </div>
-            {error && <div className="mx-6 mb-2 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">{error}</div>}
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-              <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
-              <button onClick={() => void handleSubmit()} disabled={submitting || selected.size === 0}
-                className="px-4 py-2 text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">
-                {submitting ? 'Submitting…' : `Submit ${selected.size} directories`}
-              </button>
+          )}
+
+          {/* Step: creating / lookup spinner */}
+          {(step === 'creating' || step === 'lookup') && (
+            <div className="p-12 flex flex-col items-center justify-center gap-4">
+              <Spinner className="w-10 h-10" />
+              <p className="text-sm text-gray-500">
+                {step === 'creating' ? 'Setting up your campaign…' : 'Scanning citation opportunities — this can take a minute…'}
+              </p>
             </div>
-          </>
-        )}
+          )}
+
+          {/* Step: configure */}
+          {step === 'configure' && (
+            <div className="divide-y divide-gray-100">
+
+              {/* Package */}
+              <div className="px-6 py-4">
+                <h3 className="text-sm font-semibold text-gray-800 mb-3">Package</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {CB_PACKAGES.map((pkg) => (
+                    <button
+                      key={pkg.id}
+                      onClick={() => setPackageId(pkg.id)}
+                      className={`px-3 py-2.5 rounded-lg border text-left transition-colors ${
+                        packageId === pkg.id
+                          ? 'border-brand-500 bg-brand-50 text-brand-800'
+                          : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                      }`}
+                    >
+                      <div className="text-sm font-medium">{pkg.label}</div>
+                      {pkg.note && <div className="text-xs text-gray-400 mt-0.5">{pkg.note}</div>}
+                    </button>
+                  ))}
+                </div>
+                {overLimit && (
+                  <p className="text-xs text-amber-600 mt-2">
+                    You've selected {selectedDomains.size} directories but the package includes {selectedPkg.count}. Deselect some or choose a larger package.
+                  </p>
+                )}
+              </div>
+
+              {/* Directories */}
+              {lookupCitations.length > 0 && packageId !== 'cb0' && (
+                <div className="px-6 py-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-gray-800">
+                      Directories
+                      <span className="ml-2 text-xs font-normal text-gray-400">{selectedDomains.size} selected</span>
+                    </h3>
+                    <div className="flex gap-2 text-xs">
+                      <button onClick={() => setSelectedDomains(new Set(lookupCitations.map((c) => c.domain)))} className="text-brand-600 hover:underline">All</button>
+                      <button onClick={() => setSelectedDomains(new Set())} className="text-gray-400 hover:underline">None</button>
+                    </div>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
+                    {lookupCitations.map((c) => (
+                      <label key={c.domain} className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedDomains.has(c.domain)}
+                          onChange={() => toggleDomain(c.domain)}
+                          className="rounded border-gray-300 text-brand-600"
+                        />
+                        <span className="text-sm text-gray-700 flex-1">{c.domain}</span>
+                        {c.profileUrl && (
+                          <a href={c.profileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline flex-shrink-0">↗</a>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Aggregator publishers */}
+              <div className="px-6 py-4">
+                <h3 className="text-sm font-semibold text-gray-800 mb-1">Aggregator networks <span className="text-xs font-normal text-gray-400">($30 each)</span></h3>
+                <p className="text-xs text-gray-400 mb-3">Pushes your NAP data to hundreds of downstream directories.</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {CB_PUBLISHERS.map((pub) => (
+                    <label key={pub.id} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedPublishers.has(pub.id)}
+                        onChange={() => togglePublisher(pub.id)}
+                        className="rounded border-gray-300 text-brand-600"
+                      />
+                      <span className="text-sm text-gray-700">{pub.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Options */}
+              <div className="px-6 py-4">
+                <h3 className="text-sm font-semibold text-gray-800 mb-3">Options</h3>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={removeDuplicates}
+                    onChange={(e) => setRemoveDuplicates(e.target.checked)}
+                    className="rounded border-gray-300 text-brand-600"
+                  />
+                  <div>
+                    <span className="text-sm text-gray-700">Remove duplicates</span>
+                    <p className="text-xs text-gray-400">BrightLocal will clean up existing duplicate listings.</p>
+                  </div>
+                </label>
+              </div>
+
+              {error && (
+                <div className="px-6 py-3">
+                  <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">{error}</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step: done */}
+          {step === 'done' && (
+            <div className="p-12 text-center space-y-3">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <p className="text-gray-900 font-semibold">Campaign confirmed</p>
+              <p className="text-sm text-gray-500">
+                Your citations have been submitted. Track progress in the Submissions tab — it can take days to weeks for listings to go live.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 flex-shrink-0">
+          {step === 'done' ? (
+            <button onClick={() => { onDone(); onClose(); }}
+              className="px-4 py-2 text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700">
+              View Submissions
+            </button>
+          ) : step === 'location' ? (
+            <>
+              <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
+              <button
+                disabled={!locationId}
+                onClick={() => void createCampaign(locationId)}
+                className="px-4 py-2 text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50"
+              >
+                Continue
+              </button>
+            </>
+          ) : step === 'configure' ? (
+            <>
+              <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
+              <button
+                disabled={confirming || !!overLimit || (packageId !== 'cb0' && selectedDomains.size === 0 && selectedPublishers.size === 0)}
+                onClick={() => void handleConfirm()}
+                className="px-4 py-2 text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {confirming && <Spinner className="w-4 h-4" />}
+                Confirm &amp; Submit
+              </button>
+            </>
+          ) : (
+            <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
+          )}
+        </div>
       </div>
     </div>
   );
 }
+
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Citations() {
   const [trendDays, setTrendDays] = useState<TrendDays>(90);
   const [expandedDir, setExpandedDir] = useState<string | null>(null);
   const [showErrorsOnly, setShowErrorsOnly] = useState(false);
   const [activeTab, setActiveTab] = useState<CitationsTab>('directories');
-  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [showBuilder, setShowBuilder] = useState(false);
 
   const { data, isLoading, error } = useSWR<CitationsResponse>('/citations', fetcher);
   const { data: trendData, isLoading: trendLoading } = useSWR<TrendResponse>(
@@ -201,14 +515,17 @@ export default function Citations() {
     fetcher,
   );
   const { data: submissionsData } = useSWR<SubmissionsResponse>('/citations/submissions', fetcher);
+  const { data: locData } = useSWR<LocationsResponse>('/locations', fetcher);
+  const { data: creditsData } = useSWR<CreditsResponse>('/citations/credits', fetcher);
 
   const summary = data?.data;
   const directories = summary?.directories ?? [];
   const trendSeries = trendData?.data?.history ?? [];
   const submissions = submissionsData?.data?.submissions ?? [];
+  const locations = locData?.data ?? [];
+  const credits = creditsData?.data?.credits;
 
   const napErrorCount = directories.filter(hasNapError).length;
-  const unlistedDirs = directories.filter((d) => !d.listed).map((d) => d.name);
 
   const filteredDirs = showErrorsOnly
     ? directories.filter((dir) => {
@@ -220,28 +537,35 @@ export default function Citations() {
 
   return (
     <div className="space-y-6">
-      {showSubmitModal && (
-        <SubmitModal directories={unlistedDirs} onClose={() => setShowSubmitModal(false)} />
+      {showBuilder && (
+        <CitationBuilderModal
+          locations={locations}
+          onClose={() => setShowBuilder(false)}
+          onDone={() => setActiveTab('submissions')}
+        />
       )}
 
       <div>
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">Citations</h1>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Citations</h1>
+            {credits !== undefined && (
+              <p className="text-xs text-gray-400 mt-0.5">{credits} CB credit{credits !== 1 ? 's' : ''} remaining</p>
+            )}
+          </div>
           <div className="flex gap-2">
-          {unlistedDirs.length > 0 && (
-            <button onClick={() => setShowSubmitModal(true)}
+            <button onClick={() => setShowBuilder(true)}
               className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors">
-              Submit Missing ({unlistedDirs.length})
+              Build Citations
             </button>
-          )}
-          <button
-            onClick={() => setShowErrorsOnly((v) => !v)}
-            className={`whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium rounded-lg border transition-colors ${
-              showErrorsOnly ? 'bg-brand-500 text-white border-brand-500' : 'text-slate-600 border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            Show errors only
-          </button>
+            <button
+              onClick={() => setShowErrorsOnly((v) => !v)}
+              className={`whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium rounded-lg border transition-colors ${
+                showErrorsOnly ? 'bg-brand-500 text-white border-brand-500' : 'text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              Show errors only
+            </button>
           </div>
         </div>
         <p className="text-sm text-gray-500 mt-1">Business listing status across online directories</p>
@@ -274,7 +598,11 @@ export default function Citations() {
       {activeTab === 'submissions' ? (
         submissions.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-12 text-center">
-            <p className="text-gray-400 text-sm">No submissions yet. Use "Submit Missing" to build new citations.</p>
+            <p className="text-gray-400 text-sm mb-4">No submissions yet.</p>
+            <button onClick={() => setShowBuilder(true)}
+              className="px-4 py-2 text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700">
+              Build Citations
+            </button>
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-x-auto">

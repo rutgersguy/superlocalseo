@@ -84,7 +84,6 @@ export default function AuditHistory() {
   })();
 
   const canTrigger = recentAuditDaysAgo === null || recentAuditDaysAgo >= 1;
-  const cooldownDaysLeft = recentAuditDaysAgo !== null && recentAuditDaysAgo < 1 ? 1 - recentAuditDaysAgo : null;
 
   const chartData = Object.values(
     historyAudits
