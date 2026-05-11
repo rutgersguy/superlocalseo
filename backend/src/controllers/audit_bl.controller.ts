@@ -53,8 +53,8 @@ export async function trigger(req: Request, res: Response, next: NextFunction): 
 
     if (recent) {
       const daysSince = (Date.now() - new Date(recent.created_at).getTime()) / (1000 * 60 * 60 * 24);
-      if (daysSince < 30) {
-        err(res, `Audit run ${Math.floor(daysSince)}d ago. Next in ${30 - Math.floor(daysSince)}d.`, 429, 'COOLDOWN');
+      if (daysSince < 1) {
+        err(res, `Audit run ${Math.floor(daysSince * 24)}h ago. Next in ${Math.ceil(24 - daysSince * 24)}h.`, 429, 'COOLDOWN');
         return;
       }
     }

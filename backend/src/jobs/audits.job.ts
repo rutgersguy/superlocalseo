@@ -37,10 +37,10 @@ export async function processAudits(job: Job): Promise<void> {
 
     for (const loc of locations) {
       try {
-        // Skip if an audit was run in the last 25 days (fan-out is monthly, allow 5-day buffer)
+        // Skip if an audit was run in the last 23 hours (fan-out is daily, allow 1-hour buffer)
         const recent = await db('location_audits')
           .where({ location_id: loc.locationId })
-          .where('created_at', '>', new Date(Date.now() - 25 * 24 * 60 * 60 * 1000))
+          .where('created_at', '>', new Date(Date.now() - 23 * 60 * 60 * 1000))
           .first();
         if (recent) continue;
 

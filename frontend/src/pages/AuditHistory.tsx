@@ -66,13 +66,13 @@ export default function AuditHistory() {
     return Math.floor((Date.now() - new Date(recent.createdAt).getTime()) / (1000 * 60 * 60 * 24));
   })();
 
-  const canTrigger = recentAuditDaysAgo === null || recentAuditDaysAgo >= 30;
-  const cooldownDaysLeft = recentAuditDaysAgo !== null && recentAuditDaysAgo < 30 ? 30 - recentAuditDaysAgo : null;
+  const canTrigger = recentAuditDaysAgo === null || recentAuditDaysAgo >= 1;
+  const cooldownDaysLeft = recentAuditDaysAgo !== null && recentAuditDaysAgo < 1 ? 1 - recentAuditDaysAgo : null;
 
   const chartData = historyAudits
     .filter((a) => a.status === 'complete')
     .map((a) => ({
-      date: a.completedAt ? new Date(a.completedAt).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }) : '',
+      date: a.completedAt ? new Date(a.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '',
       NAP: a.napScore,
       Citations: a.citationScore,
       Reviews: a.reviewScore,
