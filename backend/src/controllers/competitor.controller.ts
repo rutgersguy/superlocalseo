@@ -155,7 +155,16 @@ export async function search(req: Request, res: Response, next: NextFunction): P
       return;
     }
 
-    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${config.googlePlacesApiKey}`;
+    // Bias results toward the client's primary location
+    const primaryLoc = await db('locations')
+      .where({ client_id: req.clientId })
+      .select('city', 'state')
+      .first() as { city: string | null; state: string | null } | undefined;
+
+    const locationSuffix = [primaryLoc?.city, primaryLoc?.state].filter(Boolean).join(', ');
+    const biasedQuery = locationSuffix ? `${query} ${locationSuffix}` : query;
+
+    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(biasedQuery)}&key=${config.googlePlacesApiKey}`;
     const res2 = await fetch(url);
     const data = await res2.json() as {
       results?: Array<{ place_id: string; name: string; formatted_address?: string; rating?: number; user_ratings_total?: number }>;

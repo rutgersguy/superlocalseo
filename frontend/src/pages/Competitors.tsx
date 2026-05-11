@@ -132,6 +132,13 @@ function AddCompetitorModal({ onClose, onAdded }: { onClose: () => void; onAdded
             </div>
             {searchResults.length > 0 && (
               <div className="mt-1 border border-slate-200 rounded-lg overflow-hidden shadow-card">
+                <div className="flex items-center justify-between px-3 py-1.5 bg-slate-50 border-b border-slate-100">
+                  <span className="text-xs text-slate-400">{searchResults.length} result{searchResults.length !== 1 ? 's' : ''}</span>
+                  <button type="button" onClick={() => { setSearchResults([]); setSearchQ(''); }}
+                    className="text-slate-400 hover:text-slate-600 p-0.5 rounded transition-colors" title="Clear results">
+                    <X size={13} />
+                  </button>
+                </div>
                 {searchResults.map((r) => (
                   <button key={r.placeId} type="button" onClick={() => selectPlace(r)}
                     className="w-full text-left px-3 py-2.5 hover:bg-slate-50 border-b border-slate-100 last:border-0 transition-colors">
