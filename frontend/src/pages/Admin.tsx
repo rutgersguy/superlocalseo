@@ -107,12 +107,13 @@ function HealthDot({ ok, label, detail }: { ok: boolean; label: string; detail?:
 
 // ─── Tab bar ──────────────────────────────────────────────────────────────────
 
-type Tab = 'overview' | 'clients' | 'queues' | 'analytics' | 'citations';
+type Tab = 'overview' | 'clients' | 'queues' | 'analytics' | 'citations' | 'customers';
 
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'overview', label: 'Overview' },
     { key: 'clients', label: 'Clients' },
+    { key: 'customers', label: 'Customers' },
     { key: 'queues', label: 'Job Queues' },
     { key: 'analytics', label: 'Analytics' },
     { key: 'citations', label: 'Citations' },
@@ -992,6 +993,257 @@ function CitationsTab() {
   );
 }
 
+// ─── Customers tab ───────────────────────────────────────────────────────────
+
+interface Customer {
+  id: string;
+  userId: string;
+  businessName: string;
+  email: string;
+  status: string;
+  trialEndsAt: string | null;
+  locationsLimit: number;
+  locationCount: number;
+  createdAt: string;
+  hasStripe: boolean;
+}
+
+function EditCustomerModal({ customer, onClose, onSaved }: { customer: Customer; onClose: () => void; onSaved: () => void }) {
+  const [status, setStatus] = useState(customer.status);
+  const [locationsLimit, setLocationsLimit] = useState(customer.locationsLimit);
+  const [trialEndsAt, setTrialEndsAt] = useState(
+    customer.trialEndsAt ? new Date(customer.trialEndsAt).toISOString().slice(0, 10) : '',
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const body: Record<string, unknown> = { status, locationsLimit };
+      if (trialEndsAt) body.trialEndsAt = new Date(trialEndsAt).toISOString();
+      else body.trialEndsAt = null;
+      const res = await apiFetch<{ success: boolean; error?: { message: string } }>(`/admin/customers/${customer.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      });
+      if (!res.success) throw new Error(res.error?.message ?? 'Update failed');
+      onSaved();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">{customer.businessName}</h2>
+            <p className="text-xs text-gray-400">{customer.email}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl font-bold">×</button>
+        </div>
+        <div className="p-6 space-y-4">
+          {error && <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">{error}</div>}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Subscription status</label>
+            <select value={status} onChange={(e) => setStatus(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+              <option value="trialing">Trialing</option>
+              <option value="active">Active</option>
+              <option value="past_due">Past Due</option>
+              <option value="canceled">Canceled</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Locations limit</label>
+            <input type="number" min={0} max={999} value={locationsLimit} onChange={(e) => setLocationsLimit(parseInt(e.target.value, 10) || 0)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400" />
+            <p className="text-xs text-gray-400 mt-1">Currently using {customer.locationCount} location{customer.locationCount !== 1 ? 's' : ''}.</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Trial ends at</label>
+            <input type="date" value={trialEndsAt} onChange={(e) => setTrialEndsAt(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400" />
+            <p className="text-xs text-gray-400 mt-1">Only relevant when status is "trialing".</p>
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
+          <button onClick={() => void handleSave()} disabled={saving}
+            className="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2">
+            {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+            Save changes
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CustomersTab() {
+  const { data, isLoading, mutate: revalidate } = useSWR<{ success: boolean; data: { customers: Customer[] } }>(
+    '/admin/customers',
+    fetcher,
+    { revalidateOnFocus: false },
+  );
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [editing, setEditing] = useState<Customer | null>(null);
+  const [deleting, setDeleting] = useState<Customer | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deletingBusy, setDeletingBusy] = useState(false);
+
+  const customers = data?.data?.customers ?? [];
+  const filtered = customers.filter((c) => {
+    const q = search.toLowerCase();
+    const matchSearch = !q || c.businessName.toLowerCase().includes(q) || c.email.toLowerCase().includes(q);
+    const matchStatus = !statusFilter || c.status === statusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  const handleDelete = async () => {
+    if (!deleting || deleteConfirm !== deleting.businessName) return;
+    setDeletingBusy(true);
+    setDeleteError(null);
+    try {
+      const res = await apiFetch<{ success: boolean; error?: { message: string } }>(`/admin/customers/${deleting.id}`, { method: 'DELETE' });
+      if (!res.success) throw new Error(res.error?.message ?? 'Delete failed');
+      setDeleting(null);
+      setDeleteConfirm('');
+      void revalidate();
+    } catch (e) {
+      setDeleteError((e as Error).message);
+    } finally {
+      setDeletingBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {editing && (
+        <EditCustomerModal
+          customer={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); void revalidate(); }}
+        />
+      )}
+
+      {deleting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h2 className="text-base font-semibold text-gray-900">Delete customer?</h2>
+            <p className="text-sm text-gray-600">
+              This permanently deletes <strong>{deleting.businessName}</strong> and all associated data. This cannot be undone.
+            </p>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Type the business name to confirm:</label>
+              <input type="text" value={deleteConfirm} onChange={(e) => setDeleteConfirm(e.target.value)}
+                placeholder={deleting.businessName}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400" />
+            </div>
+            {deleteError && <p className="text-sm text-red-600">{deleteError}</p>}
+            <div className="flex justify-end gap-3">
+              <button onClick={() => { setDeleting(null); setDeleteConfirm(''); setDeleteError(null); }}
+                className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
+              <button onClick={() => void handleDelete()} disabled={deleteConfirm !== deleting.businessName || deletingBusy}
+                className="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2">
+                {deletingBusy && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                Delete permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="flex gap-3 flex-wrap items-center">
+        <input type="text" placeholder="Search by name or email…" value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 w-64" />
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="trialing">Trialing</option>
+          <option value="past_due">Past Due</option>
+          <option value="canceled">Canceled</option>
+        </select>
+        <span className="text-sm text-gray-400">{filtered.length} of {customers.length}</span>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Business</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Email</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Trial ends</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Locs</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Limit</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Joined</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {isLoading ? (
+                Array.from({ length: 6 }, (_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    {Array.from({ length: 8 }, (_, j) => (
+                      <td key={j} className="px-4 py-3"><div className="h-4 bg-gray-100 rounded" /></td>
+                    ))}
+                  </tr>
+                ))
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">No customers found.</td></tr>
+              ) : (
+                filtered.map((c) => (
+                  <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3 font-medium text-gray-900 max-w-[160px] truncate">
+                      {c.businessName}
+                      {!c.hasStripe && <span className="ml-1.5 text-xs text-gray-300" title="No Stripe record">◌</span>}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 text-xs max-w-[200px] truncate">{c.email}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${STATUS_STYLES[c.status] ?? 'bg-gray-100 text-gray-500'}`}>
+                        {c.status.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-400 text-xs">{fmtDate(c.trialEndsAt)}</td>
+                    <td className="px-4 py-3 text-center text-gray-700">{c.locationCount}</td>
+                    <td className="px-4 py-3 text-center text-gray-700">{c.locationsLimit}</td>
+                    <td className="px-4 py-3 text-gray-400 text-xs">{fmtDate(c.createdAt)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button onClick={() => setEditing(c)}
+                          className="text-xs px-2.5 py-1 rounded border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
+                          Edit
+                        </button>
+                        <button onClick={() => { setDeleting(c); setDeleteConfirm(''); setDeleteError(null); }}
+                          className="text-xs px-2.5 py-1 rounded border border-red-200 text-red-500 hover:bg-red-50 transition-colors">
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Admin() {
@@ -1011,6 +1263,7 @@ export default function Admin() {
         <TabBar active={tab} onChange={setTab} />
         {tab === 'overview' && <OverviewTab />}
         {tab === 'clients' && <ClientsTab />}
+        {tab === 'customers' && <CustomersTab />}
         {tab === 'queues' && <QueuesTab />}
         {tab === 'analytics' && <AnalyticsTab />}
         {tab === 'citations' && <CitationsTab />}

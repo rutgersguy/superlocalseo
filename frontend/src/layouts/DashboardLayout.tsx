@@ -138,6 +138,40 @@ function SidebarNav({ onNav }: { onNav?: () => void }) {
 }
 
 
+interface BillingStatus {
+  status: string;
+  trialDaysLeft: number | null;
+  trialEndsAt: string | null;
+  locationsLimit: number;
+  locationCount: number;
+}
+
+function TrialBanner() {
+  const { role } = useAuth();
+  const { data } = useSWR<{ success: boolean; data: BillingStatus }>(
+    role === 'client' ? '/billing/status' : null,
+    fetcher,
+    { refreshInterval: 60000 },
+  );
+  const billing = data?.data;
+  if (!billing || billing.status !== 'trialing' || billing.trialDaysLeft === null) return null;
+  if (billing.trialDaysLeft > 5) return null; // only show when getting close
+
+  const urgent = billing.trialDaysLeft <= 2;
+  return (
+    <div className={`px-4 py-2 text-sm flex items-center justify-between gap-4 ${urgent ? 'bg-red-600 text-white' : 'bg-amber-500 text-white'}`}>
+      <span>
+        {billing.trialDaysLeft === 0
+          ? 'Your trial has expired.'
+          : `Your trial ends in ${billing.trialDaysLeft} day${billing.trialDaysLeft === 1 ? '' : 's'}.`}
+      </span>
+      <a href="/billing/checkout" className="shrink-0 text-xs font-semibold underline hover:no-underline">
+        Subscribe now →
+      </a>
+    </div>
+  );
+}
+
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { isAuthenticated } = useAuth();
@@ -212,6 +246,8 @@ export default function DashboardLayout() {
               <Menu size={19} aria-hidden="true" />
             </button>
           </header>
+
+          <TrialBanner />
 
           {/* Page content */}
           <main className="flex-1 overflow-y-auto p-5 sm:p-6">

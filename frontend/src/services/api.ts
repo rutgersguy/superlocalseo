@@ -34,12 +34,12 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}, rawRespo
 
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
 
-  // Hard gate: trial expired or subscription canceled/overdue — redirect to billing
+  // Subscription gate: trial expired, payment failed, or canceled
   if (res.status === 402) {
-    const body = await res.json() as { code?: string };
-    if (body.code === 'TRIAL_EXPIRED' || body.code === 'SUBSCRIPTION_CANCELED' || body.code === 'PAYMENT_OVERDUE') {
-      window.location.href = '/dashboard/settings?tab=billing';
-      return body as T;
+    const body = await res.json() as { success: boolean; error?: { code: string; message: string } };
+    const code = body.error?.code;
+    if (code === 'TRIAL_EXPIRED' || code === 'PAYMENT_FAILED' || code === 'SUBSCRIPTION_CANCELLED') {
+      window.location.href = '/billing';
     }
     return body as T;
   }

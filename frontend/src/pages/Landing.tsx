@@ -5,7 +5,7 @@ import { ChevronDown, TrendingUp, Star, MapPin, MessageSquare, Users, FileText, 
 const faqs = [
   {
     q: 'How does the free trial work?',
-    a: 'You get 14 days completely free — no credit card required to start. At the end of the trial, choose a plan that fits your business or cancel with no obligation.',
+    a: 'You get 15 days completely free — no credit card required to start. At the end of the trial you\'ll be prompted to subscribe. If you don\'t, access is paused until you do.',
   },
   {
     q: 'What do I need to get started?',
@@ -13,7 +13,7 @@ const faqs = [
   },
   {
     q: 'Can I add locations over time?',
-    a: 'Yes. Each plan includes a base number of locations and you can add more at any time. Additional locations are billed as a monthly add-on on top of your base plan.',
+    a: 'Yes. Your subscription includes 1 location. Each additional location is $125/mo and is billed immediately on a prorated basis for the rest of your current billing cycle.',
   },
   {
     q: 'What goes in the monthly PDF report?',
@@ -200,39 +200,46 @@ export default function Landing() {
 
         {/* Pricing */}
         <section className="bg-slate-50 py-16 sm:py-20 px-6" aria-labelledby="pricing-heading">
-          <div className="max-w-4xl mx-auto text-center mb-12">
-            <h2 id="pricing-heading" className="text-3xl font-bold text-slate-900 mb-4">Simple, location-based pricing</h2>
-            <p className="text-slate-600">One price per location. Add locations as you grow.</p>
+          <div className="max-w-3xl mx-auto text-center mb-12">
+            <h2 id="pricing-heading" className="text-3xl font-bold text-slate-900 mb-4">Simple, transparent pricing</h2>
+            <p className="text-slate-600">One plan. One location included. Scale as you grow.</p>
           </div>
-          <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {[
-              { name: 'Starter', price: '$350', extra: '$150', features: ['1 location included', 'Daily rank tracking', 'Review monitoring + AI responses', 'Citation health', 'Monthly PDF report', 'Review request campaigns', 'Competitor benchmarking'] },
-              { name: 'Growth', price: '$700', extra: '$100', features: ['3 locations included', 'Everything in Starter', 'ROI & revenue attribution', 'Historical trend analytics', 'Team members & roles', 'Priority support'] },
-              { name: 'Scale', price: '$1,200', extra: '$75', features: ['5 locations included', 'Everything in Growth', 'Dedicated onboarding', 'QR code review capture', 'Embeddable review widget'] },
-            ].map((tier, i) => (
-              <div key={tier.name} className={`p-8 rounded-2xl border ${i === 1 ? 'border-brand-500 shadow-lg' : 'border-slate-200'} bg-white`}>
-                {i === 1 && <div className="text-xs font-semibold text-brand-500 uppercase tracking-wide mb-3" aria-label="Most popular plan">Most popular</div>}
-                <h3 className="text-xl font-bold text-slate-900">{tier.name}</h3>
-                <div className="mt-4 mb-6">
-                  <span className="text-4xl font-bold text-slate-900">{tier.price}</span>
-                  <span className="text-slate-500">/mo</span>
-                  <p className="text-sm text-slate-500 mt-1">+{tier.extra}/mo per additional location</p>
-                </div>
-                <ul className="space-y-3 mb-8" aria-label={`${tier.name} plan features`}>
-                  {tier.features.map((f) => (
-                    <li key={f} className="text-sm text-slate-600 flex items-center gap-2">
-                      <span className="text-brand-500" aria-hidden="true">✓</span> {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  to="/register"
-                  className={`block text-center py-3 rounded-lg font-semibold text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 ${i === 1 ? 'bg-brand-500 text-white hover:bg-brand-600' : 'border border-brand-500 text-brand-500 hover:bg-brand-50'}`}
-                >
-                  Start free trial
-                </Link>
+          <div className="max-w-lg mx-auto">
+            <div className="bg-white rounded-2xl border-2 border-brand-500 shadow-lg p-8">
+              <div className="text-xs font-semibold text-brand-500 uppercase tracking-wide mb-3">Full platform access</div>
+              <div className="flex items-end gap-2 mb-2">
+                <span className="text-5xl font-bold text-slate-900">$349</span>
+                <span className="text-slate-500 mb-1">/mo</span>
               </div>
-            ))}
+              <p className="text-sm text-slate-500 mb-1">+ $499 one-time setup fee</p>
+              <p className="text-sm text-slate-500 mb-6">+$125/mo per additional location</p>
+              <ul className="space-y-3 mb-8">
+                {[
+                  '1 location included',
+                  'Citation building & submission',
+                  'Daily rank tracking',
+                  'Review monitoring + AI responses',
+                  'Citation health monitoring',
+                  'Monthly PDF report',
+                  'Review request campaigns',
+                  'Competitor benchmarking',
+                  'ROI & revenue attribution',
+                  'Team members & roles',
+                  'QR code review capture',
+                ].map((f) => (
+                  <li key={f} className="text-sm text-slate-600 flex items-center gap-2">
+                    <span className="text-brand-500" aria-hidden="true">✓</span> {f}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                to="/register"
+                className="block text-center py-3 rounded-lg font-semibold text-sm bg-brand-500 text-white hover:bg-brand-600 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+              >
+                Start 15-day free trial
+              </Link>
+              <p className="text-center text-xs text-slate-400 mt-3">No credit card required to start.</p>
+            </div>
           </div>
         </section>
 

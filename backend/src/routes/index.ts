@@ -23,32 +23,38 @@ import reputationRouter from './reputation';
 import geoGridRouter from './geogrid';
 import adminRouter from './admin';
 import placesRouter from './places';
+import { requireActiveSubscription } from '../middleware/requireActiveSubscription';
 
 const router = Router();
 
+// Public / always-accessible routes
 router.use('/health', healthRouter);
 router.use('/auth', authRouter);
+router.use('/billing', billingRouter);
+router.use('/audit', auditRouter);
+router.use('/widget', widgetRouter);
+router.use('/places', placesRouter);
+router.use('/metrics', metricsRouter);
+
+// Accessible during trial (no paywall needed for account management)
 router.use('/clients', clientsRouter);
 router.use('/locations', locationsRouter);
-router.use('/keywords', keywordsRouter);
 router.use('/integrations', integrationsRouter);
-router.use('/rankings', rankingsRouter);
-router.use('/citations', citationsRouter);
-router.use('/reviews', reviewsRouter);
-router.use('/metrics', metricsRouter);
-router.use('/billing', billingRouter);
-router.use('/reports', reportsRouter);
-router.use('/analytics', analyticsRouter);
-router.use('/audit', auditRouter);
 router.use('/team', teamRouter);
-router.use('/widget', widgetRouter);
-router.use('/campaigns', campaignsRouter);
-router.use('/competitors', competitorsRouter);
 router.use('/qr', qrRouter);
-router.use('/audits/bl', auditsBlRouter);
-router.use('/reputation', reputationRouter);
-router.use('/geo-grid', geoGridRouter);
 router.use('/admin', adminRouter);
-router.use('/places', placesRouter);
+
+// Subscription-gated routes — blocked after trial expires / payment failure
+router.use('/keywords', requireActiveSubscription, keywordsRouter);
+router.use('/rankings', requireActiveSubscription, rankingsRouter);
+router.use('/citations', requireActiveSubscription, citationsRouter);
+router.use('/reviews', requireActiveSubscription, reviewsRouter);
+router.use('/reports', requireActiveSubscription, reportsRouter);
+router.use('/analytics', requireActiveSubscription, analyticsRouter);
+router.use('/campaigns', requireActiveSubscription, campaignsRouter);
+router.use('/competitors', requireActiveSubscription, competitorsRouter);
+router.use('/audits/bl', requireActiveSubscription, auditsBlRouter);
+router.use('/reputation', requireActiveSubscription, reputationRouter);
+router.use('/geo-grid', requireActiveSubscription, geoGridRouter);
 
 export default router;

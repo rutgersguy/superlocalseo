@@ -42,12 +42,9 @@ export const config = {
     publishableKey: required('STRIPE_PUBLISHABLE_KEY'),
     webhookSecret: optional('STRIPE_WEBHOOK_SECRET'),
     prices: {
-      tier1: optional('STRIPE_TIER1_PRICE_ID'),
-      tier2: optional('STRIPE_TIER2_PRICE_ID'),
-      tier3: optional('STRIPE_TIER3_PRICE_ID'),
-      tier1Extra: optional('STRIPE_TIER1_EXTRA_LOCATION_PRICE_ID'),
-      tier2Extra: optional('STRIPE_TIER2_EXTRA_LOCATION_PRICE_ID'),
-      tier3Extra: optional('STRIPE_TIER3_EXTRA_LOCATION_PRICE_ID'),
+      setup: optional('STRIPE_SETUP_PRICE_ID'),
+      base: optional('STRIPE_BASE_PRICE_ID'),
+      location: optional('STRIPE_LOCATION_PRICE_ID'),
     },
   },
 

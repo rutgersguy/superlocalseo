@@ -433,3 +433,80 @@ export async function triggerJob(req: Request, res: Response, next: NextFunction
     next(e);
   }
 }
+
+// ─── Customer management ──────────────────────────────────────────────────────
+
+export async function adminListCustomers(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const rows = await db('clients')
+      .join('users', 'clients.user_id', 'users.id')
+      .select(
+        'clients.id',
+        'clients.user_id',
+        'clients.business_name',
+        'clients.subscription_status',
+        'clients.trial_ends_at',
+        'clients.locations_limit',
+        'clients.created_at',
+        'users.email',
+        'users.stripe_customer_id',
+      )
+      .orderBy('clients.created_at', 'desc');
+
+    const clientIds = rows.map((r: any) => r.id as string);
+    const locCounts = clientIds.length
+      ? await db('locations').whereIn('client_id', clientIds).count('id as cnt').select('client_id').groupBy('client_id') as Array<{ client_id: string; cnt: string }>
+      : [];
+    const locMap = new Map(locCounts.map((r) => [r.client_id, parseInt(r.cnt, 10)]));
+
+    const customers = rows.map((r: any) => ({
+      id: r.id,
+      userId: r.user_id,
+      businessName: r.business_name,
+      email: r.email,
+      status: r.subscription_status,
+      trialEndsAt: r.trial_ends_at,
+      locationsLimit: r.locations_limit ?? 1,
+      locationCount: locMap.get(r.id) ?? 0,
+      createdAt: r.created_at,
+      hasStripe: !!r.stripe_customer_id,
+    }));
+
+    ok(res, { customers });
+  } catch (e) { next(e); }
+}
+
+const updateCustomerSchema = z.object({
+  status: z.enum(['trialing', 'active', 'past_due', 'canceled']).optional(),
+  locationsLimit: z.number().int().min(0).max(999).optional(),
+  trialEndsAt: z.string().datetime().nullable().optional(),
+});
+
+export async function adminUpdateCustomer(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { clientId } = req.params as { clientId: string };
+    const parsed = updateCustomerSchema.parse(req.body);
+
+    const update: Record<string, unknown> = { updated_at: new Date() };
+    if (parsed.status !== undefined) update.subscription_status = parsed.status;
+    if (parsed.locationsLimit !== undefined) update.locations_limit = parsed.locationsLimit;
+    if (parsed.trialEndsAt !== undefined) update.trial_ends_at = parsed.trialEndsAt ? new Date(parsed.trialEndsAt) : null;
+
+    const affected = await db('clients').where({ id: clientId }).update(update);
+    if (!affected) { err(res, 'Customer not found', 404, 'NOT_FOUND'); return; }
+
+    ok(res, { updated: true });
+  } catch (e) { next(e); }
+}
+
+export async function adminDeleteCustomer(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { clientId } = req.params as { clientId: string };
+    const client = await db('clients').where({ id: clientId }).first();
+    if (!client) { err(res, 'Customer not found', 404, 'NOT_FOUND'); return; }
+
+    // Cascade: delete user (clients cascade from users)
+    await db('users').where({ id: client.user_id }).delete();
+    ok(res, { deleted: true });
+  } catch (e) { next(e); }
+}

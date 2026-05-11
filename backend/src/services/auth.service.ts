@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection';
 import { redis, storeRefreshToken, validateRefreshToken, revokeRefreshToken, revokeAllRefreshTokens } from '../db/redis';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt';
-import { createCustomer, createSubscription } from './stripe.service';
+import { createCustomer } from './stripe.service';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWelcomeEmail } from './email.service';
 import { logger } from '../utils/logger';
 

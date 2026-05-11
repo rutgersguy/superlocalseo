@@ -113,7 +113,7 @@ export async function create(req: Request, res: Response, next: NextFunction): P
       const included = INCLUDED_PER_TIER[tier] ?? 1;
       const newTotal = existingCount + 1;
       if (newTotal > included) {
-        addLocationToSubscription(client.stripe_subscription_id as string, tier).catch((e) =>
+        addLocationToSubscription(client.stripe_subscription_id as string, tier).catch((e: unknown) =>
           logger.error('Failed to add location to Stripe subscription', { error: (e as Error).message }),
         );
       }
@@ -267,7 +267,7 @@ export async function remove(req: Request, res: Response, next: NextFunction): P
       const tier = (client.subscription_tier as number) as 1 | 2 | 3;
       const included = INCLUDED_PER_TIER[tier] ?? 1;
       if (totalCount > included) {
-        removeLocationFromSubscription(client.stripe_subscription_id as string, tier).catch((e) =>
+        removeLocationFromSubscription(client.stripe_subscription_id as string, tier).catch((e: unknown) =>
           logger.error('Failed to remove location from Stripe subscription', { error: (e as Error).message }),
         );
       }

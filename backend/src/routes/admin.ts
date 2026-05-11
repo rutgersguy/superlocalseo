@@ -16,4 +16,8 @@ router.get('/citations/campaign/:campaignId/lookup', requireAdmin, ctrl.adminGet
 router.post('/citations/campaign/:campaignId/confirm', requireAdmin, ctrl.adminConfirmCampaign);
 router.get('/citations/campaign/:campaignId', requireAdmin, ctrl.adminGetCampaign);
 
+router.get('/customers', requireAdmin, ctrl.adminListCustomers);
+router.patch('/customers/:clientId', requireAdmin, ctrl.adminUpdateCustomer);
+router.delete('/customers/:clientId', requireAdmin, ctrl.adminDeleteCustomer);
+
 export default router;

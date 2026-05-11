@@ -2,61 +2,69 @@ import Stripe from 'stripe';
 import { config } from '../config';
 import { db } from '../db/connection';
 import { logger } from '../utils/logger';
-import { deprovisionClient } from './emr_provisioning';
 import { sendPaymentFailedEmail } from './email.service';
 
 export const stripe = new Stripe(config.stripe.secretKey);
 
-export async function createCustomer(email: string, businessName: string): Promise<string> {
-  const customer = await stripe.customers.create({ email, name: businessName });
+export async function createCustomer(email: string, _name?: string): Promise<string> {
+  const customer = await stripe.customers.create({ email });
   return customer.id;
 }
 
-export async function createSubscription(customerId: string, tier: 1 | 2 | 3): Promise<Stripe.Subscription> {
-  const priceId = { 1: config.stripe.prices.tier1, 2: config.stripe.prices.tier2, 3: config.stripe.prices.tier3 }[tier];
-  if (!priceId) throw new Error(`No price ID configured for tier ${tier}`);
+export async function addLocationToSubscription(subscriptionId: string, _tier?: number): Promise<void> {
+  if (!subscriptionId || !config.stripe.prices.location) return;
+  const sub = await stripe.subscriptions.retrieve(subscriptionId, { expand: ['items'] });
+  const existing = sub.items.data.find((i) => i.price.id === config.stripe.prices.location);
+  if (existing) {
+    await stripe.subscriptionItems.update(existing.id, { quantity: (existing.quantity ?? 0) + 1, proration_behavior: 'create_prorations' });
+  } else {
+    await stripe.subscriptionItems.create({ subscription: subscriptionId, price: config.stripe.prices.location!, quantity: 1, proration_behavior: 'create_prorations' });
+  }
+}
 
-  return stripe.subscriptions.create({
+export async function removeLocationFromSubscription(subscriptionId: string, _tier?: number): Promise<void> {
+  if (!subscriptionId || !config.stripe.prices.location) return;
+  const sub = await stripe.subscriptions.retrieve(subscriptionId, { expand: ['items'] });
+  const existing = sub.items.data.find((i) => i.price.id === config.stripe.prices.location);
+  if (!existing) return;
+  if ((existing.quantity ?? 1) <= 1) {
+    await stripe.subscriptionItems.del(existing.id, { proration_behavior: 'create_prorations' });
+  } else {
+    await stripe.subscriptionItems.update(existing.id, { quantity: (existing.quantity ?? 1) - 1, proration_behavior: 'create_prorations' });
+  }
+}
+
+export async function getOrCreateStripeCustomer(userId: string, email: string): Promise<string> {
+  const user = await db('users').where({ id: userId }).first();
+  if (user?.stripe_customer_id) return user.stripe_customer_id as string;
+  const customer = await stripe.customers.create({ email, metadata: { userId } });
+  await db('users').where({ id: userId }).update({ stripe_customer_id: customer.id });
+  return customer.id;
+}
+
+export async function createCheckoutSession(
+  customerId: string,
+  extraLocations: number,
+  successUrl: string,
+  cancelUrl: string,
+  userId: string,
+): Promise<Stripe.Checkout.Session> {
+  const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+    { price: config.stripe.prices.setup!, quantity: 1 },
+    { price: config.stripe.prices.base!, quantity: 1 },
+  ];
+  if (extraLocations > 0) {
+    lineItems.push({ price: config.stripe.prices.location!, quantity: extraLocations });
+  }
+
+  return stripe.checkout.sessions.create({
+    mode: 'subscription',
     customer: customerId,
-    items: [{ price: priceId }],
-    trial_period_days: 14,
-    payment_behavior: 'default_incomplete',
-    expand: ['latest_invoice.payment_intent'],
-  });
-}
-
-export async function addLocationToSubscription(subscriptionId: string, tier: 1 | 2 | 3): Promise<void> {
-  const priceId = { 1: config.stripe.prices.tier1Extra, 2: config.stripe.prices.tier2Extra, 3: config.stripe.prices.tier3Extra }[tier];
-  if (!priceId) return;
-  await stripe.subscriptionItems.create({ subscription: subscriptionId, price: priceId, quantity: 1 });
-}
-
-export async function removeLocationFromSubscription(subscriptionId: string, tier: 1 | 2 | 3): Promise<void> {
-  const priceId = { 1: config.stripe.prices.tier1Extra, 2: config.stripe.prices.tier2Extra, 3: config.stripe.prices.tier3Extra }[tier];
-  if (!priceId) return;
-  const sub = await stripe.subscriptions.retrieve(subscriptionId, { expand: ['items'] });
-  const item = sub.items.data.find((i) => i.price.id === priceId);
-  if (item) await stripe.subscriptionItems.del(item.id, { proration_behavior: 'create_prorations' });
-}
-
-export async function changeSubscriptionTier(subscriptionId: string, newTier: 1 | 2 | 3): Promise<void> {
-  const newPriceId = { 1: config.stripe.prices.tier1, 2: config.stripe.prices.tier2, 3: config.stripe.prices.tier3 }[newTier];
-  if (!newPriceId) throw new Error(`No price ID configured for tier ${newTier}`);
-
-  const sub = await stripe.subscriptions.retrieve(subscriptionId, { expand: ['items'] });
-
-  // Find the base plan item (not extra-location add-ons)
-  const extraPriceIds = [
-    config.stripe.prices.tier1Extra,
-    config.stripe.prices.tier2Extra,
-    config.stripe.prices.tier3Extra,
-  ].filter(Boolean);
-  const baseItem = sub.items.data.find((i) => !extraPriceIds.includes(i.price.id));
-  if (!baseItem) throw new Error('No base subscription item found');
-
-  await stripe.subscriptions.update(subscriptionId, {
-    items: [{ id: baseItem.id, price: newPriceId }],
-    proration_behavior: 'create_prorations',
+    line_items: lineItems,
+    subscription_data: { metadata: { userId, extraLocations: String(extraLocations) } },
+    metadata: { userId, extraLocations: String(extraLocations) },
+    success_url: successUrl,
+    cancel_url: cancelUrl,
   });
 }
 
@@ -65,93 +73,82 @@ export async function getBillingPortalUrl(customerId: string, returnUrl: string)
   return session.url;
 }
 
-export async function createCheckoutSession(
-  customerId: string,
-  tier: 1 | 2 | 3,
-  successUrl: string,
-  cancelUrl: string,
-): Promise<Stripe.Checkout.Session> {
-  const priceId = { 1: config.stripe.prices.tier1, 2: config.stripe.prices.tier2, 3: config.stripe.prices.tier3 }[tier];
-  if (!priceId) throw new Error(`No price ID configured for tier ${tier}`);
-
-  return stripe.checkout.sessions.create({
-    mode: 'subscription',
-    customer: customerId,
-    line_items: [{ price: priceId, quantity: 1 }],
-    subscription_data: { trial_period_days: 14, metadata: { tier: String(tier) } },
-    metadata: { tier: String(tier) },
-    success_url: successUrl,
-    cancel_url: cancelUrl,
-  });
-}
-
-// Handle key webhook events
 export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session;
-      if (session.mode === 'subscription' && session.subscription && session.customer) {
-        const tier = session.metadata?.tier ? parseInt(session.metadata.tier, 10) : null;
-        await db('clients')
-          .where({ stripe_customer_id: session.customer as string })
-          .update({
-            stripe_subscription_id: session.subscription as string,
-            ...(tier ? { subscription_tier: tier } : {}),
-            subscription_status: 'active',
-            updated_at: new Date(),
-          });
-      }
+      if (session.mode !== 'subscription' || !session.subscription || !session.customer) break;
+      const userId = session.metadata?.userId;
+      if (!userId) break;
+      const extra = parseInt(session.metadata?.extraLocations ?? '0', 10);
+      await db('clients')
+        .where({ user_id: userId })
+        .update({
+          stripe_subscription_id: session.subscription as string,
+          subscription_status: 'active',
+          locations_limit: 1 + extra,
+          updated_at: new Date(),
+        });
       break;
     }
-    case 'customer.subscription.updated':
-    case 'customer.subscription.created': {
+
+    case 'customer.subscription.updated': {
       const sub = event.data.object as Stripe.Subscription;
-      const status = sub.status === 'active' || sub.status === 'trialing' ? 'active'
+      const userId = sub.metadata?.userId;
+      if (!userId) break;
+      const status = sub.status === 'active' ? 'active'
         : sub.status === 'past_due' ? 'past_due'
-        : sub.status === 'canceled' ? 'canceled' : 'suspended';
+        : sub.status === 'canceled' ? 'canceled' : 'trialing';
+      const locationItem = sub.items.data.find((i) => i.price.id === config.stripe.prices.location);
+      const extra = locationItem?.quantity ?? 0;
+      await db('clients')
+        .where({ user_id: userId })
+        .update({
+          subscription_status: status,
+          subscription_current_period_end: new Date(sub.current_period_end * 1000),
+          locations_limit: 1 + extra,
+          updated_at: new Date(),
+        });
+      break;
+    }
+
+    case 'customer.subscription.deleted': {
+      const sub = event.data.object as Stripe.Subscription;
       await db('clients').where({ stripe_subscription_id: sub.id }).update({
-        subscription_status: status,
-        subscription_current_period_end: new Date(sub.current_period_end * 1000),
+        subscription_status: 'canceled',
         updated_at: new Date(),
       });
       break;
     }
-    case 'customer.subscription.deleted': {
-      const sub = event.data.object as Stripe.Subscription;
-      await db('clients').where({ stripe_subscription_id: sub.id }).update({ subscription_status: 'canceled', updated_at: new Date() });
-      const canceledClient = await db('clients').where({ stripe_subscription_id: sub.id }).first();
-      if (canceledClient) {
-        void deprovisionClient(canceledClient.id as string);
-      }
-      break;
-    }
+
     case 'invoice.paid': {
       const inv = event.data.object as Stripe.Invoice;
-      if (inv.subscription) {
-        await db('clients').where({ stripe_subscription_id: inv.subscription }).update({
-          subscription_status: 'active', payment_failed_at: null, updated_at: new Date(),
-        });
-      }
+      const subId = (inv as any).subscription as string | undefined;
+      if (!subId) break;
+      await db('clients').where({ stripe_subscription_id: subId }).update({
+        subscription_status: 'active',
+        payment_failed_at: null,
+        updated_at: new Date(),
+      });
       break;
     }
+
     case 'invoice.payment_failed': {
       const inv = event.data.object as Stripe.Invoice;
-      if (inv.subscription) {
-        await db('clients').where({ stripe_subscription_id: inv.subscription }).update({
-          subscription_status: 'past_due', payment_failed_at: new Date(), updated_at: new Date(),
-        });
-        const failedClient = await db('clients').where({ stripe_subscription_id: inv.subscription }).first();
-        if (failedClient) {
-          const failedUser = await db('users').where({ id: failedClient.user_id }).first();
-          if (failedUser) {
-            void sendPaymentFailedEmail(failedUser.email as string, failedClient.business_name as string);
-          }
-        }
-        logger.warn('Payment failed for subscription', { subscriptionId: inv.subscription });
+      const subId = (inv as any).subscription as string | undefined;
+      if (!subId) break;
+      await db('clients').where({ stripe_subscription_id: subId }).update({
+        subscription_status: 'past_due',
+        payment_failed_at: new Date(),
+        updated_at: new Date(),
+      });
+      const failedClient = await db('clients').where({ stripe_subscription_id: subId }).first();
+      if (failedClient) {
+        const failedUser = await db('users').where({ id: failedClient.user_id }).first();
+        if (failedUser) void sendPaymentFailedEmail(failedUser.email as string, failedClient.business_name as string);
       }
+      logger.warn('Payment failed', { subscriptionId: subId });
       break;
     }
-    default:
-      break;
   }
 }
