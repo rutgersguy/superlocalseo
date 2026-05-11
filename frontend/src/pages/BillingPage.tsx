@@ -90,7 +90,7 @@ function CheckoutForm({ onSuccess }: { onSuccess: () => void }) {
 
 const FEATURES = [
   'Daily rank tracking across all keywords',
-  'Review monitoring + one-click AI replies',
+  'Review Monitoring + AI Replies',
   'Competitor benchmarking & analysis',
   'Citation health monitoring & builder',
   'Automated monthly PDF reports',
@@ -288,7 +288,7 @@ export default function BillingPage() {
         {/* ── Right: Payment Form ────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8">
           <h2 className="text-base font-semibold text-slate-900 mb-1">Payment details</h2>
-          <p className="text-xs text-slate-400 mb-6">Your card will be charged $848 today, then $349/mo.</p>
+          <p className="text-xs text-slate-400 mb-8">Your card will be charged $848 today, then $349/mo.</p>
 
           {loadingIntent && (
             <div className="space-y-3 animate-pulse">
