@@ -86,6 +86,20 @@ interface LookupResponse {
   };
 }
 
+const DIRECTORY_PRIORITY: Record<string, number> = {
+  google: 0, yelp: 1, facebook: 2, bing: 3, apple: 4,
+  yellowpages: 5, houzz: 6, bbb: 7, angi: 8, thumbtack: 9,
+};
+
+function sortDirectories<T extends { name: string }>(dirs: T[]): T[] {
+  return [...dirs].sort((a, b) => {
+    const pa = DIRECTORY_PRIORITY[a.name.toLowerCase()] ?? 999;
+    const pb = DIRECTORY_PRIORITY[b.name.toLowerCase()] ?? 999;
+    if (pa !== pb) return pa - pb;
+    return a.name.localeCompare(b.name);
+  });
+}
+
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-gray-100 text-gray-600',
   submitted: 'bg-blue-100 text-blue-700',
@@ -527,13 +541,15 @@ export default function Citations() {
 
   const napErrorCount = directories.filter(hasNapError).length;
 
-  const filteredDirs = showErrorsOnly
-    ? directories.filter((dir) => {
-        if (!dir.listed) return true;
-        if (!dir.napDetail) return false;
-        return hasNapError(dir);
-      })
-    : directories;
+  const filteredDirs = sortDirectories(
+    showErrorsOnly
+      ? directories.filter((dir) => {
+          if (!dir.listed) return true;
+          if (!dir.napDetail) return false;
+          return hasNapError(dir);
+        })
+      : directories,
+  );
 
   return (
     <div className="space-y-6">
