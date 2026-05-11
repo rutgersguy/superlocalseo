@@ -333,7 +333,7 @@ export async function discoverKeywords(req: Request, res: Response, next: NextFu
     const discovered = await getCompetitorRankedKeywords({
       domain: competitor.website,
       locationCode: 2840,
-      limit: 100,
+      limit: 1000,
     });
 
     // Find keywords the client already tracks (any location)
@@ -347,11 +347,18 @@ export async function discoverKeywords(req: Request, res: Response, next: NextFu
     // Get client's locations for the "add to location" picker
     const locations = await db('locations')
       .where({ client_id: req.clientId })
-      .select('id', 'name') as Array<{ id: string; name: string }>;
+      .select('id', 'name', 'city', 'state') as Array<{ id: string; name: string; city: string | null; state: string | null }>;
 
     const newKeywords = discovered.filter((k) => !trackedSet.has(k.keyword.toLowerCase()));
 
-    ok(res, { keywords: newKeywords, locations });
+    ok(res, {
+      keywords: newKeywords,
+      locations: locations.map((l) => ({
+        id: l.id,
+        name: l.name,
+        label: [l.name, l.city && l.state ? `${l.city}, ${l.state}` : l.city ?? l.state].filter(Boolean).join(' — '),
+      })),
+    });
   } catch (e) {
     next(e);
   }

@@ -31,7 +31,7 @@ interface H2HKeyword {
 interface H2HResponse { success: boolean; data: { keywords: H2HKeyword[]; competitors: Array<{ id: string; name: string }> }; }
 
 interface DiscoveredKeyword { keyword: string; competitorRank: number; competitorUrl: string | null; searchVolume: number | null; }
-interface LocationOption { id: string; name: string; }
+interface LocationOption { id: string; name: string; label: string; }
 interface DiscoverResponse { success: boolean; data: { keywords: DiscoveredKeyword[]; locations: LocationOption[] }; }
 
 interface PlaceResult { placeId: string; name: string; address: string | null; rating: number | null; reviewCount: number | null; }
@@ -438,15 +438,15 @@ function AddToLocationButton({ keyword, locations }: { keyword: string; location
   }
 
   return (
-    <div className="relative">
+    <div className="relative inline-block">
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-brand-50 text-brand-600 hover:bg-brand-100 transition-colors"
       >
-        <Plus size={11} /> Add <ChevronDown size={11} />
+        <Plus size={11} /> Add to location <ChevronDown size={11} />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded-lg shadow-lg min-w-[160px] overflow-hidden">
+        <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded-lg shadow-lg min-w-[200px] overflow-hidden">
           {locations.map((loc) => {
             const done = added.has(loc.id);
             return (
@@ -454,10 +454,10 @@ function AddToLocationButton({ keyword, locations }: { keyword: string; location
                 key={loc.id}
                 onClick={() => void addToLocation(loc)}
                 disabled={!!adding || done}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                className="w-full text-left flex items-center gap-2 px-3 py-2.5 hover:bg-slate-50 disabled:opacity-50 transition-colors"
               >
-                {done ? <Check size={12} className="text-green-500" /> : <Plus size={12} className="text-slate-400" />}
-                <span className={done ? 'text-slate-400' : 'text-slate-700'}>{loc.name}</span>
+                {done ? <Check size={12} className="text-green-500 shrink-0" /> : <Plus size={12} className="text-slate-400 shrink-0" />}
+                <span className={`text-sm leading-tight ${done ? 'text-slate-400' : 'text-slate-700'}`}>{loc.label}</span>
               </button>
             );
           })}
@@ -542,7 +542,7 @@ function DiscoverKeywords({ competitors }: { competitors: Competitor[] }) {
                     <th className="text-left px-5 py-2.5">Keyword</th>
                     <th className="text-center px-3 py-2.5">Their rank</th>
                     <th className="text-center px-3 py-2.5">Monthly searches</th>
-                    <th className="text-right px-5 py-2.5">Add to location</th>
+                    <th className="text-center px-5 py-2.5">Add to location</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -555,8 +555,10 @@ function DiscoverKeywords({ competitors }: { competitors: Competitor[] }) {
                       <td className="px-3 py-3 text-center text-slate-600">
                         {k.searchVolume != null ? k.searchVolume.toLocaleString() : '—'}
                       </td>
-                      <td className="px-5 py-3 text-right">
-                        <AddToLocationButton keyword={k.keyword} locations={result.locations} />
+                      <td className="px-5 py-3">
+                        <div className="flex justify-center">
+                          <AddToLocationButton keyword={k.keyword} locations={result.locations} />
+                        </div>
                       </td>
                     </tr>
                   ))}
