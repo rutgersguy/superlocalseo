@@ -348,15 +348,13 @@ export async function gatherReportData(
 
   // ── ROI ──────────────────────────────────────────────────────────────────────
   const roiClient = await db('clients').where({ id: clientId })
-    .select('roi_avg_customer_value', 'roi_conversion_rate').first() as {
-      roi_avg_customer_value: string | null;
-      roi_conversion_rate: string | null;
-    } | undefined;
+    .select('roi_config').first() as { roi_config: { avgCustomerValue?: number; conversionRate?: number } | null } | undefined;
 
   let roiData: ReportData['roi'] = null;
-  const avgVal = roiClient?.roi_avg_customer_value ? parseFloat(roiClient.roi_avg_customer_value) : 0;
+  const roiCfg = roiClient?.roi_config ?? {};
+  const avgVal = roiCfg.avgCustomerValue ?? 0;
   if (avgVal > 0) {
-    const convRate = roiClient?.roi_conversion_rate ? parseFloat(roiClient.roi_conversion_rate) / 100 : 0.03;
+    const convRate = (roiCfg.conversionRate ?? 2.5) / 100;
     const CTR: Record<number, number> = { 1: 0.28, 2: 0.15, 3: 0.11, 4: 0.08, 5: 0.06, 6: 0.04, 7: 0.03, 8: 0.02, 9: 0.02, 10: 0.01 };
     const VOLUMES: Record<number, number> = { 1: 100, 2: 200, 3: 300, 4: 500, 5: 1000 };
     let totalClicks = 0, totalLeads = 0, totalRevenue = 0;
