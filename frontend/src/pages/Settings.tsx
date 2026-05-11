@@ -1059,8 +1059,7 @@ interface LocForm {
 }
 
 const EMPTY_LOC_FORM: LocForm = { name: '', address: '', city: '', state: '', zip: '', phone: '', website: '', serviceArea: [] };
-const TIER_INCLUDED: Record<number, number> = { 1: 1, 2: 3, 3: Infinity };
-const EXTRA_PRICE: Record<number, number> = { 1: 150, 2: 100, 3: 75 };
+const EXTRA_LOCATION_PRICE = 125;
 
 function locFormFromLocation(loc: Location): LocForm {
   return {
@@ -1269,9 +1268,8 @@ function LocationsTab({ isAdmin }: { isAdmin: boolean }) {
   const { data: billingData } = useSWR<BillingResponse>('/billing/status', fetcher);
 
   const locations = data?.data ?? [];
-  const tier = billingData?.data?.tier ?? 1;
-  const included = TIER_INCLUDED[tier] ?? 1;
-  const extraPrice = EXTRA_PRICE[tier] ?? 150;
+  const included = billingData?.data?.locationsLimit ?? 1;
+  const extraPrice = EXTRA_LOCATION_PRICE;
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editSaving, setEditSaving] = useState(false);
@@ -1339,8 +1337,8 @@ function LocationsTab({ isAdmin }: { isAdmin: boolean }) {
     }
   }
 
-  const isOverLimit = included !== Infinity && locations.length > included;
-  const isAtLimit = included !== Infinity && locations.length >= included;
+  const isOverLimit = locations.length > included;
+  const isAtLimit = locations.length >= included;
 
   return (
     <div className="space-y-4">
@@ -1348,7 +1346,7 @@ function LocationsTab({ isAdmin }: { isAdmin: boolean }) {
         <div>
           <p className="text-sm text-slate-600">
             {locations.length} location{locations.length !== 1 ? 's' : ''}
-            {included !== Infinity && ` · ${Math.min(locations.length, included)} of ${included} included in your plan`}
+            {` · ${Math.min(locations.length, included)} of ${included} included in your plan`}
           </p>
           {isOverLimit && (
             <p className="text-xs text-slate-400 mt-0.5">
@@ -1619,28 +1617,20 @@ function KeywordsTab({ isAdmin }: { isAdmin: boolean }) {
 // ─── Billing tab ─────────────────────────────────────────────────────────────
 
 interface BillingStatus {
-  tier: number | null;
-  status: string | null;
-  currentPeriodEnd: string | null;
+  status: string;
+  trialDaysLeft: number | null;
+  trialEndsAt: string | null;
+  locationsLimit: number;
   locationCount: number;
-  includedLocationCount: number | null;
-  extraLocationCount: number;
-  extraLocationCostPerMonth: number;
-  hasPaymentMethod: boolean;
+  currentPeriodEnd: string | null;
   paymentFailedAt: string | null;
-  graceDaysRemaining: number | null;
+  publishableKey: string | null;
 }
 
 interface BillingResponse {
   success: boolean;
   data: BillingStatus;
 }
-
-const PLANS = [
-  { tier: 1 as const, name: 'Starter', price: '$350', features: ['1 location', 'Rank tracking', 'Review management', 'Citation builder'] },
-  { tier: 2 as const, name: 'Growth', price: '$700', features: ['Up to 3 locations', 'Everything in Starter', 'Geo-grid reports', 'Competitor tracking'] },
-  { tier: 3 as const, name: 'Pro', price: '$1,200', features: ['Unlimited locations', 'Everything in Growth', 'White-label reports', 'Priority support'] },
-];
 
 // ─── White-label settings ─────────────────────────────────────────────────────
 
@@ -1758,208 +1748,156 @@ function WhiteLabelSection() {
 }
 
 function BillingTab({ onGoToLocations }: { onGoToLocations: () => void }) {
-  const { data, isLoading, mutate: mutateBilling } = useSWR<BillingResponse>('/billing', fetcher);
+  const { data, isLoading } = useSWR<BillingResponse>('/billing/status', fetcher, { refreshInterval: 30000 });
   const billing = data?.data;
-  const [changing, setChanging] = useState<number | null>(null);
-  const [changeError, setChangeError] = useState('');
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
-  const [checkoutLoading, setCheckoutLoading] = useState<number | null>(null);
+  const [actionError, setActionError] = useState('');
 
-  // Handle post-checkout return
-  const [checkoutSuccess] = useState(() => new URLSearchParams(window.location.search).get('checkout') === 'success');
+  const startCheckout = async () => {
+    setCheckoutLoading(true);
+    setActionError('');
+    try {
+      const res = await apiFetch<{ success: boolean; data: { url: string }; error?: { message: string } }>('/billing/checkout', {
+        method: 'POST',
+        body: JSON.stringify({ extraLocations: 0 }),
+      });
+      if (res.success && res.data?.url) {
+        window.location.href = res.data.url;
+      } else {
+        setActionError(res.error?.message ?? 'Failed to start checkout');
+        setCheckoutLoading(false);
+      }
+    } catch {
+      setActionError('Network error');
+      setCheckoutLoading(false);
+    }
+  };
 
-  const openBillingPortal = async () => {
+  const openPortal = async () => {
     setPortalLoading(true);
+    setActionError('');
     try {
       const res = await apiFetch<{ success: boolean; data: { url: string } }>('/billing/portal', { method: 'POST' });
       if (res.success && res.data?.url) window.location.href = res.data.url;
+    } catch {
+      setActionError('Network error');
     } finally {
       setPortalLoading(false);
     }
   };
 
-  const startCheckout = async (tier: 1 | 2 | 3) => {
-    setCheckoutLoading(tier);
-    try {
-      const res = await apiFetch<{ success: boolean; data: { url: string }; error?: { message: string } }>('/billing/checkout', {
-        method: 'POST',
-        body: JSON.stringify({ tier }),
-      });
-      if (res.success && res.data?.url) {
-        window.location.href = res.data.url;
-      } else {
-        setChangeError((res as { error?: { message: string } }).error?.message ?? 'Failed to start checkout');
-      }
-    } catch {
-      setChangeError('Network error');
-    } finally {
-      setCheckoutLoading(null);
-    }
-  };
-
-  const changePlan = async (tier: 1 | 2 | 3) => {
-    setChanging(tier);
-    setChangeError('');
-    try {
-      const res = await apiFetch<{ success: boolean; error?: { message: string } }>('/billing/change-plan', {
-        method: 'POST',
-        body: JSON.stringify({ tier }),
-      });
-      if (!res.success) {
-        setChangeError((res as { error?: { message: string } }).error?.message ?? 'Failed to change plan');
-      } else {
-        await mutateBilling();
-      }
-    } catch {
-      setChangeError('Network error');
-    } finally {
-      setChanging(null);
-    }
-  };
-
-  if (isLoading) {
+  if (isLoading || !billing) {
     return (
       <div className="space-y-4 animate-pulse">
-        <div className="h-5 bg-slate-200 rounded w-40" />
-        <div className="grid grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => <div key={i} className="h-48 bg-slate-100 rounded-xl" />)}
-        </div>
+        <div className="h-24 bg-slate-100 rounded-xl" />
+        <div className="h-32 bg-slate-100 rounded-xl" />
       </div>
     );
   }
 
-  const currentTier = billing?.tier;
-  const isActive = billing?.status === 'active';
-  const isPastDue = billing?.status === 'past_due';
-  const hasSub = !!(billing?.status && billing.status !== 'canceled' && currentTier);
+  const isTrialing = billing.status === 'trialing';
+  const isActive = billing.status === 'active';
+  const isPastDue = billing.status === 'past_due';
+  const isCanceled = billing.status === 'canceled';
+  const needsSubscription = !isActive && !isTrialing;
+  const extraLocations = Math.max(0, billing.locationCount - billing.locationsLimit);
+
+  const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
+    active:    { label: 'Active', cls: 'bg-green-100 text-green-700' },
+    trialing:  { label: 'Trial', cls: 'bg-blue-100 text-blue-700' },
+    past_due:  { label: 'Past due', cls: 'bg-amber-100 text-amber-700' },
+    canceled:  { label: 'Canceled', cls: 'bg-gray-100 text-gray-500' },
+  };
+  const statusInfo = STATUS_LABELS[billing.status] ?? { label: billing.status, cls: 'bg-gray-100 text-gray-500' };
 
   return (
     <div className="space-y-5">
-      {/* Post-checkout success */}
-      {checkoutSuccess && (
-        <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
-          <strong>Subscription activated!</strong> Welcome aboard. Your plan is now active.
-        </div>
+      {actionError && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{actionError}</div>
       )}
 
-      {/* Past due warning */}
-      {isPastDue && (
-        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-          <strong>Payment overdue.</strong>{' '}
-          {billing?.graceDaysRemaining != null && billing.graceDaysRemaining > 0
-            ? `You have ${billing.graceDaysRemaining} day${billing.graceDaysRemaining !== 1 ? 's' : ''} remaining before access is restricted.`
-            : 'Access will be restricted until payment is resolved.'}
-          {' '}
-          <button onClick={() => void openBillingPortal()} className="underline font-medium">Update payment method</button>
-        </div>
-      )}
-
-      {changeError && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{changeError}</div>
-      )}
-
-      {/* Plan cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {PLANS.map((plan) => {
-          const isCurrent = currentTier === plan.tier;
-          const isUpgrade = hasSub && currentTier != null && plan.tier > currentTier;
-          const isDowngrade = hasSub && currentTier != null && plan.tier < currentTier;
-          return (
-            <div
-              key={plan.tier}
-              className={`border rounded-xl p-5 flex flex-col gap-3 transition-colors ${
-                isCurrent ? 'border-brand-500 bg-brand-50' : 'border-slate-200 bg-white'
-              }`}
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-semibold text-slate-900">{plan.name}</p>
-                  <p className="text-xl font-bold text-slate-900 mt-0.5">{plan.price}<span className="text-sm font-normal text-slate-500">/mo</span></p>
-                </div>
-                {isCurrent && (
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isActive ? 'bg-green-100 text-green-700' : isPastDue ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
-                    {isActive ? 'Current' : isPastDue ? 'Past due' : billing?.status ?? 'Current'}
-                  </span>
-                )}
-              </div>
-              <ul className="space-y-1.5 flex-1">
-                {plan.features.map((f) => (
-                  <li key={f} className="flex items-start gap-1.5 text-xs text-slate-600">
-                    <span className="text-green-500 mt-0.5">✓</span> {f}
-                  </li>
-                ))}
-              </ul>
-              {!isCurrent && hasSub && (
-                <button
-                  onClick={() => void changePlan(plan.tier)}
-                  disabled={changing !== null}
-                  className={`w-full py-2 px-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
-                    isUpgrade
-                      ? 'bg-brand-500 text-white hover:bg-brand-600'
-                      : 'border border-slate-200 text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  {changing === plan.tier ? 'Changing…' : isUpgrade ? 'Upgrade' : isDowngrade ? 'Downgrade' : 'Switch'}
-                </button>
-              )}
-              {!isCurrent && !hasSub && (
-                <button
-                  onClick={() => void startCheckout(plan.tier)}
-                  disabled={checkoutLoading !== null}
-                  className="w-full py-2 px-3 rounded-lg text-sm font-medium bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
-                >
-                  {checkoutLoading === plan.tier ? 'Redirecting…' : 'Subscribe'}
-                </button>
-              )}
+      {/* Current plan card */}
+      <div className="border border-slate-200 rounded-xl p-5 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-1">Current plan</p>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-bold text-slate-900">$349</span>
+              <span className="text-slate-500 text-sm">/mo</span>
             </div>
-          );
-        })}
-      </div>
-
-      {/* Extra location charges */}
-      {hasSub && (billing?.extraLocationCount ?? 0) > 0 && (
-        <div className="border border-amber-200 bg-amber-50 rounded-xl p-4">
-          <p className="text-sm font-semibold text-amber-900 mb-1">Extra location charges</p>
-          <div className="flex items-center justify-between text-sm text-amber-800">
-            <span>
-              {billing!.extraLocationCount} extra location{billing!.extraLocationCount !== 1 ? 's' : ''}
-              {billing?.includedLocationCount != null && (
-                <span className="text-amber-600 text-xs ml-1">
-                  ({billing.includedLocationCount} included in your plan)
-                </span>
-              )}
-            </span>
-            <span className="font-semibold">${billing!.extraLocationCostPerMonth}/mo</span>
+            <p className="text-xs text-slate-400 mt-0.5">+ $499 setup · $125/mo per extra location</p>
           </div>
-          <p className="text-xs text-amber-600 mt-2">
-            Billed automatically each month. Remove locations in{' '}
-            <button className="underline font-medium" onClick={onGoToLocations}>
-              Settings → Locations
-            </button>{' '}
-            to reduce this charge.
-          </p>
+          <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusInfo.cls}`}>
+            {statusInfo.label}
+          </span>
         </div>
-      )}
 
+        {/* Trial countdown */}
+        {isTrialing && billing.trialDaysLeft !== null && (
+          <div className={`rounded-lg px-4 py-3 text-sm ${billing.trialDaysLeft <= 2 ? 'bg-red-50 text-red-800 border border-red-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
+            {billing.trialDaysLeft === 0
+              ? 'Your trial has expired. Subscribe to continue using SuperLocalSEO.'
+              : `Trial ends in ${billing.trialDaysLeft} day${billing.trialDaysLeft === 1 ? '' : 's'}.`}
+            {billing.trialEndsAt && billing.trialDaysLeft > 0 && (
+              <span className="text-xs ml-1 opacity-70">({new Date(billing.trialEndsAt).toLocaleDateString()})</span>
+            )}
+          </div>
+        )}
 
-      {/* Portal link for payment / invoice management */}
-      <div className="pt-1 border-t">
-        <button
-          onClick={() => void openBillingPortal()}
-          disabled={portalLoading}
-          className="text-sm font-medium text-brand-500 hover:text-brand-700 disabled:opacity-50"
-        >
-          {portalLoading ? 'Redirecting…' : 'Manage payment method & invoices →'}
-        </button>
-        {billing?.currentPeriodEnd && (
-          <p className="text-xs text-slate-400 mt-1">
-            Current period ends {new Date(billing.currentPeriodEnd).toLocaleDateString()}
+        {/* Past due warning */}
+        {isPastDue && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
+            <strong>Payment overdue.</strong> Update your payment method to restore full access.
+          </div>
+        )}
+
+        {/* Locations usage */}
+        <div className="flex items-center justify-between text-sm py-3 border-t border-slate-100">
+          <span className="text-slate-600">Locations</span>
+          <span className="font-medium text-slate-900">
+            {billing.locationCount} / {billing.locationsLimit} included
+            {extraLocations > 0 && (
+              <span className="text-amber-600 ml-1.5 text-xs">+{extraLocations} extra (${extraLocations * 125}/mo)</span>
+            )}
+          </span>
+        </div>
+        {extraLocations > 0 && (
+          <p className="text-xs text-slate-400 -mt-3">
+            Remove locations in{' '}
+            <button className="underline text-brand-500" onClick={onGoToLocations}>Settings → Locations</button>{' '}
+            to reduce charges.
+          </p>
+        )}
+
+        {/* Action buttons */}
+        {needsSubscription ? (
+          <button
+            onClick={() => void startCheckout()}
+            disabled={checkoutLoading}
+            className="w-full py-2.5 rounded-lg text-sm font-semibold bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
+          >
+            {checkoutLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+            {isCanceled ? 'Reactivate subscription' : 'Subscribe now'}
+          </button>
+        ) : (
+          <button
+            onClick={() => void openPortal()}
+            disabled={portalLoading}
+            className="text-sm font-medium text-brand-500 hover:text-brand-700 disabled:opacity-50"
+          >
+            {portalLoading ? 'Redirecting…' : 'Manage payment & invoices →'}
+          </button>
+        )}
+
+        {billing.currentPeriodEnd && isActive && (
+          <p className="text-xs text-slate-400">
+            Next billing date: {new Date(billing.currentPeriodEnd).toLocaleDateString()}
           </p>
         )}
       </div>
 
-      {/* White-label report branding — Pro only */}
-      {currentTier === 3 && <WhiteLabelSection />}
+      <WhiteLabelSection />
     </div>
   );
 }
