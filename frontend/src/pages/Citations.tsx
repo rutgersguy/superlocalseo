@@ -173,12 +173,11 @@ const CB_PACKAGES: { id: string; label: string; count: number; note?: string }[]
 ];
 
 const CB_PUBLISHERS: { id: string; label: string }[] = [
-  { id: 'dataaxle',    label: 'Data Axle' },
-  { id: 'neustar',     label: 'Neustar' },
-  { id: 'foursquare',  label: 'Foursquare' },
-  { id: 'gpsnetwork',  label: 'GPS Network' },
-  { id: 'ypnetwork',   label: 'YP Network' },
-  { id: 'locafynetwork', label: 'Locafy Network' },
+  { id: 'dataaxle',   label: 'Data Axle' },
+  { id: 'neustar',    label: 'Neustar' },
+  { id: 'foursquare', label: 'Foursquare' },
+  { id: 'ypnetwork',  label: 'YP Network' },
+  { id: 'gpsnetwork', label: 'GPS Network' },
 ];
 
 // ─── Icon helpers ─────────────────────────────────────────────────────────────
