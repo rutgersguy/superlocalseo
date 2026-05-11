@@ -137,11 +137,16 @@ Features designed to increase ARPU from $780 → $1,025+ and reduce churn. See [
 ### Revenue Multipliers (Phase 3+)
 - [x] **#72 AI Review Responses** — Claude Haiku drafts per-review, client edits + approves + copies to platform; draft persists in DB
 - [x] **#73 Review Request Campaigns** — built on EMR campaign API: contact upload → `POST /campaigns/{id}/invite` triggers EMR gating (4-5★→Google, 1-3★→private feedback); funnel metrics dashboard
-- [x] **#74 Competitor Benchmarking** — track named competitors' Google ratings/review counts via Places API; leaderboard + side-by-side comparison dashboard; daily sync job
+- [x] **#74 Competitor Benchmarking** — full competitive intelligence suite: Google rating/review count via Places API (daily sync); SERP-based rank tracking via DataForSEO at zero extra cost (piggybacked on existing ranking calls); Keyword Battleground table (per-keyword × city, winning/losing/uncontested, sortable + filterable); Head-to-Head tab; Discover Keywords tab (DataForSEO Labs, up to 1000 keywords); Run Scan button with 24h Redis cooldown gate; `competitor_rankings` table with `geo_location` column
 - [x] **#75 QR Codes & NFC Review Capture** — printable QR codes → Google review deep-link, scan count tracking, PNG download; QR Codes tab in Settings
 
 ### EMR Integration Foundation (prerequisite for #73)
 - [x] **#76 EMR data model fixes** — add `replied`, `reply_date`, `emr_reply_text`, `hidden`, `avatar_url`, `verified` to reviews table; fix webhook to sync reply status on `review-updated`; expand `fetchReviews()` with pagination + filters; add `fetchCampaigns()` + `sendInvite()` to service
+
+### Blocked on Google Business API Approval
+- [ ] **Review Request Campaigns (full send flow)** — UI built; requires verified GBP OAuth app with `business.manage` scope
+- [ ] **GBP review sync** — `syncGBPReviews()` implemented; blocked on same scope approval
+- [ ] **SEO Audit GBP health score** — GBP data calls wired; blocked on scope approval
 
 ### Scale Plays (Phase 4+)
 - [ ] White-label reseller program — agencies resell to clients
@@ -149,26 +154,26 @@ Features designed to increase ARPU from $780 → $1,025+ and reduce churn. See [
 
 ---
 
-## DataForSEO Integration (Planned)
+## DataForSEO Integration ✅
 
-**Status:** Pending account signup — credentials to be added to `.env` as `DATAFORSEO_LOGIN` and `DATAFORSEO_PASSWORD`.
+**Status:** Live. Credentials configured as `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD`.
 
-### Phase 1 — Keyword Search Volume (immediate need)
-- [ ] `dataforseo.service.ts` — wrapper around DataForSEO Keywords Data API (`/keywords_data/google_ads/search_volume/live`)
-- [ ] Auto-fetch `monthly_search_volume` when a keyword is created or when it's null at rankings sync time
-- [ ] Backfill existing keywords that have null search volume on service activation
-- [ ] Cost: ~$0.001/keyword — negligible
+### Implemented
+- [x] `dataforseo.service.ts` — wrapper around DataForSEO SERP API (`/serp/google/organic/live/advanced`) for keyword rankings; Keywords Data API for search volume backfill; Labs API for competitor keyword discovery
+- [x] **SERP-based rankings** — replaces BrightLocal for daily ranking pulls. Each call returns top 30 results; client and all tracked competitors are matched in the same response (zero extra cost for competitor tracking)
+- [x] **Search volume backfill** — `getAggregatedSearchVolumes()` fetches `monthly_search_volume` for any keyword that has a null value at sync time; averaged across service-area geographies
+- [x] **Competitor keyword discovery** — `getCompetitorRankedKeywords()` calls DataForSEO Labs `ranked_keywords/live` (US country code `2840`) returning up to 1 000 keywords sorted by search volume; filters out keywords the client already tracks
+- [x] **Geo support** — ranking calls include primary city + up to 4 service-area cities per location; each snapshot tagged with `geo_location` for city-level competitive analysis
 
-### Phase 2 — On-Page SEO & Local Ranking Factors (to be scoped)
-DataForSEO offers several APIs worth evaluating for impact on local ranking features:
-- **On-Page API** — crawl a location's website: Core Web Vitals, meta tags, schema markup, internal links, duplicate content, broken links. Could power a new "Website Health" score in the audit.
-- **SERP API** — pull full SERP data for any keyword/location. More granular than BrightLocal ranking data; could replace or supplement BrightLocal for ranking checks.
-- **Google Business Profile API** — fetch GBP data (categories, attributes, Q&A, posts) without OAuth. Could power GBP health scoring.
-- **Backlinks API** — domain authority and backlink profile. Local ranking signal.
-- **Content Analysis API** — NLP keyword analysis of competitor pages. Could drive content recommendations in audit reports.
-- **Local Pack API** — extract map pack results directly. Direct local ranking signal.
+### API constraints discovered
+- Labs `ranked_keywords/live` only accepts country-level location codes (`2840` for USA). DMA or state-level codes cause a `40501 Invalid Field` error.
+- Labs `order_by` must be an array of strings in `"field,dir"` format. Nested arrays cause a `40501 Invalid Field` error.
 
-> **Review session needed** before scoping Phase 2 items. Evaluate cost, overlap with BrightLocal, and which signals have the highest impact on local rankings.
+### Future DataForSEO opportunities (not yet scoped)
+- **On-Page API** — Core Web Vitals, schema markup, broken links → "Website Health" audit score
+- **Google Business Profile API** — GBP categories, attributes, posts without OAuth → GBP health scoring
+- **Backlinks API** — domain authority signal for audit reports
+- **Local Pack API** — direct map pack extraction
 
 ---
 

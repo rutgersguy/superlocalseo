@@ -843,7 +843,16 @@ Submission statuses: `pending` → `submitted` → `live` | `rejected` | `duplic
 
 ### Overview
 
-Clients can track named local competitors, pulling their Google rating and review count via the Places API. This gives a side-by-side comparison for the key trust signals customers check.
+Clients can track named local competitors with two layers of data:
+
+1. **Reputation data** — Google rating and review count via Google Places API (daily sync job)
+2. **Search ranking data** — where each competitor appears in SERP results for every tracked keyword, captured at zero extra cost by piggybacking on the same DataForSEO SERP calls used for client rankings
+
+Together these power four analysis views: a competitor list with rating leaderboard, a **Keyword Battleground** table showing per-keyword competitive status across every city, a **Head-to-Head** breakdown comparing your rank vs. a single competitor per keyword, and a **Discover Keywords** tool that surfaces keywords your competitors rank for that you do not.
+
+### How SERP-Based Competitor Tracking Works
+
+The daily/manual rankings scan calls DataForSEO's SERP API once per keyword × location combination. Each call returns the top 30 organic results. `getSerpRanks()` scans that result set for both the client's business *and* every tracked competitor (matched by website domain). Competitor positions are stored in the `competitor_rankings` table at no additional API cost.
 
 ### Competitors API
 
@@ -882,71 +891,163 @@ Returns competitor list plus the client's own review stats for comparison:
   "googlePlaceId": "ChIJ..."
 }
 ```
-If `googlePlaceId` is provided, an immediate sync runs to fetch their current rating. The Google Places search tool helps find place IDs.
+If `googlePlaceId` is provided, an immediate sync runs to fetch their current rating. Requires team admin role.
 
 **`GET /api/competitors/search?q=<query>`**
 
-Proxies a Google Places text search and returns top 5 results with place IDs. Used by the "Add Competitor" modal's search field.
+Proxies a Google Places Text Search and returns the top 5 results with place IDs. The query is location-biased by appending the client's primary city and state, so searching "Joe Plumbing" returns local results rather than worldwide matches.
 
-**`POST /api/competitors/:id/sync`** — Manually refreshes a competitor's Google rating
+**`POST /api/competitors/:id/sync`** — Manually refreshes a competitor's Google rating (team admin)
 
-**`DELETE /api/competitors/:id`** — Removes competitor
+**`DELETE /api/competitors/:id`** — Removes competitor and all associated `competitor_rankings` rows (team admin)
 
-### Keyword Gap Report
+### Run Scan
+
+**`POST /api/competitors/sync-rankings`** *(team admin)*
+
+Queues a BullMQ rankings job for the current client immediately, pulling fresh SERP data for all keywords across all locations and service-area cities. This is the same job that runs on the daily cron.
+
+**Rate gate:** A Redis key `rankings:cooldown:{clientId}` with 86 400-second TTL is set after each scan. While the key is live, the button is disabled and shows the exact time the next scan becomes available ("Next scan tomorrow at 3:45 PM EST"). Deleting the Redis key manually opens the gate immediately.
+
+**`GET /api/competitors/scan-status`**
+
+Returns the current cooldown state:
+```json
+{ "scanning": false, "retryAfterSeconds": 74820 }
+```
+- `scanning: true` → a job is actively running (BullMQ queue depth > 0)
+- `retryAfterSeconds` → seconds until the 24h gate expires; `0` = gate is open
+
+The frontend polls this endpoint every 5 seconds while scanning, and every 30 seconds otherwise.
+
+### Keyword Battleground
 
 **`GET /api/competitors/gap`**
 
-Returns per-keyword ranking status across all tracked locations:
+Returns a row for every keyword × city combination, showing your rank and the best competitor rank across all tracked competitors.
+
+```json
+{
+  "rows": [
+    {
+      "keyword": "plumber Austin TX",
+      "locationName": "Main Office",
+      "area": "Austin, TX",
+      "yourRank": 2,
+      "bestCompetitorRank": 5,
+      "bestCompetitorName": "Rival Plumbing Co.",
+      "status": "winning",
+      "lastChecked": "2026-05-11T06:00:00Z"
+    },
+    {
+      "keyword": "emergency plumber",
+      "locationName": "Main Office",
+      "area": "Coweta, OK",
+      "yourRank": 8,
+      "bestCompetitorRank": 3,
+      "bestCompetitorName": "QuickFix Plumbing",
+      "status": "losing",
+      "lastChecked": "2026-05-11T06:00:00Z"
+    },
+    {
+      "keyword": "water heater repair",
+      "locationName": "Main Office",
+      "area": "Austin, TX",
+      "yourRank": null,
+      "bestCompetitorRank": null,
+      "bestCompetitorName": null,
+      "status": "uncontested",
+      "lastChecked": "2026-05-11T06:00:00Z"
+    }
+  ],
+  "competitors": [
+    { "id": "...", "name": "Rival Plumbing Co.", "website": "..." }
+  ]
+}
+```
+
+**`area`** is the actual city+state label (e.g. `"Austin, TX"` or `"Coweta, OK"`) — the primary city comes from the location's `city`/`state` columns, and service-area cities come from the `geo_location` tag on each snapshot.
+
+Status definitions:
+
+| Status | Condition | Badge colour |
+|---|---|---|
+| `winning` | You rank and your rank ≤ best competitor rank | Green |
+| `losing` | You rank and a competitor ranks better | Red |
+| `uncontested` | Neither you nor any competitor rank for this keyword+city | Slate |
+
+Rows are sortable by **Your Rank** and **Best Competitor** columns. A keyword filter input (with × clear button) lets the user narrow by keyword substring.
+
+Implementation notes:
+- Uses PostgreSQL `DISTINCT ON (keyword_id, location_id, geo_location)` ordered by `pulled_at DESC` to pick the most recent snapshot per geo combination — with `WHERE rank IS NOT NULL` on the competitor sub-query so a null-ranked row does not shadow an older ranked position.
+- DataForSEO SERP calls are made for the primary city *and* up to 4 service-area cities per location; each result is tagged with `geo_location = "City, ST"` (null for the primary city).
+
+### Head-to-Head Rankings
+
+**`GET /api/competitors/head-to-head?competitorId=<id>`**
+
+Returns a per-keyword comparison between the client and one specific competitor:
+
+```json
+{
+  "rows": [
+    {
+      "keyword": "plumber Austin TX",
+      "yourRank": 2,
+      "competitorRank": 7,
+      "delta": 5
+    }
+  ],
+  "competitor": { "id": "...", "name": "Rival Plumbing Co." }
+}
+```
+
+`delta` is positive when you rank better (lower rank number). Used by the Head-to-Head tab in the Competitors page.
+
+### Discover Keywords
+
+**`GET /api/competitors/:id/discover-keywords`**
+
+Calls DataForSEO Labs `ranked_keywords/live` (US country code `2840`) to fetch up to 1 000 keywords the competitor's website currently ranks for, sorted by descending search volume. Keywords the client already tracks are filtered out, leaving only new opportunities.
 
 ```json
 {
   "keywords": [
-    {
-      "keyword": "plumber Austin TX",
-      "location": "Downtown Branch",
-      "yourRank": 2,
-      "status": "winning",
-      "lastChecked": "2026-05-01T06:00:00Z"
-    },
-    {
-      "keyword": "emergency plumber",
-      "location": "Downtown Branch",
-      "yourRank": 14,
-      "status": "vulnerable",
-      "lastChecked": "2026-05-01T06:00:00Z"
-    },
-    {
-      "keyword": "water heater repair",
-      "location": "Downtown Branch",
-      "yourRank": null,
-      "status": "absent",
-      "lastChecked": "2026-05-01T06:00:00Z"
-    }
+    { "keyword": "humidifier cough repair", "searchVolume": 2400 },
+    { "keyword": "furnace filter replacement", "searchVolume": 1900 }
   ],
-  "opportunities": 3,
-  "competitors": [ ... ]
+  "competitor": { "id": "...", "name": "Rival Plumbing Co.", "website": "..." }
 }
 ```
 
-Status definitions:
-
-| Status | Rank Range | Meaning |
-|---|---|---|
-| `winning` | 1–3 | Top-3 organic position |
-| `competing` | 4–10 | Page 1, not top-3 |
-| `vulnerable` | 11+ | Page 2 or beyond |
-| `absent` | null | Not ranking at all |
-
-`opportunities` = count of `vulnerable` + `absent` keywords.
+**Implementation notes:**
+- The Labs endpoint only accepts country-level location codes (`2840` for USA). DMA or state codes return a `40501` error and must not be used.
+- `order_by` must be an array of strings in `"field,dir"` format: `["keyword_data.keyword_info.search_volume,desc"]`. Using nested arrays causes a `40501 Invalid Field` error.
 
 ### Competitors Page Walkthrough
 
-1. **"Your Business" card** — Shows client's own avg rating, total reviews, and Google-specific stats
-2. **Competitor table** — Each row: name, website link, Google rating (star icon), review count, visual rating bar
-3. **Sync button** — Per-competitor refresh from Google Places API
-4. **Google Places search** — In the "Add Competitor" modal, type a business name to find place IDs automatically
-5. **Rating leaderboard** — Below the table: ranked list of all competitors + you, sorted by Google rating, colour-coded bars
-6. **Gap report** — Keyword table with status badges. Filter: All / Opportunities Only. Shows count of keywords needing attention.
+**Overview tab**
+1. **"Your Business" card** — avg rating, total reviews, Google-specific stats
+2. **Competitor table** — each row: name, website link, Google rating (star icon), review count, visual rating bar; per-competitor sync button
+3. **"Add Competitor" modal** — type a business name; location-biased Places search returns local results; select to pre-fill fields
+4. **Rating leaderboard** — ranked list of all competitors + you, sorted by Google rating, colour-coded bars
+5. **Run Scan button** — triggers `POST /competitors/sync-rankings`; while scanning shows a spinner; when the 24h gate is active shows "Next scan tomorrow at X:XX PM EST" and is disabled
+
+**Keyword Battleground tab**
+1. Keyword filter input (searches all keyword text; × clears)
+2. Sortable columns: Keyword, Area, Your Rank (▲▼), Best Competitor (▲▼), Competitor Name, Status
+3. Status badges: green (winning), red (losing), slate (uncontested)
+4. Rows expand across primary city + all service-area cities
+
+**Head-to-Head tab**
+1. Competitor selector dropdown
+2. Per-keyword rank comparison table with delta column
+
+**Discover Keywords tab**
+1. Competitor selector dropdown
+2. Results table: keyword, monthly search volume
+3. Per-keyword "Add to Location" button — single location → direct add; multiple locations → dropdown showing "Name — City, ST" labels
+4. Up to 1 000 keywords returned, sorted by search volume descending
 
 ---
 
@@ -1627,7 +1728,7 @@ All workers register a shared `alertOnFail` handler — any job failure sends an
 
 | Queue Name | Job | Cron / Trigger | Purpose |
 |---|---|---|---|
-| `rankings` | `daily-pull` | `0 6 * * *` | Pull rankings from BrightLocal |
+| `rankings` | `daily-pull` | `0 6 * * *` | Pull rankings from DataForSEO SERP API; captures competitor ranks in the same call |
 | `citations` | `daily-pull` | `0 7 * * *` | Pull citation status from BrightLocal |
 | `reviews` | `periodic-pull` | `0 */6 * * *` | Sync reviews from EMR + GBP + Facebook |
 | `reports` | `monthly-reports` | `0 8 1 * *` | Fan out to generate reports for all clients |
@@ -1826,11 +1927,26 @@ UNIQUE: `(client_id, provider)`
 | id | UUID PK | |
 | client_id | UUID FK → clients CASCADE | |
 | name | VARCHAR(255) | |
-| website | VARCHAR(2000) | |
+| website | VARCHAR(2000) | Required for SERP-based rank tracking |
 | google_place_id | VARCHAR(255) | |
 | google_rating | DECIMAL(3,1) | |
 | google_review_count | INTEGER | |
 | last_synced_at | TIMESTAMP | |
+
+**`competitor_rankings`**
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID PK | |
+| competitor_id | UUID FK → competitors CASCADE | |
+| keyword_id | UUID FK → keywords CASCADE | |
+| location_id | UUID FK → locations CASCADE | |
+| rank | INTEGER | Null = not in top 30 |
+| url | VARCHAR(2000) | URL that ranked |
+| search_engine | VARCHAR(50) | `google` |
+| geo_location | VARCHAR(255) | Null = primary city; `"City, ST"` = service area |
+| pulled_at | TIMESTAMP | |
+
+Competitor rankings are captured at zero extra API cost — the same DataForSEO SERP call used for client rankings scans the top 30 results for any tracked competitor domain. Migration: `20260511040000_competitor_rankings_geo`.
 
 **`reports`**
 | Column | Type | Notes |
@@ -2133,4 +2249,18 @@ Pending migrations as of current build (must be run on a fresh DB):
 
 ---
 
-*Last updated: 2026-05-01. Generated from codebase review — commit `b7ae2b3`.*
+---
+
+## Pending Features (requires Google Business Profile API access)
+
+The following sections are stubbed in the UI but not yet functional:
+
+- **Review Request Campaigns** — campaign management and bulk invite UI is built; full send flow requires verified Google Business API access.
+- **Reviews (GBP sync)** — review ingestion via Google My Business API v4 is implemented but requires an approved OAuth app with `business.manage` scope.
+- **SEO Audit (GBP scoring)** — the GBP health scoring section of the in-dashboard audit requires GBP API access for accurate data.
+
+These will be enabled once the `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` credentials are approved for the `business.manage` scope in Google Cloud Console.
+
+---
+
+*Last updated: 2026-05-11. Competitor benchmarking section fully rewritten to reflect DataForSEO SERP-based competitor rank tracking, Keyword Battleground, Head-to-Head, Discover Keywords, and Run Scan with 24h cooldown. Commit `8e92856` and follow-on fixes.*

@@ -113,7 +113,7 @@ Unique constraint: `(client_id, provider)`
 | created_at | timestamptz | |
 
 ### `ranking_snapshots`
-Historical record of every BrightLocal pull. **This is our core differentiator** — BrightLocal provides no historical data.
+Historical record of every DataForSEO SERP pull. **This is our core differentiator** — DataForSEO provides no historical data of its own.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -122,10 +122,41 @@ Historical record of every BrightLocal pull. **This is our core differentiator**
 | location_id | uuid FK → locations | |
 | rank | int | null = not ranked |
 | url_ranked | text | page URL that ranked |
-| search_engine | text | `google` \| `bing` |
+| search_engine | text | `google` |
+| rank_type | text | `organic` \| `local_pack` \| `paid` |
+| geo_location | text nullable | null = primary city; `"City, ST"` = service-area city |
 | pulled_at | timestamptz | timestamp of pull |
 
 Index: `(keyword_id, location_id, pulled_at DESC)` for trend queries.
+
+### `competitors`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| client_id | uuid FK → clients | |
+| name | text | |
+| website | text | Required for SERP domain matching |
+| google_place_id | text | |
+| google_rating | numeric | |
+| google_review_count | int | |
+| last_synced_at | timestamptz | |
+
+### `competitor_rankings`
+Populated at zero extra cost — the same SERP call used for client rankings scans the top 30 results for any tracked competitor domain.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| competitor_id | uuid FK → competitors | |
+| keyword_id | uuid FK → keywords | |
+| location_id | uuid FK → locations | |
+| rank | int | null = not in top 30 |
+| url | text | |
+| search_engine | text | `google` |
+| geo_location | text nullable | null = primary city; `"City, ST"` = service-area city |
+| pulled_at | timestamptz | |
+
+Migration: `20260511040000_competitor_rankings_geo`
 
 ### `citation_snapshots`
 | Column | Type | Notes |
@@ -200,14 +231,26 @@ Pre-aggregated daily rollups for fast dashboard queries.
 
 ## External API Architecture
 
+### DataForSEO — active, pay-per-request
+
+Auth: HTTP Basic (`DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD`)
+
+| Endpoint | Use |
+|---|---|
+| `POST /serp/google/organic/live/advanced` | Keyword rankings (primary city + service-area cities). Returns top 30 results; client and all tracked competitors matched in one call. |
+| `POST /keywords_data/google_ads/search_volume/live` | Monthly search volume backfill for keywords with null volume. |
+| `POST /dataforseo_labs/google/ranked_keywords/live` | Competitor keyword discovery — up to 1000 keywords sorted by search volume. Location code must be country-level (`2840` for USA). |
+
+Cost: ~$0.001–$0.005/request depending on endpoint.
+
 ### BrightLocal (two separate APIs)
 
 **Data API** — `api.brightlocal.com` — active, pay-per-request
 - Auth: `x-api-key` header (platform key, not per-client)
-- Rankings: `POST /data/v1/rankings/search` — 5 engines, supports `geo_location.coordinates.lat/lng` for geo-grid
-- Listings: `POST /data/v1/listings/find` — find business by NAP per directory; returns listed status, NAP data, is_claimed, reviews, photos
-- All ranking and citation data flows through this API — no campaign ID required
+- Listings: `POST /data/v1/listings/find` — find business by NAP per directory; returns listed status, NAP data, is_claimed, reviews, photos — used for citation auditing
+- Geo-grid: coordinate-based ranking requests (7×7 or 13×13 grid) stored in `geo_grid_reports`
 - Cost: ~$0.005/request
+- **Note:** Rankings formerly used this API; now handled by DataForSEO SERP API
 
 **Management API** — `tools.brightlocal.com` — planned, not active
 - Auth: `api-key` query param (separate key from Data API)
@@ -239,6 +282,16 @@ Pre-aggregated daily rollups for fast dashboard queries.
 | GET | `/integrations/google/auth-url` | jwt | Google Business Profile OAuth URL |
 | GET | `/integrations/google/callback` | — | Business Profile OAuth callback |
 | DELETE | `/integrations/:provider` | jwt | Disconnect a platform |
+| GET | `/competitors` | jwt | List competitors + client rating stats |
+| POST | `/competitors` | jwt+admin | Add competitor |
+| GET | `/competitors/search` | jwt | Location-biased Google Places search |
+| GET | `/competitors/gap` | jwt | Keyword Battleground (per-keyword × city competitive status) |
+| GET | `/competitors/head-to-head` | jwt | Per-keyword rank comparison vs one competitor |
+| GET | `/competitors/scan-status` | jwt | Cooldown gate state + active scan flag |
+| POST | `/competitors/sync-rankings` | jwt+admin | Queue immediate rankings scan |
+| GET | `/competitors/:id/discover-keywords` | jwt | DataForSEO Labs: keywords competitor ranks for |
+| POST | `/competitors/:id/sync` | jwt+admin | Refresh competitor Google rating |
+| DELETE | `/competitors/:id` | jwt+admin | Remove competitor |
 | GET | `/metrics` | jwt | Dashboard summary cards |
 | GET | `/reports` | jwt | List reports |
 | GET | `/reports/:id/download` | jwt | Download PDF |
@@ -295,11 +348,12 @@ Bull cron job
 
 | Key Pattern | TTL | Invalidated By |
 |---|---|---|
-| `rankings:{clientId}:{locationId}` | 24h | After BrightLocal pull |
+| `rankings:{clientId}:{locationId}` | 24h | After DataForSEO rankings pull |
 | `reviews:{clientId}` | 6h | After pull or webhook |
 | `citations:{clientId}:{locationId}` | 24h | After BrightLocal pull |
 | `metrics:{clientId}:{date}` | 24h | After metrics_daily rollup |
 | `session:{token}` | 7d | On logout |
+| `rankings:cooldown:{clientId}` | 86 400s | Set after manual scan; expiry opens the gate |
 
 ---
 
