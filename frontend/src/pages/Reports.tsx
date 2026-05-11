@@ -449,7 +449,7 @@ export default function Reports() {
             Generate Report
           </button>
         </div>
-        <p className="text-sm text-gray-500 mt-1">Monthly PDF reports are generated automatically on the 1st of each month.</p>
+        <p className="text-sm text-gray-500 mt-1">A full performance report is automatically generated and emailed to you at the start of each month — or generate one on demand anytime below.</p>
       </div>
 
       {/* Data exports */}
