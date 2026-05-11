@@ -601,11 +601,9 @@ function DiscoverKeywords({ competitors }: { competitors: Competitor[] }) {
 
 interface ScanStatusResponse { success: boolean; data: { available: boolean; retryAfterSeconds: number } }
 
-function formatCooldown(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
+function formatNextScanTime(retryAfterSeconds: number): string {
+  const t = new Date(Date.now() + retryAfterSeconds * 1000);
+  return t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' });
 }
 
 type Tab = 'overview' | 'rankings' | 'discover';
@@ -665,7 +663,7 @@ export default function Competitors() {
             className={`whitespace-nowrap flex items-center gap-2 px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium rounded-lg border transition-colors disabled:opacity-50 ${scanQueued ? 'border-green-300 text-green-600 bg-green-50' : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50'}`}
           >
             {scanning ? <Loader2 size={15} className="animate-spin" /> : scanQueued ? <Check size={15} /> : <RefreshCw size={15} />}
-            {scanning ? 'Queuing…' : scanQueued ? 'Queued!' : !scanAvailable ? `Next scan in ${formatCooldown(retryAfter)}` : 'Run scan'}
+            {scanning ? 'Queuing…' : scanQueued ? 'Queued!' : !scanAvailable ? `Next scan tomorrow at ${formatNextScanTime(retryAfter)}` : 'Run scan'}
           </button>
           <button
             onClick={() => setShowAdd(true)}
