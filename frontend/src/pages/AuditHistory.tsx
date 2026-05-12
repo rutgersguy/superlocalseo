@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import useSWR, { mutate } from 'swr';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { fetcher, apiFetch } from '../services/api';
 
@@ -49,6 +50,129 @@ function ScoreCard({ label, value, delta, tooltip }: { label: string; value: num
     </div>
   );
 }
+
+// ─── On-page tip definitions ──────────────────────────────────────────────────
+
+interface Tip { what: string; howToFix: string; }
+
+function getTip(detail: string): Tip | null {
+  const d = detail.toLowerCase();
+  if (d.includes('https')) {
+    return {
+      what: 'HTTPS encrypts traffic between your visitor and your website. Google has used HTTPS as a ranking signal since 2014, and browsers now show a "Not Secure" warning on HTTP sites — which kills trust immediately.',
+      howToFix: d.includes('not using')
+        ? 'Contact your web host or domain registrar and enable an SSL/TLS certificate (free via Let\'s Encrypt on most hosts). Then redirect all HTTP traffic to HTTPS with a 301 redirect in your .htaccess or server config.'
+        : 'Your site is already on HTTPS — no action needed.',
+    };
+  }
+  if (d.includes('title tag') || d.includes('<title>')) {
+    const isGood = d.includes('optimal');
+    return {
+      what: 'The <title> tag is the blue clickable headline shown in Google search results. It\'s one of the strongest on-page signals — Google uses it to understand what your page is about. It also affects click-through rate: a clear, descriptive title gets more clicks.',
+      howToFix: isGood
+        ? 'Your title is the right length — make sure it includes your primary service and city (e.g. "HVAC Repair in Tulsa, OK | Aire Serv").'
+        : d.includes('short')
+          ? 'Add your primary keyword and city to the title. Aim for 50–60 characters. Example: "Heating & AC Repair Tulsa OK | Aire Serv of South Tulsa".'
+          : 'Trim the title to under 60 characters so it doesn\'t get cut off in search results. Focus on the most important keyword + city + brand.',
+    };
+  }
+  if (d.includes('meta description')) {
+    const isGood = d.includes('optimal');
+    return {
+      what: 'The meta description is the grey snippet of text shown beneath your title in search results. Google doesn\'t use it as a direct ranking factor, but a compelling description increases click-through rate — which indirectly helps your rankings.',
+      howToFix: isGood
+        ? 'Your description length is good. Make sure it includes a clear call to action and your primary keyword + city.'
+        : d.includes('short')
+          ? 'Expand your meta description to 120–160 characters. Describe what you do, mention your city, and add a call to action like "Call us for same-day service."'
+          : 'Trim the description to 155 characters. Anything longer gets cut off with "..." in search results.',
+    };
+  }
+  if (d.includes('h1')) {
+    const isGood = d.includes('good');
+    return {
+      what: 'The H1 is the main visible heading on your webpage. Search engines treat it as the primary topic signal for the page — it should clearly state what the page is about. Every page should have exactly one H1.',
+      howToFix: isGood
+        ? 'Your page has exactly 1 H1 — good. Make sure it includes your primary service and city (e.g. "HVAC & AC Repair Services in South Tulsa, OK").'
+        : d.includes('no ')
+          ? 'Add a single H1 tag to your homepage. In most website builders (WordPress, Squarespace, Wix), the main page headline is automatically set as the H1. Make it descriptive: "[Service] in [City, State]".'
+          : 'You have multiple H1 tags — reduce to one. Additional headings should use H2 and H3 instead.',
+    };
+  }
+  if (d.includes('schema') || d.includes('json-ld') || d.includes('structured data')) {
+    const isGood = d.includes('detected');
+    return {
+      what: 'Schema markup (specifically LocalBusiness JSON-LD) is structured data you embed in your page that tells Google exactly what type of business you are, your address, phone number, hours, and service area. It can unlock rich results in search (star ratings, hours, address) and is a proven local SEO signal.',
+      howToFix: isGood
+        ? 'LocalBusiness schema is detected — great. Make sure it includes your name, address, phone (NAP), opening hours, and geographic area served.'
+        : 'Add a LocalBusiness JSON-LD script to your site\'s <head>. Use Google\'s Structured Data Markup Helper (search "Google structured data markup helper") to generate the code, then paste it into your site. In WordPress, the Rank Math or Yoast SEO plugin handles this automatically.',
+    };
+  }
+  if (d.includes('canonical')) {
+    const isGood = d.includes('present');
+    return {
+      what: 'A canonical tag tells Google which version of a page is the "official" one. Without it, Google may index duplicate versions of your page (e.g. http vs https, with/without trailing slash) and split ranking signals between them — hurting your position.',
+      howToFix: isGood
+        ? 'Canonical tag is present — no action needed. Verify it points to the correct HTTPS URL of the page.'
+        : 'Add <link rel="canonical" href="https://yoursite.com/page/"> to your page\'s <head>. Most SEO plugins (Yoast, Rank Math) add this automatically. If you\'re on Squarespace or Shopify, canonical tags are added by default.',
+    };
+  }
+  if (d.includes('viewport') || d.includes('mobile')) {
+    const isGood = d.includes('present');
+    return {
+      what: 'The viewport meta tag tells mobile browsers how to scale your page. Without it, your site renders at desktop width on phones — making text tiny and unusable. Google primarily uses the mobile version of your site to determine rankings (mobile-first indexing), so this is critical.',
+      howToFix: isGood
+        ? 'Viewport tag is present — your site signals mobile responsiveness. Test the actual experience at google.com/webmasters/tools/mobile-friendly.'
+        : 'Add this line inside your page\'s <head>: <meta name="viewport" content="width=device-width, initial-scale=1">. In site builders like WordPress or Squarespace, any modern theme includes this automatically.',
+    };
+  }
+  if (d.includes('could not fetch') || d.includes('http ') || d.includes('accessible')) {
+    return {
+      what: 'The audit tool couldn\'t load your website — either the URL in your location settings is wrong, the site returned an error, or it blocked our crawler.',
+      howToFix: 'Check that the website URL in your location settings is correct and publicly accessible. Open it in a private/incognito browser to verify. If your site blocks bots, whitelist the user agent "LocalSEOAuditBot".',
+    };
+  }
+  return null;
+}
+
+function OnPageItem({ detail }: { detail: string }) {
+  const [open, setOpen] = useState(false);
+  const isIssue = /not using|no |missing|too |add |migrate|couldn't|check that|multiple|short|long/i.test(detail);
+  const tip = getTip(detail);
+
+  return (
+    <li className="border border-gray-100 rounded-lg overflow-hidden">
+      <button
+        type="button"
+        onClick={() => tip && setOpen((o) => !o)}
+        className={`w-full flex items-start gap-2 px-4 py-3 text-left text-sm text-gray-700 ${tip ? 'hover:bg-gray-50 cursor-pointer' : 'cursor-default'}`}
+      >
+        <span className={`mt-0.5 flex-shrink-0 font-bold ${isIssue ? 'text-red-500' : 'text-emerald-500'}`}>
+          {isIssue ? '✗' : '✓'}
+        </span>
+        <span className="flex-1">{detail}</span>
+        {tip && (
+          <span className="flex-shrink-0 text-gray-400 mt-0.5">
+            {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </span>
+        )}
+      </button>
+      {open && tip && (
+        <div className="border-t border-gray-100 px-4 py-3 bg-gray-50 space-y-2">
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">What this means</p>
+            <p className="text-xs text-gray-700 leading-relaxed">{tip.what}</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">How to fix it</p>
+            <p className="text-xs text-gray-700 leading-relaxed">{tip.howToFix}</p>
+          </div>
+        </div>
+      )}
+    </li>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function AuditHistory() {
   const [selectedLocationId, setSelectedLocationId] = useState('');
@@ -196,19 +320,14 @@ export default function AuditHistory() {
       {/* On-Page SEO detail */}
       {latestAudit?.onPageDetails && latestAudit.onPageDetails.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <h2 className="text-base font-semibold text-gray-900 mb-3">On-Page SEO Checks</h2>
-          <ul className="space-y-2">
-            {latestAudit.onPageDetails.map((detail, i) => {
-              const isIssue = /not|no |missing|too |add |migrate|couldn't|check that/i.test(detail);
-              return (
-                <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                  <span className={`mt-0.5 flex-shrink-0 ${isIssue ? 'text-red-500' : 'text-emerald-500'}`}>
-                    {isIssue ? '✗' : '✓'}
-                  </span>
-                  {detail}
-                </li>
-              );
-            })}
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-semibold text-gray-900">On-Page SEO Checks</h2>
+            <span className="text-xs text-gray-400">Click any item to learn more</span>
+          </div>
+          <ul className="space-y-1.5">
+            {latestAudit.onPageDetails.map((detail, i) => (
+              <OnPageItem key={i} detail={detail} />
+            ))}
           </ul>
         </div>
       )}
