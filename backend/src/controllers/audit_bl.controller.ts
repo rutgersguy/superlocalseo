@@ -5,7 +5,7 @@ import { ok, err } from '../utils/response';
 import { createAuditReport, pollAuditReport } from '../services/brightlocal.service';
 import { getPrimaryKeyword } from '../config/industry.config';
 import { computeAuditScores } from '../services/audit_score.service';
-import { getRankForKeyword, buildLocationName } from '../services/dataforseo.service';
+import { getRankForKeyword, buildLocationName, getLighthouseResult } from '../services/dataforseo.service';
 import { logger } from '../utils/logger';
 
 export async function list(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -117,6 +117,7 @@ async function computeAndSaveScores(
       composite_score: scores.compositeScore,
       on_page_score: scores.onPageScore,
       on_page_details: scores.onPageDetails.length ? JSON.stringify(scores.onPageDetails) : null,
+      dfs_on_page_task_id: scores.dfsLighthouseTaskId ?? null,
       status: 'complete',
       completed_at: new Date(),
     });
@@ -285,11 +286,76 @@ export async function pollPending(): Promise<void> {
         composite_score: scores.compositeScore,
         on_page_score: scores.onPageScore,
         on_page_details: scores.onPageDetails.length ? JSON.stringify(scores.onPageDetails) : null,
+        dfs_on_page_task_id: scores.dfsLighthouseTaskId ?? null,
         completed_at: db.raw('COALESCE(completed_at, NOW())'),
       });
     } catch (e) {
       logger.warn('Null-score audit backfill failed', { auditId: row.auditId, error: (e as Error).message });
     }
+  }
+
+  // Poll pending Lighthouse tasks — fetch result, blend score, store data
+  const lighthousePending = await db('location_audits')
+    .whereNotNull('dfs_on_page_task_id')
+    .whereNull('dfs_on_page_data')
+    .select('id', 'dfs_on_page_task_id', 'on_page_score') as Array<{
+      id: string;
+      dfs_on_page_task_id: string;
+      on_page_score: number | null;
+    }>;
+
+  for (const row of lighthousePending) {
+    try {
+      const lh = await getLighthouseResult(row.dfs_on_page_task_id);
+      if (!lh) continue; // still running
+
+      // Blend: existing on-page checks 60%, Lighthouse performance 40%
+      const blendedScore = row.on_page_score != null
+        ? Math.round(row.on_page_score * 0.6 + lh.performanceScore * 0.4)
+        : lh.performanceScore;
+
+      await db('location_audits').where({ id: row.id }).update({
+        on_page_score: blendedScore,
+        dfs_on_page_data: JSON.stringify(lh),
+      });
+      logger.info('Lighthouse result saved', { auditId: row.id, performance: lh.performanceScore });
+    } catch (e) {
+      logger.warn('Lighthouse poll failed', { auditId: row.id, error: (e as Error).message });
+    }
+  }
+}
+
+export async function reportDownload(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id } = req.params;
+    const audit = await db('location_audits')
+      .where({ 'location_audits.id': id, 'location_audits.client_id': req.clientId })
+      .join('locations', 'location_audits.location_id', 'locations.id')
+      .join('clients', 'location_audits.client_id', 'clients.id')
+      .select(
+        'location_audits.*',
+        'locations.name as location_name',
+        'locations.address as location_address',
+        'locations.city as location_city',
+        'locations.state as location_state',
+        'locations.website as location_website',
+        'clients.business_name as client_business_name',
+        'clients.industry as client_industry',
+      )
+      .first() as Record<string, unknown> | undefined;
+
+    if (!audit) { err(res, 'Not found', 404, 'NOT_FOUND'); return; }
+
+    const { generateAuditPdf } = await import('../services/audit_report.service');
+    const pdfBuffer = await generateAuditPdf(audit);
+
+    const slug = String(audit.location_name ?? 'audit').replace(/[^a-z0-9]/gi, '-').toLowerCase();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="seo-audit-${slug}.pdf"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.end(pdfBuffer);
+  } catch (e) {
+    next(e);
   }
 }
 
@@ -306,6 +372,8 @@ function formatAudit(row: Record<string, unknown>) {
     compositeScore: row.composite_score != null ? parseFloat(row.composite_score as string) : null,
     onPageScore: row.on_page_score != null ? Number(row.on_page_score) : null,
     onPageDetails: (row.on_page_details as string[] | null) ?? [],
+    dfsLighthouseTaskId: (row.dfs_on_page_task_id as string | null) ?? null,
+    dfsOnPageData: row.dfs_on_page_data ?? null,
     recommendations: row.recommendations ?? [],
     completedAt: row.completed_at,
     createdAt: row.created_at,

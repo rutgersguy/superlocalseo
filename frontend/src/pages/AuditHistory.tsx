@@ -7,6 +7,19 @@ import { fetcher, apiFetch } from '../services/api';
 interface LocationOption { id: string; name: string; blCampaignId?: string | null; }
 interface LocationsResponse { success: boolean; data: LocationOption[]; }
 
+interface LighthouseData {
+  performanceScore: number;
+  accessibilityScore: number;
+  bestPracticesScore: number;
+  seoScore: number;
+  lcp: number | null;
+  cls: number | null;
+  tbt: number | null;
+  fcp: number | null;
+  speedIndex: number | null;
+  fetchedAt: string;
+}
+
 interface AuditRow {
   id: string;
   locationId: string;
@@ -18,6 +31,8 @@ interface AuditRow {
   compositeScore: number | null;
   onPageScore: number | null;
   onPageDetails: string[];
+  dfsLighthouseTaskId: string | null;
+  dfsOnPageData: LighthouseData | null;
   recommendations: string[];
   completedAt: string | null;
   createdAt: string;
@@ -172,12 +187,46 @@ function OnPageItem({ detail }: { detail: string }) {
   );
 }
 
+// ─── CWV helpers ─────────────────────────────────────────────────────────────
+
+function cwvColor(metric: 'lcp' | 'cls' | 'tbt', value: number): string {
+  if (metric === 'lcp') return value <= 2500 ? 'text-green-600' : value <= 4000 ? 'text-yellow-600' : 'text-red-500';
+  if (metric === 'cls') return value <= 0.1 ? 'text-green-600' : value <= 0.25 ? 'text-yellow-600' : 'text-red-500';
+  return value <= 200 ? 'text-green-600' : value <= 600 ? 'text-yellow-600' : 'text-red-500';
+}
+
+function cwvLabel(metric: 'lcp' | 'cls' | 'tbt', value: number): string {
+  if (metric === 'lcp') return value <= 2500 ? 'Good' : value <= 4000 ? 'Needs Work' : 'Poor';
+  if (metric === 'cls') return value <= 0.1 ? 'Good' : value <= 0.25 ? 'Needs Work' : 'Poor';
+  return value <= 200 ? 'Good' : value <= 600 ? 'Needs Work' : 'Poor';
+}
+
+function lhScoreColor(score: number): string {
+  return score >= 75 ? 'bg-green-500' : score >= 50 ? 'bg-yellow-500' : 'bg-red-500';
+}
+
+function LighthouseBar({ label, score }: { label: string; score: number }) {
+  const color = lhScoreColor(score);
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs text-gray-600">{label}</span>
+        <span className="text-xs font-semibold text-gray-700">{score}</span>
+      </div>
+      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div className={`h-full ${color} rounded-full`} style={{ width: `${score}%` }} />
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function AuditHistory() {
   const [selectedLocationId, setSelectedLocationId] = useState('');
   const [triggering, setTriggering] = useState(false);
   const [triggerError, setTriggerError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   const { data: locData } = useSWR<LocationsResponse>('/locations', fetcher);
   const locations = locData?.data ?? [];
@@ -221,6 +270,26 @@ export default function AuditHistory() {
       }, {}),
   );
 
+  const handleDownload = async () => {
+    if (!latestAudit) return;
+    setDownloading(true);
+    try {
+      const res = await apiFetch<Response>(`/audits/bl/${latestAudit.id}/report`, {}, true);
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'seo-audit-report.pdf';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // silently fail
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const handleTrigger = async () => {
     if (!effectiveLocationId) return;
     setTriggering(true);
@@ -252,6 +321,15 @@ export default function AuditHistory() {
               className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
               {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
+          )}
+          {latestAudit && (
+            <button
+              onClick={() => void handleDownload()}
+              disabled={downloading}
+              className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {downloading ? 'Generating…' : 'Download Report'}
+            </button>
           )}
           <button
             onClick={() => void handleTrigger()}
@@ -307,6 +385,58 @@ export default function AuditHistory() {
               <OnPageItem key={i} detail={detail} />
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* Performance & Core Web Vitals */}
+      {latestAudit && (latestAudit.dfsOnPageData || latestAudit.dfsLighthouseTaskId) && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold text-gray-900">Performance &amp; Core Web Vitals</h2>
+            {latestAudit.dfsLighthouseTaskId && !latestAudit.dfsOnPageData && (
+              <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+                Fetching performance data…
+              </span>
+            )}
+          </div>
+          {latestAudit.dfsOnPageData && (() => {
+            const lh = latestAudit.dfsOnPageData!;
+            return (
+              <div className="space-y-5">
+                {/* CWV badges */}
+                <div className="grid grid-cols-3 gap-3">
+                  {lh.lcp != null && (
+                    <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-100">
+                      <p className="text-xs text-gray-500 font-medium mb-1">LCP</p>
+                      <p className={`text-xl font-bold ${cwvColor('lcp', lh.lcp)}`}>{(lh.lcp / 1000).toFixed(2)}s</p>
+                      <p className={`text-xs font-semibold mt-0.5 ${cwvColor('lcp', lh.lcp)}`}>{cwvLabel('lcp', lh.lcp)}</p>
+                    </div>
+                  )}
+                  {lh.cls != null && (
+                    <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-100">
+                      <p className="text-xs text-gray-500 font-medium mb-1">CLS</p>
+                      <p className={`text-xl font-bold ${cwvColor('cls', lh.cls)}`}>{lh.cls.toFixed(3)}</p>
+                      <p className={`text-xs font-semibold mt-0.5 ${cwvColor('cls', lh.cls)}`}>{cwvLabel('cls', lh.cls)}</p>
+                    </div>
+                  )}
+                  {lh.tbt != null && (
+                    <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-100">
+                      <p className="text-xs text-gray-500 font-medium mb-1">TBT</p>
+                      <p className={`text-xl font-bold ${cwvColor('tbt', lh.tbt)}`}>{Math.round(lh.tbt)}ms</p>
+                      <p className={`text-xs font-semibold mt-0.5 ${cwvColor('tbt', lh.tbt)}`}>{cwvLabel('tbt', lh.tbt)}</p>
+                    </div>
+                  )}
+                </div>
+                {/* Lighthouse score bars */}
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                  <LighthouseBar label="Performance" score={lh.performanceScore} />
+                  <LighthouseBar label="Accessibility" score={lh.accessibilityScore} />
+                  <LighthouseBar label="Best Practices" score={lh.bestPracticesScore} />
+                  <LighthouseBar label="SEO" score={lh.seoScore} />
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 

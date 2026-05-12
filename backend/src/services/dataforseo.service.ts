@@ -493,3 +493,94 @@ export async function getSearchVolumes(keywords: string[], locationCode = 2840):
     return keywords.map((keyword) => ({ keyword, monthlySearchVolume: null }));
   }
 }
+
+// ─── On-Page Lighthouse ───────────────────────────────────────────────────────
+
+export interface LighthouseData {
+  performanceScore: number;    // 0–100
+  accessibilityScore: number;
+  bestPracticesScore: number;
+  seoScore: number;
+  lcp: number | null;          // Largest Contentful Paint, ms
+  cls: number | null;          // Cumulative Layout Shift (unitless)
+  tbt: number | null;          // Total Blocking Time, ms (lab proxy for INP)
+  fcp: number | null;          // First Contentful Paint, ms
+  speedIndex: number | null;   // Speed Index, ms
+  fetchedAt: string;
+}
+
+export async function submitLighthouseTask(url: string): Promise<string | null> {
+  if (!config.dataforseo.login || !config.dataforseo.password) return null;
+  try {
+    const data = await dfsPost('/on_page/lighthouse/task_post', [{ url, for_mobile: false }]) as {
+      tasks?: Array<{ id?: string; status_code?: number; status_message?: string }>;
+    };
+    const task = data.tasks?.[0];
+    if (!task?.id || (task.status_code !== 20100 && task.status_code !== 20000)) {
+      logger.warn('Lighthouse task post rejected', { url, status: task?.status_code, msg: task?.status_message });
+      return null;
+    }
+    return task.id;
+  } catch (e) {
+    logger.warn('Lighthouse task submit failed', { url, error: (e as Error).message });
+    return null;
+  }
+}
+
+export async function getLighthouseResult(taskId: string): Promise<LighthouseData | null> {
+  if (!config.dataforseo.login || !config.dataforseo.password) return null;
+  try {
+    const res = await fetch(`${BASE_URL}/on_page/lighthouse/task_get/json/${taskId}`, {
+      headers: { Authorization: authHeader() },
+    });
+    if (!res.ok) return null;
+
+    const data = await res.json() as {
+      tasks?: Array<{
+        status_code?: number;
+        result?: Array<{
+          categories?: {
+            performance?: { score?: number };
+            accessibility?: { score?: number };
+            'best-practices'?: { score?: number };
+            seo?: { score?: number };
+          };
+          audits?: {
+            'largest-contentful-paint'?: { numericValue?: number };
+            'cumulative-layout-shift'?: { numericValue?: number };
+            'total-blocking-time'?: { numericValue?: number };
+            'first-contentful-paint'?: { numericValue?: number };
+            'speed-index'?: { numericValue?: number };
+          };
+        }>;
+      }>;
+    };
+
+    const task = data.tasks?.[0];
+    // 40602 = task still running; anything else non-20000 = error
+    if (!task || task.status_code === 40602) return null;
+
+    const result = task.result?.[0];
+    if (!result) return null;
+
+    const cats = result.categories ?? {};
+    const audits = result.audits ?? {};
+    const score = (v: number | undefined) => v != null ? Math.round(v * 100) : 0;
+
+    return {
+      performanceScore: score(cats.performance?.score),
+      accessibilityScore: score(cats.accessibility?.score),
+      bestPracticesScore: score(cats['best-practices']?.score),
+      seoScore: score(cats.seo?.score),
+      lcp: audits['largest-contentful-paint']?.numericValue ?? null,
+      cls: audits['cumulative-layout-shift']?.numericValue ?? null,
+      tbt: audits['total-blocking-time']?.numericValue ?? null,
+      fcp: audits['first-contentful-paint']?.numericValue ?? null,
+      speedIndex: audits['speed-index']?.numericValue ?? null,
+      fetchedAt: new Date().toISOString(),
+    };
+  } catch (e) {
+    logger.warn('Lighthouse result fetch failed', { taskId, error: (e as Error).message });
+    return null;
+  }
+}

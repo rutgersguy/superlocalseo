@@ -1,6 +1,7 @@
 import { db } from '../db/connection';
 import { getDirectoriesForIndustry } from '../config/industry.config';
 import { checkOnPageSeo } from './onpage.service';
+import { submitLighthouseTask } from './dataforseo.service';
 
 export interface AuditScores {
   napScore: number;
@@ -9,6 +10,7 @@ export interface AuditScores {
   compositeScore: number;
   onPageScore: number | null;
   onPageDetails: string[];
+  dfsLighthouseTaskId: string | null;
 }
 
 export async function computeAuditScores(locationId: string, industry: string | null | undefined): Promise<AuditScores> {
@@ -61,6 +63,7 @@ export async function computeAuditScores(locationId: string, industry: string | 
   // On-page SEO: crawl the location's website if one is configured
   let onPageScore: number | null = null;
   let onPageDetails: string[] = [];
+  let dfsLighthouseTaskId: string | null = null;
   const website = location?.website?.trim();
   if (website) {
     try {
@@ -70,7 +73,9 @@ export async function computeAuditScores(locationId: string, industry: string | 
     } catch {
       // non-blocking — on-page failure doesn't break the audit
     }
+    // Submit Lighthouse task asynchronously — result polled later
+    dfsLighthouseTaskId = await submitLighthouseTask(website).catch(() => null);
   }
 
-  return { napScore, citationScore, rankingScore, compositeScore, onPageScore, onPageDetails };
+  return { napScore, citationScore, rankingScore, compositeScore, onPageScore, onPageDetails, dfsLighthouseTaskId };
 }
