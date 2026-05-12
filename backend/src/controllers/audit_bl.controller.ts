@@ -233,6 +233,35 @@ export async function pollPending(): Promise<void> {
     }
   }
 
+  // Backfill on_page_score for complete audits that pre-date the on-page feature.
+  // Runs one batch per poll tick so it doesn't block.
+  const nullOnPageAudits = await db('location_audits')
+    .where({ 'location_audits.status': 'complete' })
+    .whereNull('location_audits.on_page_score')
+    .whereNull('location_audits.bl_report_id')
+    .join('locations', 'location_audits.location_id', 'locations.id')
+    .join('clients', 'location_audits.client_id', 'clients.id')
+    .whereNotNull('locations.website')
+    .select(
+      'location_audits.id as auditId',
+      'location_audits.location_id as locationId',
+      'clients.industry as industry',
+    )
+    .limit(5) as Array<{ auditId: string; locationId: string; industry: string | null }>;
+
+  for (const row of nullOnPageAudits) {
+    try {
+      const scores = await computeAuditScores(row.locationId, row.industry);
+      await db('location_audits').where({ id: row.auditId }).update({
+        on_page_score: scores.onPageScore,
+        on_page_details: scores.onPageDetails.length ? JSON.stringify(scores.onPageDetails) : null,
+      });
+      logger.info('On-page backfill complete', { auditId: row.auditId, score: scores.onPageScore });
+    } catch (e) {
+      logger.warn('On-page backfill failed', { auditId: row.auditId, error: (e as Error).message });
+    }
+  }
+
   // Backfill composite_score for 'complete' audits that have no score yet
   const nullScoreAudits = await db('location_audits')
     .where({ 'location_audits.status': 'complete' })
