@@ -189,32 +189,86 @@ function OnPageItem({ detail }: { detail: string }) {
 
 // ─── CWV helpers ─────────────────────────────────────────────────────────────
 
-function cwvColor(metric: 'lcp' | 'cls' | 'tbt', value: number): string {
-  if (metric === 'lcp') return value <= 2500 ? 'text-green-600' : value <= 4000 ? 'text-yellow-600' : 'text-red-500';
-  if (metric === 'cls') return value <= 0.1 ? 'text-green-600' : value <= 0.25 ? 'text-yellow-600' : 'text-red-500';
-  return value <= 200 ? 'text-green-600' : value <= 600 ? 'text-yellow-600' : 'text-red-500';
+const CWV_METRICS = {
+  lcp: {
+    label: 'Page Load Speed',
+    subtitle: 'Time until the main content is visible',
+    tooltip: 'Largest Contentful Paint (LCP) measures how long it takes for the largest element on your page — usually a hero image or heading — to fully appear. Google uses this as a Core Web Vital ranking signal. Under 2.5s is Good.',
+    format: (v: number) => `${(v / 1000).toFixed(2)}s`,
+    good: (v: number) => v <= 2500,
+    ok: (v: number) => v <= 4000,
+  },
+  cls: {
+    label: 'Layout Stability',
+    subtitle: 'How much your page shifts while loading',
+    tooltip: 'Cumulative Layout Shift (CLS) measures how much elements jump around as the page loads — e.g. a button that moves right before you click it. A high CLS creates a frustrating experience and hurts rankings. Under 0.1 is Good.',
+    format: (v: number) => v.toFixed(3),
+    good: (v: number) => v <= 0.1,
+    ok: (v: number) => v <= 0.25,
+  },
+  tbt: {
+    label: 'Interactivity',
+    subtitle: 'How quickly your page responds to clicks',
+    tooltip: 'Total Blocking Time (TBT) measures how long the browser is "frozen" and unable to respond to user input while JavaScript loads. A high TBT makes your site feel sluggish. Under 200ms is Good.',
+    format: (v: number) => `${Math.round(v)}ms`,
+    good: (v: number) => v <= 200,
+    ok: (v: number) => v <= 600,
+  },
+} as const;
+
+type CwvKey = keyof typeof CWV_METRICS;
+
+function cwvColor(metric: CwvKey, value: number): string {
+  const m = CWV_METRICS[metric];
+  return m.good(value) ? 'text-green-600' : m.ok(value) ? 'text-yellow-600' : 'text-red-500';
 }
 
-function cwvLabel(metric: 'lcp' | 'cls' | 'tbt', value: number): string {
-  if (metric === 'lcp') return value <= 2500 ? 'Good' : value <= 4000 ? 'Needs Work' : 'Poor';
-  if (metric === 'cls') return value <= 0.1 ? 'Good' : value <= 0.25 ? 'Needs Work' : 'Poor';
-  return value <= 200 ? 'Good' : value <= 600 ? 'Needs Work' : 'Poor';
+function cwvStatusLabel(metric: CwvKey, value: number): string {
+  const m = CWV_METRICS[metric];
+  return m.good(value) ? 'Good' : m.ok(value) ? 'Needs Work' : 'Poor';
 }
 
-function lhScoreColor(score: number): string {
+const LH_BARS = [
+  { key: 'performanceScore' as const, label: 'Overall Performance', tooltip: 'Google Lighthouse\'s overall performance score for your page, combining load speed, interactivity, and visual stability. Scores above 75 are considered good.' },
+  { key: 'accessibilityScore' as const, label: 'Accessibility', tooltip: 'How accessible your site is to users with disabilities — including screen reader compatibility, colour contrast, and keyboard navigation. Better accessibility also improves SEO.' },
+  { key: 'bestPracticesScore' as const, label: 'Best Practices', tooltip: 'Whether your site follows modern web development standards — secure HTTPS connections, no console errors, correct image formats, and up-to-date libraries.' },
+  { key: 'seoScore' as const, label: 'Technical SEO', tooltip: 'Lighthouse\'s technical SEO checks — mobile-friendliness, crawlability, valid structured data, and properly configured meta tags. Complements the on-page checks above.' },
+];
+
+function lhBarColor(score: number): string {
   return score >= 75 ? 'bg-green-500' : score >= 50 ? 'bg-yellow-500' : 'bg-red-500';
 }
 
-function LighthouseBar({ label, score }: { label: string; score: number }) {
-  const color = lhScoreColor(score);
+function LighthouseBar({ label, score, tooltip }: { label: string; score: number; tooltip: string }) {
   return (
-    <div>
+    <div className="relative group">
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs text-gray-600">{label}</span>
+        <span className="text-xs text-gray-600 flex items-center gap-1">
+          {label}
+          <span className="text-gray-300 cursor-help" title={tooltip}>ⓘ</span>
+        </span>
         <span className="text-xs font-semibold text-gray-700">{score}</span>
       </div>
       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-        <div className={`h-full ${color} rounded-full`} style={{ width: `${score}%` }} />
+        <div className={`h-full ${lhBarColor(score)} rounded-full`} style={{ width: `${score}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function CwvCard({ metricKey, value }: { metricKey: CwvKey; value: number }) {
+  const m = CWV_METRICS[metricKey];
+  const color = cwvColor(metricKey, value);
+  const status = cwvStatusLabel(metricKey, value);
+  return (
+    <div className="relative group bg-gray-50 rounded-lg p-4 border border-gray-100">
+      <p className="text-xs font-semibold text-gray-700">{m.label}</p>
+      <p className="text-xs text-gray-400 mt-0.5 mb-2">{m.subtitle}</p>
+      <p className={`text-2xl font-bold ${color}`}>{m.format(value)}</p>
+      <p className={`text-xs font-semibold mt-0.5 ${color}`}>{status}</p>
+      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-60 rounded-lg bg-gray-900 px-3 py-2 text-xs text-gray-100 opacity-0 group-hover:opacity-100 transition-opacity z-10 text-left shadow-lg">
+        {m.tooltip}
+        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
       </div>
     </div>
   );
@@ -373,6 +427,40 @@ export default function AuditHistory() {
         </div>
       )}
 
+      {/* Performance & Core Web Vitals */}
+      {latestAudit && (latestAudit.dfsOnPageData || latestAudit.dfsLighthouseTaskId) && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Website Performance</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Measured by Google Lighthouse — hover any metric for details</p>
+            </div>
+            {latestAudit.dfsLighthouseTaskId && !latestAudit.dfsOnPageData && (
+              <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+                Fetching performance data…
+              </span>
+            )}
+          </div>
+          {latestAudit.dfsOnPageData && (() => {
+            const lh = latestAudit.dfsOnPageData!;
+            return (
+              <div className="space-y-5">
+                <div className="grid grid-cols-3 gap-3">
+                  {lh.lcp != null && <CwvCard metricKey="lcp" value={lh.lcp} />}
+                  {lh.cls != null && <CwvCard metricKey="cls" value={lh.cls} />}
+                  {lh.tbt != null && <CwvCard metricKey="tbt" value={lh.tbt} />}
+                </div>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                  {LH_BARS.map(({ key, label, tooltip }) => (
+                    <LighthouseBar key={key} label={label} score={lh[key]} tooltip={tooltip} />
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
       {/* On-Page SEO detail */}
       {latestAudit?.onPageDetails && latestAudit.onPageDetails.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
@@ -385,58 +473,6 @@ export default function AuditHistory() {
               <OnPageItem key={i} detail={detail} />
             ))}
           </ul>
-        </div>
-      )}
-
-      {/* Performance & Core Web Vitals */}
-      {latestAudit && (latestAudit.dfsOnPageData || latestAudit.dfsLighthouseTaskId) && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-gray-900">Performance &amp; Core Web Vitals</h2>
-            {latestAudit.dfsLighthouseTaskId && !latestAudit.dfsOnPageData && (
-              <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
-                Fetching performance data…
-              </span>
-            )}
-          </div>
-          {latestAudit.dfsOnPageData && (() => {
-            const lh = latestAudit.dfsOnPageData!;
-            return (
-              <div className="space-y-5">
-                {/* CWV badges */}
-                <div className="grid grid-cols-3 gap-3">
-                  {lh.lcp != null && (
-                    <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-100">
-                      <p className="text-xs text-gray-500 font-medium mb-1">LCP</p>
-                      <p className={`text-xl font-bold ${cwvColor('lcp', lh.lcp)}`}>{(lh.lcp / 1000).toFixed(2)}s</p>
-                      <p className={`text-xs font-semibold mt-0.5 ${cwvColor('lcp', lh.lcp)}`}>{cwvLabel('lcp', lh.lcp)}</p>
-                    </div>
-                  )}
-                  {lh.cls != null && (
-                    <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-100">
-                      <p className="text-xs text-gray-500 font-medium mb-1">CLS</p>
-                      <p className={`text-xl font-bold ${cwvColor('cls', lh.cls)}`}>{lh.cls.toFixed(3)}</p>
-                      <p className={`text-xs font-semibold mt-0.5 ${cwvColor('cls', lh.cls)}`}>{cwvLabel('cls', lh.cls)}</p>
-                    </div>
-                  )}
-                  {lh.tbt != null && (
-                    <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-100">
-                      <p className="text-xs text-gray-500 font-medium mb-1">TBT</p>
-                      <p className={`text-xl font-bold ${cwvColor('tbt', lh.tbt)}`}>{Math.round(lh.tbt)}ms</p>
-                      <p className={`text-xs font-semibold mt-0.5 ${cwvColor('tbt', lh.tbt)}`}>{cwvLabel('tbt', lh.tbt)}</p>
-                    </div>
-                  )}
-                </div>
-                {/* Lighthouse score bars */}
-                <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                  <LighthouseBar label="Performance" score={lh.performanceScore} />
-                  <LighthouseBar label="Accessibility" score={lh.accessibilityScore} />
-                  <LighthouseBar label="Best Practices" score={lh.bestPracticesScore} />
-                  <LighthouseBar label="SEO" score={lh.seoScore} />
-                </div>
-              </div>
-            );
-          })()}
         </div>
       )}
 
