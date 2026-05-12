@@ -280,28 +280,6 @@ export default function AuditHistory() {
         <ScoreCard label="On-Page" value={latestAudit?.onPageScore ?? null} delta={delta('onPageScore')} tooltip="Website on-page SEO score: title tag, meta description, H1, LocalBusiness schema, canonical URL, HTTPS, and mobile viewport." />
       </div>
 
-      {/* History chart */}
-      {chartData.length > 1 && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <h2 className="text-base font-semibold text-gray-900 mb-4">Score History</h2>
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="Overall" stroke="#6366f1" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="NAP" stroke="#10b981" strokeWidth={1.5} dot={false} />
-                <Line type="monotone" dataKey="Citations" stroke="#f59e0b" strokeWidth={1.5} dot={false} />
-                <Line type="monotone" dataKey="Reviews" stroke="#3b82f6" strokeWidth={1.5} dot={false} />
-                <Line type="monotone" dataKey="Google" stroke="#ef4444" strokeWidth={1.5} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
       {/* Recommendations */}
       {latestAudit && latestAudit.recommendations && latestAudit.recommendations.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
@@ -329,6 +307,28 @@ export default function AuditHistory() {
               <OnPageItem key={i} detail={detail} />
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* History chart */}
+      {chartData.length > 1 && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+          <h2 className="text-base font-semibold text-gray-900 mb-4">Score History</h2>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData}>
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="Overall" stroke="#6366f1" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="NAP" stroke="#10b981" strokeWidth={1.5} dot={false} />
+                <Line type="monotone" dataKey="Citations" stroke="#f59e0b" strokeWidth={1.5} dot={false} />
+                <Line type="monotone" dataKey="Reviews" stroke="#3b82f6" strokeWidth={1.5} dot={false} />
+                <Line type="monotone" dataKey="Google" stroke="#ef4444" strokeWidth={1.5} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
 

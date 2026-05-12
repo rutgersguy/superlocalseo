@@ -91,11 +91,11 @@ export async function checkOnPageSeo(websiteUrl: string): Promise<OnPageResult> 
     const len = title.length;
     if (len >= 30 && len <= 60) {
       score += 10;
-      details.push(`Title tag: "${title.slice(0, 60)}" (${len} chars — optimal length)`);
+      details.push(`Title tag: "${title.slice(0, 60)}" (${len} characters — optimal length)`);
     } else if (len < 30) {
-      details.push(`Title tag: "${title}" (${len} chars — too short, aim for 30–60 chars)`);
+      details.push(`Title tag: "${title}" (${len} characters — too short, aim for 30–60 characters)`);
     } else {
-      details.push(`Title tag present but too long (${len} chars — trim to 60 or fewer)`);
+      details.push(`Title tag present but too long (${len} characters — trim to 60 or fewer)`);
     }
   }
 
@@ -108,11 +108,11 @@ export async function checkOnPageSeo(websiteUrl: string): Promise<OnPageResult> 
     const len = metaDesc.length;
     if (len >= 120 && len <= 160) {
       score += 10;
-      details.push(`Meta description present (${len} chars — optimal length)`);
+      details.push(`Meta description present (${len} characters — optimal length)`);
     } else if (len < 120) {
-      details.push(`Meta description present but short (${len} chars — expand to 120–160 chars)`);
+      details.push(`Meta description present but short (${len} characters — expand to 120–160 characters)`);
     } else {
-      details.push(`Meta description present but too long (${len} chars — trim to 160 chars to avoid truncation)`);
+      details.push(`Meta description present but too long (${len} characters — trim to 160 characters to avoid truncation)`);
     }
   }
 
