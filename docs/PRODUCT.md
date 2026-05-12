@@ -37,7 +37,8 @@ SuperLocalSEO is a white-label local SEO platform built for agencies and multi-l
 | **Scale** (Tier 3) | **$1,200/mo** | 5 | +$75/mo each |
 
 - 14-day free trial, no credit card required at signup
-- All tiers include every feature — no feature gating
+- Trial converts to paid subscription when the client adds a payment method; no access cutoff during trial period
+- All tiers include every feature — no feature gating by tier
 - Per-location billing is prorated; add or remove locations mid-month
 
 ### Unit Economics (for agency positioning)
@@ -255,16 +256,15 @@ SuperLocalSEO is a white-label local SEO platform built for agencies and multi-l
 
 ### 12. Team Members & Role-Based Access
 
-**What it does:** Invite team members to a client account with different permission levels. Perfect for agencies managing accounts alongside clients, or businesses with marketing staff.
+**What it does:** Invite team members to a client account with controlled permissions. Perfect for agencies managing accounts alongside clients, or businesses with marketing staff.
 
 **Key capabilities:**
-- Three roles: **Owner** (full control), **Admin** (can edit and configure), **Viewer** (read-only)
+- Two team roles: **Client/Owner** (full control, including team management) and **Staff** (all features except inviting or removing other staff)
 - Email-based invite with 48-hour expiry link
 - New users created automatically on invite acceptance — no pre-registration required
 - Instant login after accepting invite
 - Owner-only access to: Team management tab, billing
-- Admin-only access to: Send review invites, add competitors, manage QR codes, update widget config
-- Viewer access to: All dashboard data (rankings, reviews, citations, analytics, reports)
+- Staff access to: All dashboard data, review response drafting, sending review invites, adding competitors, managing QR codes, updating widget config
 - Team list shows: role, accepted/pending/expired status
 
 ---
@@ -529,7 +529,8 @@ SuperLocalSEO is a white-label local SEO platform built for agencies and multi-l
 - ROI estimation (data model + backend done; full UI dashboard pending)
 - Citation completeness over time chart (data stored; chart not built)
 
-### Planned ❌
+### Planned (Phase 2) ❌
+- QR code review capture (Phase 2 — code exists, not actively promoted)
 - Grace period automation for failed payments
 - Plan upgrade / downgrade flow UI
 - Yelp OAuth integration
@@ -539,3 +540,33 @@ SuperLocalSEO is a white-label local SEO platform built for agencies and multi-l
 - White-label reseller program
 - Mobile app (iOS / Android)
 - In-app support chat (Crisp — blocked on email verification)
+- BrightLocal Management API for automated citation submission (currently on free tier)
+
+---
+
+## Limitations
+
+Honest constraints to communicate to prospects and inform product decisions:
+
+### Data & Coverage
+- **Review platforms:** Review aggregation depends on EmbedMyReviews platform support. Not all review platforms are available; coverage varies by region.
+- **Citation directories:** Citation monitoring covers the directories supported by BrightLocal Data API. Automated citation *submission* is not yet active (Manual workflow provided instead).
+- **Competitor benchmarking:** Uses Google Places ratings only — not aggregate cross-platform rating. Reflects Google specifically.
+- **Ranking data:** Rankings are pulled daily, not real-time. Rank positions can fluctuate multiple times per day; snapshots represent one point in time.
+
+### Billing
+- No automated grace period for failed payments — `past_due` status blocks access immediately after the Stripe `invoice.payment_failed` webhook. Manual intervention required to re-enable access.
+- No self-service plan upgrade/downgrade UI — tier changes require operator action.
+- Extra-location billing is prorated automatically by Stripe; however, removing a location mid-month does not immediately remove the charge until the next billing cycle.
+
+### SEO Audits
+- On-page SEO audit crawls one page (the homepage/website URL stored on the location). Deep multi-page crawls are not supported.
+- Lighthouse performance data has a 5–90 second async delay; the performance section shows a "Fetching..." state until the DataForSEO task completes.
+- Lighthouse results reflect server-side rendering performance, not real user metrics (CrUX data).
+
+### Infrastructure
+- Single-node Docker Compose deployment. No built-in horizontal scaling or high availability. Planned downtime required for major updates.
+- PDF report generation uses Puppeteer/Chromium and is memory-intensive; concurrent report generation is limited to ~3 simultaneous requests on a 4 GB VPS.
+
+### QR Codes (Phase 2)
+- QR code feature is built and functional but not actively promoted. Scan tracking works; no analytics dashboard for scan trends over time.

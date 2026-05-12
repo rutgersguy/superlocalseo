@@ -367,3 +367,122 @@ Bull cron job
 - Rate limiting: 100 req/15min per IP (auth endpoints: 10 req/15min)
 - SQL injection prevention: Knex parameterized queries only
 - CORS: origin whitelist (superlocalseo.com only in production)
+
+---
+
+## RBAC Matrix
+
+The platform has two layers of access control:
+
+### System Roles (`users.role`)
+
+| Role | Who | Access |
+|---|---|---|
+| `admin` | Platform operator (us) | All admin routes (`requireAdmin`), cross-client data, `/api/admin/*`, Prometheus metrics |
+| `client` | Account owner who signed up | Their own client data only; team management; billing |
+
+### Team Member Roles (`team_members.role`)
+
+Team members are invited by a `client` account owner. They share the owner's `client_id` and access the same data.
+
+| Role | Invite/Remove Staff | Send Review Invites | Add Competitors | Manage QR + Widget | View All Data |
+|---|---|---|---|---|---|
+| `client` (owner) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `staff` | ❌ | ✅ | ✅ | ✅ | ✅ |
+
+`staff` has identical permissions to `client` (owner) **except** they cannot invite or remove staff members (`requireTeamAdmin` middleware blocks those specific routes).
+
+### Subscription Gating
+
+`requireActiveSubscription` middleware is applied to all data routes. Requests return `402 Payment Required` when `subscription_status` is `canceled` or `past_due` beyond the grace period.
+
+---
+
+## Redis Usage
+
+Redis serves three distinct purposes:
+
+| Use Case | Key Pattern | TTL | Notes |
+|---|---|---|---|
+| JWT refresh token store | `session:{userId}:{tokenHash}` | 7d | One-time use; deleted on rotation |
+| BullMQ job queues | `bull:{queueName}:*` | Managed by BullMQ | Cron schedule + retry metadata |
+| Rankings pull cooldown | `rankings:cooldown:{clientId}` | 86400s | Gate for manual sync requests |
+| API response cache | `rankings:{clientId}:{locationId}` | 24h | Invalidated after DataForSEO pull |
+| API response cache | `reviews:{clientId}` | 6h | Invalidated after EMR pull or webhook |
+| AI rate limit | `ratelimit:ai:{userId}` | 600s | Sliding window: 20 drafts/10min |
+
+**Memory management:** Configure Redis with `maxmemory 256mb` and `maxmemory-policy allkeys-lru` in production to prevent OOM. Cache keys are non-critical (will be regenerated on miss); session keys are critical and should not be evicted — ensure 256 MB is sufficient for active session count.
+
+---
+
+## Database Connection Pooling
+
+Knex.js manages the PostgreSQL connection pool. Defaults:
+
+```
+min: 2 connections
+max: 10 connections
+```
+
+**Production recommendation:** Set `max: 20` once you have >5 active clients with concurrent dashboard usage. PostgreSQL default `max_connections` is 100; with pool max=20 and a potential second API instance, set `max_connections=50` in `postgresql.conf` and keep 50 headroom for admin connections.
+
+Check current pool usage:
+```sql
+SELECT count(*), state FROM pg_stat_activity GROUP BY state;
+```
+
+---
+
+## Error Handling & Resilience
+
+### BrightLocal 429 (Rate Limit)
+
+`brightlocal.service.ts` wraps all requests with retry logic:
+- On 429: exponential backoff starting at 5 seconds, max 3 retries
+- After 3 failures: job marked failed, BullMQ default retry schedule takes over (3 retries, 30s delay)
+- Operator receives email alert on job failure via BullMQ failure hook
+
+### DataForSEO Task Polling
+
+Lighthouse and on-page audit tasks are asynchronous:
+- Tasks submitted synchronously; results fetched by the `poll-pending` BullMQ job every 5 minutes
+- If a task is still pending after 24h: marked as failed, `dfs_on_page_task_id` cleared
+- Client UI shows "Fetching performance data…" badge while pending, then hydrates automatically via SWR polling
+
+### PDF Generation Failure
+
+`generateAuditPdf()` failure (Puppeteer crash, OOM, timeout):
+- Error propagated to `reportDownload` controller
+- Returns `500` with `{ error: "Failed to generate report" }` — no partial PDF written to disk
+- Chromium runs with `--no-sandbox --disable-setuid-sandbox` (required in Docker environments)
+
+### Database Pool Exhaustion
+
+When all 10 (or configured max) connections are in use:
+- Knex queue request; waits up to `acquireTimeout` (default: 60s)
+- After timeout: throws `KnexTimeoutError`
+- Express error handler returns `503 Service Unavailable`
+- Sentry captures the error with full stack trace
+- Alert: if Prometheus shows pool wait time P95 > 5s, increase `max` pool size
+
+### Redis Unavailability
+
+- BullMQ workers: fail to start — API boots in degraded mode (data serving works, background jobs stop)
+- Rate limiting: falls back to in-memory store (single-instance only; loses state on restart)
+- Session store: refresh token rotation fails → users must re-login
+
+---
+
+## Alert Thresholds
+
+Configure these in your monitoring stack (Prometheus + Alertmanager, Sentry, or UptimeRobot):
+
+| Metric | Warning | Critical | Action |
+|---|---|---|---|
+| API error rate (`5xx`) | > 1% over 5min | > 5% over 2min | Page on-call; check Sentry |
+| API P95 latency | > 1s | > 3s | Check DB pool, slow query log |
+| Database connections | > 70% of max | > 90% of max | Increase pool size or add read replica |
+| Disk usage (reports volume) | > 70% | > 85% | Clean old reports or expand volume |
+| Redis memory | > 70% of maxmemory | > 90% | Increase `maxmemory` or flush stale cache |
+| BullMQ failed jobs | > 0 in 1h | > 5 in 1h | Check job logs; external API may be down |
+| Health check `/api/health/ready` | 1 failure | 2 consecutive failures | Restart API container; check DB/Redis |
