@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
 import { findBusiness, PlaceResult } from '../services/places.service';
+import { checkOnPageSeo } from '../services/onpage.service';
 import { sendAuditLeadEmail } from '../services/email.service';
 
 export const scanSchema = z.object({
@@ -41,7 +42,7 @@ function scoreGoogleProfile(place: PlaceResult): CategoryScore {
   let score = 0;
   const details: string[] = [];
 
-  if (place.hasWebsite) { score += 20; details.push('Website linked'); }
+  if (place.websiteUrl) { score += 20; details.push('Website linked'); }
   else details.push('No website on profile');
 
   if (place.photoCount >= 5) { score += 20; details.push(`${place.photoCount} photos`); }
@@ -96,11 +97,16 @@ function stubCategory(label: string): CategoryScore {
   };
 }
 
-function buildAuditData(place: PlaceResult | null, keyword?: string) {
+function buildAuditData(place: PlaceResult | null, onPage: { score: number; details: string[] } | null, keyword?: string) {
+  const onPageCategory: CategoryScore | null = onPage
+    ? { grade: toGrade(onPage.score), score: onPage.score, label: 'On-Page SEO', details: onPage.details, locked: false }
+    : null;
+
   const categories: CategoryScore[] = place
     ? [
         scoreGoogleProfile(place),
         scoreReviews(place),
+        ...(onPageCategory ? [onPageCategory] : []),
         stubCategory('Keyword Rankings'),
         stubCategory('Citations & Directories'),
         stubCategory('Competitor Benchmark'),
@@ -137,7 +143,18 @@ export async function scan(req: Request, res: Response, next: NextFunction): Pro
     const { businessName, city, keyword, source } = scanSchema.parse(req.body);
 
     const place = await findBusiness(businessName, city);
-    const auditData = buildAuditData(place, keyword);
+
+    // Run on-page check on the website returned by Places — in parallel with DB insert.
+    let onPage: { score: number; details: string[] } | null = null;
+    if (place?.websiteUrl) {
+      try {
+        onPage = await checkOnPageSeo(place.websiteUrl);
+      } catch {
+        // non-blocking
+      }
+    }
+
+    const auditData = buildAuditData(place, onPage, keyword);
 
     const [lead] = await db('audit_leads').insert({
       business_name: businessName,

@@ -115,6 +115,8 @@ async function computeAndSaveScores(
       nap_score: scores.napScore,
       citation_score: scores.citationScore,
       composite_score: scores.compositeScore,
+      on_page_score: scores.onPageScore,
+      on_page_details: scores.onPageDetails.length ? JSON.stringify(scores.onPageDetails) : null,
       status: 'complete',
       completed_at: new Date(),
     });
@@ -221,6 +223,8 @@ export async function pollPending(): Promise<void> {
         nap_score: scores.napScore,
         citation_score: scores.citationScore,
         composite_score: scores.compositeScore,
+        on_page_score: scores.onPageScore,
+        on_page_details: scores.onPageDetails.length ? JSON.stringify(scores.onPageDetails) : null,
         status: 'complete',
         completed_at: new Date(),
       });
@@ -250,6 +254,8 @@ export async function pollPending(): Promise<void> {
         nap_score: scores.napScore,
         citation_score: scores.citationScore,
         composite_score: scores.compositeScore,
+        on_page_score: scores.onPageScore,
+        on_page_details: scores.onPageDetails.length ? JSON.stringify(scores.onPageDetails) : null,
         completed_at: db.raw('COALESCE(completed_at, NOW())'),
       });
     } catch (e) {
@@ -269,6 +275,8 @@ function formatAudit(row: Record<string, unknown>) {
     reviewScore: row.review_score != null ? parseFloat(row.review_score as string) : null,
     googleScore: row.google_score != null ? parseFloat(row.google_score as string) : null,
     compositeScore: row.composite_score != null ? parseFloat(row.composite_score as string) : null,
+    onPageScore: row.on_page_score != null ? Number(row.on_page_score) : null,
+    onPageDetails: (row.on_page_details as string[] | null) ?? [],
     recommendations: row.recommendations ?? [],
     completedAt: row.completed_at,
     createdAt: row.created_at,

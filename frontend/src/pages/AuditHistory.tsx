@@ -15,6 +15,8 @@ interface AuditRow {
   reviewScore: number | null;
   googleScore: number | null;
   compositeScore: number | null;
+  onPageScore: number | null;
+  onPageDetails: string[];
   recommendations: string[];
   completedAt: string | null;
   createdAt: string;
@@ -145,12 +147,13 @@ export default function AuditHistory() {
       )}
 
       {/* Score cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         <ScoreCard label="Overall" value={latestAudit?.compositeScore ?? null} delta={delta('compositeScore')} tooltip="Weighted average: Citations 40%, NAP consistency 30%, Keyword rankings 30%." />
-        <ScoreCard label="NAP" value={latestAudit?.napScore ?? null} delta={delta('napScore')} tooltip="Percentage of directory listings where your business name, address, and phone number all match exactly." />
+        <ScoreCard label="NAP" value={latestAudit?.napScore ?? null} delta={delta('napScore')} tooltip="Percentage of directory listings where your business name, address, and phone number all match exactly. Only counts directories where field-level detail data is available." />
         <ScoreCard label="Citations" value={latestAudit?.citationScore ?? null} delta={delta('citationScore')} tooltip="Percentage of key directories for your industry where your business is listed." />
         <ScoreCard label="Reviews" value={latestAudit?.reviewScore ?? null} delta={delta('reviewScore')} tooltip="Average rating and review volume score. Requires Google Business Profile connection." />
         <ScoreCard label="Google" value={latestAudit?.googleScore ?? null} delta={delta('googleScore')} tooltip="Google Business Profile completeness — claimed status, photos, hours, and posts. Requires GBP connection." />
+        <ScoreCard label="On-Page" value={latestAudit?.onPageScore ?? null} delta={delta('onPageScore')} tooltip="Website on-page SEO score: title tag, meta description, H1, LocalBusiness schema, canonical URL, HTTPS, and mobile viewport." />
       </div>
 
       {/* History chart */}
@@ -186,6 +189,26 @@ export default function AuditHistory() {
                 {rec}
               </li>
             ))}
+          </ul>
+        </div>
+      )}
+
+      {/* On-Page SEO detail */}
+      {latestAudit?.onPageDetails && latestAudit.onPageDetails.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+          <h2 className="text-base font-semibold text-gray-900 mb-3">On-Page SEO Checks</h2>
+          <ul className="space-y-2">
+            {latestAudit.onPageDetails.map((detail, i) => {
+              const isIssue = /not|no |missing|too |add |migrate|couldn't|check that/i.test(detail);
+              return (
+                <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                  <span className={`mt-0.5 flex-shrink-0 ${isIssue ? 'text-red-500' : 'text-emerald-500'}`}>
+                    {isIssue ? '✗' : '✓'}
+                  </span>
+                  {detail}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

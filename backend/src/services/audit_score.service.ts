@@ -1,15 +1,18 @@
 import { db } from '../db/connection';
 import { getDirectoriesForIndustry } from '../config/industry.config';
+import { checkOnPageSeo } from './onpage.service';
 
 export interface AuditScores {
   napScore: number;
   citationScore: number;
   rankingScore: number;
   compositeScore: number;
+  onPageScore: number | null;
+  onPageDetails: string[];
 }
 
 export async function computeAuditScores(locationId: string, industry: string | null | undefined): Promise<AuditScores> {
-  const [citationRows, rankRows] = await Promise.all([
+  const [citationRows, rankRows, location] = await Promise.all([
     db('citation_snapshots')
       .where({ location_id: locationId })
       .select('directory', 'listed', 'nap_name_match', 'nap_address_match', 'nap_phone_match') as Promise<Array<{
@@ -20,14 +23,22 @@ export async function computeAuditScores(locationId: string, industry: string | 
       .where({ location_id: locationId })
       .whereNotNull('rank')
       .select('rank') as Promise<Array<{ rank: number }>>,
+    db('locations').where({ id: locationId }).select('website').first() as Promise<{ website: string | null } | undefined>,
   ]);
 
-  // NAP score: % of listed dirs with accurate NAP
+  // NAP score: % of listed dirs with accurate NAP — only among rows that have detail data.
+  // Rows where all three NAP fields are null have no detail (BrightLocal didn't return field-level
+  // NAP data for that directory) and must not be counted as "accurate".
   const listed = citationRows.filter((r) => r.listed);
-  const napAccurate = listed.filter(
+  const withDetail = listed.filter(
+    (r) => r.nap_name_match !== null || r.nap_address_match !== null || r.nap_phone_match !== null,
+  );
+  const napAccurate = withDetail.filter(
     (r) => r.nap_name_match !== false && r.nap_address_match !== false && r.nap_phone_match !== false,
   );
-  const napScore = listed.length > 0 ? Math.round((napAccurate.length / listed.length) * 100) : 0;
+  const napScore = withDetail.length > 0
+    ? Math.round((napAccurate.length / withDetail.length) * 100)
+    : 0;
 
   // Citation score: % of target dirs where listed
   const targetDirs = getDirectoriesForIndustry(industry);
@@ -47,5 +58,19 @@ export async function computeAuditScores(locationId: string, industry: string | 
   // Composite: citations 40%, NAP 30%, rankings 30%
   const compositeScore = Math.round(citationScore * 0.4 + napScore * 0.3 + rankingScore * 0.3);
 
-  return { napScore, citationScore, rankingScore, compositeScore };
+  // On-page SEO: crawl the location's website if one is configured
+  let onPageScore: number | null = null;
+  let onPageDetails: string[] = [];
+  const website = location?.website?.trim();
+  if (website) {
+    try {
+      const result = await checkOnPageSeo(website);
+      onPageScore = result.score;
+      onPageDetails = result.details;
+    } catch {
+      // non-blocking — on-page failure doesn't break the audit
+    }
+  }
+
+  return { napScore, citationScore, rankingScore, compositeScore, onPageScore, onPageDetails };
 }

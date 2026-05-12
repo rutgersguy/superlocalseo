@@ -7,7 +7,7 @@ export interface PlaceResult {
   formattedAddress: string;
   rating: number | null;
   userRatingsTotal: number | null;
-  hasWebsite: boolean;
+  websiteUrl: string | null;
   photoCount: number;
   hasHours: boolean;
   businessStatus: string | null;
@@ -71,7 +71,7 @@ export async function findBusiness(businessName: string, city: string): Promise<
     formattedAddress: p.formattedAddress ?? '',
     rating: p.rating ?? null,
     userRatingsTotal: p.userRatingCount ?? null,
-    hasWebsite: !!p.websiteUri,
+    websiteUrl: p.websiteUri ?? null,
     photoCount: p.photos?.length ?? 0,
     hasHours: !!(p.regularOpeningHours?.weekdayDescriptions?.length),
     businessStatus: p.businessStatus ?? null,
