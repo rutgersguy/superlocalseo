@@ -496,6 +496,13 @@ export async function getSearchVolumes(keywords: string[], locationCode = 2840):
 
 // ─── On-Page Lighthouse ───────────────────────────────────────────────────────
 
+export interface LighthouseAuditItem {
+  title: string;
+  description: string;
+  displayValue: string | null;
+  score: number | null;       // 0–1
+}
+
 export interface LighthouseData {
   performanceScore: number;    // 0–100
   accessibilityScore: number;
@@ -503,10 +510,45 @@ export interface LighthouseData {
   seoScore: number;
   lcp: number | null;          // Largest Contentful Paint, ms
   cls: number | null;          // Cumulative Layout Shift (unitless)
-  tbt: number | null;          // Total Blocking Time, ms (lab proxy for INP)
+  tbt: number | null;          // Total Blocking Time, ms
   fcp: number | null;          // First Contentful Paint, ms
   speedIndex: number | null;   // Speed Index, ms
+  // Top failing/warning audits per category, sorted by weight (highest impact first)
+  categoryAudits: {
+    performance: LighthouseAuditItem[];
+    accessibility: LighthouseAuditItem[];
+    bestPractices: LighthouseAuditItem[];
+    seo: LighthouseAuditItem[];
+  };
   fetchedAt: string;
+}
+
+// Picks failing audits (score < 0.9) for a category, sorted by weight descending.
+function extractFailingAudits(
+  category: { auditRefs?: Array<{ id: string; weight?: number }> } | undefined,
+  audits: Record<string, {
+    title?: string;
+    description?: string;
+    score?: number | null;
+    scoreDisplayMode?: string;
+    displayValue?: string;
+  }>,
+  limit = 6,
+): LighthouseAuditItem[] {
+  if (!category?.auditRefs) return [];
+  const SKIP_MODES = new Set(['informative', 'manual', 'notApplicable']);
+  return category.auditRefs
+    .filter((ref) => (ref.weight ?? 0) >= 0)
+    .sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0))
+    .map((ref) => ({ ref, audit: audits[ref.id] }))
+    .filter(({ audit }) => audit && !SKIP_MODES.has(audit.scoreDisplayMode ?? '') && (audit.score == null || audit.score < 0.9))
+    .slice(0, limit)
+    .map(({ audit }) => ({
+      title: audit.title ?? '',
+      description: (audit.description ?? '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'), // strip markdown links
+      displayValue: audit.displayValue ?? null,
+      score: audit.score ?? null,
+    }));
 }
 
 export async function submitLighthouseTask(url: string): Promise<string | null> {
@@ -540,31 +582,35 @@ export async function getLighthouseResult(taskId: string): Promise<LighthouseDat
         status_code?: number;
         result?: Array<{
           categories?: {
-            performance?: { score?: number };
-            accessibility?: { score?: number };
-            'best-practices'?: { score?: number };
-            seo?: { score?: number };
+            performance?: { score?: number; auditRefs?: Array<{ id: string; weight?: number }> };
+            accessibility?: { score?: number; auditRefs?: Array<{ id: string; weight?: number }> };
+            'best-practices'?: { score?: number; auditRefs?: Array<{ id: string; weight?: number }> };
+            seo?: { score?: number; auditRefs?: Array<{ id: string; weight?: number }> };
           };
-          audits?: {
-            'largest-contentful-paint'?: { numericValue?: number };
-            'cumulative-layout-shift'?: { numericValue?: number };
-            'total-blocking-time'?: { numericValue?: number };
-            'first-contentful-paint'?: { numericValue?: number };
-            'speed-index'?: { numericValue?: number };
-          };
+          audits?: Record<string, {
+            title?: string;
+            description?: string;
+            score?: number | null;
+            scoreDisplayMode?: string;
+            displayValue?: string;
+            numericValue?: number;
+          }>;
         }>;
       }>;
     };
 
     const task = data.tasks?.[0];
-    // 40602 = task still running; anything else non-20000 = error
+    // 40602 = task still running
     if (!task || task.status_code === 40602) return null;
 
     const result = task.result?.[0];
     if (!result) return null;
 
     const cats = result.categories ?? {};
-    const audits = result.audits ?? {};
+    const audits = (result.audits ?? {}) as Record<string, {
+      title?: string; description?: string; score?: number | null;
+      scoreDisplayMode?: string; displayValue?: string; numericValue?: number;
+    }>;
     const score = (v: number | undefined) => v != null ? Math.round(v * 100) : 0;
 
     return {
@@ -577,6 +623,12 @@ export async function getLighthouseResult(taskId: string): Promise<LighthouseDat
       tbt: audits['total-blocking-time']?.numericValue ?? null,
       fcp: audits['first-contentful-paint']?.numericValue ?? null,
       speedIndex: audits['speed-index']?.numericValue ?? null,
+      categoryAudits: {
+        performance: extractFailingAudits(cats.performance, audits),
+        accessibility: extractFailingAudits(cats.accessibility, audits),
+        bestPractices: extractFailingAudits(cats['best-practices'], audits),
+        seo: extractFailingAudits(cats.seo, audits),
+      },
       fetchedAt: new Date().toISOString(),
     };
   } catch (e) {

@@ -7,6 +7,13 @@ import { fetcher, apiFetch } from '../services/api';
 interface LocationOption { id: string; name: string; blCampaignId?: string | null; }
 interface LocationsResponse { success: boolean; data: LocationOption[]; }
 
+interface LighthouseAuditItem {
+  title: string;
+  description: string;
+  displayValue: string | null;
+  score: number | null;
+}
+
 interface LighthouseData {
   performanceScore: number;
   accessibilityScore: number;
@@ -17,6 +24,12 @@ interface LighthouseData {
   tbt: number | null;
   fcp: number | null;
   speedIndex: number | null;
+  categoryAudits?: {
+    performance: LighthouseAuditItem[];
+    accessibility: LighthouseAuditItem[];
+    bestPractices: LighthouseAuditItem[];
+    seo: LighthouseAuditItem[];
+  };
   fetchedAt: string;
 }
 
@@ -228,31 +241,137 @@ function cwvStatusLabel(metric: CwvKey, value: number): string {
   return m.good(value) ? 'Good' : m.ok(value) ? 'Needs Work' : 'Poor';
 }
 
-const LH_BARS = [
-  { key: 'performanceScore' as const, label: 'Overall Performance', tooltip: 'Google Lighthouse\'s overall performance score for your page, combining load speed, interactivity, and visual stability. Scores above 75 are considered good.' },
-  { key: 'accessibilityScore' as const, label: 'Accessibility', tooltip: 'How accessible your site is to users with disabilities — including screen reader compatibility, colour contrast, and keyboard navigation. Better accessibility also improves SEO.' },
-  { key: 'bestPracticesScore' as const, label: 'Best Practices', tooltip: 'Whether your site follows modern web development standards — secure HTTPS connections, no console errors, correct image formats, and up-to-date libraries.' },
-  { key: 'seoScore' as const, label: 'Technical SEO', tooltip: 'Lighthouse\'s technical SEO checks — mobile-friendliness, crawlability, valid structured data, and properly configured meta tags. Complements the on-page checks above.' },
-];
+const LH_CATEGORIES = [
+  {
+    key: 'performanceScore' as const,
+    auditsKey: 'performance' as const,
+    label: 'Overall Performance',
+    description: 'How fast your page loads and feels to visitors. Google uses performance as a ranking signal — slow pages rank lower and lose more than half their visitors before the page even loads.',
+    howToImprove: 'Work with your web developer to compress images, reduce JavaScript, and enable browser caching. Many of the specific issues below have estimated time savings — focus on the highest-impact ones first.',
+  },
+  {
+    key: 'accessibilityScore' as const,
+    auditsKey: 'accessibility' as const,
+    label: 'Accessibility',
+    description: 'How usable your site is for people with disabilities — including those using screen readers, keyboard navigation, or requiring high colour contrast. Google treats accessibility as a quality signal.',
+    howToImprove: 'Add alt text to images, ensure buttons have descriptive labels, and verify that text colours meet contrast requirements. Most website builders and SEO plugins highlight these issues automatically.',
+  },
+  {
+    key: 'bestPracticesScore' as const,
+    auditsKey: 'bestPractices' as const,
+    label: 'Best Practices',
+    description: 'Whether your site follows modern web security and quality standards — HTTPS, no browser console errors, correctly sized images, and up-to-date software. Issues here can affect user trust and search indexing.',
+    howToImprove: 'Ensure your site loads over HTTPS, fix any JavaScript errors, and update plugins and themes. Ask your developer to review the items flagged below.',
+  },
+  {
+    key: 'seoScore' as const,
+    auditsKey: 'seo' as const,
+    label: 'Technical SEO',
+    description: 'Technical signals that affect how well search engines can find, crawl, and understand your pages — including mobile-friendliness, crawlability, meta tags, and structured data. These work alongside the on-page checks above.',
+    howToImprove: 'Ensure your site has a robots.txt, a sitemap, and that all pages are mobile-friendly. Fix any meta tag or structured data issues flagged below.',
+  },
+] as const;
 
 function lhBarColor(score: number): string {
   return score >= 75 ? 'bg-green-500' : score >= 50 ? 'bg-yellow-500' : 'bg-red-500';
 }
 
-function LighthouseBar({ label, score, tooltip }: { label: string; score: number; tooltip: string }) {
+function lhTextColor(score: number): string {
+  return score >= 75 ? 'text-green-600' : score >= 50 ? 'text-yellow-600' : 'text-red-500';
+}
+
+function auditDotColor(score: number | null): string {
+  if (score == null) return 'bg-gray-300';
+  if (score >= 0.9) return 'bg-green-500';
+  if (score >= 0.5) return 'bg-yellow-400';
+  return 'bg-red-500';
+}
+
+function LighthouseCategory({
+  label, description, howToImprove, score, audits,
+}: {
+  label: string;
+  description: string;
+  howToImprove: string;
+  score: number;
+  audits: LighthouseAuditItem[];
+}) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="relative group">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs text-gray-600 flex items-center gap-1">
-          {label}
-          <span className="text-gray-300 cursor-help" title={tooltip}>ⓘ</span>
+    <div className="border border-gray-100 rounded-lg overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 text-left"
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-sm font-medium text-gray-800">{label}</span>
+            <span className={`text-sm font-bold ml-2 ${lhTextColor(score)}`}>{score}</span>
+          </div>
+          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div className={`h-full ${lhBarColor(score)} rounded-full`} style={{ width: `${score}%` }} />
+          </div>
+        </div>
+        <span className="flex-shrink-0 text-gray-400 ml-2">
+          {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </span>
-        <span className="text-xs font-semibold text-gray-700">{score}</span>
-      </div>
-      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-        <div className={`h-full ${lhBarColor(score)} rounded-full`} style={{ width: `${score}%` }} />
-      </div>
+      </button>
+      {open && (
+        <div className="border-t border-gray-100 px-4 py-4 bg-gray-50 space-y-4">
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">What this measures</p>
+            <p className="text-xs text-gray-700 leading-relaxed">{description}</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">How to improve it</p>
+            <p className="text-xs text-gray-700 leading-relaxed">{howToImprove}</p>
+          </div>
+          {audits.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Issues found</p>
+              <ul className="space-y-2">
+                {audits.map((a, i) => (
+                  <AuditIssueItem key={i} item={a} />
+                ))}
+              </ul>
+            </div>
+          )}
+          {audits.length === 0 && (
+            <p className="text-xs text-green-700 bg-green-50 border border-green-100 rounded px-3 py-2">No significant issues found in this category.</p>
+          )}
+        </div>
+      )}
     </div>
+  );
+}
+
+function AuditIssueItem({ item }: { item: LighthouseAuditItem }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <li className="bg-white border border-gray-100 rounded-md overflow-hidden">
+      <button
+        type="button"
+        onClick={() => item.description ? setOpen((o) => !o) : undefined}
+        className={`w-full flex items-start gap-2 px-3 py-2 text-left ${item.description ? 'hover:bg-gray-50 cursor-pointer' : 'cursor-default'}`}
+      >
+        <span className={`mt-1.5 flex-shrink-0 w-2 h-2 rounded-full ${auditDotColor(item.score)}`} />
+        <span className="flex-1 text-xs text-gray-700">{item.title}</span>
+        {item.displayValue && (
+          <span className="flex-shrink-0 text-xs text-gray-400 ml-2 whitespace-nowrap">{item.displayValue}</span>
+        )}
+        {item.description && (
+          <span className="flex-shrink-0 text-gray-300 mt-0.5">
+            {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          </span>
+        )}
+      </button>
+      {open && item.description && (
+        <div className="border-t border-gray-100 px-3 py-2 bg-blue-50">
+          <p className="text-xs text-gray-600 leading-relaxed">{item.description}</p>
+        </div>
+      )}
+    </li>
   );
 }
 
@@ -450,9 +569,16 @@ export default function AuditHistory() {
                   {lh.cls != null && <CwvCard metricKey="cls" value={lh.cls} />}
                   {lh.tbt != null && <CwvCard metricKey="tbt" value={lh.tbt} />}
                 </div>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                  {LH_BARS.map(({ key, label, tooltip }) => (
-                    <LighthouseBar key={key} label={label} score={lh[key]} tooltip={tooltip} />
+                <div className="space-y-2">
+                  {LH_CATEGORIES.map((cat) => (
+                    <LighthouseCategory
+                      key={cat.key}
+                      label={cat.label}
+                      description={cat.description}
+                      howToImprove={cat.howToImprove}
+                      score={lh[cat.key]}
+                      audits={lh.categoryAudits?.[cat.auditsKey] ?? []}
+                    />
                   ))}
                 </div>
               </div>
