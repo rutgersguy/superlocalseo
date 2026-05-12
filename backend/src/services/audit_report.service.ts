@@ -295,7 +295,7 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
 
   ${lh ? `
   <!-- Website Performance -->
-  <div class="section">
+  <div class="section" style="page-break-before:always;">
     <h2>Website Performance</h2>
     <div class="section-subtitle">Measured by Google Lighthouse — these signals directly affect your search rankings and user experience</div>
 
