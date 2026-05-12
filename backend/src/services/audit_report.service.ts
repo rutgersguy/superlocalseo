@@ -144,9 +144,6 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
     ? new Date(row.completed_at as string).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
     : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
-  const composite = row.composite_score != null ? Number(row.composite_score) : null;
-  const nap = row.nap_score != null ? Number(row.nap_score) : null;
-  const citation = row.citation_score != null ? Number(row.citation_score) : null;
   const onPage = row.on_page_score != null ? Number(row.on_page_score) : null;
 
   const onPageDetails: string[] = Array.isArray(row.on_page_details)
@@ -241,8 +238,6 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
   /* Footer */
   .footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; font-size: 10px; color: #94a3b8; }
 
-  /* Page break hints */
-  .page-break-before { page-break-before: always; }
 </style>
 </head>
 <body>
@@ -256,32 +251,14 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
       <div class="header-meta">${[locationName, city, website].filter(Boolean).join(' · ')}</div>
       <div class="header-meta" style="margin-top:2px;">Audit completed ${completedAt}</div>
     </div>
-    ${composite != null ? `
-    <div class="overall-badge" style="border-color:${scoreColor(composite)};">
-      <div class="num" style="color:${scoreColor(composite)};">${composite}</div>
-      <div class="lbl">Overall Score</div>
-      <div style="font-size:11px;font-weight:700;color:${scoreColor(composite)};margin-top:2px;">${scoreLabel(composite)}</div>
+    ${onPage != null ? `
+    <div class="overall-badge" style="border-color:${scoreColor(onPage)};">
+      <div class="num" style="color:${scoreColor(onPage)};">${onPage}</div>
+      <div class="lbl">On-Page Score</div>
+      <div style="font-size:11px;font-weight:700;color:${scoreColor(onPage)};margin-top:2px;">${scoreLabel(onPage)}</div>
     </div>` : ''}
   </div>
 
-  <!-- Score Overview -->
-  <div class="section">
-    <h2>Score Overview</h2>
-    <div class="section-subtitle">Scores are out of 100 — 75+ is Good, 50–74 is Fair, below 50 needs attention</div>
-    <div class="score-grid">
-      ${[
-        { label: 'Overall', value: composite },
-        { label: 'NAP Accuracy', value: nap },
-        { label: 'Citations', value: citation },
-        { label: 'On-Page SEO', value: onPage },
-      ].map((c) => `
-      <div class="score-card" style="background:${scoreBg(c.value)};">
-        <div class="val" style="color:${scoreColor(c.value)};">${c.value ?? '–'}</div>
-        <div class="lbl">${c.label}</div>
-        ${c.value != null ? `<div class="badge" style="background:${scoreColor(c.value)}22;color:${scoreColor(c.value)};">${scoreLabel(c.value)}</div>` : ''}
-      </div>`).join('')}
-    </div>
-  </div>
 
   <!-- Priority Actions -->
   ${actions.length > 0 ? `
@@ -318,7 +295,7 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
 
   ${lh ? `
   <!-- Website Performance -->
-  <div class="section page-break-before">
+  <div class="section">
     <h2>Website Performance</h2>
     <div class="section-subtitle">Measured by Google Lighthouse — these signals directly affect your search rankings and user experience</div>
 
@@ -364,29 +341,6 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
     </div>`).join('')}
   </div>` : ''}
 
-  <!-- What Your Scores Mean -->
-  <div class="section">
-    <h2>Understanding Your Scores</h2>
-    <div class="section-subtitle">Context to help you prioritise improvements</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-      <div style="background:#f8fafc;border-radius:10px;padding:14px;border:1px solid #e2e8f0;">
-        <div style="font-size:12px;font-weight:700;color:#1e293b;margin-bottom:4px;">NAP Accuracy</div>
-        <div style="font-size:11px;color:#64748b;line-height:1.6;">Your business Name, Address, and Phone must match exactly across every directory listing. Inconsistencies confuse Google and can suppress your local rankings.</div>
-      </div>
-      <div style="background:#f8fafc;border-radius:10px;padding:14px;border:1px solid #e2e8f0;">
-        <div style="font-size:12px;font-weight:700;color:#1e293b;margin-bottom:4px;">Citations</div>
-        <div style="font-size:11px;color:#64748b;line-height:1.6;">The percentage of key directories (Yelp, Google, Facebook, etc.) where your business is listed. More quality citations = more trust signals for Google.</div>
-      </div>
-      <div style="background:#f8fafc;border-radius:10px;padding:14px;border:1px solid #e2e8f0;">
-        <div style="font-size:12px;font-weight:700;color:#1e293b;margin-bottom:4px;">On-Page SEO</div>
-        <div style="font-size:11px;color:#64748b;line-height:1.6;">How well your homepage is optimised for search engines — title tag, meta description, structured data, and mobile-friendliness. These are quick wins that directly affect rankings.</div>
-      </div>
-      <div style="background:#f8fafc;border-radius:10px;padding:14px;border:1px solid #e2e8f0;">
-        <div style="font-size:12px;font-weight:700;color:#1e293b;margin-bottom:4px;">Website Performance</div>
-        <div style="font-size:11px;color:#64748b;line-height:1.6;">Google measures page speed as a ranking factor. Slow sites also lose visitors — 53% of mobile users abandon a page that takes more than 3 seconds to load.</div>
-      </div>
-    </div>
-  </div>
 
   <!-- Footer -->
   <div class="footer">

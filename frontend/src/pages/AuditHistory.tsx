@@ -514,21 +514,18 @@ export default function AuditHistory() {
           </button>
           </div>
         </div>
-        <p className="text-sm text-gray-500 mt-1">Monthly health scores across NAP, citations, reviews, and Google presence</p>
+        <p className="text-sm text-gray-500 mt-1">On-page SEO checks and website performance for your location</p>
       </div>
 
       {triggerError && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{triggerError}</div>
       )}
 
-      {/* Score cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-        <ScoreCard label="Overall" value={latestAudit?.compositeScore ?? null} delta={delta('compositeScore')} tooltip="Weighted average: Citations 40%, NAP consistency 30%, Keyword rankings 30%." />
-        <ScoreCard label="NAP" value={latestAudit?.napScore ?? null} delta={delta('napScore')} tooltip="Percentage of directory listings where your business name, address, and phone number all match exactly. Only counts directories where field-level detail data is available." />
-        <ScoreCard label="Citations" value={latestAudit?.citationScore ?? null} delta={delta('citationScore')} tooltip="Percentage of key directories for your industry where your business is listed." />
+      {/* Score cards — on-page focused */}
+      <div className="grid grid-cols-3 gap-4">
+        <ScoreCard label="On-Page SEO" value={latestAudit?.onPageScore ?? null} delta={delta('onPageScore')} tooltip="Website on-page SEO score: title tag, meta description, H1, LocalBusiness schema, canonical URL, HTTPS, and mobile viewport." />
         <ScoreCard label="Reviews" value={latestAudit?.reviewScore ?? null} delta={delta('reviewScore')} tooltip="Average rating and review volume score. Requires Google Business Profile connection." />
-        <ScoreCard label="Google" value={latestAudit?.googleScore ?? null} delta={delta('googleScore')} tooltip="Google Business Profile completeness — claimed status, photos, hours, and posts. Requires GBP connection." />
-        <ScoreCard label="On-Page" value={latestAudit?.onPageScore ?? null} delta={delta('onPageScore')} tooltip="Website on-page SEO score: title tag, meta description, H1, LocalBusiness schema, canonical URL, HTTPS, and mobile viewport." />
+        <ScoreCard label="Google Profile" value={latestAudit?.googleScore ?? null} delta={delta('googleScore')} tooltip="Google Business Profile completeness — claimed status, photos, hours, and posts. Requires GBP connection." />
       </div>
 
       {/* Recommendations */}
