@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import crypto from 'crypto';
 import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
 import { config } from '../config';
@@ -156,27 +155,6 @@ interface WebhookPayload {
 
 export async function webhook(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    // Validate HMAC signature
-    const signature = req.headers['x-embedmyreviews-signature'] as string | undefined;
-    if (!signature || !config.embedmyreviews.webhookSecret) {
-      err(res, 'Missing signature', 401, 'UNAUTHORIZED');
-      return;
-    }
-
-    const rawBody = JSON.stringify(req.body);
-    const expected = crypto
-      .createHmac('sha256', config.embedmyreviews.webhookSecret)
-      .update(rawBody)
-      .digest('hex');
-
-    const sigBuf = Buffer.from(signature);
-    const expBuf = Buffer.from(expected);
-    const valid = sigBuf.length === expBuf.length && crypto.timingSafeEqual(sigBuf, expBuf);
-    if (!valid) {
-      err(res, 'Invalid signature', 401, 'INVALID_SIGNATURE');
-      return;
-    }
-
     const payload = req.body as WebhookPayload;
 
     // EMR uses 'source' for platform name in webhook payloads
@@ -265,3 +243,4 @@ export async function webhook(req: Request, res: Response, next: NextFunction): 
     next(e);
   }
 }
+
