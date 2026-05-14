@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { Mail, Upload, Send, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, UserX, Plus, X } from 'lucide-react';
 import { fetcher, apiFetch } from '../services/api';
+import EMRSetupBanner from '../components/EMRSetupBanner';
 
 interface Campaign {
   id: string;
@@ -642,8 +643,11 @@ export default function Campaigns() {
     );
   }
 
+  const showEMRBanner = !isLoading && campaigns.length === 0;
+
   return (
     <div className="space-y-6">
+      {showEMRBanner && <EMRSetupBanner context="campaigns" />}
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">

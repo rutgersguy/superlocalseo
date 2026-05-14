@@ -429,6 +429,29 @@ export default function Onboarding() {
                 </div>
               </div>
 
+              {/* Review Management */}
+              <div className="border-2 border-amber-200 bg-amber-50 rounded-xl p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-sm font-semibold text-gray-900">Review Management</h3>
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Action required</span>
+                    </div>
+                    <p className="text-xs text-gray-600 leading-relaxed">
+                      Connect your Google, Yelp, and Facebook profiles in your Review Management dashboard to start monitoring reviews and sending review requests to customers.
+                    </p>
+                  </div>
+                </div>
+                <a
+                  href="https://app.superlocalseo.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  Open Review Management →
+                </a>
+              </div>
+
               <p className="text-xs text-gray-400">You can also connect platforms later in Settings.</p>
             </div>
           )}

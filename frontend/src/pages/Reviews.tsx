@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import useSWR from 'swr';
+import EMRSetupBanner from '../components/EMRSetupBanner';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer,
@@ -464,8 +465,12 @@ export default function Reviews() {
   const sentimentData = trendData?.data?.sentiment ?? [];
   const presentPlatforms = Array.from(new Set(volumeData.flatMap((d) => Object.keys(d).filter((k) => k !== 'date'))));
 
+  const totalReviews = data?.data?.total ?? 0;
+  const showEMRBanner = !isLoading && totalReviews === 0 && feedbackTotal === 0;
+
   return (
     <div className="space-y-6">
+      {showEMRBanner && <EMRSetupBanner context="reviews" />}
       <div>
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">Reviews</h1>
