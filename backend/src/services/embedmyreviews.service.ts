@@ -1,7 +1,9 @@
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
-const BASE_URL = 'https://gmzx.app.embedmyreviews.com/api/v1';
+// Derived at module load so config is already populated
+const BASE_URL = () => `${config.embedmyreviews.baseUrl}/api/v1`;
+const AGENCY_BASE_URL = () => `${config.embedmyreviews.baseUrl}/api/agency/v1`;
 
 export interface EMRReview {
   id: string;
@@ -30,8 +32,8 @@ export interface EMRCampaign {
   unsubscribed: number;
 }
 
-async function emrFetch(path: string, apiKey: string, options: RequestInit = {}): Promise<Response> {
-  const url = `${BASE_URL}${path}`;
+async function emrFetch(path: string, apiKey: string, options: RequestInit = {}, base?: string): Promise<Response> {
+  const url = `${base ?? BASE_URL()}${path}`;
   const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
@@ -202,20 +204,12 @@ export async function validateApiKey(apiKey: string): Promise<boolean> {
   }
 }
 
-export async function registerWebhook(apiKey: string, webhookUrl: string): Promise<boolean> {
-  try {
-    const res = await emrFetch('/webhooks', apiKey, {
-      method: 'POST',
-      body: JSON.stringify({
-        url: webhookUrl,
-        events: ['review-created', 'review-updated', 'private-feedback-created', 'private-feedback-updated'],
-      }),
-    });
-    return res.ok;
-  } catch (e) {
-    logger.warn('EmbedMyReviews registerWebhook error', { error: (e as Error).message });
-    return false;
-  }
+// Webhook registration is done via the agency dashboard UI:
+// app.superlocalseo.com → Settings → API & Webhooks
+// Enter endpoint URL and select events — no API registration endpoint exists.
+export function registerWebhook(_apiKey: string, webhookUrl: string): Promise<boolean> {
+  logger.info('EMR webhook registration is UI-only', { webhookUrl });
+  return Promise.resolve(false);
 }
 
 // ─── Agency customer lifecycle (EMR-1) ────────────────────────────────────────
@@ -236,10 +230,10 @@ export async function createCustomer(
   const operatorKey = config.embedmyreviews.apiKey;
   if (!operatorKey) throw new Error('EMBEDMYREVIEWS_API_KEY not configured');
 
-  const res = await emrFetch('/agency/customers', operatorKey, {
+  const res = await emrFetch('/customers', operatorKey, {
     method: 'POST',
     body: JSON.stringify({ business_name: businessName, email }),
-  });
+  }, AGENCY_BASE_URL());
 
   if (!res.ok) {
     const body = await res.text();
@@ -261,9 +255,9 @@ export async function deleteCustomer(customerId: string): Promise<void> {
   const operatorKey = config.embedmyreviews.apiKey;
   if (!operatorKey) return;
 
-  const res = await emrFetch(`/agency/customers/${encodeURIComponent(customerId)}`, operatorKey, {
+  const res = await emrFetch(`/customers/${encodeURIComponent(customerId)}`, operatorKey, {
     method: 'DELETE',
-  });
+  }, AGENCY_BASE_URL());
 
   if (!res.ok && res.status !== 404) {
     const body = await res.text();
@@ -275,9 +269,9 @@ export async function suspendCustomer(customerId: string): Promise<void> {
   const operatorKey = config.embedmyreviews.apiKey;
   if (!operatorKey) return;
 
-  const res = await emrFetch(`/agency/customers/${encodeURIComponent(customerId)}/suspend`, operatorKey, {
+  const res = await emrFetch(`/customers/${encodeURIComponent(customerId)}/suspend`, operatorKey, {
     method: 'POST',
-  });
+  }, AGENCY_BASE_URL());
 
   if (!res.ok && res.status !== 404) {
     const body = await res.text();
