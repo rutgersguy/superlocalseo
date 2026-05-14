@@ -206,7 +206,10 @@ export async function registerWebhook(apiKey: string, webhookUrl: string): Promi
   try {
     const res = await emrFetch('/webhooks', apiKey, {
       method: 'POST',
-      body: JSON.stringify({ url: webhookUrl, events: ['review.created', 'review.updated'] }),
+      body: JSON.stringify({
+        url: webhookUrl,
+        events: ['review-created', 'review-updated', 'feedback-created'],
+      }),
     });
     return res.ok;
   } catch (e) {
