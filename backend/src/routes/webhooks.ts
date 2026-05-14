@@ -104,8 +104,7 @@ router.post('/emr', async (req: Request, res: Response) => {
 
       logger.info('EMR review upserted via webhook', { clientId, reviewId: data.id, eventType });
 
-    } else if (eventType.includes('feedback')) {
-      // Private feedback webhook — event name TBD (launching today per EMR)
+    } else if (eventType === 'private-feedback-created' || eventType === 'private-feedback-updated') {
       if (!clientId) return;
 
       const name = [data.first_name, data.last_name].filter(Boolean).join(' ') || null;

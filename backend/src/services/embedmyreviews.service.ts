@@ -208,7 +208,7 @@ export async function registerWebhook(apiKey: string, webhookUrl: string): Promi
       method: 'POST',
       body: JSON.stringify({
         url: webhookUrl,
-        events: ['review-created', 'review-updated', 'feedback-created'],
+        events: ['review-created', 'review-updated', 'private-feedback-created', 'private-feedback-updated'],
       }),
     });
     return res.ok;
