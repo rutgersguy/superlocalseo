@@ -65,6 +65,7 @@ export const config = {
 
   embedmyreviews: {
     apiKey: optional('EMBEDMYREVIEWS_API_KEY'),
+    agencyKey: optional('EMBEDMYREVIEWS_AGENCY_KEY'),
     webhookSecret: optional('EMBEDMYREVIEWS_WEBHOOK_SECRET'),
     baseUrl: optional('EMBEDMYREVIEWS_BASE_URL', 'https://app.superlocalseo.com'),
   },

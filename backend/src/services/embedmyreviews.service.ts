@@ -37,6 +37,7 @@ async function emrFetch(path: string, apiKey: string, options: RequestInit = {},
   const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
+    'Accept': 'application/json',
     ...(options.headers as Record<string, string> | undefined),
   };
 
@@ -227,12 +228,13 @@ export async function createCustomer(
   businessName: string,
   email: string,
 ): Promise<{ customerId: string; apiKey: string }> {
-  const operatorKey = config.embedmyreviews.apiKey;
-  if (!operatorKey) throw new Error('EMBEDMYREVIEWS_API_KEY not configured');
+  const operatorKey = config.embedmyreviews.agencyKey || config.embedmyreviews.apiKey;
+  if (!operatorKey) throw new Error('EMBEDMYREVIEWS_AGENCY_KEY not configured');
 
+  const password = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10).toUpperCase() + '!1';
   const res = await emrFetch('/customers', operatorKey, {
     method: 'POST',
-    body: JSON.stringify({ business_name: businessName, email }),
+    body: JSON.stringify({ name: email, company: businessName, email, password }),
   }, AGENCY_BASE_URL());
 
   if (!res.ok) {
@@ -252,7 +254,7 @@ export async function createCustomer(
 }
 
 export async function deleteCustomer(customerId: string): Promise<void> {
-  const operatorKey = config.embedmyreviews.apiKey;
+  const operatorKey = config.embedmyreviews.agencyKey || config.embedmyreviews.apiKey;
   if (!operatorKey) return;
 
   const res = await emrFetch(`/customers/${encodeURIComponent(customerId)}`, operatorKey, {
@@ -266,7 +268,7 @@ export async function deleteCustomer(customerId: string): Promise<void> {
 }
 
 export async function suspendCustomer(customerId: string): Promise<void> {
-  const operatorKey = config.embedmyreviews.apiKey;
+  const operatorKey = config.embedmyreviews.agencyKey || config.embedmyreviews.apiKey;
   if (!operatorKey) return;
 
   const res = await emrFetch(`/customers/${encodeURIComponent(customerId)}/suspend`, operatorKey, {
