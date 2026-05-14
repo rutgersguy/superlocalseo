@@ -580,19 +580,19 @@ else
   warn "Stripe webhook → HTTP $STRIPE_STATUS (expected 400/401 — check STRIPE_WEBHOOK_SECRET)"
 fi
 
-# EMR webhook — invalid signature
-FAKE_SIG="sha256=0000000000000000000000000000000000000000000000000000000000000000"
+# EMR webhook — no auth (EMR does not send HMAC signatures)
+# A well-formed payload with unknown location_id should return 200 (logged but ignored)
+# A malformed payload missing required fields should return 400
 EMR_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
   --max-time 5 \
   -X POST \
   -H "Content-Type: application/json" \
-  -H "X-EMR-Signature: $FAKE_SIG" \
-  -d '{"event":"review.created"}' \
+  -d '{"event":"review.created","id":"qa-test-123","source":"google","author":"QA User","rating":5,"message":"test","date":"2026-01-01"}' \
   "${API}/reviews/webhook" 2>/dev/null) || EMR_STATUS=0
-if [ "$EMR_STATUS" = "401" ] || [ "$EMR_STATUS" = "400" ] || [ "$EMR_STATUS" = "403" ]; then
-  pass "EMR webhook rejects bad HMAC ($EMR_STATUS)"
+if [ "$EMR_STATUS" = "200" ]; then
+  pass "EMR webhook accepts valid payload ($EMR_STATUS)"
 else
-  warn "EMR webhook → HTTP $EMR_STATUS (expected 401/400)"
+  warn "EMR webhook → HTTP $EMR_STATUS (expected 200)"
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -648,3 +648,4 @@ else
   echo -e "${RED}${BOLD}✗ $FAIL CHECK(S) FAILED${RESET}"
   exit 1
 fi
+
