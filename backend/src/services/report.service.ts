@@ -667,7 +667,7 @@ export function renderReportHtml(data: ReportData): string {
   </div>
 
   <!-- Executive Summary -->
-  <div style="padding:16px 40px 12px">
+  <div style="padding:28px 40px 12px">
     <h2 style="font-size:14px;font-weight:700;color:${brandColor};margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em">Executive Summary</h2>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px">
       ${statBox('Avg. Rank', rankings.avgRank != null ? String(rankings.avgRank) : 'N/A', brandColor)}
