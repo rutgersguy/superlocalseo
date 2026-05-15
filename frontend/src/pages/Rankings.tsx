@@ -602,7 +602,7 @@ export default function Rankings() {
           <button
             onClick={() => void handleSync()}
             disabled={syncing}
-            className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-3 sm:py-1.5 font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+            className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
           >
             {syncing ? 'Refreshing…' : 'Refresh'}
           </button>
