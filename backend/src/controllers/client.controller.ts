@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok } from '../utils/response';
 import { provisionClient } from '../services/emr_provisioning';
+import { decrypt } from '../utils/crypto';
 import { citationsQueue } from '../jobs/queue';
 import { logger } from '../utils/logger';
 
@@ -154,6 +155,29 @@ export async function retryProvision(req: Request, res: Response, next: NextFunc
 
     await provisionClient(req.clientId);
     ok(res, { provisioned: true });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function emrCredentials(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const client = await db('clients')
+      .where({ id: req.clientId })
+      .select('emr_customer_id', 'emr_provisioning_status', 'emr_password_encrypted')
+      .first();
+
+    const user = await db('users').where({ id: req.userId }).select('email').first();
+
+    const ready = !!client?.emr_customer_id && !!client?.emr_password_encrypted;
+    const password = ready ? decrypt(client.emr_password_encrypted as string) : null;
+
+    ok(res, {
+      ready,
+      loginUrl: 'https://app.superlocalseo.com',
+      email: ready ? (user?.email as string) : null,
+      password,
+    });
   } catch (e) {
     next(e);
   }

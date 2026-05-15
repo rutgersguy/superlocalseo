@@ -227,7 +227,7 @@ export interface EMRCustomer {
 export async function createCustomer(
   businessName: string,
   email: string,
-): Promise<{ customerId: string; apiKey: string }> {
+): Promise<{ customerId: string; password: string }> {
   const operatorKey = config.embedmyreviews.agencyKey || config.embedmyreviews.apiKey;
   if (!operatorKey) throw new Error('EMBEDMYREVIEWS_AGENCY_KEY not configured');
 
@@ -242,15 +242,13 @@ export async function createCustomer(
     throw new Error(`EMR createCustomer failed: ${res.status} ${body}`);
   }
 
-  const data = await res.json() as { id?: string; api_key?: string; customer?: { id: string; api_key: string } };
-  const customerId = data.id ?? data.customer?.id;
-  const apiKey = data.api_key ?? data.customer?.api_key;
+  // Response shape: { data: { id: number, ... } }
+  const json = await res.json() as { data?: { id?: number | string } };
+  const customerId = String(json?.data?.id ?? '');
 
-  if (!customerId || !apiKey) {
-    throw new Error('EMR createCustomer: unexpected response shape');
-  }
+  if (!customerId) throw new Error('EMR createCustomer: no customer id in response');
 
-  return { customerId, apiKey };
+  return { customerId, password };
 }
 
 export async function deleteCustomer(customerId: string): Promise<void> {

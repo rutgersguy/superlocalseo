@@ -42,57 +42,54 @@ export async function provisionClient(clientId: string): Promise<void> {
   const businessName = (client.business_name as string) ?? 'Business';
 
   let customerId: string | undefined;
-  let apiKey: string;
+  let emrPassword: string | undefined;
 
   try {
     const result = await createCustomer(businessName, email);
     customerId = result.customerId;
-    apiKey = result.apiKey;
+    emrPassword = result.password;
   } catch (e) {
-    // Agency sub-account creation failed (plan limitation or API unavailable).
-    // Fall back to the shared operator key so the client can still use EMR features.
-    const operatorKey = config.embedmyreviews.apiKey;
-    if (!operatorKey) throw e; // re-throw only if there's truly no key at all
-    logger.warn('EMR agency provisioning failed, falling back to shared operator key', {
+    logger.warn('EMR agency sub-account creation failed', {
       clientId,
       error: (e as Error).message,
     });
-    apiKey = operatorKey;
   }
 
   const now = new Date();
-  const encryptedKey = encrypt(apiKey);
-
-  // Upsert the integrations row with the per-client key
-  const existing = await db('integrations')
-    .where({ client_id: clientId, provider: 'embedmyreviews' })
-    .first();
-
-  if (existing) {
-    await db('integrations').where({ id: existing.id }).update({
-      api_key_encrypted: encryptedKey,
-      status: 'connected',
-      error_message: null,
-      updated_at: now,
-    });
-  } else {
-    await db('integrations').insert({
-      client_id: clientId,
-      provider: 'embedmyreviews',
-      api_key_encrypted: encryptedKey,
-      status: 'connected',
-      created_at: now,
-      updated_at: now,
-    });
-  }
 
   await db('clients').where({ id: clientId }).update({
     ...(customerId ? { emr_customer_id: customerId } : {}),
+    ...(emrPassword ? { emr_password_encrypted: encrypt(emrPassword) } : {}),
     emr_provisioning_status: 'provisioned',
     updated_at: now,
   });
 
-  logger.info('EMR provisioned for client', { clientId, customerId: customerId ?? 'shared-operator-key' });
+  // Keep integrations row pointing to the shared operator key for review reads
+  const operatorKey = config.embedmyreviews.apiKey;
+  if (operatorKey) {
+    const existing = await db('integrations')
+      .where({ client_id: clientId, provider: 'embedmyreviews' })
+      .first();
+    if (existing) {
+      await db('integrations').where({ id: existing.id }).update({
+        api_key_encrypted: encrypt(operatorKey),
+        status: 'connected',
+        error_message: null,
+        updated_at: now,
+      });
+    } else {
+      await db('integrations').insert({
+        client_id: clientId,
+        provider: 'embedmyreviews',
+        api_key_encrypted: encrypt(operatorKey),
+        status: 'connected',
+        created_at: now,
+        updated_at: now,
+      });
+    }
+  }
+
+  logger.info('EMR provisioned for client', { clientId, customerId: customerId ?? 'none', hasPassword: !!emrPassword });
 }
 
 /**

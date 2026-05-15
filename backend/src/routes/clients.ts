@@ -10,5 +10,6 @@ router.get('/', requireAuth, requireClient, ctrl.getClient);
 router.patch('/', requireAuth, requireClient, requireTeamAdmin, validate(ctrl.patchSchema), ctrl.updateClient);
 router.post('/complete-onboarding', requireAuth, requireClient, requireTeamAdmin, ctrl.completeOnboarding);
 router.post('/retry-emr-provision', requireAuth, requireClient, requireTeamAdmin, ctrl.retryProvision);
+router.get('/emr-credentials', requireAuth, requireClient, ctrl.emrCredentials);
 
 export default router;
