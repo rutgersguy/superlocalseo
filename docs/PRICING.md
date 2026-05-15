@@ -6,7 +6,7 @@
 |---|---|---|---|
 | Tier 1 — Starter | $350/mo | 1 | +$150/mo each |
 | Tier 2 — Growth | $700/mo | 3 | +$100/mo each |
-| Tier 3 — Pro | $1,200/mo | 5 | +$75/mo each |
+| Tier 3 — Scale | $1,200/mo | 5 | +$75/mo each |
 
 All tiers include: daily ranking tracking, 6-hour review sync, citation monitoring, monthly PDF report.
 
@@ -71,7 +71,7 @@ Product: SuperLocalSEO Tier 2
   Price: $700/mo recurring
   Metadata: tier=2, included_locations=3
 
-Product: SuperLocalSEO Tier 3
+Product: SuperLocalSEO Tier 3 — Scale
   Price: $1,200/mo recurring
   Metadata: tier=3, included_locations=5
 

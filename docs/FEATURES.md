@@ -708,6 +708,8 @@ Returns available invitation templates from EMR.
 
 `deleteClientEMR(clientId)` hard-deletes the sub-account when a client record is permanently removed.
 
+> **Known gap:** `deleteClientEMR` is not currently called when a client is deleted via the admin panel. EMR sub-accounts are orphaned on admin delete. Manual cleanup in the EMR agency dashboard is required until this is wired up.
+
 ### Campaigns Page Walkthrough
 
 1. **Campaign cards** — Each campaign shows the full funnel with a mini conversion funnel visualisation (invited → opened → clicked → reviewed)
@@ -1329,6 +1331,7 @@ Yelp removed direct API access for reviews in 2018. Yelp review monitoring is ha
 ### Integrations Settings Page
 
 The Settings → Integrations tab shows:
+- **Review Management** — EMR credentials card (always visible, above OAuth cards); shows login URL, email, and auto-generated password with one-click copy buttons; includes "Open Review Management" link to `https://app.superlocalseo.com/login`
 - **Google Business Profile** — Connect/Disconnect button; status badge
 - **Facebook** — Connect/Disconnect button; shows connected page name when linked
 - **Yelp** — Informational card explaining BrightLocal handles Yelp monitoring

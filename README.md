@@ -27,7 +27,7 @@ Enterprise-grade local SEO platform for service businesses (plumbers, HVAC, elec
 | Queue | BullMQ (scheduled data pulls, report generation) |
 | PDF | Puppeteer (report rendering) |
 | Email | Resend |
-| Payments | Stripe (subscriptions, per-location billing at $125/mo per additional location) |
+| Payments | Stripe (subscriptions, tier-based per-location billing — see [Pricing](docs/PRICING.md)) |
 | Auth | JWT (access + refresh tokens) + Google OAuth 2.0 |
 | External APIs | BrightLocal Data API (rankings, geo-grid, citation auditing) · EmbedMyReviews (reviews, campaigns, private feedback) |
 | DevOps | Docker, Docker Compose, Nginx |
@@ -131,20 +131,20 @@ Client matching: the webhook payload includes `organization_id`, which maps to `
 ### Customer Onboarding Flow
 
 1. Customer registers (email + password or Google Sign-In)
-2. Onboarding wizard: business details → locations (step 1) → billing (step 2) → connect Google Business Profile (step 3) → review management setup (step 4)
+2. Onboarding wizard (4 steps): Business Info → Locations → Keywords → Connect Google Business Profile
 3. On `POST /clients/complete-onboarding`: EMR sub-account is provisioned (12-second timeout; failure is non-fatal and retried), citation scan is queued
-4. Credentials for `app.superlocalseo.com` are available immediately via `GET /clients/emr-credentials`
-5. Customer logs into `app.superlocalseo.com` and connects their review profiles and/or sets up campaigns
+4. Customer selects a billing plan on the billing page
+5. Credentials for `app.superlocalseo.com/login` are accessible at any time via the Reviews page header, Settings → Integrations, or the `GET /clients/emr-credentials` endpoint
+6. Customer logs into `app.superlocalseo.com/login` and connects their review profiles and/or sets up campaigns
 
 ### Pricing
 
-- Base plan covers 1 location
-- Additional locations: **+$125/mo per location** (enforced via Stripe per-location billing)
+See [docs/PRICING.md](docs/PRICING.md) for the full tier breakdown. Additional locations are billed at **+$150/mo** (Starter), **+$100/mo** (Growth), or **+$75/mo** (Scale) depending on the client's tier.
 
 ---
 
 ## Known Issues / Ops Notes
 
-- **Existing test accounts** (`brent@superlocalseo.com`, `airserve@superlocalseo.com`): created before the password-storage fix; `emr_password_encrypted` is NULL. EMR sub-accounts exist (customer IDs 3 and 2 respectively). Credentials were set manually.
-- **AirServe GBP OAuth**: Token expired 2026-05-11; refresh returns `unauthorized_client`. Client needs to reconnect Google Business Profile in the app.
+- **AirServe GBP OAuth**: Token expired 2026-05-11; refresh returns `unauthorized_client`. Client needs to reconnect Google Business Profile in Settings → Integrations.
+- **deleteClientEMR not called on admin delete**: EMR sub-accounts are orphaned when a client is deleted via the admin panel. Manual cleanup in the EMR agency dashboard is required.
 - **BullMQ reviews job**: Runs hourly. Pulls reviews via EMR API. Private feedback is received via webhook, not polled.
