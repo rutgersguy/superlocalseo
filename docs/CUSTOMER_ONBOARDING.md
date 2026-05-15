@@ -26,12 +26,12 @@ Step-by-step guide for onboarding a new customer to SuperLocalSEO.
 ### Step 3 — Keywords
 - For each location, add target search terms (e.g. "HVAC repair in Dallas")
 - 3–5 keywords per location to start
-- Click **Next**
+- Stuck? Click **Suggest Keywords** — the system generates relevant terms based on your business name and industry automatically
 
 ### Step 4 — Connect Google Business Profile
 - Click **Connect Google** and complete the OAuth flow
 - Optional but strongly recommended — enables Google review sync and ranking data
-- Click **Finish** (can skip Google and connect later in Settings)
+- Click **Finish** (can skip Google and connect later in Settings → Integrations)
 
 ---
 
@@ -43,25 +43,37 @@ The following happen server-side when the customer clicks Finish:
 - Citation scan is queued — results appear in the Citations tab within a few minutes
 - Customer is redirected to the billing page to select a plan
 
-> **Note:** If EMR provisioning times out (12s limit), `emr_provisioning_status` is set to `failed` and the customer still proceeds. Provisioning can be retried via the retry button or manually from the server.
+> **If EMR provisioning fails or times out:** The customer still proceeds to the dashboard normally — all other features (rankings, citations, reports) work immediately. The review management section will show a "still being set up" state until provisioning succeeds. See EMR failure handling below.
 
 ---
 
-## 4. Set Up Review Management (EMR)
+## 4. When Will I See Data?
 
-- An amber banner appears on the **Reviews** and **Campaigns** pages
-- Customer clicks **"Set Up Review Management"**
+| Data Type | When It Appears |
+|---|---|
+| Citation scan results | 2–5 minutes after onboarding |
+| First keyword rankings | Within 24 hours (BrightLocal pull) |
+| Review data (if GBP connected) | Within 1–2 hours of connecting |
+| First monthly report | Day 32 (auto-generated on the 1st of the following month) |
+
+---
+
+## 5. Set Up Review Management (EMR)
+
+> **What is `app.superlocalseo.com`?** This is SuperLocalSEO's white-labeled review management portal, powered by EmbedMyReviews. It is a separate application from the main SuperLocalSEO dashboard — customers log in with their own credentials and connect their review profiles there. Think of it as a companion tool, not a sub-page.
+
+- An amber banner appears on the **Reviews** and **Campaigns** pages, or click **Review Management** in the header or go to **Settings → Integrations**
 - A modal displays their login credentials:
-  - **Login URL:** `https://app.superlocalseo.com`
+  - **Login URL:** `https://app.superlocalseo.com/login`
   - **Email:** their registered email address
   - **Password:** auto-generated (copy button provided)
-- Customer logs into `app.superlocalseo.com` with those credentials
-- Inside EMR, they connect their Google, Yelp, Facebook, and other review profiles
+- Customer logs into `app.superlocalseo.com/login` with those credentials
+- Inside the portal, they connect their Google, Yelp, Facebook, and other review profiles
 - Reviews sync hourly via the BullMQ job, or near-instantly via webhook for new reviews
 
 ---
 
-## 5. Send a Test Review Request (Optional)
+## 6. Send a Test Review Request (Optional)
 
 - Inside `app.superlocalseo.com`, create a campaign
 - Send a review invite to a test contact
@@ -72,9 +84,10 @@ The following happen server-side when the customer clicks Finish:
 ## Operator Checklist (After Customer Onboards)
 
 - [ ] Confirm `emr_provisioning_status = provisioned` and `emr_customer_id` is populated in the admin panel
-- [ ] If EMR credentials modal shows "still being set up", re-provision manually:
-  1. Set `emr_provisioning_status = 'failed'` in DB for that client
-  2. Run `provisionClient(clientId)` via ts-node in the API container
+- [ ] If EMR credentials modal shows "still being set up":
+  1. Check admin panel — if `emr_provisioning_status = failed`, use the **Retry Provision** button
+  2. If retry fails, set `emr_provisioning_status = 'failed'` in DB and run `provisionClient(clientId)` via ts-node in the API container
+  3. Customer can use all other dashboard features in the meantime — only review management is affected
 - [ ] Confirm citation scan results are populating in the Citations tab
 - [ ] Confirm billing plan is set (or manually set trial via admin panel)
 
@@ -82,10 +95,14 @@ The following happen server-side when the customer clicks Finish:
 
 ## Pricing Reference
 
-| Locations | Monthly Cost |
-|---|---|
-| 1 (base) | Plan base price |
-| Each additional | +$125/mo |
+| Tier | Monthly Price | Included Locations | Extra Locations |
+|---|---|---|---|
+| **Starter** | $350/mo | 1 | +$150/mo each |
+| **Growth** | $700/mo | 3 | +$100/mo each |
+| **Scale** | $1,200/mo | 5 | +$75/mo each |
+
+- All tiers include every feature — no feature gating by tier
+- Per-location billing is prorated; locations can be added or removed mid-month
 
 ---
 
