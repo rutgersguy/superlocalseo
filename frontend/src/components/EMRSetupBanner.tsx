@@ -3,7 +3,7 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import { fetcher } from '../services/api';
 
-const EMR_URL = 'https://app.superlocalseo.com';
+const EMR_URL = 'https://app.superlocalseo.com/login';
 const DISMISS_KEY = 'emr_setup_banner_dismissed';
 
 interface Credentials {

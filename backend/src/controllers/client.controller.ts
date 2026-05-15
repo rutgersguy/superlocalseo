@@ -174,7 +174,7 @@ export async function emrCredentials(req: Request, res: Response, next: NextFunc
 
     ok(res, {
       ready,
-      loginUrl: 'https://app.superlocalseo.com',
+      loginUrl: 'https://app.superlocalseo.com/login',
       email: ready ? (user?.email as string) : null,
       password,
     });
