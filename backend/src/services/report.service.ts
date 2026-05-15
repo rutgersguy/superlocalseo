@@ -444,9 +444,9 @@ export async function gatherReportData(
 
 export function renderReportHtml(data: ReportData): string {
   const { client, period, rankings, reviews, citations, competitors, clientStats, gap, sentiment, visibility, auditScore, roi } = data;
-  const brandColor = client.whiteLabel?.color ?? '#0052CC';
+  const brandColor = client.whiteLabel?.color ?? '#1360FA';
   const brandName = client.whiteLabel?.companyName ?? 'SuperLocalSEO';
-  const brandLogoUrl = client.whiteLabel?.logoUrl ?? null;
+  const brandLogoUrl = client.whiteLabel?.logoUrl ?? 'https://superlocalseo.com/sls_logo_wide_white.png';
 
   // Auto recommendations
   const recommendations: string[] = [];
@@ -649,12 +649,22 @@ export function renderReportHtml(data: ReportData): string {
 <div class="page">
 
   <!-- Header -->
-  <div style="background:${brandColor};color:#ffffff;padding:18px 40px 14px">
-    ${brandLogoUrl
-      ? `<img src="${brandLogoUrl}" alt="${escHtml(brandName)}" style="height:26px;margin-bottom:8px;object-fit:contain;display:block" />`
-      : `<div style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;opacity:0.7;margin-bottom:2px">${escHtml(brandName)}</div>`}
-    <h1 style="font-size:20px;font-weight:700;margin-bottom:4px">${escHtml(client.businessName)}</h1>
-    <div style="font-size:12px;opacity:0.85">Monthly SEO Performance Report &mdash; ${escHtml(period.label)}</div>
+  <div style="background:${brandColor};color:#ffffff;padding:28px 40px 24px">
+    <!-- Logo left / client info right -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <img src="${brandLogoUrl}" alt="${escHtml(brandName)}" style="height:34px;object-fit:contain;display:block;flex-shrink:0" />
+      <div style="text-align:right">
+        <div style="font-size:18px;font-weight:700;letter-spacing:-0.01em;line-height:1.2">${escHtml(client.businessName)}</div>
+        <div style="font-size:11px;opacity:0.7;margin-top:3px;letter-spacing:0.02em">${escHtml(client.email)}</div>
+      </div>
+    </div>
+    <!-- Divider -->
+    <div style="border-top:1px solid rgba(255,255,255,0.2);margin-bottom:18px"></div>
+    <!-- Centered report title -->
+    <div style="text-align:center">
+      <div style="font-size:10px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;opacity:0.6;margin-bottom:6px">Monthly SEO Performance Report</div>
+      <div style="font-size:26px;font-weight:800;letter-spacing:-0.02em;line-height:1">${escHtml(period.label)}</div>
+    </div>
   </div>
 
   <!-- Executive Summary -->
