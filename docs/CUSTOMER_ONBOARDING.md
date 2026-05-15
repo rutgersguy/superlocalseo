@@ -2,6 +2,8 @@
 
 Step-by-step guide for onboarding a new customer to SuperLocalSEO.
 
+> **Working doc (Google Docs):** https://docs.google.com/document/d/1IWPIR5D6Um84f64Giitl_y8okV-gA8WwE6c2V4cYKgU/edit?usp=sharing
+
 ---
 
 ## 1. Register
