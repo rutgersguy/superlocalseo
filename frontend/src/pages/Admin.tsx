@@ -1357,12 +1357,14 @@ function PromoCodesTab() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Value</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {form.type === 'percent' ? 'Discount (%)' : 'Discount ($)'}
+              </label>
               <input
                 type="number"
                 value={form.value}
                 onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
-                placeholder={form.type === 'percent' ? '25' : '100'}
+                placeholder={form.type === 'percent' ? 'e.g. 25 = 25% off' : 'e.g. 100 = $100 off'}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400"
               />
             </div>
