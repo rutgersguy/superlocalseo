@@ -56,7 +56,7 @@ export default function ResetPassword() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link to="/" className="text-2xl font-bold text-brand-500">SuperLocalSEO</Link>
+          <Link to="/"><img src="/sls_logo_wide_color.png" alt="SuperLocalSEO" className="h-10 w-auto mx-auto" /></Link>
           <h1 className="mt-4 text-2xl font-bold text-gray-900">Set new password</h1>
           <p className="mt-1 text-sm text-gray-600">Enter your new password below.</p>
         </div>

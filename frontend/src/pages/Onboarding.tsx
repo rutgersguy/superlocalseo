@@ -215,7 +215,7 @@ export default function Onboarding() {
       <div className="max-w-2xl mx-auto">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-2xl font-bold text-brand-500">SuperLocalSEO</span>
+            <img src="/sls_logo_wide_color.png" alt="SuperLocalSEO" className="h-8 w-auto" />
             <button
               onClick={() => void handleSkip()}
               className="text-sm text-gray-400 hover:text-gray-600 hover:underline"

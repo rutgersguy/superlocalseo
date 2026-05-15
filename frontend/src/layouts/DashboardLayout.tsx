@@ -204,11 +204,8 @@ export default function DashboardLayout() {
         >
           {/* Logo */}
           <div className="px-4 pt-5 pb-3 flex items-center justify-between shrink-0">
-            <Link to="/dashboard" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-              <div className="w-7 h-7 rounded-lg bg-brand-500 flex items-center justify-center shrink-0">
-                <BarChart2 size={14} className="text-white" aria-hidden="true" />
-              </div>
-              <span className="text-sm font-bold text-white tracking-tight leading-none">SuperLocalSEO</span>
+            <Link to="/dashboard" className="hover:opacity-80 transition-opacity">
+              <img src="/sls_logo_wide_color-white.png" alt="SuperLocalSEO" className="h-7 w-auto" />
             </Link>
             <button
               className="lg:hidden p-1 rounded text-slate-500 hover:text-slate-300"

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { BarChart2, CheckCircle2, ShieldCheck, Lock, Tag, X } from 'lucide-react';
+import { CheckCircle2, ShieldCheck, Lock, Tag, X } from 'lucide-react';
 import useSWR from 'swr';
 import { fetcher, apiFetch } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
@@ -251,10 +251,7 @@ export default function BillingPage() {
       {/* Top nav strip */}
       <div className="bg-white border-b border-slate-100 px-6 py-3 flex items-center justify-between">
         <Link to="/dashboard" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-          <div className="w-6 h-6 rounded-md bg-brand-500 flex items-center justify-center shrink-0">
-            <BarChart2 size={12} className="text-white" />
-          </div>
-          <span className="text-sm font-bold text-slate-900 tracking-tight">SuperLocalSEO</span>
+          <img src="/sls_logo_wide_color.png" alt="SuperLocalSEO" className="h-7 w-auto" />
         </Link>
         <button onClick={() => void logout()} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
           Sign out

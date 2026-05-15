@@ -127,7 +127,7 @@ export default function Audit() {
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="max-w-xl mx-auto">
         <div className="text-center mb-8">
-          <Link to="/" className="text-xl font-bold text-brand-500">SuperLocalSEO</Link>
+          <Link to="/"><img src="/sls_logo_wide_color.png" alt="SuperLocalSEO" className="h-8 w-auto" /></Link>
           <h1 className="mt-3 text-2xl font-bold text-gray-900">Free Local SEO Audit</h1>
           <p className="text-sm text-gray-500 mt-1">See how your business stacks up in under 30 seconds</p>
         </div>

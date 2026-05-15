@@ -101,7 +101,7 @@ export default function Landing() {
       <nav className="border-b border-slate-100 px-6 py-4" aria-label="Main navigation">
         <div className="flex items-center justify-between">
           <Link to="/" aria-label="SuperLocalSEO home">
-            <span className="text-xl font-bold text-brand-500">SuperLocalSEO</span>
+            <img src="/sls_logo_wide_color.png" alt="SuperLocalSEO" className="h-9 w-auto" />
           </Link>
 
           {/* Desktop nav */}
