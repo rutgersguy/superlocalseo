@@ -781,7 +781,7 @@ export function renderReportHtml(data: ReportData): string {
 
   <!-- Competitors -->
   ${competitors.length > 0 ? `
-  <div style="padding:0 40px 32px">
+  <div style="page-break-before:always;padding:40px 40px 32px">
     <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Competitor Benchmarking</h2>
     <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
       <table>
