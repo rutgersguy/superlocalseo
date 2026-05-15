@@ -232,23 +232,33 @@ export async function createCustomer(
   if (!operatorKey) throw new Error('EMBEDMYREVIEWS_AGENCY_KEY not configured');
 
   const password = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10).toUpperCase() + '!1';
-  const res = await emrFetch('/customers', operatorKey, {
-    method: 'POST',
-    body: JSON.stringify({ name: email, company: businessName, email, password }),
-  }, AGENCY_BASE_URL());
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`EMR createCustomer failed: ${res.status} ${body}`);
+  // Try with plain business name first; fall back to "Name (email)" if company name is taken.
+  for (const company of [businessName, `${businessName} (${email})`]) {
+    const res = await emrFetch('/customers', operatorKey, {
+      method: 'POST',
+      body: JSON.stringify({ name: email, company, email, password }),
+    }, AGENCY_BASE_URL());
+
+    if (res.status === 422) {
+      const body = await res.text();
+      if (body.includes('company')) continue; // name collision — retry with disambiguated name
+      throw new Error(`EMR createCustomer failed: 422 ${body}`);
+    }
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`EMR createCustomer failed: ${res.status} ${body}`);
+    }
+
+    // Response shape: { data: { id: number, ... } }
+    const json = await res.json() as { data?: { id?: number | string } };
+    const customerId = String(json?.data?.id ?? '');
+    if (!customerId) throw new Error('EMR createCustomer: no customer id in response');
+    return { customerId, password };
   }
 
-  // Response shape: { data: { id: number, ... } }
-  const json = await res.json() as { data?: { id?: number | string } };
-  const customerId = String(json?.data?.id ?? '');
-
-  if (!customerId) throw new Error('EMR createCustomer: no customer id in response');
-
-  return { customerId, password };
+  throw new Error('EMR createCustomer: company name conflict could not be resolved');
 }
 
 export async function deleteCustomer(customerId: string): Promise<void> {
