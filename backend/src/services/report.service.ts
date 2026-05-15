@@ -662,8 +662,7 @@ export function renderReportHtml(data: ReportData): string {
     <div style="border-top:1px solid rgba(255,255,255,0.2);margin-bottom:18px"></div>
     <!-- Centered report title -->
     <div style="text-align:center">
-      <div style="font-size:10px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;opacity:0.6;margin-bottom:6px">Monthly SEO Performance Report</div>
-      <div style="font-size:26px;font-weight:800;letter-spacing:-0.02em;line-height:1">${escHtml(period.label)}</div>
+      <div style="font-size:10px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;opacity:0.6">Monthly SEO Performance Report &mdash; ${escHtml(period.label)}</div>
     </div>
   </div>
 
