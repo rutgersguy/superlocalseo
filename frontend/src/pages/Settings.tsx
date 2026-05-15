@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, type ChangeEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useSWR, { mutate as swrMutate } from 'swr';
-import { QrCode, Download, Trash2, Plus, AlertCircle, CheckCircle2, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
+import { QrCode, Download, Trash2, Plus, AlertCircle, CheckCircle2, ExternalLink, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
 import { apiFetch, fetcher } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 
@@ -171,6 +171,88 @@ function OAuthCard({ name, description, connected, comingSoon, onConnect, onDisc
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── EMR Credentials card ─────────────────────────────────────────────────────
+
+interface EMRCreds {
+  ready: boolean;
+  loginUrl: string;
+  email: string | null;
+  password: string | null;
+}
+
+function EMRCredentialsCard() {
+  const { data, isLoading } = useSWR<{ success: boolean; data: EMRCreds }>('/clients/emr-credentials', fetcher);
+  const creds = data?.data;
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const copy = async (value: string, field: string) => {
+    await navigator.clipboard.writeText(value);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  const fields = creds?.ready
+    ? [
+        { label: 'Login URL', value: creds.loginUrl, field: 'url' },
+        { label: 'Email', value: creds.email!, field: 'email' },
+        { label: 'Password', value: creds.password!, field: 'password' },
+      ]
+    : [];
+
+  return (
+    <div className="border border-slate-200 rounded-xl p-5">
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">Review Management</h3>
+          <p className="text-xs text-slate-500 mt-0.5">Login credentials for your review management portal</p>
+        </div>
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+          isLoading ? 'bg-slate-100 text-slate-400'
+          : creds?.ready ? 'bg-green-100 text-green-700'
+          : 'bg-amber-100 text-amber-600'
+        }`}>
+          {isLoading ? '…' : creds?.ready ? 'Active' : 'Setting up'}
+        </span>
+      </div>
+
+      {!isLoading && !creds?.ready && (
+        <p className="text-sm text-slate-500 mb-4">Your review management account is being set up. Check back in a moment.</p>
+      )}
+
+      {creds?.ready && (
+        <div className="space-y-3 bg-slate-50 rounded-lg p-4 mb-4">
+          {fields.map(({ label, value, field }) => (
+            <div key={field}>
+              <p className="text-xs font-medium text-slate-500 mb-1">{label}</p>
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm text-slate-800 font-mono break-all">{value}</span>
+                <button
+                  onClick={() => void copy(value, field)}
+                  className="flex-shrink-0 text-slate-400 hover:text-slate-700 transition-colors"
+                  title="Copy"
+                >
+                  {copiedField === field
+                    ? <Check className="w-3.5 h-3.5 text-green-600" />
+                    : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <a
+        href="https://app.superlocalseo.com/login"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 px-4 py-2 bg-brand-500 text-white text-sm font-semibold rounded-lg hover:bg-brand-600 transition-colors"
+      >
+        Open Review Management <ExternalLink className="w-3.5 h-3.5" />
+      </a>
     </div>
   );
 }
@@ -2119,6 +2201,7 @@ export default function Settings() {
         {/* Integrations tab */}
         {activeTab === 'integrations' && (
           <div className="space-y-4">
+            <EMRCredentialsCard />
             <OAuthCard
               name="Google Business Profile"
               description="Sync reviews, Q&A, and business info from Google"

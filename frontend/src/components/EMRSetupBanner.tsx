@@ -13,7 +13,7 @@ interface Credentials {
   password: string | null;
 }
 
-function CopyButton({ value }: { value: string }) {
+export function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     await navigator.clipboard.writeText(value);
@@ -27,7 +27,7 @@ function CopyButton({ value }: { value: string }) {
   );
 }
 
-function CredentialsModal({ onClose }: { onClose: () => void }) {
+export function CredentialsModal({ onClose }: { onClose: () => void }) {
   const { data, isLoading } = useSWR<{ success: boolean; data: Credentials }>('/clients/emr-credentials', fetcher);
   const creds = data?.data;
 

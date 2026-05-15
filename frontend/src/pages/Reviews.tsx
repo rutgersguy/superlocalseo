@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import useSWR from 'swr';
-import EMRSetupBanner from '../components/EMRSetupBanner';
+import EMRSetupBanner, { CredentialsModal } from '../components/EMRSetupBanner';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer,
@@ -318,7 +318,7 @@ function PostReplyModal({ review, onClose, onPosted }: { review: Review; onClose
 
 // ─── Review card ──────────────────────────────────────────────────────────────
 
-function ReviewCard({ review, onReplyPosted }: { review: Review; onReplyPosted: () => void }) {
+function ReviewCard({ review, onReplyPosted, onOpenCreds }: { review: Review; onReplyPosted: () => void; onOpenCreds: () => void }) {
   const [showResponse, setShowResponse] = useState(false);
   const [showReplyModal, setShowReplyModal] = useState(false);
 
@@ -367,15 +367,25 @@ function ReviewCard({ review, onReplyPosted }: { review: Review; onReplyPosted: 
               Post to Google
             </button>
           )}
-          <a
-            href={review.platformUrl ?? 'https://app.superlocalseo.com/reviews'}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="p-1.5 text-slate-400 hover:text-brand-500 hover:bg-brand-50 rounded-lg transition-colors"
-            title={review.platformUrl ? 'View on platform' : 'View in Review Management'}
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
+          {review.platformUrl ? (
+            <a
+              href={review.platformUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-1.5 text-slate-400 hover:text-brand-500 hover:bg-brand-50 rounded-lg transition-colors"
+              title="View on platform"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          ) : (
+            <button
+              onClick={onOpenCreds}
+              className="p-1.5 text-slate-400 hover:text-brand-500 hover:bg-brand-50 rounded-lg transition-colors"
+              title="Open Review Management"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </button>
+          )}
           <button
             onClick={() => setShowResponse((v) => !v)}
             className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
@@ -398,53 +408,53 @@ function FeedbackTab() {
   const { data, isLoading } = useSWR<{ success: boolean; data: { feedback: any[]; total: number } }>('/reviews/feedback', fetcher);
   const feedback = data?.data?.feedback ?? [];
   const total = data?.data?.total ?? 0;
+  const [showCredsModal, setShowCredsModal] = useState(false);
 
   if (isLoading) return <div className="text-sm text-slate-500">Loading...</div>;
 
-  if (feedback.length === 0) {
-    return (
-      <div className="text-center py-16 text-slate-400">
-        <p className="font-medium text-slate-600 mb-1">No private feedback yet</p>
-        <p className="text-sm">When a review requester rates 1–3★, their response appears here instead of going to Google.</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-3">
-      <p className="text-sm text-slate-500">{total} private responses</p>
-      {feedback.map((f: any) => (
-        <div key={f.id} className="bg-white rounded-xl p-4 shadow-card">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                {f.contactName && <span className="text-sm font-medium text-slate-800">{f.contactName}</span>}
-                <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-medium">Private</span>
-                {f.rating && (
-                  <span className="text-xs text-slate-500">{'★'.repeat(f.rating)}{'☆'.repeat(5 - f.rating)}</span>
-                )}
-              </div>
-              {f.contactEmail && <p className="text-xs text-slate-400">{f.contactEmail}</p>}
-              {f.message && <p className="text-sm text-slate-700 mt-2">{f.message}</p>}
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="text-xs text-slate-400 whitespace-nowrap">
-                {new Date(f.receivedAt).toLocaleDateString()}
-              </span>
-              <a
-                href="https://app.superlocalseo.com/request-reviews/contacts"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-1.5 text-slate-400 hover:text-brand-500 hover:bg-brand-50 rounded-lg transition-colors"
-                title="View in Review Management"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            </div>
-          </div>
+    <>
+      {showCredsModal && <CredentialsModal onClose={() => setShowCredsModal(false)} />}
+      {feedback.length === 0 ? (
+        <div className="text-center py-16 text-slate-400">
+          <p className="font-medium text-slate-600 mb-1">No private feedback yet</p>
+          <p className="text-sm">When a review requester rates 1–3★, their response appears here instead of going to Google.</p>
         </div>
-      ))}
-    </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-sm text-slate-500">{total} private responses</p>
+          {feedback.map((f: any) => (
+            <div key={f.id} className="bg-white rounded-xl p-4 shadow-card">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    {f.contactName && <span className="text-sm font-medium text-slate-800">{f.contactName}</span>}
+                    <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-medium">Private</span>
+                    {f.rating && (
+                      <span className="text-xs text-slate-500">{'★'.repeat(f.rating)}{'☆'.repeat(5 - f.rating)}</span>
+                    )}
+                  </div>
+                  {f.contactEmail && <p className="text-xs text-slate-400">{f.contactEmail}</p>}
+                  {f.message && <p className="text-sm text-slate-700 mt-2">{f.message}</p>}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="text-xs text-slate-400 whitespace-nowrap">
+                    {new Date(f.receivedAt).toLocaleDateString()}
+                  </span>
+                  <button
+                    onClick={() => setShowCredsModal(true)}
+                    className="p-1.5 text-slate-400 hover:text-brand-500 hover:bg-brand-50 rounded-lg transition-colors"
+                    title="Open Review Management"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -462,6 +472,7 @@ export default function Reviews() {
   const [rating, setRating] = useState('All');
   const [status, setStatus] = useState('All');
   const [search, setSearch] = useState('');
+  const [showCredsModal, setShowCredsModal] = useState(false);
   const [trendRange, setTrendRange] = useState<TrendRange>(30);
 
   const params = new URLSearchParams();
@@ -492,6 +503,7 @@ export default function Reviews() {
 
   return (
     <div className="space-y-6">
+      {showCredsModal && <CredentialsModal onClose={() => setShowCredsModal(false)} />}
       {showEMRBanner && <EMRSetupBanner context="reviews" />}
       <div>
         <div className="flex items-center justify-between">
@@ -501,6 +513,12 @@ export default function Reviews() {
             <button onClick={() => { window.location.href = '/api/analytics/export?type=reviews'; }}
               className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
               Export CSV
+            </button>
+            <button
+              onClick={() => setShowCredsModal(true)}
+              className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors flex items-center gap-1.5"
+            >
+              Review Management <ExternalLink className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -619,7 +637,7 @@ export default function Reviews() {
             </div>
           ) : (
             <div className="grid gap-4">
-              {reviews.map((review) => <ReviewCard key={review.id} review={review} onReplyPosted={() => void mutateReviews()} />)}
+              {reviews.map((review) => <ReviewCard key={review.id} review={review} onReplyPosted={() => void mutateReviews()} onOpenCreds={() => setShowCredsModal(true)} />)}
             </div>
           )}
         </>
