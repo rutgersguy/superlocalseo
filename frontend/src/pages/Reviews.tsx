@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ExternalLink } from 'lucide-react';
 import useSWR from 'swr';
 import EMRSetupBanner from '../components/EMRSetupBanner';
 import {
@@ -20,6 +21,7 @@ interface Review {
   blReviewId?: string | null;
   blReplyStatus?: string | null;
   blReplyPostedAt?: string | null;
+  platformUrl?: string | null;
 }
 
 interface ReviewResponse {
@@ -365,6 +367,15 @@ function ReviewCard({ review, onReplyPosted }: { review: Review; onReplyPosted: 
               Post to Google
             </button>
           )}
+          <a
+            href={review.platformUrl ?? 'https://app.superlocalseo.com/reviews'}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-1.5 text-slate-400 hover:text-brand-500 hover:bg-brand-50 rounded-lg transition-colors"
+            title={review.platformUrl ? 'View on platform' : 'View in Review Management'}
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
           <button
             onClick={() => setShowResponse((v) => !v)}
             className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
@@ -416,9 +427,20 @@ function FeedbackTab() {
               {f.contactEmail && <p className="text-xs text-slate-400">{f.contactEmail}</p>}
               {f.message && <p className="text-sm text-slate-700 mt-2">{f.message}</p>}
             </div>
-            <span className="text-xs text-slate-400 whitespace-nowrap">
-              {new Date(f.receivedAt).toLocaleDateString()}
-            </span>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span className="text-xs text-slate-400 whitespace-nowrap">
+                {new Date(f.receivedAt).toLocaleDateString()}
+              </span>
+              <a
+                href="https://app.superlocalseo.com/request-reviews/contacts"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 text-slate-400 hover:text-brand-500 hover:bg-brand-50 rounded-lg transition-colors"
+                title="View in Review Management"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
           </div>
         </div>
       ))}
