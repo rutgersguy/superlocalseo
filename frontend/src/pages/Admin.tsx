@@ -1455,6 +1455,7 @@ function PromoCodesTab() {
               <tr>
                 <th className="px-4 py-3 text-left">Code</th>
                 <th className="px-4 py-3 text-left">Discount</th>
+                <th className="px-4 py-3 text-left">Applies To</th>
                 <th className="px-4 py-3 text-left">Duration</th>
                 <th className="px-4 py-3 text-left">Redemptions</th>
                 <th className="px-4 py-3 text-left">Expires</th>
@@ -1467,6 +1468,7 @@ function PromoCodesTab() {
                 <tr key={p.id} className="hover:bg-gray-50/50">
                   <td className="px-4 py-3 font-mono font-semibold text-gray-900 tracking-wider">{p.code}</td>
                   <td className="px-4 py-3 text-gray-700">{p.discount}</td>
+                  <td className="px-4 py-3 text-gray-600 capitalize">{(p as any).applyTo === 'setup' ? 'Setup fee' : (p as any).applyTo === 'monthly' ? 'Monthly' : 'All'}</td>
                   <td className="px-4 py-3 text-gray-600">{p.duration}</td>
                   <td className="px-4 py-3 text-gray-600">
                     {p.redemptions}{p.maxRedemptions ? ` / ${p.maxRedemptions}` : ''}

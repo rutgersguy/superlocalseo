@@ -26,7 +26,7 @@ interface IntentResponse {
 
 interface PromoResponse {
   success: boolean;
-  data: { id: string; discount: string; duration: string };
+  data: { id: string; discount: string; duration: string; applyTo: string };
   error?: { message: string };
 }
 
@@ -118,7 +118,7 @@ export default function BillingPage() {
 
   const [promoInput, setPromoInput] = useState('');
   const [promoLoading, setPromoLoading] = useState(false);
-  const [promoApplied, setPromoApplied] = useState<{ id: string; discount: string; duration: string } | null>(null);
+  const [promoApplied, setPromoApplied] = useState<{ id: string; discount: string; duration: string; applyTo: string } | null>(null);
   const [promoError, setPromoError] = useState('');
 
   // Check for success return from Stripe
@@ -361,7 +361,10 @@ export default function BillingPage() {
                 <CheckCircle2 size={14} className="text-green-500 shrink-0" />
                 <div>
                   <span className="text-sm font-medium text-green-800">{promoInput} applied</span>
-                  <span className="ml-2 text-xs text-green-600">{promoApplied.discount} · {promoApplied.duration}</span>
+                  <span className="ml-2 text-xs text-green-600">
+                    {promoApplied.discount} · {promoApplied.duration}
+                    {promoApplied.applyTo === 'setup' ? ' · setup fee only' : promoApplied.applyTo === 'monthly' ? ' · monthly only' : ''}
+                  </span>
                 </div>
               </div>
               <button type="button" onClick={removePromo} className="text-green-500 hover:text-green-700 ml-2">

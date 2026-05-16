@@ -72,7 +72,7 @@ export async function createCheckoutSession(
 
 export async function listPromoCodes(): Promise<Array<{
   id: string; code: string; active: boolean;
-  discount: string; duration: string; redemptions: number; maxRedemptions: number | null;
+  discount: string; duration: string; applyTo: string; redemptions: number; maxRedemptions: number | null;
   expiresAt: number | null;
 }>> {
   const promos = await stripe.promotionCodes.list({ limit: 100, expand: ['data.coupon'] });
@@ -84,9 +84,10 @@ export async function listPromoCodes(): Promise<Array<{
     const duration = c.duration === 'forever' ? 'forever'
       : c.duration === 'once' ? 'first invoice only'
       : `${c.duration_in_months ?? '?'} months`;
+    const applyTo = (c.metadata?.applyTo as string | undefined) ?? 'all';
     return {
       id: p.id, code: p.code, active: p.active,
-      discount, duration,
+      discount, duration, applyTo,
       redemptions: p.times_redeemed,
       maxRedemptions: p.max_redemptions ?? null,
       expiresAt: p.expires_at ?? null,
@@ -106,11 +107,20 @@ export interface CreatePromoParams {
 }
 
 export async function createPromoCode(params: CreatePromoParams): Promise<{ id: string; code: string }> {
+  // For monthly-only codes, restrict the Stripe coupon to the base subscription product
+  // so the setup fee line item on the first invoice is not discounted.
+  let appliesTo: Stripe.CouponCreateParams.AppliesTo | undefined;
+  if (params.applyTo === 'monthly' && config.stripe.prices.base) {
+    const basePrice = await stripe.prices.retrieve(config.stripe.prices.base);
+    const productId = typeof basePrice.product === 'string' ? basePrice.product : basePrice.product.id;
+    appliesTo = { products: [productId] };
+  }
+
   const couponParams: Stripe.CouponCreateParams = {
     duration: params.duration,
     ...(params.duration === 'repeating' ? { duration_in_months: params.durationMonths ?? 3 } : {}),
     ...(params.type === 'percent' ? { percent_off: params.value } : { amount_off: Math.round(params.value * 100), currency: 'usd' }),
-    ...(params.applyTo === 'setup' && config.stripe.prices.setup ? { applies_to: { products: [] } } : {}),
+    ...(appliesTo ? { applies_to: appliesTo } : {}),
     metadata: { applyTo: params.applyTo },
   };
   const coupon = await stripe.coupons.create(couponParams);
@@ -128,8 +138,8 @@ export async function deactivatePromoCode(promoId: string): Promise<void> {
   await stripe.promotionCodes.update(promoId, { active: false });
 }
 
-export async function validatePromoCode(code: string): Promise<{ id: string; discount: string; duration: string } | null> {
-  const results = await stripe.promotionCodes.list({ code: code.toUpperCase(), active: true, limit: 1 });
+export async function validatePromoCode(code: string): Promise<{ id: string; discount: string; duration: string; applyTo: string } | null> {
+  const results = await stripe.promotionCodes.list({ code: code.toUpperCase(), active: true, limit: 1, expand: ['data.coupon'] });
   if (!results.data.length) return null;
   const p = results.data[0];
   const c = p.coupon as Stripe.Coupon;
@@ -139,7 +149,8 @@ export async function validatePromoCode(code: string): Promise<{ id: string; dis
   const duration = c.duration === 'forever' ? 'forever'
     : c.duration === 'once' ? 'first invoice only'
     : `${c.duration_in_months ?? '?'} months`;
-  return { id: p.id, discount, duration };
+  const applyTo = (c.metadata?.applyTo as string | undefined) ?? 'all';
+  return { id: p.id, discount, duration, applyTo };
 }
 
 export async function createSubscriptionIntent(
@@ -155,17 +166,57 @@ export async function createSubscriptionIntent(
     items.push({ price: config.stripe.prices.location, quantity: extraLocations });
   }
 
+  // Determine if this promo is setup-fee-only, which requires special handling:
+  // - Do NOT apply promotion_code to the subscription (that would discount monthly charges)
+  // - Instead, compute the discounted setup fee and inject it inline
+  let setupOnlyDiscount = false;
+  let setupInvoiceItems: Stripe.SubscriptionCreateParams.AddInvoiceItem[] = [];
+
+  if (promotionCodeId && config.stripe.prices.setup) {
+    const promoCode = await stripe.promotionCodes.retrieve(promotionCodeId, { expand: ['coupon'] });
+    const coupon = promoCode.coupon as Stripe.Coupon;
+    const applyTo = (coupon.metadata?.applyTo as string | undefined) ?? 'all';
+
+    if (applyTo === 'setup') {
+      setupOnlyDiscount = true;
+      const setupPrice = await stripe.prices.retrieve(config.stripe.prices.setup);
+      const unitAmount = setupPrice.unit_amount ?? 0;
+      let discountedAmount = unitAmount;
+      if (coupon.percent_off) {
+        discountedAmount = Math.round(unitAmount * (1 - coupon.percent_off / 100));
+      } else if (coupon.amount_off) {
+        discountedAmount = Math.max(0, unitAmount - coupon.amount_off);
+      }
+      if (discountedAmount > 0) {
+        setupInvoiceItems = [{
+          price_data: {
+            currency: setupPrice.currency,
+            product: typeof setupPrice.product === 'string' ? setupPrice.product : setupPrice.product.id,
+            unit_amount: discountedAmount,
+          },
+        }];
+      }
+      // discountedAmount === 0 means free setup — omit the item entirely
+    } else {
+      setupInvoiceItems = config.stripe.prices.setup
+        ? [{ price: config.stripe.prices.setup }]
+        : [];
+    }
+  } else {
+    setupInvoiceItems = config.stripe.prices.setup
+      ? [{ price: config.stripe.prices.setup }]
+      : [];
+  }
+
   const sub = await stripe.subscriptions.create({
     customer: customerId,
     items,
-    add_invoice_items: config.stripe.prices.setup
-      ? [{ price: config.stripe.prices.setup }]
-      : [],
+    add_invoice_items: setupInvoiceItems,
     payment_behavior: 'default_incomplete',
     payment_settings: { save_default_payment_method: 'on_subscription' },
     expand: ['latest_invoice.payment_intent'],
     metadata: { userId, extraLocations: String(extraLocations) },
-    ...(promotionCodeId ? { promotion_code: promotionCodeId } : {}),
+    ...(!setupOnlyDiscount && promotionCodeId ? { promotion_code: promotionCodeId } : {}),
   });
 
   const invoice = sub.latest_invoice as Stripe.Invoice;
