@@ -28,6 +28,11 @@ import BillingPage from './pages/BillingPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 
+function ExternalRedirect({ to }: { to: string }) {
+  window.location.replace(to);
+  return null;
+}
+
 function App() {
   const auth = useAuthState();
 
@@ -45,7 +50,7 @@ function App() {
           <Route path="/auth/forgot-password" element={<ForgotPassword />} />
           <Route path="/auth/reset-password" element={<ResetPassword />} />
           <Route path="/auth/google/success" element={<AuthGoogleSuccess />} />
-          <Route path="/audit" element={<Audit />} />
+          <Route path="/audit" element={<ExternalRedirect to="https://app.superlocalseo.com/intel-request" />} />
           <Route path="/team/accept" element={<TeamAccept />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
