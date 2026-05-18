@@ -1,8 +1,37 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, TrendingUp, Star, MapPin, MessageSquare, Users, FileText, DollarSign } from 'lucide-react';
+import { ChevronDown, TrendingUp, Star, MapPin, MessageSquare, Users, FileText, DollarSign, Shield, Trophy, Cpu, Heart } from 'lucide-react';
+
+const INTEL_URL = 'https://app.superlocalseo.com/intel-request';
+
+const reportPreviewCards = [
+  {
+    Icon: Shield,
+    title: 'Trust Score & Google Profile',
+    desc: 'Your star rating, review count, response rate, and an A–F grade that tells you exactly where you stand.',
+  },
+  {
+    Icon: Trophy,
+    title: 'Live Market Battle',
+    desc: "How you stack up against your 5 nearest competitors — with click share estimates showing who's winning local searches.",
+  },
+  {
+    Icon: Cpu,
+    title: 'AI Visibility Check',
+    desc: 'Whether ChatGPT, Gemini, and Perplexity recommend your business when a customer asks for a local contractor.',
+  },
+  {
+    Icon: Heart,
+    title: 'What Customers Are Saying',
+    desc: 'AI-powered sentiment analysis of your reviews — the themes customers love and the ones they keep complaining about.',
+  },
+];
 
 const faqs = [
+  {
+    q: 'What is the free local visibility report?',
+    a: 'It\'s a no-strings snapshot of your business on Google — your trust score, how you rank against local competitors by click share, what customers are saying in your reviews, and whether AI tools like ChatGPT and Gemini recommend your business when someone asks. Enter your business name and city and we\'ll email the full report in about 2 minutes. No account, no credit card.',
+  },
   {
     q: 'How does the free trial work?',
     a: 'You get 15 days completely free — no credit card required to start. At the end of the trial you\'ll be prompted to subscribe. If you don\'t, access is paused until you do.',
@@ -150,24 +179,27 @@ export default function Landing() {
           />
           <div className="absolute inset-0 bg-white/85" />
           <div className="relative z-10 max-w-4xl mx-auto px-6 pt-16 sm:pt-24 pb-16 text-center">
-            <div className="inline-flex items-center gap-2 bg-brand-50 text-brand-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-6 border border-brand-100">
+            <a
+              href={INTEL_URL}
+              className="inline-flex items-center gap-2 bg-brand-50 text-brand-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-6 border border-brand-100 hover:bg-brand-100 transition-colors"
+            >
               <span className="w-1.5 h-1.5 rounded-full bg-brand-500 inline-block" />
-              Built for local businesses
-            </div>
+              Free local visibility report — no card needed →
+            </a>
             <h1 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-6 leading-tight">
               Local SEO that actually<br className="hidden sm:block" />{' '}shows up on the map
             </h1>
             <p className="text-lg sm:text-xl text-slate-600 mb-10 max-w-2xl mx-auto">
-              Rankings, reviews, and citations in one dashboard. Automated monthly PDF reports
-              delivered to your inbox. Built for any local business that needs to rank.
+              Rankings, reviews, and AI visibility in one dashboard. See how you stack up against
+              local competitors — free report in 2 minutes, then track it every day.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Link
-                to="/audit"
+              <a
+                href={INTEL_URL}
                 className="inline-block bg-brand-500 text-white text-lg px-8 py-4 rounded-xl font-semibold hover:bg-brand-600 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
               >
-                Get your free SEO audit
-              </Link>
+                Get my free visibility report
+              </a>
               <Link
                 to="/register"
                 className="inline-block border border-slate-300 text-slate-700 text-lg px-8 py-4 rounded-xl font-semibold hover:bg-slate-50 transition-colors"
@@ -175,7 +207,7 @@ export default function Landing() {
                 Start free trial
               </Link>
             </div>
-            <p className="mt-4 text-sm text-slate-500">Free audit — no account needed. Trial requires no credit card.</p>
+            <p className="mt-4 text-sm text-slate-500">Free report — no account needed. Trial requires no credit card.</p>
           </div>
         </section>
 
@@ -183,6 +215,36 @@ export default function Landing() {
         <div className="border-y border-slate-100 bg-slate-50/60 py-5 px-6 text-center text-sm text-slate-500">
           Trusted by local businesses across every industry to track their rankings every day.
         </div>
+
+        {/* Report preview */}
+        <section className="max-w-5xl mx-auto px-6 py-14 sm:py-20" aria-labelledby="report-preview-heading">
+          <div className="text-center mb-10">
+            <h2 id="report-preview-heading" className="text-2xl sm:text-3xl font-bold text-slate-900 mb-3">
+              See exactly where you stand before you commit
+            </h2>
+            <p className="text-slate-600 max-w-xl mx-auto">
+              Your free local visibility report pulls live Google data on your business in about 2 minutes — no account needed.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+            {reportPreviewCards.map(({ Icon, title, desc }) => (
+              <div key={title} className="p-6 rounded-2xl border border-brand-100 bg-brand-50/40 shadow-sm">
+                <Icon size={24} className="text-brand-500 mb-3" />
+                <h3 className="text-base font-semibold text-slate-900 mb-2">{title}</h3>
+                <p className="text-slate-600 text-sm leading-relaxed">{desc}</p>
+              </div>
+            ))}
+          </div>
+          <div className="text-center">
+            <a
+              href={INTEL_URL}
+              className="inline-block bg-brand-500 text-white px-8 py-3 rounded-xl font-semibold text-sm hover:bg-brand-600 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+            >
+              Get my free report →
+            </a>
+            <p className="mt-3 text-xs text-slate-400">Free, no card needed. Ready in about 2 minutes.</p>
+          </div>
+        </section>
 
         {/* Value props */}
         <section className="max-w-5xl mx-auto px-6 py-12 sm:py-16" aria-labelledby="features-heading">
@@ -239,6 +301,12 @@ export default function Landing() {
                 Start 15-day free trial
               </Link>
               <p className="text-center text-xs text-slate-400 mt-3">No credit card required to start.</p>
+              <p className="text-center text-xs text-slate-500 mt-4">
+                Not ready to commit?{' '}
+                <a href={INTEL_URL} className="text-brand-500 hover:underline">
+                  Get your free local visibility report first →
+                </a>
+              </p>
             </div>
           </div>
         </section>
