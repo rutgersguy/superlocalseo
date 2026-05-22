@@ -132,8 +132,9 @@ Client matching: the webhook payload includes `organization_id`, which maps to `
 
 1. Customer registers (email + password or Google Sign-In)
 2. Onboarding wizard (4 steps): Business Info → Locations → Keywords → Connect Google Business Profile
+   > ⚠️ Wizard steps 2–3 are UI-only — location and keywords must be added via Settings → Locations/Keywords after onboarding
 3. On `POST /clients/complete-onboarding`: EMR sub-account is provisioned (12-second timeout; failure is non-fatal and retried), citation scan is queued
-4. Customer selects a billing plan on the billing page
+4. 14-day free trial begins; customer accesses dashboard. `/billing` shows a soft landing ("no payment needed yet") until ≤7 days remain
 5. Credentials for `app.superlocalseo.com/login` are accessible at any time via the Reviews page header, Settings → Integrations, or the `GET /clients/emr-credentials` endpoint
 6. Customer logs into `app.superlocalseo.com/login` and connects their review profiles and/or sets up campaigns
 

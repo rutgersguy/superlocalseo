@@ -126,10 +126,11 @@ What happens on registration:
 1. Password hashed with bcrypt (cost factor 10)
 2. `users` row created with `email_verified = false`
 3. `clients` row created with `subscription_status = 'trialing'`, `trial_ends_at = now + 14 days`, `onboarding_step = 0`
-4. Stripe customer created via `createCustomer()` — `stripe_customer_id` stored on client
-5. Stripe trial subscription created (Tier 1 price, `trial_end` = 14 days)
-6. Email verification token generated (UUID stored in Redis with 24hr TTL), sent via Resend
-7. Welcome email sent asynchronously (non-blocking)
+4. Stripe customer created via `createCustomer()` — `stripe_customer_id` stored on `users` table
+5. Email verification token generated (UUID stored in Redis with 24hr TTL), sent via Resend
+6. Welcome email sent asynchronously (non-blocking)
+
+> **Note:** No Stripe subscription is created at registration. The subscription is created later when the user completes the billing flow (`POST /api/billing/subscription-intent`). Until then, `stripe_subscription_id` is NULL and access is gated purely by `subscription_status = 'trialing'` and `trial_ends_at`.
 
 Returns: `{ userId, clientId }` — **no access token on registration** (user must verify email and log in).
 
@@ -223,25 +224,30 @@ A 4-step wizard at `/onboarding` guides new users to a working setup. All steps 
 - `PATCH /api/clients` with `{ businessName, industry, onboardingStep: 1 }`
 
 **Step 2 — Locations**
-- Add one or more business locations (name, address, city, state, zip, phone, website)
-- `POST /api/locations` for each location
-- First location is automatically marked `is_primary = true`
+- UI collects location fields (name, address, city, state, zip, phone, website)
+- **⚠️ Data is held in React component state only — it is NOT saved to the database during the wizard.**
+- `PATCH /api/clients` with `{ onboardingStep: 2 }` (step number only)
+- Customers must add their location via **Settings → Locations** after completing onboarding
 
 **Step 3 — Keywords**
-- Add target keywords per location (e.g. "plumber Austin TX", "emergency plumbing")
-- `POST /api/keywords` with `{ locationId, keyword }`
-- Displayed as a tag list with delete capability
+- UI collects keywords per location (tag-style input)
+- **⚠️ Data is held in React component state only — it is NOT saved to the database during the wizard.**
+- `PATCH /api/clients` with `{ onboardingStep: 3 }` (step number only)
+- Keywords must be added via **Settings → Keywords** after the location is created
 
 **Step 4 — Connect Platforms**
 - Google Business Profile OAuth connect button
-- On completion: `POST /api/clients/onboarding/complete`
+- On clicking Finish: `POST /api/clients/complete-onboarding`
   - Sets `onboarding_step = 4`
   - Attempts to provision an EmbedMyReviews sub-account (12-second timeout, non-blocking)
+  - Enqueues citation scan job
   - Returns `{ provisioned: boolean }` — clients can proceed regardless
 
 ### Post-Onboarding
 
-After onboarding completes, the app redirects to `/dashboard/settings?tab=billing` so the user can choose their subscription plan. The 14-day trial is already active from registration, so this step is informational unless the user wants to upgrade immediately.
+After onboarding completes, the app redirects to `/dashboard/settings?tab=billing`. The 14-day trial is already active — no payment is required at this point.
+
+If the user navigates to `/billing`, the page now shows a **soft landing** ("You're on a free trial — no payment needed yet") for users with more than 7 days remaining. They can optionally click "Subscribe early anyway" to proceed to the card form. Users with ≤7 days left see the payment form directly.
 
 ---
 
@@ -1545,7 +1551,7 @@ Every new account starts on a 14-day free trial:
 - `trial_ends_at = created_at + 14 days`
 - Full dashboard access during trial
 
-After the trial expires, the middleware returns `402 TRIAL_EXPIRED` for all protected API calls, and the frontend redirects to `/dashboard/settings?tab=billing`.
+After the trial expires, the middleware returns `402 TRIAL_EXPIRED` for all protected API calls, and the `apiFetch` client in `api.ts` automatically redirects the browser to `/billing`.
 
 ### Grace Period
 
@@ -1598,18 +1604,30 @@ Changes the subscription tier immediately (prorated).
 | `invoice.payment_failed` | Set `subscription_status = 'past_due'`, set `payment_failed_at = now`, send payment-failed email |
 | `customer.subscription.deleted` | Set `subscription_status = 'canceled'` |
 
-### Dashboard Banners
+### Dashboard Banners & CTAs
 
 The main Dashboard page shows contextual banners:
-- **Trial banner** (when trialing with ≤ 5 days remaining): blue → amber (≤ 3 days) → red (≤ 1 day) colour progression. Expired state shows hard CTA.
-- **Past Due banner** (when `status = 'past_due'`): red warning with billing link.
+- **SubscribeCTA card** (shown for all trialing and canceled users): prominent dark card with "Subscribe now →" link to `/billing`. Always visible during trial.
+- **Trial strip banner** (DashboardLayout, when trialing with ≤ 5 days remaining): blue → amber (≤ 3 days) → red (≤ 1 day) colour progression.
+- **Past Due banner** (when `status = 'past_due'`): amber warning with Stripe portal link.
 
-### Settings → Billing Tab Walkthrough
+### `/billing` Page Behaviour
 
-1. **Status card** — Current plan, status badge, trial countdown or renewal date
-2. **Three plan cards** — Starter ($350), Growth ($700), Pro ($1,200). Current plan highlighted. Buttons: "Subscribe" (trialing), "Upgrade", "Downgrade".
-3. **Stripe portal button** — "Manage payment method / view invoices"
-4. **Checkout success message** — Shown after returning from Stripe Checkout with `?checkout=success`
+| User state | What they see |
+|---|---|
+| `active` | "Already subscribed" — link to Settings → Billing |
+| `trialing`, >7 days left | Soft landing: "You're on a free trial — no payment needed yet" + "Subscribe early" opt-in |
+| `trialing`, ≤7 days left | Full payment form (Stripe Elements) |
+| `canceled` / expired | Full payment form |
+
+When the full payment form is shown, `POST /api/billing/subscription-intent` is called immediately to create a Stripe subscription in `default_incomplete` state and return a `clientSecret` for the Stripe `PaymentElement`. On successful payment, the `invoice.paid` webhook activates the subscription.
+
+### Settings → Billing Tab
+
+1. **Status card** — Current plan ($349/mo), status badge, trial countdown or renewal date
+2. **Locations summary** — Count vs. limit, extra-location surcharge warning
+3. **Subscribe now** button (only when `status` is not `active` and not `trialing`) — calls `POST /api/billing/checkout` for a hosted Stripe Checkout session
+4. **Manage payment & invoices** link (when `active` or `trialing`) — opens Stripe Customer Portal
 
 ---
 
