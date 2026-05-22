@@ -115,6 +115,7 @@ export default function BillingPage() {
   const [intentError, setIntentError] = useState('');
   const [loadingIntent, setLoadingIntent] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [proceedEarly, setProceedEarly] = useState(false);
 
   const [promoInput, setPromoInput] = useState('');
   const [promoLoading, setPromoLoading] = useState(false);
@@ -129,11 +130,15 @@ export default function BillingPage() {
     }
   }, []);
 
+  // Determine if user is in early trial (show soft landing instead of payment form)
+  const isEarlyTrial = billing?.status === 'trialing' && billing.trialDaysLeft !== null && billing.trialDaysLeft > 7;
+
   // Fetch subscription intent when status is known and user needs to subscribe
   useEffect(() => {
     if (success) return;
     if (!billing) return;
     if (billing.status === 'active') return;
+    if (isEarlyTrial && !proceedEarly) return; // don't create intent until user opts in
     if (clientSecret) return;
 
     setLoadingIntent(true);
@@ -151,7 +156,7 @@ export default function BillingPage() {
       })
       .catch(() => setIntentError('Network error — please refresh'))
       .finally(() => setLoadingIntent(false));
-  }, [billing, clientSecret]);
+  }, [billing, clientSecret, isEarlyTrial, proceedEarly]);
 
   const applyPromo = async () => {
     const code = promoInput.trim();
@@ -219,6 +224,42 @@ export default function BillingPage() {
             Go to billing settings
           </a>
           <Link to="/dashboard" className="block text-sm text-slate-400 hover:text-slate-600">← Back to dashboard</Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Early trial soft landing — don't show payment form unless they opt in
+  if (isEarlyTrial && !proceedEarly) {
+    const days = billing!.trialDaysLeft!;
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 max-w-sm w-full text-center space-y-5">
+          <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto">
+            <ShieldCheck size={28} className="text-blue-500" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-slate-900">You're on a free trial</h1>
+            <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+              You have <strong className="text-slate-700">{days} day{days === 1 ? '' : 's'}</strong> left — no payment needed yet.
+              Keep exploring the platform and subscribe when you're ready.
+            </p>
+          </div>
+          <Link
+            to="/dashboard"
+            className="block w-full py-2.5 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 transition-colors"
+          >
+            Back to dashboard
+          </Link>
+          <button
+            onClick={() => setProceedEarly(true)}
+            className="block w-full text-sm text-slate-400 hover:text-slate-600 transition-colors py-1"
+          >
+            Subscribe early anyway →
+          </button>
+          <button onClick={() => void logout()} className="block w-full text-xs text-slate-300 hover:text-slate-500 transition-colors">
+            Sign out
+          </button>
         </div>
       </div>
     );
