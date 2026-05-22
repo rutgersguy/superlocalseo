@@ -21,14 +21,16 @@ Step-by-step guide for onboarding a new customer to SuperLocalSEO.
 - Click **Next**
 
 ### Step 2 — Locations
-- The wizard collects location details (name, address, city, state, zip, phone)
-- **⚠️ This data is not saved to the database yet** — the wizard is a UI preview only
-- Click **Next** (location must be added again via Settings → Locations after onboarding)
+- Add primary location (name, address, city, state, zip, phone)
+- Each location is saved to the database immediately when added
+- Add additional locations if applicable
+- Click **Next**
 
 ### Step 3 — Keywords
-- The wizard collects target search terms per location
-- **⚠️ This data is not saved to the database yet** — keywords must be added via Settings → Keywords after a location exists
-- 3–5 keywords per location to start (e.g. "HVAC repair in Dallas")
+- For each location, add target search terms (e.g. "HVAC repair in Dallas")
+- Each keyword is saved to the database immediately when added
+- 3–5 keywords per location to start
+- The system also auto-seeds starter keywords from your industry when a location is first created
 
 ### Step 4 — Connect Google Business Profile
 - Click **Connect Google** and complete the OAuth flow
@@ -49,14 +51,6 @@ The following happen server-side when the customer clicks Finish:
 
 > **If EMR provisioning fails or times out:** The customer still proceeds to the dashboard normally — all other features (rankings, citations, reports) work immediately. The review management section will show a "still being set up" state until provisioning succeeds. See EMR failure handling below.
 
-## 3a. After Onboarding — Add Location & Keywords
-
-**The onboarding wizard does not save location or keyword data to the database.** After finishing onboarding, the customer (or you as operator) must:
-
-1. Go to **Settings → Locations** → click **Add location** → fill in name, address, city, state, zip, phone
-2. Go to **Settings → Keywords** → select the location → add 3–5 target keywords
-
-Until a location is saved, no ranking, citation, or review data will be collected.
 
 ---
 
@@ -96,8 +90,8 @@ Until a location is saved, no ranking, citation, or review data will be collecte
 
 ## Operator Checklist (After Customer Onboards)
 
-- [ ] **Add location** — go to Settings → Locations as the client and add their primary location (wizard does not save it)
-- [ ] **Add keywords** — go to Settings → Keywords, select the location, add 3–5 target keywords
+- [ ] Confirm location was added during onboarding (check admin panel or Settings → Locations); if missing, add via Settings → Locations
+- [ ] Confirm keywords exist for each location (Settings → Keywords); if missing, add 3–5 target terms
 - [ ] Confirm `emr_provisioning_status = provisioned` and `emr_customer_id` is populated in the admin panel
 - [ ] If EMR credentials modal shows "still being set up":
   1. Check admin panel — if `emr_provisioning_status = failed`, use the **Retry Provision** button
@@ -123,7 +117,6 @@ Until a location is saved, no ranking, citation, or review data will be collecte
 
 ## Known Issues / Bugs
 
-- **Onboarding wizard does not save locations or keywords:** Steps 2 and 3 of the wizard are UI-only — data is lost if the user navigates away. Locations and keywords must be added via Settings after onboarding. This is a known bug to be fixed.
 - **EMR company name collision:** If two customers share the same business name, provisioning retries with `"Business Name (email@domain.com)"` as the company name in EMR automatically.
 - **Google OAuth expiry:** GBP tokens expire and may need reconnection. Customer reconnects in Settings → Integrations.
 - **deleteClientEMR not called on admin delete:** EMR sub-accounts are orphaned when a client is deleted via the admin panel. Manual cleanup in the EMR agency dashboard is required.

@@ -224,16 +224,16 @@ A 4-step wizard at `/onboarding` guides new users to a working setup. All steps 
 - `PATCH /api/clients` with `{ businessName, industry, onboardingStep: 1 }`
 
 **Step 2 — Locations**
-- UI collects location fields (name, address, city, state, zip, phone, website)
-- **⚠️ Data is held in React component state only — it is NOT saved to the database during the wizard.**
-- `PATCH /api/clients` with `{ onboardingStep: 2 }` (step number only)
-- Customers must add their location via **Settings → Locations** after completing onboarding
+- Add one or more business locations (name, address, city, state, zip, phone)
+- Each location is saved immediately via `POST /api/locations` when added — first is marked `is_primary = true`
+- Adding a location also auto-seeds starter keywords from the industry config
+- `PATCH /api/clients` with `{ onboardingStep: 2 }` on Next
 
 **Step 3 — Keywords**
-- UI collects keywords per location (tag-style input)
-- **⚠️ Data is held in React component state only — it is NOT saved to the database during the wizard.**
-- `PATCH /api/clients` with `{ onboardingStep: 3 }` (step number only)
-- Keywords must be added via **Settings → Keywords** after the location is created
+- Add target keywords per location (tag-style input)
+- Each keyword is saved immediately via `POST /api/keywords` with `{ locationId, keyword }`
+- Removing a keyword calls `DELETE /api/keywords/:id`
+- `PATCH /api/clients` with `{ onboardingStep: 3 }` on Next
 
 **Step 4 — Connect Platforms**
 - Google Business Profile OAuth connect button

@@ -6,7 +6,7 @@ import { apiFetch } from '../services/api';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Location {
-  id?: string;
+  id?: string; // set after successful POST /locations
   name: string;
   address: string;
   city: string;
@@ -15,8 +15,13 @@ interface Location {
   phone: string;
 }
 
+interface SavedKeyword {
+  id: string;   // real DB id from POST /keywords
+  keyword: string;
+}
+
 interface LocationKeywords {
-  [locationIndex: number]: string[];
+  [locationIndex: number]: SavedKeyword[];
 }
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
@@ -75,7 +80,30 @@ export default function Onboarding() {
   const [businessName, setBusinessName] = useState('');
   const [industry, setIndustry] = useState('');
 
-  // Pre-populate from existing client record and resume from saved step
+  // Step 2 state — locations are saved to DB immediately when added
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [showAddLocation, setShowAddLocation] = useState(false);
+  const [newLocation, setNewLocation] = useState<Location>({
+    name: '', address: '', city: '', state: '', zip: '', phone: '',
+  });
+  const [locationSaving, setLocationSaving] = useState(false);
+  const [locationError, setLocationError] = useState('');
+
+  // Step 3 state — keywords are saved to DB immediately when added
+  const [keywords, setKeywords] = useState<LocationKeywords>({});
+  const [kwInput, setKwInput] = useState<{ [idx: number]: string }>({});
+  const [kwSaving, setKwSaving] = useState<{ [idx: number]: boolean }>({});
+  const [kwError, setKwError] = useState<{ [idx: number]: string }>({});
+
+  // Step 4 state
+  const [googleConnecting, setGoogleConnecting] = useState(false);
+  const [provisioning, setProvisioning] = useState(false);
+
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  // ── Load existing data on mount (handles resume) ────────────────────────────
+
   useEffect(() => {
     apiFetch<{ success: boolean; data: { businessName: string; industry: string | null; onboardingStep: number } }>('/clients')
       .then((res) => {
@@ -85,25 +113,36 @@ export default function Onboarding() {
         if (saved > 0 && saved <= TOTAL_STEPS) setStep(saved);
       })
       .catch(() => {/* non-fatal */});
+
+    // Load any locations already saved (for resume and deduplication)
+    apiFetch<{ success: boolean; data: Array<{ id: string; name: string; address: string | null; city: string | null; state: string | null; zip: string | null; phone: string | null }> }>('/locations')
+      .then((res) => {
+        if (!res.success || !res.data?.length) return;
+        setLocations(res.data.map((l) => ({
+          id: l.id,
+          name: l.name,
+          address: l.address ?? '',
+          city: l.city ?? '',
+          state: l.state ?? '',
+          zip: l.zip ?? '',
+          phone: l.phone ?? '',
+        })));
+
+        // Load keywords for each location
+        res.data.forEach((loc, idx) => {
+          apiFetch<{ success: boolean; data: Array<{ id: string; keyword: string }> }>(`/keywords?locationId=${loc.id}`)
+            .then((kwRes) => {
+              if (!kwRes.success || !kwRes.data?.length) return;
+              setKeywords((prev) => ({
+                ...prev,
+                [idx]: kwRes.data.map((k) => ({ id: k.id, keyword: k.keyword })),
+              }));
+            })
+            .catch(() => {/* non-fatal */});
+        });
+      })
+      .catch(() => {/* non-fatal */});
   }, []);
-
-  // Step 2 state
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [showAddLocation, setShowAddLocation] = useState(false);
-  const [newLocation, setNewLocation] = useState<Location>({
-    name: '', address: '', city: '', state: '', zip: '', phone: '',
-  });
-
-  // Step 3 state
-  const [keywords, setKeywords] = useState<LocationKeywords>({});
-  const [kwInput, setKwInput] = useState<{ [idx: number]: string }>({});
-
-  // Step 4 state
-  const [googleConnecting, setGoogleConnecting] = useState(false);
-  const [provisioning, setProvisioning] = useState(false);
-
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
 
   // ── Navigation helpers ──────────────────────────────────────────────────────
 
@@ -164,32 +203,95 @@ export default function Onboarding() {
     navigate('/dashboard');
   };
 
-  // ── Step 2 helpers ──────────────────────────────────────────────────────────
+  // ── Step 2 helpers — save to DB immediately ─────────────────────────────────
 
-  const addLocation = () => {
+  const addLocation = async () => {
     if (!newLocation.name || !newLocation.address) return;
-    setLocations((prev) => [...prev, { ...newLocation }]);
-    setNewLocation({ name: '', address: '', city: '', state: '', zip: '', phone: '' });
-    setShowAddLocation(false);
+    setLocationSaving(true);
+    setLocationError('');
+    try {
+      const res = await apiFetch<{ success: boolean; data: { id: string }; error?: { message: string } }>(
+        '/locations',
+        { method: 'POST', body: JSON.stringify(newLocation) },
+      );
+      if (!res.success) {
+        setLocationError(res.error?.message ?? 'Failed to save location');
+        return;
+      }
+      setLocations((prev) => [...prev, { ...newLocation, id: res.data.id }]);
+      setNewLocation({ name: '', address: '', city: '', state: '', zip: '', phone: '' });
+      setShowAddLocation(false);
+    } catch {
+      setLocationError('Network error — please try again');
+    } finally {
+      setLocationSaving(false);
+    }
   };
 
-  const removeLocation = (idx: number) => {
+  const removeLocation = async (idx: number) => {
+    const loc = locations[idx];
+    if (loc.id) {
+      try {
+        await apiFetch(`/locations/${loc.id}`, { method: 'DELETE' });
+      } catch { /* non-fatal — remove from UI anyway */ }
+    }
     setLocations((prev) => prev.filter((_, i) => i !== idx));
+    // Clean up keywords for this index and re-index remaining
+    setKeywords((prev) => {
+      const next: LocationKeywords = {};
+      Object.entries(prev).forEach(([k, v]) => {
+        const ki = parseInt(k, 10);
+        if (ki < idx) next[ki] = v;
+        else if (ki > idx) next[ki - 1] = v;
+        // ki === idx is dropped
+      });
+      return next;
+    });
   };
 
-  // ── Step 3 helpers ──────────────────────────────────────────────────────────
+  // ── Step 3 helpers — save to DB immediately ─────────────────────────────────
 
-  const addKeyword = (locIdx: number) => {
+  const addKeyword = async (locIdx: number) => {
     const kw = (kwInput[locIdx] ?? '').trim();
     if (!kw) return;
-    setKeywords((prev) => ({
-      ...prev,
-      [locIdx]: [...(prev[locIdx] ?? []), kw],
-    }));
-    setKwInput((prev) => ({ ...prev, [locIdx]: '' }));
+
+    const loc = locations[locIdx];
+    if (!loc?.id) {
+      // Shouldn't happen if step 2 saved correctly, but fall back gracefully
+      setKwError((prev) => ({ ...prev, [locIdx]: 'Location not saved yet — please go back and re-add it' }));
+      return;
+    }
+
+    setKwSaving((prev) => ({ ...prev, [locIdx]: true }));
+    setKwError((prev) => ({ ...prev, [locIdx]: '' }));
+    try {
+      const res = await apiFetch<{ success: boolean; data: { id: string; keyword: string }; error?: { message: string } }>(
+        '/keywords',
+        { method: 'POST', body: JSON.stringify({ locationId: loc.id, keyword: kw }) },
+      );
+      if (!res.success) {
+        setKwError((prev) => ({ ...prev, [locIdx]: res.error?.message ?? 'Failed to save keyword' }));
+        return;
+      }
+      setKeywords((prev) => ({
+        ...prev,
+        [locIdx]: [...(prev[locIdx] ?? []), { id: res.data.id, keyword: res.data.keyword }],
+      }));
+      setKwInput((prev) => ({ ...prev, [locIdx]: '' }));
+    } catch {
+      setKwError((prev) => ({ ...prev, [locIdx]: 'Network error — please try again' }));
+    } finally {
+      setKwSaving((prev) => ({ ...prev, [locIdx]: false }));
+    }
   };
 
-  const removeKeyword = (locIdx: number, kwIdx: number) => {
+  const removeKeyword = async (locIdx: number, kwIdx: number) => {
+    const kw = keywords[locIdx]?.[kwIdx];
+    if (kw?.id) {
+      try {
+        await apiFetch(`/keywords/${kw.id}`, { method: 'DELETE' });
+      } catch { /* non-fatal */ }
+    }
     setKeywords((prev) => ({
       ...prev,
       [locIdx]: (prev[locIdx] ?? []).filter((_, i) => i !== kwIdx),
@@ -275,20 +377,24 @@ export default function Onboarding() {
                 <p className="text-sm text-gray-500">No locations added yet. Add your first location below.</p>
               )}
               {locations.map((loc, idx) => (
-                <div key={idx} className="flex items-start justify-between p-4 border border-gray-200 rounded-lg">
+                <div key={loc.id ?? idx} className="flex items-start justify-between p-4 border border-gray-200 rounded-lg">
                   <div>
                     <p className="font-medium text-gray-900 text-sm">{loc.name}</p>
                     <p className="text-xs text-gray-500 mt-0.5">{loc.address}, {loc.city}, {loc.state} {loc.zip}</p>
                     {loc.phone && <p className="text-xs text-gray-500">{loc.phone}</p>}
                   </div>
                   <button
-                    onClick={() => removeLocation(idx)}
+                    onClick={() => void removeLocation(idx)}
                     className="text-red-400 hover:text-red-600 text-xs ml-4"
                   >
                     Remove
                   </button>
                 </div>
               ))}
+
+              {locationError && (
+                <p className="text-sm text-red-600">{locationError}</p>
+              )}
 
               {showAddLocation ? (
                 <div className="border border-brand-500 rounded-lg p-5 space-y-4">
@@ -307,13 +413,15 @@ export default function Onboarding() {
                   ))}
                   <div className="flex gap-3">
                     <button
-                      onClick={addLocation}
-                      className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600"
+                      onClick={() => void addLocation()}
+                      disabled={locationSaving || !newLocation.name || !newLocation.address}
+                      className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 flex items-center gap-2"
                     >
-                      Add
+                      {locationSaving && <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                      {locationSaving ? 'Saving…' : 'Add'}
                     </button>
                     <button
-                      onClick={() => setShowAddLocation(false)}
+                      onClick={() => { setShowAddLocation(false); setLocationError(''); }}
                       className="text-gray-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-100"
                     >
                       Cancel
@@ -339,33 +447,39 @@ export default function Onboarding() {
                 <p className="text-sm text-gray-500">No locations added. Go back to add a location first.</p>
               ) : (
                 locations.map((loc, locIdx) => (
-                  <div key={locIdx}>
+                  <div key={loc.id ?? locIdx}>
                     <p className="text-sm font-semibold text-gray-800 mb-2">{loc.name}</p>
-                    <div className="flex gap-2 mb-3">
+                    <div className="flex gap-2 mb-1">
                       <input
                         type="text"
                         value={kwInput[locIdx] ?? ''}
                         onChange={(e) => setKwInput((p) => ({ ...p, [locIdx]: e.target.value }))}
-                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addKeyword(locIdx))}
+                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), void addKeyword(locIdx))}
                         className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                         placeholder="e.g. personal trainer in Brooklyn"
+                        disabled={kwSaving[locIdx]}
                       />
                       <button
-                        onClick={() => addKeyword(locIdx)}
-                        className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600"
+                        onClick={() => void addKeyword(locIdx)}
+                        disabled={kwSaving[locIdx] || !kwInput[locIdx]?.trim()}
+                        className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 flex items-center gap-2"
                       >
+                        {kwSaving[locIdx] && <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />}
                         Add
                       </button>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    {kwError[locIdx] && (
+                      <p className="mb-2 text-xs text-red-600">{kwError[locIdx]}</p>
+                    )}
+                    <div className="flex flex-wrap gap-2 mt-2">
                       {(keywords[locIdx] ?? []).map((kw, kwIdx) => (
                         <span
-                          key={kwIdx}
+                          key={kw.id}
                           className="flex items-center gap-1.5 bg-brand-50 text-brand-500 text-xs font-medium px-3 py-1.5 rounded-full"
                         >
-                          {kw}
+                          {kw.keyword}
                           <button
-                            onClick={() => removeKeyword(locIdx, kwIdx)}
+                            onClick={() => void removeKeyword(locIdx, kwIdx)}
                             className="hover:text-brand-700 font-bold leading-none"
                           >
                             ×
