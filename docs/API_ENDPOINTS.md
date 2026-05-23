@@ -154,7 +154,7 @@ Returns the authenticated client's profile, industry, subscription status, and i
 ---
 
 ### `POST /clients/complete-onboarding`
-**Requires:** team admin. Marks onboarding complete; triggers EmbedMyReviews account provisioning.
+**Requires:** team admin. Marks onboarding complete; triggers EmbedMyReviews account provisioning; enqueues citation scan and initial rankings pull (both non-fatal — onboarding succeeds even if queues are unavailable).
 
 ---
 

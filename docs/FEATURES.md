@@ -225,6 +225,7 @@ A 4-step wizard at `/onboarding` guides new users to a working setup. All steps 
 
 **Step 2 — Locations**
 - Add one or more business locations (name, address, city, state, zip, phone)
+- Each location includes a **service area** field — an autocomplete chip input backed by `/places/cities` (Google Places, 300ms debounce) that stores up to 20 nearby cities as a JSONB array; these cities are used in rankings and competitor SERP scans
 - Each location is saved immediately via `POST /api/locations` when added — first is marked `is_primary = true`
 - Adding a location also auto-seeds starter keywords from the industry config
 - `PATCH /api/clients` with `{ onboardingStep: 2 }` on Next
@@ -237,17 +238,19 @@ A 4-step wizard at `/onboarding` guides new users to a working setup. All steps 
 
 **Step 4 — Connect Platforms**
 - Google Business Profile OAuth connect button
+- Facebook card links to **Settings → Integrations** to connect after onboarding (no OAuth during the wizard)
 - On clicking Finish: `POST /api/clients/complete-onboarding`
   - Sets `onboarding_step = 4`
   - Attempts to provision an EmbedMyReviews sub-account (12-second timeout, non-blocking)
   - Enqueues citation scan job
+  - Enqueues initial rankings pull (`rankingsQueue`, job name `onboarding-pull`) — non-fatal if queue is unavailable
   - Returns `{ provisioned: boolean }` — clients can proceed regardless
 
 ### Post-Onboarding
 
-After onboarding completes, the app redirects to `/dashboard/settings?tab=billing`. The 14-day trial is already active — no payment is required at this point.
+After onboarding completes, the app redirects to `/dashboard`. The 14-day trial is already active — no payment is required at this point.
 
-If the user navigates to `/billing`, the page now shows a **soft landing** ("You're on a free trial — no payment needed yet") for users with more than 7 days remaining. They can optionally click "Subscribe early anyway" to proceed to the card form. Users with ≤7 days left see the payment form directly.
+If the user navigates to `/billing`, the page shows a **soft landing** ("You're on a free trial — no payment needed yet") for users with more than 7 days remaining. They can optionally click "Subscribe early anyway" to proceed to the card form. Users with ≤7 days left see the payment form directly.
 
 ---
 
@@ -1337,7 +1340,7 @@ Yelp removed direct API access for reviews in 2018. Yelp review monitoring is ha
 ### Integrations Settings Page
 
 The Settings → Integrations tab shows:
-- **Review Management** — EMR credentials card (always visible, above OAuth cards); shows login URL, email, and auto-generated password with one-click copy buttons; includes "Open Review Management" link to `https://app.superlocalseo.com/login`
+- **Review Management** — EMR credentials card; shows login URL, email, and auto-generated password with one-click copy buttons; includes "Open Review Management" link to `https://app.superlocalseo.com/login`. **Visible to platform admin accounts only** (`role = 'admin'` from JWT); hidden for regular client accounts.
 - **Google Business Profile** — Connect/Disconnect button; status badge
 - **Facebook** — Connect/Disconnect button; shows connected page name when linked
 - **Yelp** — Informational card explaining BrightLocal handles Yelp monitoring
@@ -1635,11 +1638,11 @@ When the full payment form is shown, `POST /api/billing/subscription-intent` is 
 
 ### Availability
 
-Pro tier (Tier 3, $1,200/mo) only.
+Pro tier (Tier 3, $1,200/mo) only. Additionally, the White-Label section in Settings → Account is only rendered for **platform admin accounts** (`role = 'admin'` from JWT) — regular client accounts do not see this UI regardless of tier.
 
 ### Configuration
 
-In Settings → Account, a White-Label section appears for Pro clients:
+In Settings → Account, the White-Label section appears for Pro clients (admin accounts only):
 - **Company name** — Replaces "SuperLocalSEO" throughout the PDF
 - **Logo URL** — Replaces the logo image in the PDF header
 - **Brand colour** — Hex colour (`#RRGGBB`) replacing the `#0052CC` brand colour

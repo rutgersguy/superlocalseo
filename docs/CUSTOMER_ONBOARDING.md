@@ -32,10 +32,10 @@ Step-by-step guide for onboarding a new customer to SuperLocalSEO.
 - 3–5 keywords per location to start
 - The system also auto-seeds starter keywords from your industry when a location is first created
 
-### Step 4 — Connect Google Business Profile
-- Click **Connect Google** and complete the OAuth flow
-- Optional but strongly recommended — enables Google review sync and ranking data
-- Click **Finish** (can skip Google and connect later in Settings → Integrations)
+### Step 4 — Connect Platforms
+- Click **Connect Google** and complete the OAuth flow — optional but strongly recommended (enables Google review sync and ranking data)
+- **Facebook** — the card links to **Settings → Integrations** to connect after onboarding; no OAuth is required during the wizard
+- Click **Finish** (all integrations can be connected later in Settings → Integrations)
 
 ---
 
@@ -45,9 +45,10 @@ The following happen server-side when the customer clicks Finish:
 
 - EMR review management sub-account is created and credentials are stored
 - Citation scan is queued — results appear in the Citations tab within a few minutes
-- Customer is redirected to **Settings → Billing** tab (trial is already running — no payment required)
+- Initial rankings pull is queued — first keyword positions appear within 24 hours
+- Customer is redirected to the **Dashboard**
 
-> **Billing page behaviour:** If the customer navigates to `/billing` during their trial, they see a soft landing ("You're on a free trial — no payment needed yet") with an option to subscribe early. The card form only appears automatically when ≤7 days remain or the trial has expired.
+> **Billing:** The 14-day trial is already active — no payment is required. To subscribe early, go to Settings → Billing. The payment form appears automatically when ≤7 days remain or the trial has expired.
 
 > **If EMR provisioning fails or times out:** The customer still proceeds to the dashboard normally — all other features (rankings, citations, reports) work immediately. The review management section will show a "still being set up" state until provisioning succeeds. See EMR failure handling below.
 
@@ -67,9 +68,11 @@ The following happen server-side when the customer clicks Finish:
 
 ## 5. Set Up Review Management (EMR)
 
+> **Admin-only feature:** EMR credentials, the EMR provision banner, and the EMR section in Settings → Integrations are only visible to platform admin accounts (`role = 'admin'` in the `users` table). Regular client accounts do not see these elements.
+
 > **What is `app.superlocalseo.com`?** This is SuperLocalSEO's white-labeled review management portal, powered by EmbedMyReviews. It is a separate application from the main SuperLocalSEO dashboard — customers log in with their own credentials and connect their review profiles there. Think of it as a companion tool, not a sub-page.
 
-- An amber banner appears on the **Reviews** and **Campaigns** pages, or click **Review Management** in the header or go to **Settings → Integrations**
+- (Admin only) An amber banner appears on the **Reviews** and **Campaigns** pages, or go to **Settings → Integrations**
 - A modal displays their login credentials:
   - **Login URL:** `https://app.superlocalseo.com/login`
   - **Email:** their registered email address
