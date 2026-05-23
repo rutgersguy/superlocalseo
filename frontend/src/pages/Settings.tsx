@@ -1829,7 +1829,7 @@ function WhiteLabelSection() {
   );
 }
 
-function BillingTab({ onGoToLocations, isAdmin }: { onGoToLocations: () => void; isAdmin: boolean }) {
+function BillingTab({ onGoToLocations, isAdmin, isPlatformAdmin }: { onGoToLocations: () => void; isAdmin: boolean; isPlatformAdmin: boolean }) {
   const { data, isLoading, mutate: mutateBilling } = useSWR<BillingResponse>('/billing/status', fetcher, { refreshInterval: 30000 });
   const { data: locData, mutate: mutateLocs } = useSWR<{ success: boolean; data: Location[] }>('/locations', fetcher);
   const billing = data?.data;
@@ -2047,7 +2047,8 @@ function BillingTab({ onGoToLocations, isAdmin }: { onGoToLocations: () => void;
         )}
       </div>
 
-      <WhiteLabelSection />
+      {/* White-label report branding — operator admin only */}
+      {isPlatformAdmin && <WhiteLabelSection />}
     </div>
   );
 }
@@ -2061,7 +2062,8 @@ export default function Settings() {
   const { data, isLoading, error, mutate } = useSWR<ClientResponse>('/clients', fetcher);
   const client = data?.data;
   const { data: teamData } = useSWR<{ success: boolean; data: { owner: { userId: string } | null; members: Array<{ userId: string | null; role: string; accepted: boolean }> } }>('/team', fetcher);
-  const { userId } = useAuth();
+  const { userId, role: platformRole } = useAuth();
+  const isPlatformAdmin = platformRole === 'admin'; // JWT role='admin' = operator-level admin account
   const isOwner = !!(teamData?.data?.owner?.userId && teamData.data.owner.userId === userId);
   const currentMember = teamData?.data?.members?.find((m) => m.userId === userId && m.accepted);
   const isAdmin = isOwner || currentMember?.role === 'admin';
@@ -2201,7 +2203,8 @@ export default function Settings() {
         {/* Integrations tab */}
         {activeTab === 'integrations' && (
           <div className="space-y-4">
-            <EMRCredentialsCard />
+            {/* EMR credentials — operator admin only */}
+            {isPlatformAdmin && <EMRCredentialsCard />}
             <OAuthCard
               name="Google Business Profile"
               description="Sync reviews, Q&A, and business info from Google"
@@ -2233,7 +2236,7 @@ export default function Settings() {
         {activeTab === 'team' && <TeamTab />}
 
         {/* Billing tab */}
-        {activeTab === 'billing' && <BillingTab onGoToLocations={() => setActiveTab('locations')} isAdmin={isAdmin} />}
+        {activeTab === 'billing' && <BillingTab onGoToLocations={() => setActiveTab('locations')} isAdmin={isAdmin} isPlatformAdmin={isPlatformAdmin} />}
       </div>
     </div>
   );

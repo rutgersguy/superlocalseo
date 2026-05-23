@@ -5,8 +5,10 @@ import { ok, created, noContent, notFound, err } from '../utils/response';
 import { getAggregatedSearchVolumes } from '../services/dataforseo.service';
 
 export const keywordSchema = z.object({
-  locationId: z.string().uuid(),
-  keyword: z.string().min(1).max(255),
+  locationId: z.string().uuid('Invalid location ID'),
+  keyword: z.string()
+    .min(1, 'Keyword cannot be empty')
+    .max(255, 'Keyword is too long (max 255 characters) — use a specific search phrase like "plumber in Austin TX"'),
 });
 
 export const keywordQuerySchema = z.object({

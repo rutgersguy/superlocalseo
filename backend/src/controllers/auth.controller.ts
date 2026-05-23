@@ -7,18 +7,23 @@ import { config } from '../config';
 import { logger } from '../utils/logger';
 
 const registerSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-  businessName: z.string().min(2).max(255),
+  email: z.string().email('Enter a valid email address (e.g. you@example.com)'),
+  password: z.string().min(8, 'Password must be at least 8 characters — this helps keep your account secure'),
+  businessName: z.string()
+    .min(2, 'Business name must be at least 2 characters')
+    .max(255, 'Business name is too long (max 255 characters)'),
 });
 
 const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  email: z.string().email('Enter a valid email address'),
+  password: z.string().min(1, 'Password is required'),
 });
 
-const resetRequestSchema = z.object({ email: z.string().email() });
-const resetConfirmSchema = z.object({ token: z.string(), password: z.string().min(8) });
+const resetRequestSchema = z.object({ email: z.string().email('Enter a valid email address to receive your reset link') });
+const resetConfirmSchema = z.object({
+  token: z.string(),
+  password: z.string().min(8, 'New password must be at least 8 characters'),
+});
 
 export async function register(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {

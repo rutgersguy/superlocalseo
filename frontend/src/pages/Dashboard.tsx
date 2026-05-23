@@ -4,6 +4,7 @@ import useSWR, { mutate } from 'swr';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { TrendingUp, Star, ClipboardList, FileText } from 'lucide-react';
 import { fetcher, apiFetch } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -256,13 +257,15 @@ function SubscribeCTA({ billing }: { billing: BillingStatusResponse['data'] | un
 }
 
 function EMRProvisionBanner() {
+  const { role: platformRole } = useAuth();
   const { data: clientData, isLoading } = useSWR<ClientResponse>('/clients', fetcher);
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
   const status = clientData?.data?.emrProvisioningStatus;
-  if (isLoading || dismissed || status === 'provisioned' || status === 'pending') return null;
+  // EMR provisioning is only relevant for the operator admin account
+  if (platformRole !== 'admin' || isLoading || dismissed || status === 'provisioned' || status === 'pending') return null;
 
   const handleRetry = async () => {
     setRetrying(true);
