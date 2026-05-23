@@ -3,6 +3,34 @@ import { useNavigate } from 'react-router-dom';
 import { mutate } from 'swr';
 import { apiFetch } from '../services/api';
 
+// ─── Field Tooltip ────────────────────────────────────────────────────────────
+
+function FieldTooltip({ content }: { content: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-flex items-center ml-1 align-middle">
+      <button
+        type="button"
+        aria-label="More info"
+        className="w-4 h-4 rounded-full bg-gray-200 text-gray-500 hover:bg-gray-300 text-xs flex items-center justify-center focus:outline-none focus:ring-1 focus:ring-brand-400 leading-none"
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onClick={() => setOpen((v) => !v)}
+      >
+        ?
+      </button>
+      {open && (
+        <span className="absolute left-5 top-0 z-20 w-60 rounded-lg bg-gray-900 px-3 py-2 text-xs text-white shadow-xl leading-relaxed pointer-events-none">
+          <span className="absolute -left-1 top-2 w-2 h-2 bg-gray-900 rotate-45" />
+          {content}
+        </span>
+      )}
+    </span>
+  );
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Location {
@@ -108,6 +136,7 @@ export default function Onboarding() {
   // Step 4 state
   const [googleConnecting, setGoogleConnecting] = useState(false);
   const [provisioning, setProvisioning] = useState(false);
+  const [gbpInfoOpen, setGbpInfoOpen] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -408,7 +437,10 @@ export default function Onboarding() {
             <div className="space-y-5">
               <h2 className="text-lg font-semibold text-gray-900">Business Information</h2>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Business Name</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Business Name
+                  <FieldTooltip content="Enter exactly as it appears on your Google Business Profile. Consistent name, address, and phone (NAP) across the web is a key local ranking factor." />
+                </label>
                 <input
                   type="text"
                   value={businessName}
@@ -513,7 +545,10 @@ export default function Onboarding() {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">Phone</label>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Phone
+                        <FieldTooltip content="Use the exact format shown on your Google Business Profile. Inconsistent phone formats across the web hurt local rankings (this is called NAP consistency)." />
+                      </label>
                       <input type="text" value={newLocation.phone}
                         onChange={(e) => setNewLocation((p) => ({ ...p, phone: e.target.value }))}
                         placeholder="+15125550100"
@@ -521,7 +556,9 @@ export default function Onboarding() {
                     </div>
                     <div className="col-span-2">
                       <label className="block text-xs text-gray-500 mb-1">
-                        Service area cities <span className="text-gray-400">(optional — cities you serve beyond your address)</span>
+                        Service area cities
+                        <FieldTooltip content="Cities where you want to rank in search results. If you serve customers outside your main city, add those here — we'll track your rankings in each one." />
+                        <span className="text-gray-400 ml-1">(optional)</span>
                       </label>
                       {newLocation.serviceArea.length > 0 && (
                         <div className="flex flex-wrap gap-1 mb-2">
@@ -675,20 +712,63 @@ export default function Onboarding() {
               </div>
 
               {/* Google Business Profile */}
-              <div className="border border-gray-200 rounded-xl p-5">
-                <div className="flex items-center justify-between mb-4">
+              <div className="border border-gray-200 rounded-xl p-5 space-y-4">
+                <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-900">Google Business Profile</h3>
-                    <p className="text-xs text-gray-500">Sync reviews, Q&A, and business info from Google</p>
+                    <h3 className="text-sm font-semibold text-gray-900">
+                      Google Business Profile
+                      <FieldTooltip content="Connecting your Google Business Profile lets us pull your reviews directly and improves Google's confidence in your listing data. You can connect it later in Settings → Integrations." />
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-0.5">Sync reviews, Q&A, and business info from Google</p>
                   </div>
                 </div>
                 <button
-                    onClick={() => void connectGoogle()}
-                    disabled={googleConnecting}
-                    className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50"
+                  onClick={() => void connectGoogle()}
+                  disabled={googleConnecting}
+                  className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50"
+                >
+                  {googleConnecting ? 'Redirecting...' : 'Connect Google'}
+                </button>
+
+                {/* No GBP yet? collapsible */}
+                <div className="border-t border-gray-100 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setGbpInfoOpen((v) => !v)}
+                    className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors"
                   >
-                    {googleConnecting ? 'Redirecting...' : 'Connect Google'}
+                    <svg
+                      className={`w-3.5 h-3.5 transition-transform ${gbpInfoOpen ? 'rotate-90' : ''}`}
+                      fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    Don't have a Google Business Profile yet?
                   </button>
+                  {gbpInfoOpen && (
+                    <div className="mt-3 rounded-lg bg-gray-50 border border-gray-200 p-4 space-y-3 text-xs text-gray-600">
+                      <p>
+                        A free Google Business Profile puts your business on Google Maps and local search results.
+                        It takes about 5 minutes to create — Google will then send a verification postcard to your
+                        business address (typically 5–14 days).
+                      </p>
+                      <ol className="list-decimal list-inside space-y-1 text-gray-500">
+                        <li>Create your profile at the link below</li>
+                        <li>Enter your business name, address, and category</li>
+                        <li>Wait for Google's verification postcard</li>
+                        <li>Come back to <strong className="text-gray-700">Settings → Integrations</strong> to connect it here</li>
+                      </ol>
+                      <a
+                        href="https://business.google.com/create"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 font-medium text-brand-600 hover:text-brand-700 hover:underline"
+                      >
+                        Create your free Google Business Profile →
+                      </a>
+                    </div>
+                  )}
+                </div>
               </div>
 
 

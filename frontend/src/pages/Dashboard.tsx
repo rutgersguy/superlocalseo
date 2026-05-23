@@ -142,7 +142,12 @@ function fmt$(n: number) {
 
 interface ClientResponse {
   success: boolean;
-  data: { emrProvisioningStatus?: string };
+  data: { emrProvisioningStatus?: string; onboardingStep?: number };
+}
+
+interface IntegrationsResponse {
+  success: boolean;
+  data: Array<{ provider: string; status: string }>;
 }
 
 interface BillingStatusResponse {
@@ -304,6 +309,44 @@ function EMRProvisionBanner() {
   );
 }
 
+function GBPNudgeBanner() {
+  const { data: clientData } = useSWR<ClientResponse>('/clients', fetcher);
+  const { data: integrationsData } = useSWR<IntegrationsResponse>('/integrations', fetcher);
+  const [dismissed, setDismissed] = useState(false);
+
+  if (dismissed) return null;
+  // Only show once onboarding is fully complete
+  if ((clientData?.data?.onboardingStep ?? 0) < 4) return null;
+  // Hide once Google is connected
+  const googleConnected = (integrationsData?.data ?? []).some(
+    (i) => i.provider === 'google' && i.status === 'connected',
+  );
+  if (googleConnected) return null;
+  // Wait for both fetches before rendering to avoid flash
+  if (!clientData || !integrationsData) return null;
+
+  return (
+    <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+      <div className="flex items-center gap-2">
+        <svg className="w-4 h-4 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>
+          <strong>Finish setting up —</strong> Connect your Google Business Profile to unlock review sync and ranking data.
+        </span>
+      </div>
+      <div className="flex items-center gap-3 ml-4 shrink-0">
+        <Link to="/dashboard/settings?tab=integrations" className="font-medium underline hover:no-underline whitespace-nowrap">
+          Connect now →
+        </Link>
+        <button onClick={() => setDismissed(true)} className="text-blue-500 hover:text-blue-700 font-bold">
+          ×
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [linkedDismissed, setLinkedDismissed] = useState(false);
@@ -350,6 +393,7 @@ export default function Dashboard() {
         </div>
       )}
       <EMRProvisionBanner />
+      <GBPNudgeBanner />
       <PastDueBanner billing={billing} />
       <SubscribeCTA billing={billing} />
 
