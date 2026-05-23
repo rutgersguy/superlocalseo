@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { mutate } from 'swr';
 import { apiFetch } from '../services/api';
@@ -13,7 +13,10 @@ interface Location {
   state: string;
   zip: string;
   phone: string;
+  serviceArea: string[];
 }
+
+interface CitySuggestion { city: string; state: string | null; label: string; }
 
 interface SavedKeyword {
   id: string;   // real DB id from POST /keywords
@@ -84,8 +87,15 @@ export default function Onboarding() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [showAddLocation, setShowAddLocation] = useState(false);
   const [newLocation, setNewLocation] = useState<Location>({
-    name: '', address: '', city: '', state: '', zip: '', phone: '',
+    name: '', address: '', city: '', state: '', zip: '', phone: '', serviceArea: [],
   });
+  // Service area city autocomplete state
+  const [cityInput, setCityInput] = useState('');
+  const [citySuggestions, setCitySuggestions] = useState<CitySuggestion[]>([]);
+  const [citySuggestionsOpen, setCitySuggestionsOpen] = useState(false);
+  const [loadingCitySuggestions, setLoadingCitySuggestions] = useState(false);
+  const cityDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cityWrapperRef = useRef<HTMLDivElement>(null);
   const [locationSaving, setLocationSaving] = useState(false);
   const [locationError, setLocationError] = useState('');
 
@@ -115,7 +125,7 @@ export default function Onboarding() {
       .catch(() => {/* non-fatal */});
 
     // Load any locations already saved (for resume and deduplication)
-    apiFetch<{ success: boolean; data: Array<{ id: string; name: string; address: string | null; city: string | null; state: string | null; zip: string | null; phone: string | null }> }>('/locations')
+    apiFetch<{ success: boolean; data: Array<{ id: string; name: string; address: string | null; city: string | null; state: string | null; zip: string | null; phone: string | null; serviceArea?: string[] }> }>('/locations')
       .then((res) => {
         if (!res.success || !res.data?.length) return;
         setLocations(res.data.map((l) => ({
@@ -126,6 +136,7 @@ export default function Onboarding() {
           state: l.state ?? '',
           zip: l.zip ?? '',
           phone: l.phone ?? '',
+          serviceArea: l.serviceArea ?? [],
         })));
 
         // Load keywords for each location
@@ -187,7 +198,7 @@ export default function Onboarding() {
     // Flush SWR cache before navigating so OnboardingRedirect sees the updated onboardingStep
     // and doesn't loop us back here.
     await mutate('/clients');
-    navigate('/dashboard/settings?tab=billing');
+    navigate('/dashboard');
   };
 
   const handleSkip = async () => {
@@ -205,6 +216,62 @@ export default function Onboarding() {
 
   // ── Step 2 helpers — save to DB immediately ─────────────────────────────────
 
+  // Close city suggestions dropdown on outside click
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (cityWrapperRef.current && !cityWrapperRef.current.contains(e.target as Node)) {
+        setCitySuggestionsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
+
+  function onCityInputChange(e: ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value;
+    setCityInput(val);
+    if (cityDebounceRef.current) clearTimeout(cityDebounceRef.current);
+    if (val.trim().length < 2) { setCitySuggestions([]); setCitySuggestionsOpen(false); return; }
+    cityDebounceRef.current = setTimeout(async () => {
+      setLoadingCitySuggestions(true);
+      try {
+        const res = await apiFetch<{ success: boolean; data: CitySuggestion[] }>(`/places/cities?q=${encodeURIComponent(val.trim())}`);
+        if (res.success && res.data.length > 0) {
+          setCitySuggestions(res.data);
+          setCitySuggestionsOpen(true);
+        } else {
+          setCitySuggestions([]);
+          setCitySuggestionsOpen(false);
+        }
+      } catch { /* ignore */ } finally {
+        setLoadingCitySuggestions(false);
+      }
+    }, 300);
+  }
+
+  function selectCitySuggestion(s: CitySuggestion) {
+    const label = s.label;
+    if (!newLocation.serviceArea.includes(label)) {
+      setNewLocation((p) => ({ ...p, serviceArea: [...p.serviceArea, label] }));
+    }
+    setCityInput('');
+    setCitySuggestions([]);
+    setCitySuggestionsOpen(false);
+  }
+
+  function addCityManual() {
+    const trimmed = cityInput.trim();
+    if (!trimmed || newLocation.serviceArea.includes(trimmed)) { setCityInput(''); return; }
+    setNewLocation((p) => ({ ...p, serviceArea: [...p.serviceArea, trimmed] }));
+    setCityInput('');
+    setCitySuggestions([]);
+    setCitySuggestionsOpen(false);
+  }
+
+  function removeServiceCity(city: string) {
+    setNewLocation((p) => ({ ...p, serviceArea: p.serviceArea.filter((c) => c !== city) }));
+  }
+
   const addLocation = async () => {
     if (!newLocation.name || !newLocation.address) return;
     setLocationSaving(true);
@@ -219,7 +286,8 @@ export default function Onboarding() {
         return;
       }
       setLocations((prev) => [...prev, { ...newLocation, id: res.data.id }]);
-      setNewLocation({ name: '', address: '', city: '', state: '', zip: '', phone: '' });
+      setNewLocation({ name: '', address: '', city: '', state: '', zip: '', phone: '', serviceArea: [] });
+      setCityInput('');
       setShowAddLocation(false);
     } catch {
       setLocationError('Network error — please try again');
@@ -382,6 +450,13 @@ export default function Onboarding() {
                     <p className="font-medium text-gray-900 text-sm">{loc.name}</p>
                     <p className="text-xs text-gray-500 mt-0.5">{loc.address}, {loc.city}, {loc.state} {loc.zip}</p>
                     {loc.phone && <p className="text-xs text-gray-500">{loc.phone}</p>}
+                    {loc.serviceArea.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {loc.serviceArea.map((city) => (
+                          <span key={city} className="text-xs bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full border border-brand-200">{city}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <button
                     onClick={() => void removeLocation(idx)}
@@ -399,18 +474,103 @@ export default function Onboarding() {
               {showAddLocation ? (
                 <div className="border border-brand-500 rounded-lg p-5 space-y-4">
                   <h3 className="text-sm font-semibold text-gray-900">Add Location</h3>
-                  {(['name', 'address', 'city', 'state', 'zip', 'phone'] as const).map((field) => (
-                    <div key={field}>
-                      <label htmlFor={`loc-${field}`} className="block text-sm font-medium text-gray-700 mb-1">{field.charAt(0).toUpperCase() + field.slice(1)}</label>
-                      <input
-                        id={`loc-${field}`}
-                        type="text"
-                        value={newLocation[field]}
-                        onChange={(e) => setNewLocation((p) => ({ ...p, [field]: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                      />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
+                      <label className="block text-xs text-gray-500 mb-1">Location name *</label>
+                      <input type="text" value={newLocation.name}
+                        onChange={(e) => setNewLocation((p) => ({ ...p, name: e.target.value }))}
+                        placeholder="e.g. Main Office"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
                     </div>
-                  ))}
+                    <div className="col-span-2">
+                      <label className="block text-xs text-gray-500 mb-1">Address *</label>
+                      <input type="text" value={newLocation.address}
+                        onChange={(e) => setNewLocation((p) => ({ ...p, address: e.target.value }))}
+                        placeholder="123 Main St"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">City</label>
+                      <input type="text" value={newLocation.city}
+                        onChange={(e) => setNewLocation((p) => ({ ...p, city: e.target.value }))}
+                        placeholder="Austin"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">State</label>
+                        <input type="text" value={newLocation.state}
+                          onChange={(e) => setNewLocation((p) => ({ ...p, state: e.target.value }))}
+                          placeholder="TX"
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">ZIP</label>
+                        <input type="text" value={newLocation.zip}
+                          onChange={(e) => setNewLocation((p) => ({ ...p, zip: e.target.value }))}
+                          placeholder="78701"
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Phone</label>
+                      <input type="text" value={newLocation.phone}
+                        onChange={(e) => setNewLocation((p) => ({ ...p, phone: e.target.value }))}
+                        placeholder="+15125550100"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Service area cities <span className="text-gray-400">(optional — cities you serve beyond your address)</span>
+                      </label>
+                      {newLocation.serviceArea.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {newLocation.serviceArea.map((city) => (
+                            <span key={city} className="inline-flex items-center gap-1 bg-brand-50 text-brand-700 text-xs font-medium px-2 py-1 rounded-full border border-brand-200">
+                              {city}
+                              <button type="button" onClick={() => removeServiceCity(city)} className="hover:text-brand-900 leading-none">&times;</button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div ref={cityWrapperRef} className="relative">
+                        <div className="flex gap-2">
+                          <input
+                            value={cityInput}
+                            onChange={onCityInputChange}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ',') {
+                                e.preventDefault();
+                                citySuggestionsOpen && citySuggestions[0] ? selectCitySuggestion(citySuggestions[0]) : addCityManual();
+                              }
+                              if (e.key === 'Escape') setCitySuggestionsOpen(false);
+                            }}
+                            placeholder="Search for a city…"
+                            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                            autoComplete="off"
+                          />
+                          {!citySuggestionsOpen && (
+                            <button type="button" onClick={addCityManual}
+                              className="px-3 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200 transition-colors whitespace-nowrap">
+                              {loadingCitySuggestions ? '…' : '+ Add'}
+                            </button>
+                          )}
+                        </div>
+                        {citySuggestionsOpen && citySuggestions.length > 0 && (
+                          <ul className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                            {citySuggestions.map((s) => (
+                              <li key={s.label}
+                                onMouseDown={() => selectCitySuggestion(s)}
+                                className="px-3 py-2 text-sm text-gray-700 hover:bg-brand-50 cursor-pointer">
+                                {s.label}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">Type a city name and press Enter or select from the list. Used for keyword rank tracking across your service area.</p>
+                    </div>
+                  </div>
                   <div className="flex gap-3">
                     <button
                       onClick={() => void addLocation()}
@@ -418,10 +578,10 @@ export default function Onboarding() {
                       className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 flex items-center gap-2"
                     >
                       {locationSaving && <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                      {locationSaving ? 'Saving…' : 'Add'}
+                      {locationSaving ? 'Saving…' : 'Add location'}
                     </button>
                     <button
-                      onClick={() => { setShowAddLocation(false); setLocationError(''); }}
+                      onClick={() => { setShowAddLocation(false); setLocationError(''); setCityInput(''); }}
                       className="text-gray-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-100"
                     >
                       Cancel
@@ -533,17 +693,23 @@ export default function Onboarding() {
 
 
               {/* Facebook */}
-              <div className="border border-gray-200 rounded-xl p-5 opacity-60">
-                <div className="flex items-center justify-between">
+              <div className="border border-gray-200 rounded-xl p-5">
+                <div className="flex items-center justify-between mb-4">
                   <div>
                     <h3 className="text-sm font-semibold text-gray-900">Facebook</h3>
-                    <p className="text-xs text-gray-500">Sync Facebook reviews and business updates</p>
+                    <p className="text-xs text-gray-500">Sync Facebook page ratings and reviews</p>
                   </div>
-                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">Coming soon</span>
                 </div>
+                <a
+                  href="/dashboard/settings?tab=integrations"
+                  className="inline-block bg-[#1877F2] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#1565d8] transition-colors"
+                >
+                  Connect Facebook in Settings →
+                </a>
+                <p className="text-xs text-gray-400 mt-2">Optional — you can connect Facebook any time from Settings.</p>
               </div>
 
-              <p className="text-xs text-gray-400">You can also connect platforms later in Settings.</p>
+              <p className="text-xs text-gray-400">You can also connect or change platforms any time in Settings.</p>
             </div>
           )}
 

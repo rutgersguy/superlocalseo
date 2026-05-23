@@ -4,16 +4,26 @@ import { db } from '../db/connection';
 import { ok } from '../utils/response';
 import { provisionClient } from '../services/emr_provisioning';
 import { decrypt } from '../utils/crypto';
-import { citationsQueue } from '../jobs/queue';
+import { citationsQueue, rankingsQueue } from '../jobs/queue';
 import { logger } from '../utils/logger';
 
 export const patchSchema = z.object({
-  businessName: z.string().min(2).max(255).optional(),
+  businessName: z.string()
+    .min(2, 'Business name must be at least 2 characters')
+    .max(255, 'Business name is too long (max 255 characters)')
+    .optional(),
   industry: z.string().optional(),
   onboardingStep: z.number().int().min(0).max(4).optional(),
   whiteLabelCompanyName: z.string().max(255).nullable().optional(),
-  whiteLabelLogoUrl: z.string().url().max(2048).nullable().optional(),
-  whiteLabelColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+  whiteLabelLogoUrl: z.string()
+    .url('Enter a full URL including https:// (e.g. https://yoursite.com/logo.png)')
+    .max(2048)
+    .nullable()
+    .optional(),
+  whiteLabelColor: z.string()
+    .regex(/^#[0-9a-fA-F]{6}$/, 'Enter a valid hex color code (e.g. #0052CC)')
+    .nullable()
+    .optional(),
 });
 
 type PatchBody = z.infer<typeof patchSchema>;
@@ -134,6 +144,17 @@ export async function completeOnboarding(req: Request, res: Response, next: Next
       await citationsQueue.add('onboarding-pull', { clientId: req.clientId });
     } catch (e) {
       logger.warn('Failed to enqueue citations job on onboarding', {
+        clientId: req.clientId,
+        error: (e as Error).message,
+      });
+    }
+
+    // Kick off initial rankings pull so the Rankings page is populated right away
+    // rather than waiting until the next daily job at 06:00 UTC.
+    try {
+      await rankingsQueue.add('onboarding-pull', { clientId: req.clientId });
+    } catch (e) {
+      logger.warn('Failed to enqueue rankings job on onboarding', {
         clientId: req.clientId,
         error: (e as Error).message,
       });

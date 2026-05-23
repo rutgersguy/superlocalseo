@@ -37,15 +37,22 @@ async function seedDefaultKeywords(
 const INCLUDED_PER_TIER: Record<number, number> = { 1: 1, 2: 3, 3: Infinity };
 
 export const locationSchema = z.object({
-  name: z.string().min(1).max(255),
+  name: z.string()
+    .min(1, 'Location name is required — use a descriptive label like "Main Office" or "Downtown Branch"')
+    .max(255, 'Location name is too long (max 255 characters)'),
   address: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
   zip: z.string().optional(),
   phone: z.string().optional(),
-  website: z.string().url().optional().or(z.literal('')),
+  website: z.string()
+    .url('Enter a full website URL including https:// (e.g. https://yoursite.com) — this is used for citation matching and rank tracking')
+    .optional()
+    .or(z.literal('')),
   brightlocalCampaignId: z.string().max(100).optional().or(z.literal('')),
-  serviceArea: z.array(z.string().min(1).max(100)).max(20).optional(),
+  serviceArea: z.array(
+    z.string().min(1).max(100, 'City name is too long (max 100 characters)'),
+  ).max(20, 'You can add up to 20 service area cities per location').optional(),
 });
 
 export const locationPatchSchema = locationSchema.partial();

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import useSWR from 'swr';
 import EMRSetupBanner, { CredentialsModal } from '../components/EMRSetupBanner';
+import { useAuth } from '../hooks/useAuth';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer,
@@ -467,6 +468,8 @@ const STATUSES = ['All', 'New', 'Responded'];
 type ActiveTab = 'reviews' | 'feedback';
 
 export default function Reviews() {
+  const { role: platformRole } = useAuth();
+  const isPlatformAdmin = platformRole === 'admin';
   const [activeTab, setActiveTab] = useState<ActiveTab>('reviews');
   const [platform, setPlatform] = useState('All');
   const [rating, setRating] = useState('All');
@@ -499,7 +502,8 @@ export default function Reviews() {
   const presentPlatforms = Array.from(new Set(volumeData.flatMap((d) => Object.keys(d).filter((k) => k !== 'date'))));
 
   const totalReviews = data?.data?.total ?? 0;
-  const showEMRBanner = !isLoading && totalReviews === 0 && feedbackTotal === 0;
+  // EMR setup banner is only relevant for the operator admin account (platform-level)
+  const showEMRBanner = isPlatformAdmin && !isLoading && totalReviews === 0 && feedbackTotal === 0;
 
   return (
     <div className="space-y-6">
