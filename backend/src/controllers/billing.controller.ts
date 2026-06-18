@@ -34,7 +34,7 @@ export async function checkout(req: Request, res: Response, next: NextFunction):
 
     const customerId = await getOrCreateStripeCustomer(req.userId!, user.email as string);
     const successUrl = `${config.appUrl}/billing/success`;
-    const cancelUrl = `${config.appUrl}/settings`;
+    const cancelUrl = `${config.appUrl}/dashboard/settings?tab=billing`;
     const session = await createCheckoutSession(customerId, extraLocations, successUrl, cancelUrl, req.userId!);
 
     ok(res, { url: session.url });
@@ -67,7 +67,7 @@ export async function portal(req: Request, res: Response, next: NextFunction): P
   try {
     const user = await db('users').where({ id: req.userId }).first();
     if (!user?.stripe_customer_id) { err(res, 'No billing account found', 400, 'NO_STRIPE_CUSTOMER'); return; }
-    const url = await getBillingPortalUrl(user.stripe_customer_id as string, `${config.appUrl}/settings`);
+    const url = await getBillingPortalUrl(user.stripe_customer_id as string, `${config.appUrl}/dashboard/settings?tab=billing`);
     ok(res, { url });
   } catch (e) { next(e); }
 }

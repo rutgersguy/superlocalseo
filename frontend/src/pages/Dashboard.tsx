@@ -332,12 +332,12 @@ function GBPNudgeBanner() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <span>
-          <strong>Finish setting up —</strong> Connect your Google Business Profile to unlock review sync and ranking data.
+          <strong>Optional:</strong> Connect your Google Business Profile to unlock review sync and ranking data.
         </span>
       </div>
       <div className="flex items-center gap-3 ml-4 shrink-0">
         <Link to="/dashboard/settings?tab=integrations" className="font-medium underline hover:no-underline whitespace-nowrap">
-          Connect now →
+          Connect Google →
         </Link>
         <button onClick={() => setDismissed(true)} className="text-blue-500 hover:text-blue-700 font-bold">
           ×

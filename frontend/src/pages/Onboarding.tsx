@@ -224,9 +224,9 @@ export default function Onboarding() {
       setSaving(false);
       setProvisioning(false);
     }
-    // Flush SWR cache before navigating so OnboardingRedirect sees the updated onboardingStep
-    // and doesn't loop us back here.
-    await mutate('/clients');
+    // Populate the SWR cache with fresh data so OnboardingRedirect immediately sees
+    // onboardingStep=4 and doesn't redirect back here with stale step=0 data.
+    await mutate('/clients', apiFetch('/clients'));
     navigate('/dashboard');
   };
 
@@ -239,7 +239,7 @@ export default function Onboarding() {
       }
       await apiFetch('/clients', { method: 'PATCH', body: JSON.stringify(payload) });
     } catch { /* non-fatal */ }
-    await mutate('/clients');
+    await mutate('/clients', apiFetch('/clients'));
     navigate('/dashboard');
   };
 

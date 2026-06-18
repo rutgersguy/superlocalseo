@@ -397,7 +397,11 @@ function GeoGridPanel() {
       const res = await apiFetch('/geo-grid', {
         method: 'POST',
         body: JSON.stringify({ locationId: selectedLocationId, keywordId: selectedKeywordId }),
-      }) as { data?: { report?: GeoReport } };
+      }) as { success?: boolean; data?: { report?: GeoReport }; error?: { message?: string } };
+      if (!res.success) {
+        setTriggerError(res.error?.message ?? 'Failed to start scan');
+        return;
+      }
       if (res.data?.report) setPollingId(res.data.report.id);
       await mutateReports();
     } catch (e) {

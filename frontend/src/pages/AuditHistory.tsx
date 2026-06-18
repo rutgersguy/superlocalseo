@@ -464,14 +464,21 @@ export default function AuditHistory() {
   };
 
   const handleTrigger = async () => {
-    if (!effectiveLocationId) return;
+    if (!effectiveLocationId) {
+      setTriggerError('No location found. Please add a location in Settings before running an audit.');
+      return;
+    }
     setTriggering(true);
     setTriggerError(null);
     try {
-      await apiFetch('/audits/bl/generate', {
+      const res = await apiFetch('/audits/bl/generate', {
         method: 'POST',
         body: JSON.stringify({ locationId: effectiveLocationId }),
-      });
+      }) as { success?: boolean; error?: { message?: string } };
+      if (!res.success) {
+        setTriggerError(res.error?.message ?? 'Failed to trigger audit');
+        return;
+      }
       await Promise.all([
         mutate('/audits/bl'),
         mutate(`/audits/bl/location/${effectiveLocationId}/history`),

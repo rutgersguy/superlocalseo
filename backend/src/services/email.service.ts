@@ -65,7 +65,7 @@ export async function sendTrialEndingSoonEmail(to: string, businessName: string,
 }
 
 export async function sendPaymentFailedEmail(to: string, businessName: string): Promise<void> {
-  const url = `${config.publicUrl}/settings/billing`;
+  const url = `${config.publicUrl}/dashboard/settings?tab=billing`;
   await resend.emails.send({
     from,
     to,
