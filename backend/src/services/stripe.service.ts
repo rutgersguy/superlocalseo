@@ -48,21 +48,28 @@ export async function createCheckoutSession(
   successUrl: string,
   cancelUrl: string,
   userId: string,
+  plan: 'lite' | 'pro' = 'pro',
 ): Promise<Stripe.Checkout.Session> {
-  const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
-    { price: config.stripe.prices.setup!, quantity: 1 },
-    { price: config.stripe.prices.base!, quantity: 1 },
-  ];
-  if (extraLocations > 0) {
-    lineItems.push({ price: config.stripe.prices.location!, quantity: extraLocations });
+  // Lite: single $99/mo recurring item, no setup fee, no extra locations.
+  const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = plan === 'lite'
+    ? [{ price: config.stripe.prices.liteBase!, quantity: 1 }]
+    : [
+      { price: config.stripe.prices.setup!, quantity: 1 },
+      { price: config.stripe.prices.base!, quantity: 1 },
+    ];
+  const extra = plan === 'lite' ? 0 : extraLocations;
+  if (extra > 0) {
+    lineItems.push({ price: config.stripe.prices.location!, quantity: extra });
   }
 
+  // subscription_data.metadata carries the plan onto the SUBSCRIPTION so later
+  // customer.subscription.updated / invoice.payment_succeeded events can read it.
   return stripe.checkout.sessions.create({
     mode: 'subscription',
     customer: customerId,
     line_items: lineItems,
-    subscription_data: { metadata: { userId, extraLocations: String(extraLocations) } },
-    metadata: { userId, extraLocations: String(extraLocations) },
+    subscription_data: { metadata: { userId, extraLocations: String(extra), plan } },
+    metadata: { userId, extraLocations: String(extra), plan },
     success_url: successUrl,
     cancel_url: cancelUrl,
   });
@@ -158,7 +165,24 @@ export async function createSubscriptionIntent(
   extraLocations: number,
   userId: string,
   promotionCodeId?: string,
+  plan: 'lite' | 'pro' = 'pro',
 ): Promise<{ clientSecret: string; subscriptionId: string }> {
+  if (plan === 'lite') {
+    // Lite: single recurring item, no setup fee, no extra locations.
+    const sub = await stripe.subscriptions.create({
+      customer: customerId,
+      items: [{ price: config.stripe.prices.liteBase! }],
+      payment_behavior: 'default_incomplete',
+      payment_settings: { save_default_payment_method: 'on_subscription' },
+      expand: ['latest_invoice.payment_intent'],
+      metadata: { userId, extraLocations: '0', plan: 'lite' },
+      ...(promotionCodeId ? { promotion_code: promotionCodeId } : {}),
+    });
+    const liteInvoice = sub.latest_invoice as Stripe.Invoice;
+    const litePi = liteInvoice.payment_intent as Stripe.PaymentIntent;
+    return { clientSecret: litePi.client_secret!, subscriptionId: sub.id };
+  }
+
   const items: Stripe.SubscriptionCreateParams.Item[] = [
     { price: config.stripe.prices.base! },
   ];
@@ -215,7 +239,7 @@ export async function createSubscriptionIntent(
     payment_behavior: 'default_incomplete',
     payment_settings: { save_default_payment_method: 'on_subscription' },
     expand: ['latest_invoice.payment_intent'],
-    metadata: { userId, extraLocations: String(extraLocations) },
+    metadata: { userId, extraLocations: String(extraLocations), plan: 'pro' },
     ...(!setupOnlyDiscount && promotionCodeId ? { promotion_code: promotionCodeId } : {}),
   });
 
@@ -223,6 +247,52 @@ export async function createSubscriptionIntent(
   const pi = invoice.payment_intent as Stripe.PaymentIntent;
 
   return { clientSecret: pi.client_secret!, subscriptionId: sub.id };
+}
+
+/**
+ * Upgrade a Lite subscriber to Pro.
+ * - Swaps the subscription item liteBase → base (Pro)
+ * - Adds the $499 setup fee to the proration invoice (charged immediately)
+ * - proration_behavior 'always_invoice' bills the price difference + setup now
+ *
+ * product_line is intentionally NOT flipped here. The subscription now carries
+ * metadata.plan='pro'; the client is promoted to Pro only when the upgrade invoice
+ * actually pays (invoice.payment_succeeded webhook), so a failed payment never
+ * grants free Pro access.
+ *
+ * @returns clientSecret for confirming the upgrade payment (null if no payment was
+ *          required — e.g. covered by credit), and the proration invoiceId.
+ */
+export async function upgradeToProSubscription(
+  subscriptionId: string,
+  userId: string,
+  promotionCodeId?: string,
+): Promise<{ clientSecret: string | null; invoiceId: string }> {
+  const sub = await stripe.subscriptions.retrieve(subscriptionId, { expand: ['items'] });
+  const liteItem = sub.items.data.find((i) => i.price.id === config.stripe.prices.liteBase);
+  if (!liteItem) throw new Error('No Lite subscription item found — cannot upgrade.');
+
+  // One-time setup fee, pulled into the proration invoice created below.
+  if (config.stripe.prices.setup) {
+    await stripe.invoiceItems.create({
+      customer: sub.customer as string,
+      price: config.stripe.prices.setup,
+      description: 'SuperLocalSEO Pro — one-time setup fee',
+    });
+  }
+
+  const updatedSub = await stripe.subscriptions.update(subscriptionId, {
+    items: [{ id: liteItem.id, price: config.stripe.prices.base!, quantity: 1 }],
+    proration_behavior: 'always_invoice',
+    metadata: { ...sub.metadata, userId, plan: 'pro' },
+    expand: ['latest_invoice.payment_intent'],
+    ...(promotionCodeId ? { promotion_code: promotionCodeId } : {}),
+  });
+
+  const inv = updatedSub.latest_invoice as Stripe.Invoice | null;
+  if (!inv) throw new Error('No invoice generated for upgrade — cannot confirm payment.');
+  const pi = inv.payment_intent as Stripe.PaymentIntent | null;
+  return { clientSecret: pi?.client_secret ?? null, invoiceId: inv.id! };
 }
 
 export async function getBillingPortalUrl(customerId: string, returnUrl: string): Promise<string> {
@@ -237,13 +307,15 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
       if (session.mode !== 'subscription' || !session.subscription || !session.customer) break;
       const userId = session.metadata?.userId;
       if (!userId) break;
-      const extra = parseInt(session.metadata?.extraLocations ?? '0', 10);
+      const plan = (session.metadata?.plan ?? 'pro') as 'lite' | 'pro';
+      const extra = plan === 'lite' ? 0 : parseInt(session.metadata?.extraLocations ?? '0', 10);
       await db('clients')
         .where({ user_id: userId })
         .update({
           stripe_subscription_id: session.subscription as string,
           subscription_status: 'active',
-          locations_limit: 1 + extra,
+          locations_limit: plan === 'lite' ? 1 : 1 + extra,
+          product_line: plan,
           updated_at: new Date(),
         });
       break;
@@ -258,12 +330,14 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
         : sub.status === 'canceled' ? 'canceled' : 'trialing';
       const locationItem = sub.items.data.find((i) => i.price.id === config.stripe.prices.location);
       const extra = locationItem?.quantity ?? 0;
+      const planFromMeta = sub.metadata?.plan as 'lite' | 'pro' | undefined;
       await db('clients')
         .where({ user_id: userId })
         .update({
           subscription_status: status,
           subscription_current_period_end: new Date(sub.current_period_end * 1000),
-          locations_limit: 1 + extra,
+          locations_limit: planFromMeta === 'lite' ? 1 : 1 + extra,
+          ...(planFromMeta ? { product_line: planFromMeta } : {}),
           updated_at: new Date(),
         });
       break;
@@ -278,13 +352,30 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
       break;
     }
 
-    case 'invoice.paid': {
+    // The webhook endpoint enables invoice.payment_succeeded; handle invoice.paid too
+    // for parity. This is the authoritative point where a Lite→Pro upgrade takes
+    // effect — product_line is promoted only once the upgrade invoice actually pays.
+    case 'invoice.paid':
+    case 'invoice.payment_succeeded': {
       const inv = event.data.object as Stripe.Invoice;
       const subId = (inv as any).subscription as string | undefined;
       if (!subId) break;
+
+      let planUpdate: { product_line?: 'lite' | 'pro'; locations_limit?: number } = {};
+      try {
+        const sub = await stripe.subscriptions.retrieve(subId);
+        const plan = sub.metadata?.plan as 'lite' | 'pro' | undefined;
+        if (plan) {
+          const locationItem = sub.items.data.find((i) => i.price.id === config.stripe.prices.location);
+          const extra = locationItem?.quantity ?? 0;
+          planUpdate = { product_line: plan, locations_limit: plan === 'lite' ? 1 : 1 + extra };
+        }
+      } catch { /* if the retrieve fails, still mark the invoice paid below */ }
+
       await db('clients').where({ stripe_subscription_id: subId }).update({
         subscription_status: 'active',
         payment_failed_at: null,
+        ...planUpdate,
         updated_at: new Date(),
       });
       break;

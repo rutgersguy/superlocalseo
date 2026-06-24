@@ -41,6 +41,7 @@ function formatClient(
     email,
     businessName: client.business_name,
     industry: client.industry,
+    productLine: (client.product_line as string | null) ?? 'pro',
     billing: {
       plan: client.subscription_tier ?? 'free',
       status: client.subscription_status ?? 'inactive',
