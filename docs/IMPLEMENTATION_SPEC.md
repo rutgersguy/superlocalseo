@@ -1,4 +1,4 @@
-# SuperLocalSEO — Lite/Pro Split: Implementation Spec (rev 2)
+# SuperLocalSEO — Lite/Pro Split: Implementation Spec (rev 3)
 
 **Revision notes:** Addresses all six concerns raised in Claude Code review:
 1. Central feature map with default-deny (replaces manual per-route gating)
@@ -248,39 +248,59 @@ STRIPE_LITE_BASE_PRICE_ID=     # Stripe price ID for Lite plan ($99/mo recurring
 
 ---
 
-## Part 4 — Backend Middleware (using req.client — zero extra DB reads)
+## Part 4 — Backend Middleware (correct wiring — zero extra DB reads)
+
+> **Rev 3 correctness fixes.** Rev 2 mounted the gate at the index level but read `req.client`/`req.user` that are only populated by per-route `requireAuth`/`requireClient` *inside* the child routers — i.e. AFTER the gate runs. That made the gate **fail open** (everyone treated as `'pro'`). Three concrete corrections, all verified against the current code:
+> 1. **Populate `req.client` BEFORE the gate** by hoisting `requireClient` to the index level. `requireClient` already calls `requireAuth` internally, is team-member-aware, and sets `req.client`. Per-route `requireClient` calls become no-ops via an idempotency guard (4.0) — so this adds **zero** net DB queries.
+> 2. **Admin field is `req.userRole`, not `req.user.role`.** `requireAuth` sets `req.userId` + `req.userRole`; there is no `req.user`. Rev 2's admin bypass never fired.
+> 3. **Path matching uses `req.baseUrl + req.path`, not `req.path`.** Inside a path-mounted middleware Express strips the mount prefix from `req.path` (it becomes `/`), so `req.path` alone never matched the capability map → fail open. `req.baseUrl` carries the mount (`/api/citations`).
+
+### 4.0 Edit: `backend/src/middleware/requireClient.ts` — idempotency guard
+
+So hoisting `requireClient` to the index level doesn't double-query when the per-route `requireClient` also runs. Add at the very top of `requireClient`, before the `requireAuth` await:
+
+```typescript
+export async function requireClient(req: Request, res: Response, next: NextFunction): Promise<void> {
+  // Idempotent: if a parent-level requireClient already populated the request, skip.
+  if (req.client) { next(); return; }
+  // ...existing body unchanged (requireAuth await, owner/team lookup, checkBillingAccess)...
+}
+```
 
 ### 4.1 New file: `backend/src/middleware/requireProPlan.ts`
 
-This replaces the version in rev 1. Key change: it reads `req.user` and `req.client` which are already populated by `requireAuth` and `requireClient` — no new DB queries.
+Reads `req.userRole` and `req.client` — both populated by the index-level `requireClient` (which runs `requireAuth`). No new DB queries.
 
 ```typescript
 import { Request, Response, NextFunction } from 'express';
 import { isPlanAllowed } from '../config/planFeatures';
 
 /**
- * Plan-based access gate. Must be mounted AFTER requireAuth and requireClient.
+ * Plan-based access gate. Must be mounted AFTER requireClient at the index level
+ * (requireClient runs requireAuth internally and populates req.client + req.userRole).
  *
  * Uses isPlanAllowed() from the central capability map — no manual per-route logic.
- * Reuses req.user and req.client (populated by requireAuth / requireClient) — zero extra DB reads.
+ * Zero extra DB reads: reuses req.client populated upstream.
  */
 export function requireProPlan(req: Request, res: Response, next: NextFunction): void {
-  // Admins always bypass
-  if (req.user?.role === 'admin') { next(); return; }
+  // Admins always bypass (requireAuth sets req.userRole, NOT req.user.role)
+  if (req.userRole === 'admin') { next(); return; }
 
   const productLine = (req.client?.product_line as string | null) ?? 'pro';
+  if (productLine === 'pro') { next(); return; }
 
-  // Strip /api/ prefix, get the meaningful path segment
-  const apiPath = req.path.replace(/^\/api\//, '').replace(/^\//, '');
+  // req.baseUrl carries the mount prefix (e.g. "/api/citations"); req.path is mount-relative.
+  // Combine them, strip the leading "/api/", and trim any trailing slash.
+  const apiPath = `${req.baseUrl}${req.path}`
+    .replace(/^\/api\//, '')
+    .replace(/\/+$/, '');
 
   // Special case: POST /competitors creates a competitor — mapped to __create__ sub-path
   const normalizedPath = (req.method === 'POST' && apiPath === 'competitors')
     ? 'competitors/__create__'
     : apiPath;
 
-  if (isPlanAllowed(normalizedPath, productLine as 'lite' | 'pro')) {
-    next(); return;
-  }
+  if (isPlanAllowed(normalizedPath, 'lite')) { next(); return; }
 
   res.status(403).json({
     success: false,
@@ -291,9 +311,10 @@ export function requireProPlan(req: Request, res: Response, next: NextFunction):
 
 ### 4.2 Edit: `backend/src/routes/index.ts`
 
-Replace manual per-file gating with a **single middleware applied at the router level**, after `requireActiveSubscription`. This is the fail-safe approach: any new route added gets gated automatically.
+Hoist `requireClient` (which runs `requireAuth`) ahead of the gate, then apply `requireProPlan` once at the router level. Fail-safe: any new route added to these prefixes is gated automatically, and `req.client` is guaranteed populated before the gate reads it.
 
 ```typescript
+import { requireClient } from '../middleware/requireClient';
 import { requireProPlan } from '../middleware/requireProPlan';
 
 // ── Replace the subscription-gated block with this ───────────────────────────
@@ -313,19 +334,19 @@ const subscriptionRoutes = [
   ['/geo-grid',    geoGridRouter],
 ] as const;
 
+// Order matters: requireClient populates req.client + req.userRole (runs requireAuth),
+// then requireActiveSubscription enforces billing, then requireProPlan reads req.client.
 for (const [path, routerModule] of subscriptionRoutes) {
-  router.use(path, requireActiveSubscription, requireProPlan, routerModule);
+  router.use(path, requireClient, requireActiveSubscription, requireProPlan, routerModule);
 }
 
 // Team and QR don't need requireActiveSubscription (accessible during trial)
-// but DO need the plan gate:
-router.use('/team', requireProPlan, teamRouter);
-router.use('/qr',   requireProPlan, qrRouter);
+// but DO need client population + the plan gate:
+router.use('/team', requireClient, requireProPlan, teamRouter);
+router.use('/qr',   requireClient, requireProPlan, qrRouter);
 ```
 
-> **Note:** `req.user` and `req.client` are populated by `requireAuth` and `requireClient` inside each route file. The `requireProPlan` middleware runs before the individual route handlers but after the Express Router has started processing — `req.user` will be populated by the time `requireProPlan` executes as long as `requireAuth` is the first middleware in each child route. Verify this is the case across all route files before deploying.
->
-> If any route file doesn't call `requireAuth` as its first middleware, add `requireProPlan` inside that file after `requireAuth` and `requireClient` instead of at the index level.
+> **Why this is now correct:** `requireClient` runs first and sets `req.client` (team-aware) + `req.userRole`; the per-route `requireClient` inside each child router short-circuits via the 4.0 guard, so there's no second query. `requireProPlan` then reads the already-populated `req.client`. The mount prefix lives in `req.baseUrl`, which the gate uses for matching. Net new DB reads per request: **zero**.
 
 ---
 
@@ -410,18 +431,18 @@ export async function upgradeToProSubscription(
     throw new Error('No invoice generated for upgrade — cannot confirm payment.');
   }
 
-  // 5. Optimistically update the DB (webhook will also fire but idempotent)
-  await db('clients')
-    .where({ user_id: userId })
-    .update({
-      product_line: 'pro',
-      locations_limit: 1,  // Pro base = 1 location; they can add more separately
-      updated_at: new Date(),
-    });
+  // 5. Do NOT flip product_line here.
+  //    Rev 3: flipping optimistically would grant Pro access even if the upgrade
+  //    invoice (proration + $499 setup fee) fails to pay — free Pro until dunning.
+  //    The subscription item is already swapped and carries metadata.plan='pro';
+  //    product_line flips to 'pro' only when `invoice.payment_succeeded` fires
+  //    for this subscription (see webhook 5.1f). Until then the client stays Lite.
 
   return { clientSecret, invoiceId };
 }
 ```
+
+> **Note:** because the Pro price swap on the Stripe subscription has already happened, the customer is billed Pro on the next cycle regardless — but they do not *receive* Pro features until the upgrade invoice is actually paid and the webhook flips `product_line`. If the invoice fails, normal Stripe dunning applies and `customer.subscription.updated` will carry `status: 'past_due'`; the client remains on Lite features.
 
 #### 5.1b — Update `createSubscriptionIntent` to accept `plan`
 
@@ -461,6 +482,14 @@ export async function createSubscriptionIntent(
 #### 5.1c — Update `createCheckoutSession` to accept `plan`
 
 Same pattern — add `plan: 'lite' | 'pro' = 'pro'` and branch identically to `createSubscriptionIntent` above. Checkout sessions use `config.stripe.prices.liteBase` for Lite, no setup item.
+
+**Rev 3:** set `subscription_data.metadata` so the *subscription* (not just the checkout session) carries the plan — `customer.subscription.updated` and `invoice.payment_succeeded` read it from there:
+
+```typescript
+subscription_data: {
+  metadata: { userId, plan, extraLocations: String(plan === 'lite' ? 0 : extraLocations) },
+},
+```
 
 #### 5.1d — Update `handleWebhookEvent` — `checkout.session.completed`
 
@@ -515,6 +544,39 @@ case 'customer.subscription.updated': {
   break;
 }
 ```
+
+#### 5.1f — Add `invoice.payment_succeeded` webhook (flips `product_line` on a paid upgrade)
+
+This is the authoritative point where an upgrade takes effect. It also harmlessly re-affirms the plan on every successful renewal (idempotent).
+
+```typescript
+case 'invoice.payment_succeeded': {
+  const invoice = event.data.object as Stripe.Invoice;
+  if (!invoice.subscription) break;
+  const subId = invoice.subscription as string;
+
+  // Read the plan from the subscription metadata (set on create + on upgrade swap)
+  const sub = await stripe.subscriptions.retrieve(subId);
+  const userId = sub.metadata?.userId;
+  const plan = (sub.metadata?.plan ?? 'pro') as 'lite' | 'pro';
+  if (!userId) break;
+
+  const locationItem = sub.items.data.find((i) => i.price.id === config.stripe.prices.location);
+  const extra = locationItem?.quantity ?? 0;
+
+  await db('clients')
+    .where({ user_id: userId })
+    .update({
+      product_line: plan,                       // ← upgrade takes effect only once paid
+      locations_limit: plan === 'lite' ? 1 : 1 + extra,
+      subscription_status: 'active',
+      updated_at: new Date(),
+    });
+  break;
+}
+```
+
+> Ensure `invoice.payment_succeeded` is in the Stripe webhook's enabled-events list (Dashboard → Webhooks) alongside the existing `checkout.session.completed` / `customer.subscription.updated` events.
 
 ---
 
@@ -1222,7 +1284,11 @@ async function registerAndLogin(email: string): Promise<string> {
 async function setProductLine(email: string, plan: 'lite' | 'pro') {
   const user = await db('users').where({ email }).first();
   if (!user) return;
-  await db('clients').where({ user_id: user.id }).update({ product_line: plan });
+  // Rev 3: requireActiveSubscription runs BEFORE requireProPlan, so set status 'active'
+  // too — otherwise a Lite route would 402 (billing) before reaching the 403 (plan gate).
+  await db('clients')
+    .where({ user_id: user.id })
+    .update({ product_line: plan, subscription_status: 'active' });
 }
 
 describe('Plan gate — requireProPlan middleware', () => {
@@ -1446,16 +1512,30 @@ test.describe('Suite 08 — Onboarding: Lite plan', () => {
 | #6 No automated coverage | Manual smoke test only | `plan-gate.test.ts` (unit + integration) + `08-onboarding-lite.spec.ts` (6 e2e tests) |
 | Product: keyword nudge | Not addressed | `avgRank > 10` nudge banner in `LiteDashboard` links to keyword settings |
 
+## Changes in Rev 3 (correctness — the rev-2 central gate would have failed *open*)
+
+All three gate bugs were verified against the current code, not just the spec.
+
+| # | Rev 2 defect (fail-open / broken) | Rev 3 fix | Where |
+|---|---|---|---|
+| A | Gate mounted at index level read `req.client`, but `requireClient` only runs *inside* child routers (after the gate) → `req.client` undefined → `productLine` defaulted to `'pro'` for everyone | Hoist `requireClient` to the index level ahead of the gate; add an idempotency guard so the per-route `requireClient` becomes a no-op (zero net queries) | 4.0, 4.2 |
+| B | Admin bypass used `req.user?.role`, but `requireAuth` sets `req.userRole` (there is no `req.user`) → admins were gated | Use `req.userRole === 'admin'` | 4.1 |
+| C | Path matched on `req.path`, which Express strips to `/` inside a path-mounted middleware → never matched the map → fail-open | Match on `req.baseUrl + req.path` (baseUrl carries `/api/<prefix>`) | 4.1 |
+| D | `upgradeToProSubscription` flipped `product_line='pro'` optimistically, before the proration + $499 setup-fee invoice was paid → free Pro on failed payment | Remove optimistic write; flip `product_line` only on `invoice.payment_succeeded` (5.1f). Subscription carries `metadata.plan` via `subscription_data` so the webhook can read it | 5.1c, 5.1f, Part 5 step 5 |
+| E | Plan-gate integration tests would 402 (billing) before reaching the 403 (gate) under the new ordering | Test setup sets `subscription_status='active'` alongside `product_line` | 16.1 |
+
 ## Execution Order for Claude Code
 
 1. Part 1 — Create `planFeatures.ts` in both backend and frontend (everything depends on this)
 2. Part 2 — Run DB migration (`product_line` column)
-3. Parts 3–4 — Config + middleware (no frontend impact yet)
-4. Part 5 — Stripe service (`upgradeToProSubscription` + `plan` param on existing functions)
-5. Parts 6–7 — Billing controller + client controller
-6. Part 8 — `useClient` hook (frontend entry point for plan data)
-7. Parts 9–14 — Frontend components, pages, layout, register, billing, audit
-8. Part 15 — App.tsx (note: no changes needed vs rev 1 assessment)
-9. Part 16 — Tests (run existing suite first to confirm baseline, then add new files)
-10. TypeScript check: `cd backend && npx tsc --noEmit && cd ../frontend && npx tsc --noEmit`
-11. Run `plan-gate.test.ts` and confirm all assertions pass before merging
+3. Part 4.0 — Add the `requireClient` idempotency guard FIRST (the index-level wiring depends on it)
+4. Parts 3–4 — Config + `requireProPlan` + `index.ts` wiring
+5. **Checkpoint:** add and run `plan-gate.test.ts` now and prove the gate actually blocks Lite / passes Pro / bypasses admin **before** touching anything else
+6. Part 5 — Stripe service (`upgradeToProSubscription`, `plan` param, `invoice.payment_succeeded` webhook)
+7. Parts 6–7 — Billing controller (incl. `/billing/upgrade`) + client controller
+8. Part 8 — `useClient` hook (frontend entry point for plan data)
+9. Parts 9–14 — Frontend components, pages, layout, register, billing, audit
+10. Part 15 — App.tsx
+11. Part 16.2 — Lite onboarding e2e
+12. TypeScript check: `cd backend && npx tsc --noEmit && cd ../frontend && npx tsc --noEmit`
+13. Run full `plan-gate.test.ts` + existing suite green before merging
