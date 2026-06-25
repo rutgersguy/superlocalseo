@@ -8,7 +8,6 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import VerifyEmail from './pages/VerifyEmail';
 import AuthGoogleSuccess from './pages/AuthGoogleSuccess';
-import Audit from './pages/Audit';
 import TeamAccept from './pages/TeamAccept';
 import Onboarding from './pages/Onboarding';
 import DashboardLayout from './layouts/DashboardLayout';

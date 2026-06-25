@@ -244,7 +244,7 @@ const BATTLE_STATUS = {
 type SortCol = 'yourRank' | 'bestCompetitorRank';
 type SortDir = 'asc' | 'desc';
 
-function SortIcon({ col, active, dir }: { col: SortCol; active: boolean; dir: SortDir }) {
+function SortIcon({ active, dir }: { col: SortCol; active: boolean; dir: SortDir }) {
   return (
     <span className={`ml-1 inline-flex flex-col leading-none ${active ? 'text-brand-500' : 'text-slate-300'}`}>
       <span className={`text-[8px] ${active && dir === 'asc' ? 'text-brand-500' : ''}`}>▲</span>
