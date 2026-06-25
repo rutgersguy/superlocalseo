@@ -16,6 +16,7 @@ interface BillingStatus {
   locationCount: number;
   currentPeriodEnd: string | null;
   publishableKey: string | null;
+  productLine: 'lite' | 'pro';
 }
 
 interface IntentResponse {
@@ -132,6 +133,9 @@ export default function BillingPage() {
 
   // Determine if user is in early trial (show soft landing instead of payment form)
   const isEarlyTrial = billing?.status === 'trialing' && billing.trialDaysLeft !== null && billing.trialDaysLeft > 7;
+  // Plan chosen at registration (Option B: trials run as Pro; the plan applies at checkout).
+  const planForCheckout: 'lite' | 'pro' = localStorage.getItem('selectedPlan') === 'pro' ? 'pro' : 'lite';
+  const isUpgrade = new URLSearchParams(window.location.search).get('upgrade') === '1';
 
   // Fetch subscription intent when status is known and user needs to subscribe
   useEffect(() => {
@@ -144,7 +148,7 @@ export default function BillingPage() {
     setLoadingIntent(true);
     apiFetch<IntentResponse>('/billing/subscription-intent', {
       method: 'POST',
-      body: JSON.stringify({ extraLocations: 0, promotionCodeId: promoApplied?.id }),
+      body: JSON.stringify({ plan: planForCheckout, extraLocations: 0, promotionCodeId: promoApplied?.id }),
     })
       .then((res) => {
         if (!res.success || !res.data?.clientSecret) {
@@ -157,6 +161,30 @@ export default function BillingPage() {
       .catch(() => setIntentError('Network error — please refresh'))
       .finally(() => setLoadingIntent(false));
   }, [billing, clientSecret, isEarlyTrial, proceedEarly]);
+
+  // Lite→Pro upgrade: call /billing/upgrade and reuse the payment form for confirmation.
+  // product_line flips to 'pro' on the invoice.payment_succeeded webhook once paid.
+  useEffect(() => {
+    if (!isUpgrade || success) return;
+    if (!billing || billing.status !== 'active' || billing.productLine !== 'lite') return;
+    if (clientSecret || loadingIntent) return;
+
+    setLoadingIntent(true);
+    apiFetch<{ success: boolean; data: { clientSecret: string | null }; error?: { message?: string } }>(
+      '/billing/upgrade', { method: 'POST' },
+    )
+      .then((res) => {
+        if (!res.success) { setIntentError(res.error?.message ?? 'Upgrade failed'); return; }
+        if (res.data.clientSecret) {
+          setClientSecret(res.data.clientSecret);
+          setPubKey(billing.publishableKey);
+        } else {
+          setSuccess(true); // covered by proration credit — no extra payment needed
+        }
+      })
+      .catch(() => setIntentError('Network error — please refresh'))
+      .finally(() => setLoadingIntent(false));
+  }, [isUpgrade, billing, clientSecret, loadingIntent, success]);
 
   const applyPromo = async () => {
     const code = promoInput.trim();
@@ -211,8 +239,9 @@ export default function BillingPage() {
     },
   };
 
-  // Already subscribed
-  if (billing?.status === 'active') {
+  // Already subscribed — but let an active Lite subscriber who chose to upgrade
+  // (?upgrade=1) fall through to the upgrade payment form below.
+  if (billing?.status === 'active' && !(isUpgrade && billing.productLine === 'lite')) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 max-w-sm w-full text-center space-y-4">
