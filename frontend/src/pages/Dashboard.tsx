@@ -4,6 +4,7 @@ import useSWR, { mutate } from 'swr';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { TrendingUp, Star, ClipboardList, FileText } from 'lucide-react';
 import { fetcher, apiFetch } from '../services/api';
+import { useClient } from '../hooks/useClient';
 import { useAuth } from '../hooks/useAuth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -348,6 +349,7 @@ function GBPNudgeBanner() {
 }
 
 export default function Dashboard() {
+  const { isLite } = useClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [linkedDismissed, setLinkedDismissed] = useState(false);
   const showLinkedBanner = searchParams.get('linked') === '1' && !linkedDismissed;
@@ -366,12 +368,13 @@ export default function Dashboard() {
   const { data: rankingsData, isLoading: rankingsLoading, error: rankingsError } =
     useSWR<RankingsResponse>('/rankings?limit=10', fetcher);
 
-  const { data: roiData } = useSWR<RoiResponse>('/analytics/roi', fetcher);
+  // ROI and SEO Audit are Pro features — skip those fetches for Lite (would 403).
+  const { data: roiData } = useSWR<RoiResponse>(isLite ? null : '/analytics/roi', fetcher);
 
   const { data: visData } = useSWR<{ success: boolean; data: { current: number | null; delta: number | null; series: Array<{ date: string; score: number }> } }>('/metrics/visibility', fetcher);
   const vis = visData?.data;
 
-  const { data: auditData } = useSWR<{ success: boolean; data: { audits: Array<{ locationId: string; status: string; compositeScore: number | null }> } }>('/audits/bl', fetcher);
+  const { data: auditData } = useSWR<{ success: boolean; data: { audits: Array<{ locationId: string; status: string; compositeScore: number | null }> } }>(isLite ? null : '/audits/bl', fetcher);
   const latestAuditScore = (auditData?.data?.audits ?? []).find((a) => a.status === 'complete')?.compositeScore ?? null;
 
   const metrics = metricsData?.data;
@@ -411,15 +414,15 @@ export default function Dashboard() {
         <MetricCard label="Avg Rating" value={metrics?.avgRating != null ? metrics.avgRating.toFixed(1) : '—'} loading={metricsLoading} accent={metrics?.avgRating != null && metrics.avgRating >= 4 ? 'text-emerald-600' : undefined} />
       </div>
 
-      {/* Secondary metric row */}
+      {/* Secondary metric row — SEO Audit & Citations are Pro-only */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-        <MetricCard label="Local SEO Score" value={latestAuditScore != null ? `${latestAuditScore.toFixed(0)}/100` : '—'} loading={!auditData} />
-        <MetricCard label="Citation Score" value={metrics?.citationScore != null ? `${metrics.citationScore}/100` : '—'} loading={metricsLoading} />
+        {!isLite && <MetricCard label="Local SEO Score" value={latestAuditScore != null ? `${latestAuditScore.toFixed(0)}/100` : '—'} loading={!auditData} />}
+        {!isLite && <MetricCard label="Citation Score" value={metrics?.citationScore != null ? `${metrics.citationScore}/100` : '—'} loading={metricsLoading} />}
         <VisibilityCard vis={vis} loading={!visData} />
       </div>
 
-      {/* ROI section */}
-      {roiConfigured && roi ? (
+      {/* ROI section — Pro only */}
+      {!isLite && (roiConfigured && roi ? (
         <div className="grid grid-cols-3 gap-3">
           {[
             { label: 'Est. Monthly Clicks', value: roi.totals.estClicks.toLocaleString(), accent: undefined },
@@ -440,14 +443,15 @@ export default function Dashboard() {
           </div>
           <Link to="/dashboard/rankings?roi=1" className="shrink-0 ml-4 bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors">Set it up →</Link>
         </div>
-      )}
+      ))}
 
       {/* Quick actions row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: 'Track Keywords',  to: '/dashboard/rankings',      Icon: TrendingUp  },
           { label: 'View Reviews',    to: '/dashboard/reviews',       Icon: Star        },
-          { label: 'Run SEO Audit',   to: '/dashboard/audit', Icon: ClipboardList },
+          // SEO Audit is Pro-only
+          ...(isLite ? [] : [{ label: 'Run SEO Audit', to: '/dashboard/audit', Icon: ClipboardList }]),
           { label: 'Generate Report', to: '/dashboard/reports',       Icon: FileText    },
         ].map(({ label, to, Icon }) => (
           <Link
