@@ -252,8 +252,8 @@ export async function createSubscriptionIntent(
 /**
  * Upgrade a Lite subscriber to Pro.
  * - Swaps the subscription item liteBase → base (Pro)
- * - Adds the $499 setup fee to the proration invoice (charged immediately)
- * - proration_behavior 'always_invoice' bills the price difference + setup now
+ * - proration_behavior 'always_invoice' bills the prorated monthly difference now
+ * - The $499 setup fee is WAIVED on upgrade — they're already a paying customer.
  *
  * product_line is intentionally NOT flipped here. The subscription now carries
  * metadata.plan='pro'; the client is promoted to Pro only when the upgrade invoice
@@ -272,14 +272,7 @@ export async function upgradeToProSubscription(
   const liteItem = sub.items.data.find((i) => i.price.id === config.stripe.prices.liteBase);
   if (!liteItem) throw new Error('No Lite subscription item found — cannot upgrade.');
 
-  // One-time setup fee, pulled into the proration invoice created below.
-  if (config.stripe.prices.setup) {
-    await stripe.invoiceItems.create({
-      customer: sub.customer as string,
-      price: config.stripe.prices.setup,
-      description: 'SuperLocalSEO Pro — one-time setup fee',
-    });
-  }
+  // Setup fee waived on Lite→Pro upgrade — no invoice item added.
 
   const updatedSub = await stripe.subscriptions.update(subscriptionId, {
     items: [{ id: liteItem.id, price: config.stripe.prices.base!, quantity: 1 }],

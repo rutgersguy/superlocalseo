@@ -6,6 +6,7 @@ import {
 } from 'recharts';
 import { MapContainer, CircleMarker, Popup, TileLayer } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import { useClient } from '../hooks/useClient';
 import { BarChart2, Search } from 'lucide-react';
 import { apiFetch, fetcher } from '../services/api';
 
@@ -508,6 +509,7 @@ function GeoGridPanel() {
 // ─── Main component ────────────────────────────────────────────────────────────
 
 export default function Rankings() {
+  const { isLite } = useClient();
   const [searchParams] = useSearchParams();
   const [sortKey, setSortKey] = useState<SortKey>('rank');
   const [mainTab, setMainTab] = useState<MainTab>('table');
@@ -524,7 +526,8 @@ export default function Rankings() {
 
   const rankingsUrl = rankType !== 'all' ? `/rankings?rankType=${rankType}` : '/rankings';
   const { data: rankingsData, isLoading, error, mutate: mutateRankings } = useSWR<{ success: boolean; data: RankingRow[] }>(rankingsUrl, fetcher);
-  const { data: roiData, mutate: roiMutate } = useSWR<{ success: boolean; data: RoiData }>('/analytics/roi', fetcher);
+  // ROI is a Pro feature (backend gates /analytics/roi) — don't fetch it for Lite.
+  const { data: roiData, mutate: roiMutate } = useSWR<{ success: boolean; data: RoiData }>(isLite ? null : '/analytics/roi', fetcher);
   const { data: allKwData, mutate: mutateAllKw } = useSWR<KeywordsListResponse>('/keywords', fetcher);
   const { data: locData } = useSWR<LocationsResponse>('/locations', fetcher);
 
@@ -603,40 +606,46 @@ export default function Rankings() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-900 tracking-tight">Rankings</h1>
         <div className="flex gap-1 sm:gap-2">
-          <button
-            onClick={() => void handleSync()}
-            disabled={syncing}
-            className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
-          >
-            {syncing ? 'Refreshing…' : 'Refresh'}
-          </button>
+          {!isLite && (
+            <button
+              onClick={() => void handleSync()}
+              disabled={syncing}
+              className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+            >
+              {syncing ? 'Refreshing…' : 'Refresh'}
+            </button>
+          )}
           <button
             onClick={() => setShowKeywords((v) => !v)}
             className={`whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium rounded-lg border transition-colors ${showKeywords ? 'bg-brand-500 text-white border-brand-500' : 'text-slate-600 border-slate-200 hover:bg-slate-50'}`}
           >
             Keywords
           </button>
-          <button
-            onClick={() => setShowRoi((v) => !v)}
-            className={`whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium rounded-lg border transition-colors ${showRoi ? 'bg-brand-500 text-white border-brand-500' : 'text-slate-600 border-slate-200 hover:bg-slate-50'}`}
-          >
-            ROI
-          </button>
-          <button
-            onClick={async () => {
-              const res = await apiFetch<never>('/analytics/export?type=rankings', {}, true);
-              const blob = await res.blob();
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = 'rankings-export.csv';
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
-            className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
-          >
-            Export CSV
-          </button>
+          {!isLite && (
+            <button
+              onClick={() => setShowRoi((v) => !v)}
+              className={`whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium rounded-lg border transition-colors ${showRoi ? 'bg-brand-500 text-white border-brand-500' : 'text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+            >
+              ROI
+            </button>
+          )}
+          {!isLite && (
+            <button
+              onClick={async () => {
+                const res = await apiFetch<never>('/analytics/export?type=rankings', {}, true);
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'rankings-export.csv';
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+            >
+              Export CSV
+            </button>
+          )}
         </div>
       </div>
 
@@ -704,12 +713,15 @@ export default function Rankings() {
             Rankings Table
           </span>
         </button>
-        <button onClick={() => setMainTab('map')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${mainTab === 'map' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-          <span className="flex items-center gap-1.5">
-            📍 Visibility Map
-          </span>
-        </button>
+        {/* Visibility Map (geo-grid) is Pro-only */}
+        {!isLite && (
+          <button onClick={() => setMainTab('map')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${mainTab === 'map' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+            <span className="flex items-center gap-1.5">
+              📍 Visibility Map
+            </span>
+          </button>
+        )}
       </div>
 
       {mainTab === 'map' && (

@@ -4,6 +4,7 @@ import useSWR, { mutate as swrMutate } from 'swr';
 import { QrCode, Download, Trash2, Plus, AlertCircle, CheckCircle2, ExternalLink, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
 import { apiFetch, fetcher } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
+import { useClient } from '../hooks/useClient';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,15 +65,17 @@ interface TeamData {
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
 function TabBar({ active, onChange, isOwner }: { active: Tab; onChange: (t: Tab) => void; isOwner: boolean }) {
+  const { isLite } = useClient();
+  // Team and QR Codes are Pro-only (backend gates /team and /qr).
   const tabs: { key: Tab; label: string }[] = [
     { key: 'account', label: 'Account' },
     { key: 'locations', label: 'Locations' },
     { key: 'keywords', label: 'Keywords' },
     { key: 'integrations', label: 'Integrations' },
     { key: 'billing', label: 'Billing' },
-    ...(isOwner ? [{ key: 'team' as Tab, label: 'Team' }] : []),
+    ...(isOwner && !isLite ? [{ key: 'team' as Tab, label: 'Team' }] : []),
     { key: 'widgets' as Tab, label: 'Widgets' },
-    { key: 'qrcodes' as Tab, label: 'QR Codes' },
+    ...(isLite ? [] : [{ key: 'qrcodes' as Tab, label: 'QR Codes' }]),
   ];
   return (
     <>
