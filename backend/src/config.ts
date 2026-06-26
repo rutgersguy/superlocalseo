@@ -45,6 +45,7 @@ export const config = {
       setup: optional('STRIPE_SETUP_PRICE_ID'),
       base: optional('STRIPE_BASE_PRICE_ID'),
       location: optional('STRIPE_LOCATION_PRICE_ID'),
+      liteBase: optional('STRIPE_LITE_BASE_PRICE_ID'), // $99/mo recurring, no setup fee
     },
   },
 

@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
-import { getOrCreateStripeCustomer, createCheckoutSession, createSubscriptionIntent, getBillingPortalUrl, handleWebhookEvent, validatePromoCode } from '../services/stripe.service';
+import { getOrCreateStripeCustomer, createCheckoutSession, createSubscriptionIntent, upgradeToProSubscription, getBillingPortalUrl, handleWebhookEvent, validatePromoCode } from '../services/stripe.service';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
@@ -22,20 +22,22 @@ export async function status(req: Request, res: Response, next: NextFunction): P
       currentPeriodEnd: client.subscription_current_period_end ?? null,
       paymentFailedAt: client.payment_failed_at ?? null,
       publishableKey: config.stripe.publishableKey,
+      productLine: (client.product_line as string | null) ?? 'pro',
     });
   } catch (e) { next(e); }
 }
 
 export async function checkout(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const extraLocations = Math.max(0, parseInt(req.body.extraLocations ?? '0', 10));
+    const plan = req.body.plan === 'lite' ? 'lite' : 'pro';
+    const extraLocations = plan === 'lite' ? 0 : Math.max(0, parseInt(req.body.extraLocations ?? '0', 10));
     const user = await db('users').where({ id: req.userId }).first();
     if (!user) { err(res, 'User not found', 404, 'NOT_FOUND'); return; }
 
     const customerId = await getOrCreateStripeCustomer(req.userId!, user.email as string);
     const successUrl = `${config.appUrl}/billing/success`;
     const cancelUrl = `${config.appUrl}/dashboard/settings?tab=billing`;
-    const session = await createCheckoutSession(customerId, extraLocations, successUrl, cancelUrl, req.userId!);
+    const session = await createCheckoutSession(customerId, extraLocations, successUrl, cancelUrl, req.userId!, plan);
 
     ok(res, { url: session.url });
   } catch (e) { next(e); }
@@ -43,13 +45,37 @@ export async function checkout(req: Request, res: Response, next: NextFunction):
 
 export async function subscriptionIntent(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const extraLocations = Math.max(0, parseInt(req.body.extraLocations ?? '0', 10));
+    const plan = req.body.plan === 'lite' ? 'lite' : 'pro';
+    const extraLocations = plan === 'lite' ? 0 : Math.max(0, parseInt(req.body.extraLocations ?? '0', 10));
     const promotionCodeId = typeof req.body.promotionCodeId === 'string' ? req.body.promotionCodeId : undefined;
     const user = await db('users').where({ id: req.userId }).first();
     if (!user) { err(res, 'User not found', 404, 'NOT_FOUND'); return; }
     const customerId = await getOrCreateStripeCustomer(req.userId!, user.email as string);
-    const { clientSecret, subscriptionId } = await createSubscriptionIntent(customerId, extraLocations, req.userId!, promotionCodeId);
+    const { clientSecret, subscriptionId } = await createSubscriptionIntent(customerId, extraLocations, req.userId!, promotionCodeId, plan);
+    // Persist the subscription id now so the sub-id-matched webhooks (invoice.payment_succeeded,
+    // invoice.payment_failed, customer.subscription.deleted) work for the embedded-payment flow.
+    // (Previously only checkout.session.completed set this — never the subscription-intent path.)
+    await db('clients').where({ user_id: req.userId }).update({ stripe_subscription_id: subscriptionId });
     ok(res, { clientSecret, subscriptionId, publishableKey: config.stripe.publishableKey });
+  } catch (e) { next(e); }
+}
+
+/**
+ * POST /billing/upgrade — upgrade an active Lite subscriber to Pro.
+ * Returns a clientSecret if additional payment confirmation is needed (proration +
+ * setup fee), or null if covered by credit. product_line flips to 'pro' on the
+ * invoice.payment_succeeded webhook once the upgrade invoice is paid.
+ */
+export async function upgrade(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const client = req.client;
+    if (!client) { err(res, 'Client not found', 404, 'NOT_FOUND'); return; }
+    if (client.product_line !== 'lite') { err(res, 'Account is already on Pro', 400, 'ALREADY_PRO'); return; }
+    if (!client.stripe_subscription_id) { err(res, 'No active subscription to upgrade', 400, 'NO_SUBSCRIPTION'); return; }
+
+    const promotionCodeId = typeof req.body.promotionCodeId === 'string' ? req.body.promotionCodeId : undefined;
+    const result = await upgradeToProSubscription(client.stripe_subscription_id as string, req.userId!, promotionCodeId);
+    ok(res, { ...result, publishableKey: config.stripe.publishableKey });
   } catch (e) { next(e); }
 }
 

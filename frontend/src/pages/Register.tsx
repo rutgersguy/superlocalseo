@@ -21,6 +21,9 @@ export default function Register() {
   const [searchParams] = useSearchParams();
   const [apiError, setApiError] = useState('');
   const [emailTakenHint, setEmailTakenHint] = useState<'google' | 'password' | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<'lite' | 'pro'>(
+    searchParams.get('plan') === 'pro' ? 'pro' : 'lite',
+  );
 
   const {
     register,
@@ -39,6 +42,8 @@ export default function Register() {
     setEmailTakenHint(null);
     try {
       await registerUser(data.email, data.password, data.businessName);
+      // Carry the chosen plan to the billing step after email verification.
+      localStorage.setItem('selectedPlan', selectedPlan);
       navigate('/registered', { state: { email: data.email } });
     } catch (err) {
       const e = err as Error & { code?: string; hint?: string };
@@ -106,6 +111,26 @@ export default function Register() {
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+            <div>
+              <span className="block text-sm font-medium text-gray-700 mb-1.5">Choose your plan</span>
+              <div className="grid grid-cols-2 gap-3">
+                {(['lite', 'pro'] as const).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setSelectedPlan(p)}
+                    className={`rounded-xl border-2 p-3 text-left transition-colors ${
+                      selectedPlan === p ? 'border-brand-500 bg-brand-50' : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <p className="font-semibold text-sm text-slate-900 capitalize">{p}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {p === 'lite' ? '$99/mo · 1 location · No setup fee' : '$349/mo + $499 setup'}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
             <div>
               <label htmlFor="reg-businessName" className="block text-sm font-medium text-gray-700 mb-1">Business Name</label>
               <input

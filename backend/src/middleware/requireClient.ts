@@ -56,6 +56,13 @@ function checkBillingAccess(req: Request, res: Response, client: Record<string, 
 }
 
 export async function requireClient(req: Request, res: Response, next: NextFunction): Promise<void> {
+  // Idempotent: if a parent-level requireClient already populated the request
+  // (e.g. mounted at the router index ahead of requireProPlan), skip the work —
+  // requireAuth, the client lookup, and the billing check have already run.
+  // NB: key off req.clientId (our own field), NOT req.client — Node aliases
+  // req.client to the TCP socket, so it is always truthy before we set it.
+  if (req.clientId) { next(); return; }
+
   // First ensure authenticated
   await new Promise<void>((resolve) => requireAuth(req, res, () => resolve()));
   // If requireAuth sent a response, stop here

@@ -23,7 +23,7 @@ import reputationRouter from './reputation';
 import geoGridRouter from './geogrid';
 import adminRouter from './admin';
 import placesRouter from './places';
-import { requireActiveSubscription } from '../middleware/requireActiveSubscription';
+import { enforcePlanGate } from '../middleware/requireProPlan';
 
 const router = Router();
 
@@ -40,21 +40,38 @@ router.use('/metrics', metricsRouter);
 router.use('/clients', clientsRouter);
 router.use('/locations', locationsRouter);
 router.use('/integrations', integrationsRouter);
-router.use('/team', teamRouter);
-router.use('/qr', qrRouter);
 router.use('/admin', adminRouter);
 
-// Subscription-gated routes — blocked after trial expires / payment failure
-router.use('/keywords', requireActiveSubscription, keywordsRouter);
-router.use('/rankings', requireActiveSubscription, rankingsRouter);
-router.use('/citations', requireActiveSubscription, citationsRouter);
-router.use('/reviews', requireActiveSubscription, reviewsRouter);
-router.use('/reports', requireActiveSubscription, reportsRouter);
-router.use('/analytics', requireActiveSubscription, analyticsRouter);
-router.use('/campaigns', requireActiveSubscription, campaignsRouter);
-router.use('/competitors', requireActiveSubscription, competitorsRouter);
-router.use('/audits/bl', requireActiveSubscription, auditsBlRouter);
-router.use('/reputation', requireActiveSubscription, reputationRouter);
-router.use('/geo-grid', requireActiveSubscription, geoGridRouter);
+// Team & QR — accessible during trial but Pro-only. enforcePlanGate populates the
+// client (authenticated requests) and enforces the plan; per-route requireClient
+// already runs the billing check, and its idempotency guard avoids a double query.
+router.use('/team', enforcePlanGate, teamRouter);
+router.use('/qr', enforcePlanGate, qrRouter);
+
+// Subscription + plan gated routes. enforcePlanGate is applied once per prefix:
+// - anonymous requests (e.g. POST /api/reviews/webhook) pass through; the public
+//   handler runs and protected handlers still 401 via their own requireAuth.
+// - authenticated requests get req.client populated, then requireProPlan enforces
+//   the central capability map. Billing is enforced by requireClient.checkBillingAccess
+//   (the same per-route check as before — the old index-level requireActiveSubscription
+//   was a no-op here because req.userId is not populated until per-route requireAuth).
+// New routes added under these prefixes are gated automatically — fail-safe.
+const subscriptionRoutes = [
+  ['/keywords', keywordsRouter],
+  ['/rankings', rankingsRouter],
+  ['/citations', citationsRouter],
+  ['/reviews', reviewsRouter],
+  ['/reports', reportsRouter],
+  ['/analytics', analyticsRouter],
+  ['/campaigns', campaignsRouter],
+  ['/competitors', competitorsRouter],
+  ['/audits/bl', auditsBlRouter],
+  ['/reputation', reputationRouter],
+  ['/geo-grid', geoGridRouter],
+] as const;
+
+for (const [path, routerModule] of subscriptionRoutes) {
+  router.use(path, enforcePlanGate, routerModule);
+}
 
 export default router;

@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { NavLink, Link, Outlet, useNavigate } from 'react-router-dom';
 import { Home, BarChart2, Star, Link2, Settings, LogOut, Menu, X, FileText, Megaphone, Users2, ClipboardList, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { useClient } from '../hooks/useClient';
 import { fetcher } from '../services/api';
+import { NAV_ITEMS as PLAN_NAV } from '../config/planFeatures';
 import useSWR from 'swr';
 
 declare global {
@@ -17,7 +19,7 @@ const CRISP_WEBSITE_ID = 'b43a3ca0-74af-4cac-b7a7-e310cd2041d0';
 function OnboardingRedirect() {
   const { role } = useAuth();
   const navigate = useNavigate();
-  const { data } = useSWR<{ success: boolean; data: { onboardingStep: number } }>(
+  const { data } = useSWR<{ success: boolean; data: { onboardingStep: number; productLine?: string } }>(
     role === 'client' ? '/clients' : null,
     fetcher,
   );
@@ -25,7 +27,9 @@ function OnboardingRedirect() {
   useEffect(() => {
     if (role !== 'client' || !data?.data) return;
     if (data.data.onboardingStep === 0) {
-      navigate('/onboarding', { replace: true });
+      // Lite uses the same Onboarding page in a 2-step mode via ?lite=1
+      const dest = data.data.productLine === 'lite' ? '/onboarding?lite=1' : '/onboarding';
+      navigate(dest, { replace: true });
     }
   }, [data, role, navigate]);
 
@@ -79,10 +83,19 @@ const navItems: NavItem[] = [
 
 function SidebarNav({ onNav }: { onNav?: () => void }) {
   const { logout, role } = useAuth();
+  const { productLine } = useClient();
+
+  // planFeatures.ts is the source of truth for which tiers see each nav item.
+  // Admins always see everything.
+  const plansFor = (to: string) => PLAN_NAV.find((n) => n.to === to)?.plans ?? ['lite', 'pro'];
+  const visibleNavItems = role === 'admin'
+    ? navItems
+    : navItems.filter((item) => plansFor(item.to).includes(productLine));
+
   return (
     <>
       <nav className="flex-1 px-2.5 py-2 space-y-0.5" aria-label="Dashboard navigation">
-        {navItems.map((item) => (
+        {visibleNavItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
