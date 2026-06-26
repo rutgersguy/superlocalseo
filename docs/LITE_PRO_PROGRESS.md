@@ -8,36 +8,34 @@ default to `'pro'` — zero disruption.** Lite = $99/mo, single location, no set
 
 ---
 
-## Status
+## Status — ALL PHASES COMPLETE
 
 | Phase | Scope | State | Commit |
 |---|---|---|---|
-| 1 | Backend gate: capability map, migration, `requireProPlan`/`enforcePlanGate`, gate tests | ✅ Done | `5870fb5` |
-| 2 | Stripe service + billing: `plan` param, `upgradeToProSubscription`, webhook flip, `/billing/upgrade`, `productLine` exposure | ✅ Done | `5857214` |
-| 3 | **Frontend (NEXT)** — see below | ⬜ Not started | — |
-| 4 | Lite onboarding e2e + open PR | ⬜ Not started | — |
+| 1 | Backend gate: capability map, migration, `requireProPlan`/`enforcePlanGate`, gate tests | ✅ | `5870fb5` |
+| 2 | Stripe service + billing: `plan` param, `upgradeToProSubscription`, webhook flip, `/billing/upgrade`, `productLine` | ✅ | `5857214` |
+| 3a | `useClient`, `ProGate`, plan-filtered nav | ✅ | `87e3a55` |
+| 3b | Competitors teaser + Rankings/Settings guards + upgrade setup-fee waiver | ✅ | `583a9e6` |
+| 3c | Register plan picker | ✅ | `d17ecd0` |
+| 3d | BillingPage plan checkout + Lite→Pro upgrade flow | ✅ | `e3d7fec` |
+| 3e | Dashboard Lite guards | ✅ | `f1dfef7` |
+| 4 | e2e for Lite gating | ✅ | `fffc5cd` |
 
-Backend is feature-complete for the split. `tsc` clean. Test suite: 32 pass;
-the only failures are **3 pre-existing webhook-signature tests** (fail identically
-on clean `main` — unrelated to this work; flagged below).
+Backend + frontend `tsc` clean. Backend suite 32 pass (3 pre-existing webhook-sig
+failures, unrelated). Lite e2e: 3/3 green.
 
----
+## Product decisions (deviations from spec rev 3)
 
-## Phase 3 — Frontend (resume here tomorrow)
-
-Spec parts 8–15. Suggested order (non-visual foundation first, then opinionated UI):
-
-1. **Part 8** — `frontend/src/hooks/useClient.ts` (`productLine`, `isLite`, `isPro`). Foundation; everything else consumes it.
-2. **Part 9/10** — `ProGate` component + plan-filtered nav in `DashboardLayout.tsx` (uses `frontend/src/config/planFeatures.ts`, already created in Phase 1).
-3. **Part 12/13** — Competitors teaser (blurred upsell), Rankings/Dashboard/Settings Lite guards.
-4. **Part 11** — single `Onboarding.tsx` with `?lite=1` 2-step mode (no keywords step).
-5. **Part 14/15** — Register plan-picker, BillingPage upgrade CTA (calls `POST /billing/upgrade`), Audit→Lite default, `App.tsx` routing.
-6. `cd frontend && npx tsc --noEmit`.
-
-**Check in with Brent before the opinionated pieces** — Competitors teaser copy, upgrade CTA wording, Lite onboarding copy.
-
-The frontend capability map (`frontend/src/config/planFeatures.ts`) already exists with
-`NAV_ITEMS`, `PRO_SETTINGS_TABS`, `LITE_RANKINGS_HIDDEN`, `canAccess()`.
+- **Option B funnel:** trials run as **Pro** (let everyone taste Pro); the chosen
+  plan applies **at checkout**, and `product_line` flips to `'lite'` only on a Lite
+  payment. Register stores the chosen plan in `localStorage`; BillingPage passes it
+  to `subscription-intent`.
+- **Consequence:** the spec's 2-step Lite onboarding is **not built** — nobody is
+  Lite during onboarding. Everyone onboards as Pro. (`OnboardingRedirect` keeps a
+  harmless `?lite=1` branch that is currently a no-op.)
+- **Upgrade setup fee waived:** Lite→Pro upgrade charges only the prorated monthly
+  difference, **no $499 setup fee** (existing paying customer).
+- **Pro price shown as $349/mo** (matches the actual Stripe price; spec said $350).
 
 ---
 
@@ -81,9 +79,15 @@ docker exec -e NODE_ENV=test -e DATABASE_URL=postgresql://slseo:slseo@postgres:5
 
 ---
 
-## Open items / follow-ups (not blocking)
+## Open items / follow-ups
 
-- **Pre-existing:** `webhook-security.test.ts` — 3 "rejects bad signature" tests fail on
-  clean baseline too. `POST /api/reviews/webhook` may not reject unsigned / bad-HMAC
-  requests with 401. Worth a separate security look — NOT part of this work.
-- Phase 4: add `tests/e2e/08-onboarding-lite.spec.ts` (spec Part 16.2) and open the PR.
+- **Verify the upgrade *payment* flow in the sandbox** (unit tests mock Stripe): real
+  Lite checkout → webhook → `product_line='lite'`, and Lite→Pro `?upgrade=1` → proration
+  invoice → `product_line='pro'`. Click through once before going live.
+- **Live Stripe:** recreate the Lite price + `invoice.payment_succeeded` webhook event in
+  live mode and set the live `STRIPE_LITE_BASE_PRICE_ID`.
+- **Pre-existing (separate):** `webhook-security.test.ts` — 3 "rejects bad signature" tests
+  fail on clean baseline too. `POST /api/reviews/webhook` may not reject unsigned / bad-HMAC
+  requests with 401. Worth a security look — NOT part of this work.
+- BillingPage upgrade view reuses the new-subscription form copy; could get
+  upgrade-specific wording in a follow-up (functional as-is).
