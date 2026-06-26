@@ -134,7 +134,11 @@ export default function BillingPage() {
   // Determine if user is in early trial (show soft landing instead of payment form)
   const isEarlyTrial = billing?.status === 'trialing' && billing.trialDaysLeft !== null && billing.trialDaysLeft > 7;
   // Plan chosen at registration (Option B: trials run as Pro; the plan applies at checkout).
-  const planForCheckout: 'lite' | 'pro' = localStorage.getItem('selectedPlan') === 'pro' ? 'pro' : 'lite';
+  // Fall back to the client's CURRENT plan (not Lite) when no choice is stored, so existing
+  // trial users mid-funnel at deploy aren't silently checked out on the cheaper Lite price.
+  const storedPlan = localStorage.getItem('selectedPlan');
+  const planForCheckout: 'lite' | 'pro' =
+    storedPlan === 'lite' || storedPlan === 'pro' ? storedPlan : (billing?.productLine ?? 'pro');
   const isUpgrade = new URLSearchParams(window.location.search).get('upgrade') === '1';
 
   // Fetch subscription intent when status is known and user needs to subscribe
