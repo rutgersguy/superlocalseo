@@ -509,7 +509,7 @@ function GeoGridPanel() {
 // ─── Main component ────────────────────────────────────────────────────────────
 
 export default function Rankings() {
-  const { isLite } = useClient();
+  const { isLite, loading: planLoading } = useClient();
   const [searchParams] = useSearchParams();
   const [sortKey, setSortKey] = useState<SortKey>('rank');
   const [mainTab, setMainTab] = useState<MainTab>('table');
@@ -527,7 +527,8 @@ export default function Rankings() {
   const rankingsUrl = rankType !== 'all' ? `/rankings?rankType=${rankType}` : '/rankings';
   const { data: rankingsData, isLoading, error, mutate: mutateRankings } = useSWR<{ success: boolean; data: RankingRow[] }>(rankingsUrl, fetcher);
   // ROI is a Pro feature (backend gates /analytics/roi) — don't fetch it for Lite.
-  const { data: roiData, mutate: roiMutate } = useSWR<{ success: boolean; data: RoiData }>(isLite ? null : '/analytics/roi', fetcher);
+  // Wait for the plan to load so a Lite user doesn't fire a transient 403.
+  const { data: roiData, mutate: roiMutate } = useSWR<{ success: boolean; data: RoiData }>(planLoading || isLite ? null : '/analytics/roi', fetcher);
   const { data: allKwData, mutate: mutateAllKw } = useSWR<KeywordsListResponse>('/keywords', fetcher);
   const { data: locData } = useSWR<LocationsResponse>('/locations', fetcher);
 

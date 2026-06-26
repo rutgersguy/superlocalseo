@@ -349,7 +349,7 @@ function GBPNudgeBanner() {
 }
 
 export default function Dashboard() {
-  const { isLite } = useClient();
+  const { isLite, loading: planLoading } = useClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [linkedDismissed, setLinkedDismissed] = useState(false);
   const showLinkedBanner = searchParams.get('linked') === '1' && !linkedDismissed;
@@ -369,12 +369,13 @@ export default function Dashboard() {
     useSWR<RankingsResponse>('/rankings?limit=10', fetcher);
 
   // ROI and SEO Audit are Pro features — skip those fetches for Lite (would 403).
-  const { data: roiData } = useSWR<RoiResponse>(isLite ? null : '/analytics/roi', fetcher);
+  // Wait until the plan is known (planLoading) so a Lite user doesn't fire a transient 403.
+  const { data: roiData } = useSWR<RoiResponse>(planLoading || isLite ? null : '/analytics/roi', fetcher);
 
   const { data: visData } = useSWR<{ success: boolean; data: { current: number | null; delta: number | null; series: Array<{ date: string; score: number }> } }>('/metrics/visibility', fetcher);
   const vis = visData?.data;
 
-  const { data: auditData } = useSWR<{ success: boolean; data: { audits: Array<{ locationId: string; status: string; compositeScore: number | null }> } }>(isLite ? null : '/audits/bl', fetcher);
+  const { data: auditData } = useSWR<{ success: boolean; data: { audits: Array<{ locationId: string; status: string; compositeScore: number | null }> } }>(planLoading || isLite ? null : '/audits/bl', fetcher);
   const latestAuditScore = (auditData?.data?.audits ?? []).find((a) => a.status === 'complete')?.compositeScore ?? null;
 
   const metrics = metricsData?.data;

@@ -722,14 +722,15 @@ function CompetitorsTeaser() {
 }
 
 export default function Competitors() {
-  const { isLite } = useClient();
+  const { isLite, loading: planLoading } = useClient();
   const [tab, setTab] = useState<Tab>('overview');
   const [showAdd, setShowAdd] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanQueued, setScanQueued] = useState(false);
   // Lite users only get the base /competitors list; show the upgrade teaser instead.
-  const { data, isLoading, error } = useSWR<CompetitorsResponse>(isLite ? null : '/competitors', fetcher);
-  const { data: scanStatusData, mutate: mutateScanStatus } = useSWR<ScanStatusResponse>(isLite ? null : '/competitors/scan-status', fetcher, { refreshInterval: 60000 });
+  // Wait for the plan to load before fetching so Lite never kicks off the Pro suite's calls.
+  const { data, isLoading, error } = useSWR<CompetitorsResponse>(planLoading || isLite ? null : '/competitors', fetcher);
+  const { data: scanStatusData, mutate: mutateScanStatus } = useSWR<ScanStatusResponse>(planLoading || isLite ? null : '/competitors/scan-status', fetcher, { refreshInterval: 60000 });
 
   // Lite: render the upgrade teaser instead of the full Pro competitor suite.
   if (isLite) return <CompetitorsTeaser />;

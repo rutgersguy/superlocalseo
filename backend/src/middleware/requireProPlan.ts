@@ -44,6 +44,12 @@ export function requireProPlan(req: Request, res: Response, next: NextFunction):
  * POST /api/reviews/webhook) and must stay reachable. Protected handlers still
  * enforce auth via their own per-route requireAuth, so passthrough is safe.
  *
+ * ⚠️ SECURITY INVARIANT: this gate does NOT authenticate. Every handler under a
+ * gated prefix (see subscriptionRoutes in routes/index.ts) MUST run its own
+ * requireAuth — a tokenless request reaches the child router. Only deliberately
+ * public endpoints (signed webhooks) may omit requireAuth. If you add a Pro route,
+ * add requireAuth to it; do not rely on this gate to block anonymous access.
+ *
  * For authenticated requests, requireClient populates req.client (+ runs the
  * billing check); its idempotency guard means the per-route requireClient inside
  * each child router short-circuits, so this adds zero net DB queries.
