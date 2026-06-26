@@ -1,6 +1,22 @@
 # Pricing Model
 
-## Client-Facing Tiers
+## Current Tiers — Lite/Pro (implemented, PR #102/#103)
+
+| Plan | Monthly | Setup | Locations | Scope |
+|---|---|---|---|---|
+| **Lite** | $99/mo | none | 1 only | Dashboard, Rankings (read-only), Reviews, Campaigns, Reports, Settings + a blurred Competitors upgrade teaser |
+| **Pro** | $349/mo | $499 one-time | 1 (+$125/mo each) | Full suite: geo-grid heatmaps, citation auditing, competitor intelligence, SEO audits, team members, QR codes, analytics/CSV exports |
+
+- All existing clients default to **Pro** (zero disruption). New signups choose at registration; **trials run as Pro** and the plan applies at checkout (`product_line` flips to `lite` only on a paid Lite invoice).
+- **Lite→Pro upgrade** is self-serve and prorated, with the **$499 setup fee waived** (existing paying customer).
+- Stripe prices (sandbox): Lite `STRIPE_LITE_BASE_PRICE_ID` ($99/mo) · Pro base $349/mo · setup $499 · additional location $125/mo. The flip is driven by the `invoice.payment_succeeded` webhook.
+- Enforcement architecture: `config/planFeatures.ts` capability map + `requireProPlan`/`enforcePlanGate`. See [LITE_PRO_PROGRESS.md](LITE_PRO_PROGRESS.md).
+
+---
+
+## Legacy Tier 1/2/3 model (SUPERSEDED — kept for unit-economics reference)
+
+> Replaced by the Lite/Pro split above. The per-location cost analysis below still applies.
 
 | Tier | Monthly Price | Included Locations | Additional Locations |
 |---|---|---|---|

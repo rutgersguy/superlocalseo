@@ -127,6 +127,9 @@
 
 Features designed to increase ARPU from $780 → $1,025+ and reduce churn. See [Epic #67](https://github.com/rutgersguy/superlocalseo/issues/67) for financial projections.
 
+### Plan Tiering (Lite/Pro)
+- [x] **Lite/Pro split** (PR #102/#103) — $99 Lite vs $349 Pro tier via a `product_line` gate across the full stack; existing clients default to Pro (zero disruption). Lite is excluded from geo-grid, citations, competitor intelligence, SEO audits, team, QR, and analytics/CSV exports, with upgrade CTAs + a blurred Competitors teaser. Self-serve Lite→Pro upgrade (setup fee waived), verified end-to-end against sandbox Stripe. See [docs/LITE_PRO_PROGRESS.md](docs/LITE_PRO_PROGRESS.md). This makes every Pro-gated feature below the **Pro value-prop**.
+
 ### Quick Wins
 - [x] **#68 Audit Report Lead Magnet** — free public `/audit` page, Google Places scan, 5-category score, email gate, register CTA
 - [x] **#69 Team Members & RBAC** — invite admin/viewer users by email, 48hr token flow, instant login on accept, owner-only Team tab in Settings
@@ -195,15 +198,20 @@ Features designed to increase ARPU from $780 → $1,025+ and reduce churn. See [
 
 ## Pricing Model
 
-| Tier | Monthly | Included Locations | Additional Locations |
-|---|---|---|---|
-| Tier 1 | $350/mo | 1 | +$150/mo each |
-| Tier 2 | $700/mo | 3 | +$100/mo each |
-| Tier 3 | $1,200/mo | 5 | +$75/mo each |
+**Current implemented tiers — Lite/Pro split (shipped, PR #102/#103):**
 
-**BrightLocal Data API cost per location:** ~$1.82/mo (pay-per-request, no subscription fee) · **EmbedMyReviews:** $99/mo flat
+| Plan | Monthly | Setup | Locations | Scope |
+|---|---|---|---|---|
+| **Lite** | $99/mo | — | 1 only | Dashboard, Rankings (read-only), Reviews, Campaigns, Reports, Settings + a blurred Competitors upgrade teaser |
+| **Pro** | $349/mo | $499 one-time | 1 (+$125/mo each) | Full suite: geo-grid, citations, competitor intelligence, SEO audits, team members, QR codes, analytics/CSV exports |
 
-See [docs/PRICING.md](docs/PRICING.md) for full unit economics.
+- All existing clients default to **Pro** (zero disruption). New signups pick a plan at registration; **trials run as Pro**, and the plan applies at checkout.
+- **Lite→Pro upgrade** is self-serve in-app — prorated, with the $499 setup fee **waived**.
+- Enforcement: a `clients.product_line` column + a central capability map (`config/planFeatures.ts`), gated server-side by `requireProPlan` / `enforcePlanGate` (fail-safe, applied once per gated route prefix) and mirrored in the frontend.
+
+**BrightLocal Data API cost per location:** ~$1.82/mo (pay-per-request) · **EmbedMyReviews:** $99/mo flat
+
+> The legacy Tier 1/2/3 model is **superseded** by the Lite/Pro split above. Full unit economics: [docs/PRICING.md](docs/PRICING.md).
 
 ---
 

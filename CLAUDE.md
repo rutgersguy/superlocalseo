@@ -36,6 +36,8 @@ Monorepo: `backend/` (Express API) + `frontend/` (React SPA) + `nginx.conf` prox
 
 **Design system:** Tailwind with custom tokens. Use `slate-*` (not `gray-*`), `shadow-card` / `shadow-card-md`, and `brand-*` color tokens. Full-width page layouts — no `max-w-3xl mx-auto` wrappers inside dashboard pages.
 
+**Plan gating (Lite/Pro):** `clients.product_line` (`'lite' | 'pro'`, default `'pro'`) drives a two-tier split. The single source of truth is the capability map in `backend/src/config/planFeatures.ts` (mirrored in `frontend/src/config/planFeatures.ts` — keep them in sync). Backend: `enforcePlanGate` is mounted once per gated route prefix in `routes/index.ts` (it passes anonymous requests through, so **every gated handler must run its own `requireAuth`**); it populates `req.client` and calls `requireProPlan`. Frontend: `useClient()` exposes `isLite`/`isPro`; gate Pro-only SWR fetches on `(loading || isLite) ? null : url` to avoid transient 403s. `product_line` flips only on the `invoice.payment_succeeded` webhook (payment-gated). See `docs/LITE_PRO_PROGRESS.md`.
+
 **External APIs:**
 - **BrightLocal Data API** (`api.brightlocal.com`, `x-api-key` header, pay-per-request) — rankings (5 engines), geo-grid heatmap (coordinate-based), citation auditing (per-directory listing find). No subscription or campaign ID required.
 - **BrightLocal Management API** (`tools.brightlocal.com`) — citation submission to 40+ directories only. Requires paid BL plan — pending confirmation. Not currently in use; guided manual workflow is the active fallback.
