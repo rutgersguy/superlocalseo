@@ -52,6 +52,10 @@ export async function subscriptionIntent(req: Request, res: Response, next: Next
     if (!user) { err(res, 'User not found', 404, 'NOT_FOUND'); return; }
     const customerId = await getOrCreateStripeCustomer(req.userId!, user.email as string);
     const { clientSecret, subscriptionId } = await createSubscriptionIntent(customerId, extraLocations, req.userId!, promotionCodeId, plan);
+    // Persist the subscription id now so the sub-id-matched webhooks (invoice.payment_succeeded,
+    // invoice.payment_failed, customer.subscription.deleted) work for the embedded-payment flow.
+    // (Previously only checkout.session.completed set this — never the subscription-intent path.)
+    await db('clients').where({ user_id: req.userId }).update({ stripe_subscription_id: subscriptionId });
     ok(res, { clientSecret, subscriptionId, publishableKey: config.stripe.publishableKey });
   } catch (e) { next(e); }
 }

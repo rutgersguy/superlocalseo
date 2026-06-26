@@ -324,13 +324,15 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
       const locationItem = sub.items.data.find((i) => i.price.id === config.stripe.prices.location);
       const extra = locationItem?.quantity ?? 0;
       const planFromMeta = sub.metadata?.plan as 'lite' | 'pro' | undefined;
+      // NOTE: product_line is intentionally NOT set here. This event fires on the
+      // Lite→Pro price swap BEFORE the upgrade invoice is paid; flipping here would
+      // grant Pro on an unpaid upgrade. The flip happens only in invoice.payment_succeeded.
       await db('clients')
         .where({ user_id: userId })
         .update({
           subscription_status: status,
           subscription_current_period_end: new Date(sub.current_period_end * 1000),
           locations_limit: planFromMeta === 'lite' ? 1 : 1 + extra,
-          ...(planFromMeta ? { product_line: planFromMeta } : {}),
           updated_at: new Date(),
         });
       break;
