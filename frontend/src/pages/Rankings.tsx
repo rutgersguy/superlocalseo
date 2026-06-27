@@ -490,6 +490,10 @@ function GeoGridPanel() {
         </>
       )}
 
+      {(!selectedLocationId || !selectedKeywordId) && (
+        <div className="py-12 text-center text-slate-400 text-sm">Select a location and keyword above, then click "Run Scan" to generate a visibility map.</div>
+      )}
+
       {!latestReport && selectedLocationId && selectedKeywordId && (
         <div className="py-12 text-center text-slate-400 text-sm">No scan yet. Click "Run Scan" to generate a visibility map.</div>
       )}
