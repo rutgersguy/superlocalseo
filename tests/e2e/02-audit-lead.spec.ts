@@ -1,7 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { uniqueEmail } from './helpers/auth';
 
-test.describe('Suite 02 — Public Audit Lead', () => {
+// SKIPPED: the in-app /audit lead-magnet form these tests target was replaced by an
+// external redirect to app.superlocalseo.com/intel-request (App.tsx — ExternalRedirect).
+// The flow now lives off-app, so these in-app assertions no longer apply. Kept (not
+// deleted) in case the in-app audit returns; delete if the external intel-request is permanent.
+test.describe.skip('Suite 02 — Public Audit Lead', () => {
   test('TEST-AUDIT-01 — audit form renders', async ({ page }) => {
     await page.goto('/audit');
     // Audit form has: Business Name label, City/Area label, and a submit button

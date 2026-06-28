@@ -30,7 +30,7 @@ test.describe('Suite 03 — Onboarding: Single Location', () => {
     await loginViaUI(page, email, password);
     await page.waitForURL('/onboarding', { timeout: 15_000 });
     // Fill business name (placeholder is "Acme Plumbing")
-    await page.getByPlaceholder('Acme Plumbing').fill('Acme Plumbing Co');
+    await page.getByPlaceholder('e.g. Sunrise Fitness, Metro Law Group').fill('Acme Plumbing Co');
     // Select industry from the select dropdown
     await page.locator('select').selectOption('Plumbing');
     await page.getByRole('button', { name: 'Next' }).click();
@@ -52,14 +52,14 @@ test.describe('Suite 03 — Onboarding: Single Location', () => {
     // Add location - click "+ Add location" button
     await page.getByRole('button', { name: '+ Add location' }).click();
     // Fill location form (capitalize labels match the rendered label text)
-    await page.getByLabel('Name').fill('Main Branch');
-    await page.getByLabel('Address').fill('123 Main St');
-    await page.getByLabel('City').fill('Austin');
-    await page.getByLabel('State').fill('TX');
-    await page.getByLabel('Zip').fill('78701');
-    await page.getByLabel('Phone').fill('512-555-0100');
-    // Click "Add" button inside the location form
-    await page.getByRole('button', { name: 'Add' }).click();
+    await page.getByPlaceholder('e.g. Main Office').fill('Main Branch');
+    await page.getByPlaceholder('123 Main St').fill('123 Main St');
+    await page.getByPlaceholder('Austin').fill('Austin');
+    await page.getByPlaceholder('TX').fill('TX');
+    await page.getByPlaceholder('78701').fill('78701');
+    await page.getByPlaceholder('+15125550100').fill('512-555-0100');
+    // Submit the location form ("+ Add" is the service-area button — be exact)
+    await page.getByRole('button', { name: 'Add location', exact: true }).click();
     // Location should now appear in the list
     await expect(page.getByText('Main Branch')).toBeVisible();
     await page.getByRole('button', { name: 'Next' }).click();
@@ -72,29 +72,29 @@ test.describe('Suite 03 — Onboarding: Single Location', () => {
     await page.getByRole('button', { name: 'Next' }).click(); // step 1->2
     await expect(page.getByText('Step 2 of 4')).toBeVisible({ timeout: 10_000 });
     await page.getByRole('button', { name: '+ Add location' }).click();
-    await page.getByLabel('Name').fill('Main Branch');
-    await page.getByLabel('Address').fill('123 Main St');
-    await page.getByLabel('City').fill('Austin');
-    await page.getByLabel('State').fill('TX');
-    await page.getByLabel('Zip').fill('78701');
-    await page.getByLabel('Phone').fill('512-555-0100');
-    await page.getByRole('button', { name: 'Add' }).click();
+    await page.getByPlaceholder('e.g. Main Office').fill('Main Branch');
+    await page.getByPlaceholder('123 Main St').fill('123 Main St');
+    await page.getByPlaceholder('Austin').fill('Austin');
+    await page.getByPlaceholder('TX').fill('TX');
+    await page.getByPlaceholder('78701').fill('78701');
+    await page.getByPlaceholder('+15125550100').fill('512-555-0100');
+    await page.getByRole('button', { name: 'Add location', exact: true }).click();
     await page.getByRole('button', { name: 'Next' }).click(); // step 2->3
     await expect(page.getByText('Step 3 of 4')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('Target Keywords')).toBeVisible();
     // keyword input placeholder: "e.g. plumber near me"
-    const kwInput = page.getByPlaceholder('e.g. plumber near me');
+    const kwInput = page.getByPlaceholder('e.g. personal trainer in Brooklyn');
     await kwInput.fill('plumber near me');
     await kwInput.press('Enter');
     await expect(page.getByText('plumber near me')).toBeVisible();
     await kwInput.fill('emergency plumber Austin');
-    await page.getByRole('button', { name: 'Add' }).click();
+    await page.getByRole('button', { name: 'Add', exact: true }).click();
     await expect(page.getByText('emergency plumber Austin')).toBeVisible();
     await page.getByRole('button', { name: 'Next' }).click();
     await expect(page.getByText('Step 4 of 4')).toBeVisible({ timeout: 10_000 });
   });
 
-  test('TEST-ONB-S-05 — step 4: finish navigates to billing settings', async ({ page }) => {
+  test('TEST-ONB-S-05 — step 4: finish navigates to dashboard', async ({ page }) => {
     test.setTimeout(45_000);
     await loginViaUI(page, email, password);
     await page.waitForURL('/onboarding', { timeout: 15_000 });
@@ -109,8 +109,8 @@ test.describe('Suite 03 — Onboarding: Single Location', () => {
     await expect(page.getByText('Step 4 of 4')).toBeVisible({ timeout: 10_000 });
     // Finish
     await page.getByRole('button', { name: 'Finish', exact: true }).click();
-    await page.waitForURL(/dashboard\/settings/, { timeout: 25_000 });
-    expect(page.url()).toContain('tab=billing');
+    // Onboarding finish now lands on the dashboard (was billing settings; changed by the #100 fix).
+    await page.waitForURL(/\/dashboard(?!\/)/, { timeout: 25_000 });
     const row = getClientForEmail(email);
     expect(row).toContain('4');
   });
@@ -128,12 +128,12 @@ test.describe('Suite 03 — Onboarding: Single Location', () => {
     // Wait for the API to load business name before typing (avoids race condition where
     // the useEffect resolves asynchronously and overwrites user input)
     await page.waitForLoadState('networkidle');
-    await page.getByPlaceholder('Acme Plumbing').fill('My Plumbing');
+    await page.getByPlaceholder('e.g. Sunrise Fitness, Metro Law Group').fill('My Plumbing');
     await page.getByRole('button', { name: 'Next' }).click();
     await expect(page.getByText('Step 2 of 4')).toBeVisible({ timeout: 10_000 });
     await page.getByRole('button', { name: 'Back' }).click();
     await expect(page.getByText('Step 1 of 4')).toBeVisible();
     // After Back, the React state should still hold 'My Plumbing'
-    await expect(page.getByPlaceholder('Acme Plumbing')).toHaveValue('My Plumbing');
+    await expect(page.getByPlaceholder('e.g. Sunrise Fitness, Metro Law Group')).toHaveValue('My Plumbing');
   });
 });
