@@ -65,4 +65,55 @@ test.describe('Suite 08 — Lite plan gating', () => {
     await expect(page.getByText(/\$99\/mo/)).toBeVisible();
     await expect(page.getByText(/\$349\/mo/)).toBeVisible();
   });
+
+  test('TEST-LITE-04 — Rankings hides Pro features for Lite', async ({ page }) => {
+    await loginViaUI(page, email, password);
+    await page.waitForURL('/dashboard', { timeout: 15_000 });
+    await page.goto('/dashboard/rankings');
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.getByRole('heading', { name: 'Rankings' })).toBeVisible({ timeout: 10_000 });
+    // Pro-only controls hidden for Lite
+    await expect(page.getByText('Visibility Map')).toHaveCount(0); // geo-grid tab
+    await expect(page.getByRole('button', { name: 'ROI', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Export CSV' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Refresh' })).toHaveCount(0); // manual sync
+  });
+
+  test('TEST-LITE-05 — Settings hides Team and QR Codes tabs for Lite', async ({ page }) => {
+    await loginViaUI(page, email, password);
+    await page.waitForURL('/dashboard', { timeout: 15_000 });
+    await page.goto('/dashboard/settings');
+    await page.waitForLoadState('networkidle');
+
+    // Lite keeps these tabs
+    await expect(page.getByRole('button', { name: 'Account', exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('button', { name: 'Billing', exact: true })).toBeVisible();
+    // Pro-only tabs hidden
+    await expect(page.getByRole('button', { name: 'Team', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'QR Codes', exact: true })).toHaveCount(0);
+  });
+
+  test('TEST-LITE-06 — Dashboard hides Pro widgets for Lite', async ({ page }) => {
+    await loginViaUI(page, email, password);
+    await page.waitForURL('/dashboard', { timeout: 15_000 });
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 10_000 });
+    // Pro-only widgets/actions hidden for Lite
+    await expect(page.getByText('Local SEO Score')).toHaveCount(0); // audit metric
+    await expect(page.getByText('Unlock your ROI estimate')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Run SEO Audit' })).toHaveCount(0);
+  });
+
+  test('TEST-LITE-07 — direct nav to a Pro route shows the upgrade gate (ProGate)', async ({ page }) => {
+    await loginViaUI(page, email, password);
+    await page.waitForURL('/dashboard', { timeout: 15_000 });
+    // Lite user types the URL directly — nav hides it, but the route must gate gracefully.
+    await page.goto('/dashboard/citations');
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.getByText('Citations is a Pro feature')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('link', { name: /upgrade to pro/i })).toBeVisible();
+  });
 });

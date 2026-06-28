@@ -9,6 +9,7 @@ import ResetPassword from './pages/ResetPassword';
 import VerifyEmail from './pages/VerifyEmail';
 import AuthGoogleSuccess from './pages/AuthGoogleSuccess';
 import TeamAccept from './pages/TeamAccept';
+import { ProRoute } from './components/ProRoute';
 import Onboarding from './pages/Onboarding';
 import DashboardLayout from './layouts/DashboardLayout';
 import Dashboard from './pages/Dashboard';
@@ -66,11 +67,11 @@ function App() {
               <Route index element={<Dashboard />} />
               <Route path="rankings" element={<Rankings />} />
               <Route path="reviews" element={<Reviews />} />
-              <Route path="citations" element={<Citations />} />
+              <Route path="citations" element={<ProRoute feature="Citations" description="Audit and build local citations across 40+ directories."><Citations /></ProRoute>} />
               <Route path="reports" element={<Reports />} />
               <Route path="campaigns" element={<Campaigns />} />
               <Route path="competitors" element={<Competitors />} />
-              <Route path="audit" element={<AuditHistory />} />
+              <Route path="audit" element={<ProRoute feature="SEO Audit" description="Run a full local SEO audit and track your score over time."><AuditHistory /></ProRoute>} />
               <Route path="settings" element={<Settings />} />
             </Route>
           </Route>
