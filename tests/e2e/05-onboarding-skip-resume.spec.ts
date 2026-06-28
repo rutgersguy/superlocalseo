@@ -113,8 +113,8 @@ test.describe('Suite 05 — Onboarding: Skip & Resume', () => {
     await page.getByRole('button', { name: 'Next' }).click();
     await expect(page.getByText('Step 4 of 4')).toBeVisible({ timeout: 10_000 });
     await page.getByRole('button', { name: 'Finish', exact: true }).click();
-    await page.waitForURL(/dashboard\/settings/, { timeout: 25_000 });
-    expect(page.url()).toContain('tab=billing');
+    // Onboarding finish now lands on the dashboard (was billing settings; #100 fix).
+    await page.waitForURL(/\/dashboard(?!\/)/, { timeout: 25_000 });
     // Navigate to dashboard — should NOT redirect back to /onboarding
     // Use client-side nav to avoid token rotation
     await page.evaluate(() => { window.history.pushState({}, '', '/dashboard'); window.dispatchEvent(new PopStateEvent('popstate')); });

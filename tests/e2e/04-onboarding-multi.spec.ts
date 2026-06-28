@@ -19,13 +19,13 @@ async function addLocation(
   phone: string
 ) {
   await page.getByRole('button', { name: '+ Add location' }).click();
-  await page.getByLabel('Name').fill(name);
-  await page.getByLabel('Address').fill(address);
-  await page.getByLabel('City').fill(city);
-  await page.getByLabel('State').fill(state);
-  await page.getByLabel('Zip').fill(zip);
-  await page.getByLabel('Phone').fill(phone);
-  await page.getByRole('button', { name: 'Add' }).click();
+  await page.getByPlaceholder('e.g. Main Office').fill(name);
+  await page.getByPlaceholder('123 Main St').fill(address);
+  await page.getByPlaceholder('Austin').fill(city);
+  await page.getByPlaceholder('TX').fill(state);
+  await page.getByPlaceholder('78701').fill(zip);
+  await page.getByPlaceholder('+15125550100').fill(phone);
+  await page.getByRole('button', { name: 'Add location', exact: true }).click();
   // Match the exact location name in the card (not the address line or input value)
   await expect(page.locator('p.font-medium').filter({ hasText: name })).toBeVisible({ timeout: 5_000 });
 }
@@ -66,7 +66,7 @@ test.describe('Suite 04 — Onboarding: Multiple Locations', () => {
     // Each location gets its own keyword input
     await expect(page.getByText('North Branch')).toBeVisible();
     await expect(page.getByText('South Branch')).toBeVisible();
-    const kwInputs = page.getByPlaceholder('e.g. plumber near me');
+    const kwInputs = page.getByPlaceholder('e.g. personal trainer in Brooklyn');
     expect(await kwInputs.count()).toBeGreaterThanOrEqual(2);
   });
 
@@ -76,7 +76,7 @@ test.describe('Suite 04 — Onboarding: Multiple Locations', () => {
     await addLocation(page, 'South Branch', '200 S Elm St', 'Dallas', 'TX', '75203', '214-555-0202');
     await page.getByRole('button', { name: 'Next' }).click();
     await expect(page.getByText('Step 3 of 4')).toBeVisible({ timeout: 10_000 });
-    const kwInputs = page.getByPlaceholder('e.g. plumber near me');
+    const kwInputs = page.getByPlaceholder('e.g. personal trainer in Brooklyn');
     // First location keywords
     await kwInputs.nth(0).fill('hvac repair dallas');
     await kwInputs.nth(0).press('Enter');
@@ -108,7 +108,7 @@ test.describe('Suite 04 — Onboarding: Multiple Locations', () => {
     await addLocation(page, 'Main', '1 Main St', 'Austin', 'TX', '78701', '512-000-0001');
     await page.getByRole('button', { name: 'Next' }).click();
     await expect(page.getByText('Step 3 of 4')).toBeVisible({ timeout: 10_000 });
-    const kwInput = page.getByPlaceholder('e.g. plumber near me').first();
+    const kwInput = page.getByPlaceholder('e.g. personal trainer in Brooklyn').first();
     for (const kw of ['kw1', 'kw2', 'kw3']) {
       await kwInput.fill(kw);
       await kwInput.press('Enter');

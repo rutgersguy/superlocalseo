@@ -14,11 +14,14 @@ test.describe('Suite 06 — Dashboard', () => {
   });
 
   test('TEST-DASH-01 — dashboard loads and shows main nav items', async ({ page }) => {
-    await expect(page.getByRole('link', { name: /rankings/i })).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByRole('link', { name: /reviews/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /citations/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /reports/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /settings/i })).toBeVisible();
+    // Scope to the sidebar nav — the dashboard body also has quick-action cards
+    // (e.g. "View Reviews") whose names collide with nav links.
+    const nav = page.getByRole('navigation', { name: /dashboard navigation/i });
+    await expect(nav.getByRole('link', { name: 'Rankings', exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(nav.getByRole('link', { name: 'Reviews', exact: true })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Citations', exact: true })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Reports', exact: true })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Settings', exact: true })).toBeVisible();
   });
 
   test('TEST-DASH-02 — rankings nav link works', async ({ page }) => {
@@ -29,7 +32,7 @@ test.describe('Suite 06 — Dashboard', () => {
   });
 
   test('TEST-DASH-03 — reviews nav link works', async ({ page }) => {
-    await page.getByRole('link', { name: /reviews/i }).click();
+    await page.getByRole('navigation', { name: /dashboard navigation/i }).getByRole('link', { name: 'Reviews', exact: true }).click();
     await page.waitForURL(/dashboard\/reviews/, { timeout: 5_000 });
     const body = await page.locator('body').innerText();
     expect(body.length).toBeGreaterThan(50);
@@ -50,7 +53,7 @@ test.describe('Suite 06 — Dashboard', () => {
   });
 
   test('TEST-DASH-06 — audit nav link works', async ({ page }) => {
-    await page.getByRole('link', { name: /audit/i }).click();
+    await page.getByRole('navigation', { name: /dashboard navigation/i }).getByRole('link', { name: 'SEO Audit', exact: true }).click();
     await page.waitForURL(/dashboard\/audit/, { timeout: 5_000 });
     const body = await page.locator('body').innerText();
     expect(body.length).toBeGreaterThan(50);
