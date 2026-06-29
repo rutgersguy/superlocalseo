@@ -34,7 +34,11 @@ const faqs = [
   },
   {
     q: 'How does the free trial work?',
-    a: 'You get 15 days completely free — no credit card required to start. At the end of the trial you\'ll be prompted to subscribe. If you don\'t, access is paused until you do.',
+    a: 'You get 15 days completely free — no credit card required to start. Trials run with full Pro access so you can try everything. At checkout you choose the plan that fits — Lite ($99/mo) or Pro ($349/mo) — and that\'s when billing begins. If you don\'t subscribe, access is paused until you do.',
+  },
+  {
+    q: 'What\'s the difference between Lite and Pro?',
+    a: 'Lite ($99/mo, no setup fee) covers the essentials for a single location — daily rank tracking, review monitoring with AI responses, review request campaigns, and a monthly PDF report. Pro ($349/mo + a one-time $499 setup fee) adds citation building, geo-grid visibility heatmaps, competitor intelligence, full SEO audits, ROI attribution, team members, QR codes, CSV exports, and lets you add more locations. You can start on Lite and upgrade to Pro anytime — the $499 setup fee is waived when you do.',
   },
   {
     q: 'What do I need to get started?',
@@ -42,7 +46,7 @@ const faqs = [
   },
   {
     q: 'Can I add locations over time?',
-    a: 'Yes. Your subscription includes 1 location. Each additional location is $125/mo and is billed immediately on a prorated basis for the rest of your current billing cycle.',
+    a: 'Yes, on the Pro plan. Each plan includes 1 location; on Pro you can add more for $125/mo each, billed immediately on a prorated basis for the rest of your current billing cycle. Lite covers a single location — upgrade to Pro when you\'re ready to add more.',
   },
   {
     q: 'What goes in the monthly PDF report?',
@@ -50,7 +54,7 @@ const faqs = [
   },
   {
     q: 'Can I add team members?',
-    a: 'Yes. You can invite team members with different permission levels — Owner, Admin, or Viewer. Admins can send review invites and manage settings; Viewers get read-only access to all dashboard data. No extra charge per seat.',
+    a: 'Yes, on the Pro plan. You can invite team members with different permission levels — Owner, Admin, or Viewer. Admins can send review invites and manage settings; Viewers get read-only access to all dashboard data. No extra charge per seat. Team members are a Pro feature.',
   },
   {
     q: 'Is my data secure?',
@@ -264,30 +268,26 @@ export default function Landing() {
         <section className="bg-slate-50 py-16 sm:py-20 px-6" aria-labelledby="pricing-heading">
           <div className="max-w-3xl mx-auto text-center mb-12">
             <h2 id="pricing-heading" className="text-3xl font-bold text-slate-900 mb-4">Simple, transparent pricing</h2>
-            <p className="text-slate-600">One plan. One location included. Scale as you grow.</p>
+            <p className="text-slate-600">Start lean with Lite, or unlock the full suite with Pro. Every trial starts free — no credit card.</p>
           </div>
-          <div className="max-w-lg mx-auto">
-            <div className="bg-white rounded-2xl border-2 border-brand-500 shadow-lg p-8">
-              <div className="text-xs font-semibold text-brand-500 uppercase tracking-wide mb-3">Full platform access</div>
+          <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            {/* Lite */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 h-full flex flex-col">
+              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Lite</div>
               <div className="flex items-end gap-2 mb-2">
-                <span className="text-5xl font-bold text-slate-900">$349</span>
+                <span className="text-5xl font-bold text-slate-900">$99</span>
                 <span className="text-slate-500 mb-1">/mo</span>
               </div>
-              <p className="text-sm text-slate-500 mb-1">+ $499 one-time setup fee</p>
-              <p className="text-sm text-slate-500 mb-6">+$125/mo per additional location</p>
-              <ul className="space-y-3 mb-8">
+              <p className="text-sm text-slate-500 mb-1">No setup fee</p>
+              <p className="text-sm text-slate-500 mb-6">The essentials to track and grow your local presence.</p>
+              <ul className="space-y-3 mb-8 flex-1">
                 {[
-                  '1 location included',
-                  'Citation building & submission',
+                  '1 location',
                   'Daily rank tracking',
                   'Review monitoring + AI responses',
-                  'Citation health monitoring',
-                  'Monthly PDF report',
                   'Review request campaigns',
-                  'Competitor benchmarking',
-                  'ROI & revenue attribution',
-                  'Team members & roles',
-                  'QR code review capture',
+                  'Monthly PDF report',
+                  'Email support',
                 ].map((f) => (
                   <li key={f} className="text-sm text-slate-600 flex items-center gap-2">
                     <span className="text-brand-500" aria-hidden="true">✓</span> {f}
@@ -295,20 +295,59 @@ export default function Landing() {
                 ))}
               </ul>
               <Link
-                to="/register"
+                to="/register?plan=lite"
+                className="block text-center py-3 rounded-lg font-semibold text-sm border border-brand-500 text-brand-600 hover:bg-brand-50 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+              >
+                Start with Lite
+              </Link>
+              <p className="text-center text-xs text-slate-400 mt-3">No credit card required to start.</p>
+            </div>
+
+            {/* Pro */}
+            <div className="bg-white rounded-2xl border-2 border-brand-500 shadow-lg p-8 h-full flex flex-col relative">
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-500 text-white text-xs font-semibold px-3 py-1 rounded-full">
+                Most popular
+              </span>
+              <div className="text-xs font-semibold text-brand-500 uppercase tracking-wide mb-3">Pro</div>
+              <div className="flex items-end gap-2 mb-2">
+                <span className="text-5xl font-bold text-slate-900">$349</span>
+                <span className="text-slate-500 mb-1">/mo</span>
+              </div>
+              <p className="text-sm text-slate-500 mb-1">+ $499 one-time setup fee</p>
+              <p className="text-sm text-slate-500 mb-6">+$125/mo per additional location</p>
+              <ul className="space-y-3 mb-8 flex-1">
+                {[
+                  'Everything in Lite',
+                  'Citation building & health monitoring',
+                  'Geo-grid visibility heatmaps',
+                  'Competitor benchmarking & intelligence',
+                  'Full local SEO audits',
+                  'ROI & revenue attribution',
+                  'Team members & roles',
+                  'QR code review capture',
+                  'CSV exports',
+                  'Add unlimited locations',
+                ].map((f) => (
+                  <li key={f} className="text-sm text-slate-600 flex items-center gap-2">
+                    <span className="text-brand-500" aria-hidden="true">✓</span> {f}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                to="/register?plan=pro"
                 className="block text-center py-3 rounded-lg font-semibold text-sm bg-brand-500 text-white hover:bg-brand-600 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
               >
                 Start 15-day free trial
               </Link>
               <p className="text-center text-xs text-slate-400 mt-3">No credit card required to start.</p>
-              <p className="text-center text-xs text-slate-500 mt-4">
-                Not ready to commit?{' '}
-                <a href={INTEL_URL} className="text-brand-500 hover:underline">
-                  Get your free local visibility report first →
-                </a>
-              </p>
             </div>
           </div>
+          <p className="text-center text-xs text-slate-500 mt-8">
+            Start on Lite and upgrade to Pro anytime — the $499 setup fee is waived when you upgrade.{' '}
+            <a href={INTEL_URL} className="text-brand-500 hover:underline">
+              Or get your free local visibility report first →
+            </a>
+          </p>
         </section>
 
         {/* FAQ */}
