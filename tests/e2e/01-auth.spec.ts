@@ -41,7 +41,7 @@ test.describe('Suite 01 — Authentication', () => {
   test('TEST-AUTH-03 — Google-only account shows Google hint', async ({ page }) => {
     const email = `pw-google-${Date.now()}@test.com`;
     dbQuery(`INSERT INTO users (email, google_id, role, email_verified) VALUES ('${email}', 'fake-gid-${Date.now()}', 'client', true)`);
-    dbQuery(`INSERT INTO clients (user_id, business_name, subscription_status, trial_ends_at) VALUES ((SELECT id FROM users WHERE email = '${email}'), 'Google Biz', 'trialing', NOW() + INTERVAL '14 days')`);
+    dbQuery(`INSERT INTO clients (user_id, business_name, subscription_status, trial_ends_at) VALUES ((SELECT id FROM users WHERE email = '${email}'), 'Google Biz', 'trialing', NOW() + INTERVAL '7 days')`);
     await page.goto('/login');
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password').fill('anything');

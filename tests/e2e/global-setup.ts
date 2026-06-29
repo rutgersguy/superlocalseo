@@ -29,7 +29,7 @@ async function globalSetup() {
   const clientEmail = `pw-dashboard-${Date.now()}@test.com`;
   const clientPassword = 'TestPass123!';
   await registerViaAPI(clientEmail, clientPassword, 'Dashboard Test Biz');
-  dbQuery(`UPDATE clients SET onboarding_step = 4, subscription_status = 'trialing', trial_ends_at = NOW() + INTERVAL '14 days' WHERE user_id = (SELECT id FROM users WHERE email = '${clientEmail}')`);
+  dbQuery(`UPDATE clients SET onboarding_step = 4, subscription_status = 'trialing', trial_ends_at = NOW() + INTERVAL '7 days' WHERE user_id = (SELECT id FROM users WHERE email = '${clientEmail}')`);
   dbQuery(`UPDATE users SET email_verified = true WHERE email = '${clientEmail}'`);
 
   // Client session — separate browser to avoid cookie contamination

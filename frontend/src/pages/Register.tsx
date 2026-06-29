@@ -62,7 +62,7 @@ export default function Register() {
         <div className="text-center mb-8">
           <Link to="/"><img src="/sls_logo_wide_color.png" alt="SuperLocalSEO" className="h-10 w-auto mx-auto" /></Link>
           <h1 className="mt-4 text-2xl font-bold text-gray-900">Create your account</h1>
-          <p className="mt-1 text-sm text-gray-600">Start your free 14-day trial</p>
+          <p className="mt-1 text-sm text-gray-600">Start your free 7-day trial</p>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
           {emailTakenHint === 'google' && (

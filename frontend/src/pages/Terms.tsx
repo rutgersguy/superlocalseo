@@ -67,7 +67,7 @@ export default function Terms() {
           <section>
             <h2 className="text-xl font-semibold text-slate-900 mb-3">4. Free Trial</h2>
             <p className="text-slate-600 leading-relaxed">
-              New accounts receive a 14-day free trial with no credit card required. At the end of
+              New accounts receive a 7-day free trial with no credit card required. At the end of
               the trial period, you must select a paid plan to continue using the Service. Unused
               trial days do not carry over. We reserve the right to modify or discontinue the free
               trial at any time.

@@ -34,7 +34,7 @@ const faqs = [
   },
   {
     q: 'How does the free trial work?',
-    a: 'You get 15 days completely free — no credit card required to start. Trials run with full Pro access so you can try everything. At checkout you choose the plan that fits — Lite ($99/mo) or Pro ($349/mo) — and that\'s when billing begins. If you don\'t subscribe, access is paused until you do.',
+    a: 'You get 7 days completely free — no credit card required to start. Trials run with full Pro access so you can try everything. At checkout you choose the plan that fits — Lite ($99/mo) or Pro ($349/mo) — and that\'s when billing begins. If you don\'t subscribe, access is paused until you do.',
   },
   {
     q: 'What\'s the difference between Lite and Pro?',
@@ -298,7 +298,7 @@ export default function Landing() {
                 to="/register?plan=lite"
                 className="block text-center py-3 rounded-lg font-semibold text-sm border border-brand-500 text-brand-600 hover:bg-brand-50 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
               >
-                Start with Lite
+                Start 7-day free trial
               </Link>
               <p className="text-center text-xs text-slate-400 mt-3">No credit card required to start.</p>
             </div>
@@ -345,7 +345,7 @@ export default function Landing() {
                 to="/register?plan=pro"
                 className="block text-center py-3 rounded-lg font-semibold text-sm bg-brand-500 text-white hover:bg-brand-600 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
               >
-                Start 15-day free trial
+                Start 7-day free trial
               </Link>
               <p className="text-center text-xs text-slate-400 mt-3">No credit card required to start.</p>
             </div>

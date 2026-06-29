@@ -275,7 +275,7 @@ export default function Audit() {
                 to={`/register?email=${encodeURIComponent(email)}&business=${encodeURIComponent(businessName || audit.businessName || '')}`}
                 className="inline-block bg-brand-500 text-white px-6 py-2.5 rounded-lg font-semibold text-sm hover:bg-brand-600"
               >
-                Start free 14-day trial
+                Start free 7-day trial
               </Link>
               <p className="text-xs text-gray-400 mt-2">No credit card required</p>
             </div>

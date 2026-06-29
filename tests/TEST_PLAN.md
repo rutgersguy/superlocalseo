@@ -81,7 +81,7 @@ tests/
 
 **Setup:** Via DB, insert a user with `google_id` set and `password_hash = NULL`  
 `INSERT INTO users (email, google_id, role, email_verified) VALUES ('googleonly@example.com', 'fake-gid', 'client', true);`  
-`INSERT INTO clients (user_id, business_name, subscription_status, trial_ends_at) VALUES ((SELECT id FROM users WHERE email='googleonly@example.com'), 'Google Biz', 'trialing', NOW() + INTERVAL '14 days');`
+`INSERT INTO clients (user_id, business_name, subscription_status, trial_ends_at) VALUES ((SELECT id FROM users WHERE email='googleonly@example.com'), 'Google Biz', 'trialing', NOW() + INTERVAL '7 days');`
 
 **Steps:**
 1. Navigate to `/login`
@@ -190,7 +190,7 @@ tests/
 
 **Assertions:**
 - All category cards now visible / unlocked
-- "Start free 14-day trial" button visible
+- "Start free 7-day trial" button visible
 - That button href contains `/register?email=` with test email encoded
 - That button href contains `&business=`
 
@@ -200,7 +200,7 @@ tests/
 
 **Steps:**
 1. Complete TEST-AUDIT-03
-2. Click "Start free 14-day trial"
+2. Click "Start free 7-day trial"
 
 **Assertions:**
 - Navigated to `/register`
@@ -495,7 +495,7 @@ Same as Suite 03 — fresh user with `onboarding_step = 0`
 **Assertions:**
 - Nav items visible: Dashboard, Rankings, Reviews, Campaigns, Competitors, Citations, SEO Audit, Reports, Settings
 - Admin nav item NOT visible (non-admin user)
-- Trial banner visible (if within 14-day trial window)
+- Trial banner visible (if within 7-day trial window)
 
 ---
 
