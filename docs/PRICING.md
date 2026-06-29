@@ -5,11 +5,12 @@
 | Plan | Monthly | Setup | Locations | Scope |
 |---|---|---|---|---|
 | **Lite** | $99/mo | none | 1 only | Dashboard, Rankings (read-only), Reviews, Campaigns, Reports, Settings + a blurred Competitors upgrade teaser |
-| **Pro** | $349/mo | $499 one-time | 1 (+$125/mo each) | Full suite: geo-grid heatmaps, citation auditing, competitor intelligence, SEO audits, team members, QR codes, analytics/CSV exports |
+| **Pro** | $349/mo | ~~$499~~ **waived** | 1 (+$125/mo each) | Full suite: geo-grid heatmaps, citation auditing, competitor intelligence, SEO audits, team members, QR codes, analytics/CSV exports |
 
 - All existing clients default to **Pro** (zero disruption). New signups choose at registration; **trials run as Pro** and the plan applies at checkout (`product_line` flips to `lite` only on a paid Lite invoice).
-- **Lite→Pro upgrade** is self-serve and prorated, with the **$499 setup fee waived** (existing paying customer).
-- Stripe prices (sandbox): Lite `STRIPE_LITE_BASE_PRICE_ID` ($99/mo) · Pro base $349/mo · setup $499 · additional location $125/mo. The flip is driven by the `invoice.payment_succeeded` webhook.
+- **Setup fee is waived** (decided 2026-06-29 — margins are ~97%, the fee was a conversion tax). The $499 price object is kept in Stripe as a pricing anchor (struck through on the homepage) but is **not charged** on new subscriptions. Gated by `STRIPE_SETUP_FEE_ENABLED` in `config.ts` (default `false`); set it to `true` to reintroduce the fee without code changes.
+- **Lite→Pro upgrade** is self-serve and prorated, with no setup fee (already the case in code — upgrade never added a setup item).
+- Stripe prices (sandbox): Lite `STRIPE_LITE_BASE_PRICE_ID` ($99/mo) · Pro base $349/mo · setup $499 (anchor only, not charged) · additional location $125/mo. The flip is driven by the `invoice.payment_succeeded` webhook.
 - Enforcement architecture: `config/planFeatures.ts` capability map + `requireProPlan`/`enforcePlanGate`. See [LITE_PRO_PROGRESS.md](LITE_PRO_PROGRESS.md).
 
 ---

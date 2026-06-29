@@ -51,10 +51,12 @@ export async function createCheckoutSession(
   plan: 'lite' | 'pro' = 'pro',
 ): Promise<Stripe.Checkout.Session> {
   // Lite: single $99/mo recurring item, no setup fee, no extra locations.
+  // Pro: $349/mo base. The $499 setup fee is waived unless STRIPE_SETUP_FEE_ENABLED=true.
+  const chargeSetupFee = config.stripe.setupFeeEnabled && !!config.stripe.prices.setup;
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = plan === 'lite'
     ? [{ price: config.stripe.prices.liteBase!, quantity: 1 }]
     : [
-      { price: config.stripe.prices.setup!, quantity: 1 },
+      ...(chargeSetupFee ? [{ price: config.stripe.prices.setup!, quantity: 1 }] : []),
       { price: config.stripe.prices.base!, quantity: 1 },
     ];
   const extra = plan === 'lite' ? 0 : extraLocations;
@@ -190,13 +192,17 @@ export async function createSubscriptionIntent(
     items.push({ price: config.stripe.prices.location, quantity: extraLocations });
   }
 
+  // The $499 setup fee is waived by default. The whole setup-fee block (including the
+  // setup-fee-only promo handling) only runs when STRIPE_SETUP_FEE_ENABLED=true.
+  const chargeSetupFee = config.stripe.setupFeeEnabled && !!config.stripe.prices.setup;
+
   // Determine if this promo is setup-fee-only, which requires special handling:
   // - Do NOT apply promotion_code to the subscription (that would discount monthly charges)
   // - Instead, compute the discounted setup fee and inject it inline
   let setupOnlyDiscount = false;
   let setupInvoiceItems: Stripe.SubscriptionCreateParams.AddInvoiceItem[] = [];
 
-  if (promotionCodeId && config.stripe.prices.setup) {
+  if (chargeSetupFee && promotionCodeId && config.stripe.prices.setup) {
     const promoCode = await stripe.promotionCodes.retrieve(promotionCodeId, { expand: ['coupon'] });
     const coupon = promoCode.coupon as Stripe.Coupon;
     const applyTo = (coupon.metadata?.applyTo as string | undefined) ?? 'all';
@@ -226,7 +232,7 @@ export async function createSubscriptionIntent(
         ? [{ price: config.stripe.prices.setup }]
         : [];
     }
-  } else {
+  } else if (chargeSetupFee) {
     setupInvoiceItems = config.stripe.prices.setup
       ? [{ price: config.stripe.prices.setup }]
       : [];
