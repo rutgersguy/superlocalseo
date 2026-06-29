@@ -38,7 +38,7 @@ const faqs = [
   },
   {
     q: 'What\'s the difference between Lite and Pro?',
-    a: 'Lite ($99/mo, no setup fee) covers the essentials for a single location — daily rank tracking, review monitoring with AI responses, review request campaigns, and a monthly PDF report. Pro ($349/mo + a one-time $499 setup fee) adds citation building, geo-grid visibility heatmaps, competitor intelligence, full SEO audits, ROI attribution, team members, QR codes, CSV exports, and lets you add more locations. You can start on Lite and upgrade to Pro anytime — the $499 setup fee is waived when you do.',
+    a: 'Lite ($99/mo) covers the essentials for a single location — daily rank tracking, review monitoring with AI responses, review request campaigns, and a monthly PDF report. Pro ($349/mo) adds citation building, geo-grid visibility heatmaps, competitor intelligence, full SEO audits, ROI attribution, team members, QR codes, CSV exports, and lets you add more locations ($125/mo each). Neither plan has a setup fee, and you can start on Lite and upgrade to Pro anytime.',
   },
   {
     q: 'What do I need to get started?',
@@ -304,32 +304,40 @@ export default function Landing() {
             </div>
 
             {/* Pro */}
-            <div className="bg-white rounded-2xl border-2 border-brand-500 shadow-lg p-8 h-full flex flex-col relative">
-              <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-500 text-white text-xs font-semibold px-3 py-1 rounded-full">
-                Most popular
-              </span>
-              <div className="text-xs font-semibold text-brand-500 uppercase tracking-wide mb-3">Pro</div>
+            <div className="bg-white rounded-2xl border-2 border-brand-500 shadow-lg p-8 h-full flex flex-col">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs font-semibold text-brand-500 uppercase tracking-wide">Pro</span>
+                <span className="bg-brand-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide">
+                  Most popular
+                </span>
+              </div>
               <div className="flex items-end gap-2 mb-2">
                 <span className="text-5xl font-bold text-slate-900">$349</span>
                 <span className="text-slate-500 mb-1">/mo</span>
               </div>
-              <p className="text-sm text-slate-500 mb-1">+ $499 one-time setup fee</p>
+              <p className="text-sm text-slate-500 mb-1">
+                Setup fee <span className="line-through">$499</span>{' '}
+                <span className="font-semibold text-brand-600">waived</span>
+              </p>
               <p className="text-sm text-slate-500 mb-6">+$125/mo per additional location</p>
               <ul className="space-y-3 mb-8 flex-1">
                 {[
-                  'Everything in Lite',
-                  'Citation building & health monitoring',
-                  'Geo-grid visibility heatmaps',
-                  'Competitor benchmarking & intelligence',
-                  'Full local SEO audits',
-                  'ROI & revenue attribution',
-                  'Team members & roles',
-                  'QR code review capture',
-                  'CSV exports',
-                  'Add unlimited locations',
-                ].map((f) => (
-                  <li key={f} className="text-sm text-slate-600 flex items-center gap-2">
-                    <span className="text-brand-500" aria-hidden="true">✓</span> {f}
+                  { label: 'Everything in Lite', pro: true },
+                  { label: 'Citation building & health monitoring', pro: true },
+                  { label: 'Geo-grid visibility heatmaps', pro: true },
+                  { label: 'Competitor benchmarking & intelligence', pro: true },
+                  { label: 'Full local SEO audits', pro: true },
+                  { label: 'ROI & revenue attribution', pro: true },
+                  { label: 'Team members & roles', pro: true },
+                  { label: 'QR code review capture', pro: true },
+                  { label: 'CSV exports', pro: true },
+                  { label: 'Add locations — $125/mo each', pro: true },
+                ].map(({ label, pro }) => (
+                  <li
+                    key={label}
+                    className={`text-sm flex items-center gap-2 ${pro ? 'font-semibold text-slate-900' : 'text-slate-600'}`}
+                  >
+                    <span className="text-brand-500" aria-hidden="true">✓</span> {label}
                   </li>
                 ))}
               </ul>
@@ -343,7 +351,7 @@ export default function Landing() {
             </div>
           </div>
           <p className="text-center text-xs text-slate-500 mt-8">
-            Start on Lite and upgrade to Pro anytime — the $499 setup fee is waived when you upgrade.{' '}
+            Start on Lite and upgrade to Pro anytime — no setup fee, ever.{' '}
             <a href={INTEL_URL} className="text-brand-500 hover:underline">
               Or get your free local visibility report first →
             </a>
