@@ -58,7 +58,7 @@ SuperLocalSEO is a multi-tenant SaaS platform for local SEO management. It is so
 | Growth (Tier 2) | $700/mo | 3 | +$100/mo each |
 | Pro (Tier 3) | $1,200/mo | 5 | +$75/mo each |
 
-All new accounts start on a **14-day free trial** (Tier 1 by default). After trial expiry, access is gated. A **3-day grace period** is applied when a payment fails before access is revoked.
+All new accounts start on a **7-day free trial** (Tier 1 by default). After trial expiry, access is gated. A **3-day grace period** is applied when a payment fails before access is revoked.
 
 ---
 
@@ -125,7 +125,7 @@ Validation rules:
 What happens on registration:
 1. Password hashed with bcrypt (cost factor 10)
 2. `users` row created with `email_verified = false`
-3. `clients` row created with `subscription_status = 'trialing'`, `trial_ends_at = now + 14 days`, `onboarding_step = 0`
+3. `clients` row created with `subscription_status = 'trialing'`, `trial_ends_at = now + 7 days`, `onboarding_step = 0`
 4. Stripe customer created via `createCustomer()` — `stripe_customer_id` stored on `users` table
 5. Email verification token generated (UUID stored in Redis with 24hr TTL), sent via Resend
 6. Welcome email sent asynchronously (non-blocking)
@@ -248,9 +248,9 @@ A 4-step wizard at `/onboarding` guides new users to a working setup. All steps 
 
 ### Post-Onboarding
 
-After onboarding completes, the app redirects to `/dashboard`. The 14-day trial is already active — no payment is required at this point.
+After onboarding completes, the app redirects to `/dashboard`. The 7-day trial is already active — no payment is required at this point.
 
-If the user navigates to `/billing`, the page shows a **soft landing** ("You're on a free trial — no payment needed yet") for users with more than 7 days remaining. They can optionally click "Subscribe early anyway" to proceed to the card form. Users with ≤7 days left see the payment form directly.
+If the user navigates to `/billing`, the page shows a **soft landing** ("You're on a free trial — no payment needed yet") for users with more than 3 days remaining. They can optionally click "Subscribe early anyway" to proceed to the card form. Users with ≤3 days left see the payment form directly.
 
 ---
 
@@ -1123,7 +1123,7 @@ Overall grade: A (90+), B (75+), C (60+), D (45+), F (<45)
 4. Results appear: overall grade displayed prominently, two scored categories visible, three locked with a blurred overlay
 5. "Unlock your full audit" prompt — email input appears
 6. User submits email → all categories unlock
-7. CTA: "Get your free 14-day trial" → links to `/register`
+7. CTA: "Get your free 7-day trial" → links to `/register`
 
 ### 14b. BrightLocal Location Audits (`/dashboard/audit`)
 
@@ -1549,9 +1549,9 @@ The Reviews page has a "Post to Google" modal for each review. When clicked:
 
 ### Trial Period
 
-Every new account starts on a 14-day free trial:
+Every new account starts on a 7-day free trial:
 - `subscription_status = 'trialing'`
-- `trial_ends_at = created_at + 14 days`
+- `trial_ends_at = created_at + 7 days`
 - Full dashboard access during trial
 
 After the trial expires, the middleware returns `402 TRIAL_EXPIRED` for all protected API calls, and the `apiFetch` client in `api.ts` automatically redirects the browser to `/billing`.
@@ -1619,8 +1619,8 @@ The main Dashboard page shows contextual banners:
 | User state | What they see |
 |---|---|
 | `active` | "Already subscribed" — link to Settings → Billing |
-| `trialing`, >7 days left | Soft landing: "You're on a free trial — no payment needed yet" + "Subscribe early" opt-in |
-| `trialing`, ≤7 days left | Full payment form (Stripe Elements) |
+| `trialing`, >3 days left | Soft landing: "You're on a free trial — no payment needed yet" + "Subscribe early" opt-in |
+| `trialing`, ≤3 days left | Full payment form (Stripe Elements) |
 | `canceled` / expired | Full payment form |
 
 When the full payment form is shown, `POST /api/billing/subscription-intent` is called immediately to create a Stripe subscription in `default_incomplete` state and return a `clientSecret` for the Stripe `PaymentElement`. On successful payment, the `invoice.paid` webhook activates the subscription.
@@ -1838,7 +1838,7 @@ Sends one email per qualifying client. The 1-day window prevents duplicates on c
 | stripe_subscription_id | VARCHAR(255) | |
 | stripe_customer_id | VARCHAR(255) | |
 | subscription_current_period_end | TIMESTAMP | |
-| trial_ends_at | TIMESTAMP | registration + 14 days |
+| trial_ends_at | TIMESTAMP | registration + 7 days |
 | payment_failed_at | TIMESTAMP | |
 | onboarding_step | INTEGER | 0–4 |
 | emr_provisioning_status | VARCHAR(50) | |

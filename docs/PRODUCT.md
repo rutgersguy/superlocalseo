@@ -36,7 +36,7 @@ SuperLocalSEO is a white-label local SEO platform built for agencies and multi-l
 | **Growth** (Tier 2) | **$700/mo** | 3 | +$100/mo each |
 | **Scale** (Tier 3) | **$1,200/mo** | 5 | +$75/mo each |
 
-- 14-day free trial, no credit card required at signup
+- 7-day free trial, no credit card required at signup
 - Trial converts to paid subscription when the client adds a payment method; no access cutoff during trial period
 - All tiers include every feature — no feature gating by tier
 - Per-location billing is prorated; add or remove locations mid-month

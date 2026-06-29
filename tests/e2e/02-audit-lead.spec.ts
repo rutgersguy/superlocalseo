@@ -39,8 +39,8 @@ test.describe.skip('Suite 02 — Public Audit Lead', () => {
     const testEmail = uniqueEmail();
     await page.locator('input[type="email"]').fill(testEmail);
     await page.getByRole('button', { name: 'Unlock' }).click();
-    // After unlocking, step='unlocked' shows a "Start free 14-day trial" link
-    const ctaLink = page.getByRole('link', { name: 'Start free 14-day trial' });
+    // After unlocking, step='unlocked' shows a "Start free 7-day trial" link
+    const ctaLink = page.getByRole('link', { name: 'Start free 7-day trial' });
     await expect(ctaLink).toBeVisible({ timeout: 15_000 });
     const href = await ctaLink.getAttribute('href');
     expect(href).toContain('/register');
@@ -57,7 +57,7 @@ test.describe.skip('Suite 02 — Public Audit Lead', () => {
     const testEmail = uniqueEmail();
     await page.locator('input[type="email"]').fill(testEmail);
     await page.getByRole('button', { name: 'Unlock' }).click();
-    const ctaLink = page.getByRole('link', { name: 'Start free 14-day trial' });
+    const ctaLink = page.getByRole('link', { name: 'Start free 7-day trial' });
     await ctaLink.waitFor({ timeout: 15_000 });
     await ctaLink.click();
     await page.waitForURL(/\/register/, { timeout: 8_000 });

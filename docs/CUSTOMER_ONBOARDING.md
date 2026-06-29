@@ -48,7 +48,7 @@ The following happen server-side when the customer clicks Finish:
 - Initial rankings pull is queued — first keyword positions appear within 24 hours
 - Customer is redirected to the **Dashboard**
 
-> **Billing:** The 14-day trial is already active — no payment is required. To subscribe early, go to Settings → Billing. The payment form appears automatically when ≤7 days remain or the trial has expired.
+> **Billing:** The 7-day trial is already active — no payment is required. To subscribe early, go to Settings → Billing. The payment form appears automatically when ≤3 days remain or the trial has expired.
 
 > **If EMR provisioning fails or times out:** The customer still proceeds to the dashboard normally — all other features (rankings, citations, reports) work immediately. The review management section will show a "still being set up" state until provisioning succeeds. See EMR failure handling below.
 
@@ -101,7 +101,7 @@ The following happen server-side when the customer clicks Finish:
   2. If retry fails, set `emr_provisioning_status = 'failed'` in DB and run `provisionClient(clientId)` via ts-node in the API container
   3. Customer can use all other dashboard features in the meantime — only review management is affected
 - [ ] Confirm citation scan results are populating in the Citations tab
-- [ ] Trial is auto-set to 14 days from registration — no manual action needed unless adjusting
+- [ ] Trial is auto-set to 7 days from registration — no manual action needed unless adjusting
 
 ---
 

@@ -131,8 +131,10 @@ export default function BillingPage() {
     }
   }, []);
 
-  // Determine if user is in early trial (show soft landing instead of payment form)
-  const isEarlyTrial = billing?.status === 'trialing' && billing.trialDaysLeft !== null && billing.trialDaysLeft > 7;
+  // Determine if user is in early trial (show soft landing instead of payment form).
+  // Trial is 7 days; show the soft landing for the first few days, then the payment form
+  // once 3 or fewer days remain.
+  const isEarlyTrial = billing?.status === 'trialing' && billing.trialDaysLeft !== null && billing.trialDaysLeft > 3;
   // Plan chosen at registration (Option B: trials run as Pro; the plan applies at checkout).
   // Fall back to the client's CURRENT plan (not Lite) when no choice is stored, so existing
   // trial users mid-funnel at deploy aren't silently checked out on the cheaper Lite price.

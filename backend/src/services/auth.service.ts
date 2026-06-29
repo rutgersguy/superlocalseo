@@ -22,7 +22,7 @@ export async function register(email: string, password: string, businessName: st
   const stripeCustomerId = await createCustomer(email, businessName);
 
   const [user] = await db('users').insert({ email, password_hash: passwordHash, role: 'client', stripe_customer_id: stripeCustomerId }).returning('*');
-  const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+  const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   const [client] = await db('clients').insert({ user_id: user.id, business_name: businessName, subscription_tier: 1, subscription_status: 'trialing', trial_ends_at: trialEndsAt }).returning('*');
 
   // Send verification + welcome emails
@@ -119,7 +119,7 @@ export async function googleSignIn(googleId: string, email: string, displayName:
         business_name: displayName,
         subscription_tier: 1,
         subscription_status: 'trialing',
-        trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+        trial_ends_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       });
       user = newUser;
       status = 'new';

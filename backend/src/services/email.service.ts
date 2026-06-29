@@ -235,7 +235,7 @@ export async function sendAuditLeadEmail(
           <tr><td style="background:#eff6ff;border-radius:10px;padding:20px;">
             <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:#1e40af;">Unlock your full audit + start tracking</p>
             <p style="margin:0 0 16px;font-size:13px;color:#3b82f6;">See your keyword rankings, citation gaps, and how you stack up against local competitors — all updated daily.</p>
-            <a href="${registerUrl}" style="display:inline-block;background:#2563eb;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;padding:12px 28px;border-radius:8px;">Start your free 14-day trial →</a>
+            <a href="${registerUrl}" style="display:inline-block;background:#2563eb;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;padding:12px 28px;border-radius:8px;">Start your free 7-day trial →</a>
           </td></tr>
         </table>
 

@@ -54,7 +54,7 @@ export default function Login() {
           {noAccountHint && (
             <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
               <p className="font-medium mb-1">No account found for that email.</p>
-              <p className="mb-3 text-amber-700">Want to get started with a free 14-day trial?</p>
+              <p className="mb-3 text-amber-700">Want to get started with a free 7-day trial?</p>
               <Link
                 to={`/register?email=${encodeURIComponent(email)}`}
                 className="inline-block bg-brand-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-brand-600"
