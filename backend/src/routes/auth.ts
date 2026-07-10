@@ -9,6 +9,7 @@ router.post('/login', authLimiter, ctrl.login);
 router.post('/refresh', ctrl.refreshToken);
 router.post('/logout', ctrl.logout);
 router.get('/verify', ctrl.verifyEmail);
+router.post('/resend-verification', authLimiter, ctrl.resendVerification);
 router.post('/password-reset/request', authLimiter, ctrl.passwordResetRequest);
 router.post('/password-reset/confirm', authLimiter, ctrl.passwordResetConfirm);
 router.get('/google', ctrl.googleAuthUrl);

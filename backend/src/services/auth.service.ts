@@ -47,7 +47,21 @@ export async function login(email: string, password: string) {
   const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) throw Object.assign(new Error('Invalid credentials'), { status: 401, code: 'INVALID_CREDENTIALS' });
 
+  // Email verification is a soft nudge, not a gate — unverified users can still sign in
+  // and use the app (an in-app banner prompts them to verify). We never block entry.
   return issueTokens(user.id, user.role);
+}
+
+/**
+ * Re-send the verification email for an unverified account. Silent for unknown or
+ * already-verified emails so it never reveals whether an account exists.
+ */
+export async function resendVerification(email: string): Promise<void> {
+  const user = await db('users').where({ email }).first();
+  if (!user || user.email_verified) return;
+  const verifyToken = uuidv4();
+  await redis.setex(`verify:${verifyToken}`, VERIFY_TTL, user.id);
+  await sendVerificationEmail(email, verifyToken).catch(() => {});
 }
 
 export async function refresh(refreshToken: string) {

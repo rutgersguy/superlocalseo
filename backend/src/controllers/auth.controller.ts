@@ -74,6 +74,15 @@ export async function verifyEmail(req: Request, res: Response, next: NextFunctio
   } catch (e) { next(e); }
 }
 
+export async function resendVerification(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { email } = z.object({ email: z.string().email() }).parse(req.body);
+    await authService.resendVerification(email);
+    // Always a generic success — never reveal whether the account exists or is verified.
+    ok(res, { message: 'If that account exists and is unverified, a new verification email is on its way.' });
+  } catch (e) { next(e); }
+}
+
 export async function passwordResetRequest(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { email } = resetRequestSchema.parse(req.body);
