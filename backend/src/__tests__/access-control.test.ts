@@ -22,6 +22,19 @@ async function registerAndLogin(email: string): Promise<string> {
   return (login.body as { data?: { accessToken?: string } }).data?.accessToken ?? '';
 }
 
+// The shared test DB is persistent, so a fixture registered on a prior run keeps its
+// original trial_ends_at — which eventually lapses and makes requireClient return 402
+// (TRIAL_EXPIRED) instead of 200. Reset the billing state each run so these
+// data-isolation tests never depend on wall-clock time or prior pollution.
+async function ensureHealthyTrial(email: string): Promise<void> {
+  const user = await db('users').where({ email }).first();
+  if (!user) return;
+  await db('clients').where({ user_id: user.id }).update({
+    subscription_status: 'trialing',
+    trial_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+  });
+}
+
 // ── tests ─────────────────────────────────────────────────────────────────────
 
 describe('Access control — client data isolation', () => {
@@ -31,6 +44,8 @@ describe('Access control — client data isolation', () => {
   beforeAll(async () => {
     tokenA = await registerAndLogin('client-a@example.com');
     tokenB = await registerAndLogin('client-b@example.com');
+    await ensureHealthyTrial('client-a@example.com');
+    await ensureHealthyTrial('client-b@example.com');
   });
 
   it('GET /api/reviews returns only own reviews', async () => {
