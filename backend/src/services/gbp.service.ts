@@ -67,6 +67,22 @@ interface GBPAccountsResponse {
   nextPageToken?: string;
 }
 
+/**
+ * Thrown when Google rejects our OAuth credentials themselves — a revoked/expired
+ * refresh token, or a client-credential mismatch after an OAuth credential rotation
+ * (Google returns `unauthorized_client`/`invalid_grant`). These will keep failing on
+ * every retry until the user reconnects Google, so callers should stop retrying and
+ * flag the integration for reconnect — unlike transient 5xx/network errors.
+ */
+export class GBPAuthError extends Error {
+  readonly httpStatus: number;
+  constructor(message: string, httpStatus: number) {
+    super(message);
+    this.name = 'GBPAuthError';
+    this.httpStatus = httpStatus;
+  }
+}
+
 async function refreshAccessToken(refreshToken: string): Promise<{ accessToken: string; expiresAt: Date }> {
   const body = new URLSearchParams({
     client_id: config.google.clientId,
@@ -83,6 +99,11 @@ async function refreshAccessToken(refreshToken: string): Promise<{ accessToken: 
 
   if (!res.ok) {
     const text = await res.text();
+    // 400 (invalid_grant) / 401 (unauthorized_client) mean the refresh token can't be
+    // used with our current credentials — permanent until the user reconnects.
+    if (res.status === 400 || res.status === 401) {
+      throw new GBPAuthError(`Token refresh failed (${res.status}): ${text}`, res.status);
+    }
     throw new Error(`Token refresh failed (${res.status}): ${text}`);
   }
 
@@ -105,6 +126,9 @@ async function getAccounts(accessToken: string): Promise<GBPAccount[]> {
 
     if (!res.ok) {
       const text = await res.text();
+      if (res.status === 401) {
+        throw new GBPAuthError(`GBP accounts fetch failed (${res.status}): ${text}`, res.status);
+      }
       throw new Error(`GBP accounts fetch failed (${res.status}): ${text}`);
     }
 
@@ -131,6 +155,9 @@ async function getLocations(accountName: string, accessToken: string): Promise<G
 
     if (!res.ok) {
       const text = await res.text();
+      if (res.status === 401) {
+        throw new GBPAuthError(`GBP locations fetch failed (${res.status}): ${text}`, res.status);
+      }
       throw new Error(`GBP locations fetch failed (${res.status}): ${text}`);
     }
 
@@ -156,6 +183,9 @@ async function getReviews(locationName: string, accessToken: string): Promise<GB
 
     if (!res.ok) {
       const text = await res.text();
+      if (res.status === 401) {
+        throw new GBPAuthError(`GBP reviews fetch failed (${res.status}): ${text}`, res.status);
+      }
       throw new Error(`GBP reviews fetch failed (${res.status}): ${text}`);
     }
 
