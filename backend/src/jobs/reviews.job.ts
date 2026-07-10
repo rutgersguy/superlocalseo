@@ -2,7 +2,7 @@ import { Job } from 'bullmq';
 import { db } from '../db/connection';
 import { decrypt } from '../utils/crypto';
 import { fetchAllReviews, fetchCampaigns } from '../services/embedmyreviews.service';
-import { syncGBPReviews } from '../services/gbp.service';
+import { syncGBPReviews, GBPAuthError } from '../services/gbp.service';
 import { syncFacebookReviews } from '../services/facebook.service';
 import { logger } from '../utils/logger';
 
@@ -131,7 +131,33 @@ export async function processReviews(_job: Job): Promise<void> {
         intg.oauth_expires_at ? new Date(intg.oauth_expires_at as string) : null,
       );
     } catch (e) {
-      logger.error('GBP review sync failed', { clientId: intg.client_id, error: (e as Error).message });
+      if (e instanceof GBPAuthError) {
+        // Dead/mismatched token — retrying every 6h will never recover it. Flag the
+        // integration for reconnect (dashboard shows "Connect Google" when status is
+        // not 'connected') and clear the dead tokens so it stops being re-synced.
+        logger.error('GBP auth failed — flagging integration for reconnect', {
+          clientId: intg.client_id,
+          httpStatus: e.httpStatus,
+          error: e.message,
+        });
+        await db('integrations')
+          .where({ client_id: intg.client_id as string, provider: 'google' })
+          .update({
+            status: 'disconnected',
+            oauth_access_token: null,
+            oauth_refresh_token: null,
+            error_message: 'Google authorization expired. Please reconnect your Google Business Profile.',
+            updated_at: new Date(),
+          })
+          .catch(() => undefined);
+      } else {
+        // Transient (network/5xx) — keep the integration connected and retry next cycle.
+        logger.error('GBP review sync failed', { clientId: intg.client_id, error: (e as Error).message });
+        await db('integrations')
+          .where({ client_id: intg.client_id as string, provider: 'google' })
+          .update({ error_message: (e as Error).message })
+          .catch(() => undefined);
+      }
     }
   }
 
