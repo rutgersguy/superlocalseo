@@ -57,16 +57,14 @@ services:
   web:
     build:
       context: ./frontend
-      target: dev
+      # Production build: `vite build` served as static files by nginx (SPA fallback in
+      # frontend/nginx-frontend.conf). No dev server, no source exposure, no error overlay.
+      # Deploy = `docker compose build web && docker compose up -d web` (rebuild, not restart).
+      target: production
     container_name: superlocalseo-web
     restart: unless-stopped
     ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend/src:/app/src
-      - ./frontend/public:/app/public
-    environment:
-      - VITE_API_URL=http://localhost:3000
+      - "5173:80"
     depends_on:
       - api
 
