@@ -72,6 +72,10 @@ export const config = {
     apiKey: optional('EMBEDMYREVIEWS_API_KEY'),
     agencyKey: optional('EMBEDMYREVIEWS_AGENCY_KEY'),
     webhookSecret: optional('EMBEDMYREVIEWS_WEBHOOK_SECRET'),
+    // Shared secret carried in the webhook URL (?token=) or an X-Webhook-Token header.
+    // EMR exposes no signing secret, so this is the supported way to authenticate the
+    // inbound webhook — register the URL in EMR with this token appended.
+    webhookToken: optional('EMBEDMYREVIEWS_WEBHOOK_TOKEN'),
     baseUrl: optional('EMBEDMYREVIEWS_BASE_URL', 'https://app.superlocalseo.com'),
   },
 

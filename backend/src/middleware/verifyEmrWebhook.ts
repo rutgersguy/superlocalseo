@@ -4,46 +4,72 @@ import { config } from '../config';
 import { logger } from '../utils/logger';
 
 /**
- * Verifies the HMAC-SHA256 signature on EmbedMyReviews webhooks
- * (POST /api/reviews/webhook). Without this the handler would write to the
- * reviews table from any unauthenticated caller.
+ * Authenticates EmbedMyReviews webhooks (POST /api/reviews/webhook). Without this
+ * the handler would write to the reviews table from any unauthenticated caller.
  *
- * Signing scheme (per docs/INTEGRATIONS.md): HMAC-SHA256 of the JSON body using
- * EMBEDMYREVIEWS_WEBHOOK_SECRET, hex-encoded. EMR's exact header name is confirmed
- * at go-live — we accept both `x-emr-signature` and `x-embedmyreviews-signature`.
+ * EMR publishes no webhook signing secret or signature header (their webhook docs are
+ * unfinished, and the dashboard only lets you enter a destination URL). So the primary
+ * auth is a shared token WE control, sent either as a `?token=` query param on the
+ * registered webhook URL or an `X-Webhook-Token` header — configured via
+ * EMBEDMYREVIEWS_WEBHOOK_TOKEN. This works regardless of EMR's (absent) signing support.
  *
- * Rollout: when the secret is configured we enforce strictly (401 on missing/bad
- * signature). When it is NOT configured we log a loud error and pass through, so
- * deploying this does not break live review ingestion before the secret is set —
- * BUT the endpoint stays unauthenticated until then. Set the secret to close it.
+ * A legacy HMAC-SHA256 path (EMBEDMYREVIEWS_WEBHOOK_SECRET) is kept in case EMR ever
+ * documents real signing; it is only consulted when no token is configured.
+ *
+ * Rollout: when neither a token nor a secret is configured we log a loud error and pass
+ * through, so deploying this never breaks live ingestion before the token is set — BUT
+ * the endpoint stays unauthenticated until then. Register the tokenized URL in EMR and
+ * set EMBEDMYREVIEWS_WEBHOOK_TOKEN to close it.
  */
+
+/** Constant-time string comparison that is safe against length-mismatch throws. */
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
+}
+
 export function verifyEmrWebhook(req: Request, res: Response, next: NextFunction): void {
+  const token = config.embedmyreviews.webhookToken;
   const secret = config.embedmyreviews.webhookSecret;
 
-  if (!secret) {
-    logger.error(
-      'EMR webhook signature verification SKIPPED — EMBEDMYREVIEWS_WEBHOOK_SECRET is not set. '
-      + 'POST /api/reviews/webhook is UNAUTHENTICATED. Set the secret (and configure it in the EMR dashboard) to enforce.',
-    );
+  // Primary: shared token (query param or header).
+  if (token) {
+    const fromQuery = typeof req.query.token === 'string' ? req.query.token : undefined;
+    const fromHeader = req.headers['x-webhook-token'] as string | undefined;
+    const provided = fromQuery ?? fromHeader;
+    if (!provided || !safeEqual(provided, token)) {
+      logger.warn('EMR webhook token invalid or missing', { ip: req.ip });
+      res.status(401).json({ success: false, error: { code: 'INVALID_TOKEN', message: 'Invalid or missing webhook token' } });
+      return;
+    }
     next();
     return;
   }
 
-  const provided = (req.headers['x-emr-signature'] ?? req.headers['x-embedmyreviews-signature']) as string | undefined;
-  if (!provided) {
-    res.status(401).json({ success: false, error: { code: 'INVALID_SIGNATURE', message: 'Missing webhook signature' } });
+  // Legacy fallback: HMAC-SHA256 of the JSON body, hex-encoded, in x-emr-signature.
+  if (secret) {
+    const provided = (req.headers['x-emr-signature'] ?? req.headers['x-embedmyreviews-signature']) as string | undefined;
+    if (!provided) {
+      res.status(401).json({ success: false, error: { code: 'INVALID_SIGNATURE', message: 'Missing webhook signature' } });
+      return;
+    }
+    const expected = crypto.createHmac('sha256', secret).update(JSON.stringify(req.body)).digest('hex');
+    if (!safeEqual(provided, expected)) {
+      logger.warn('EMR webhook signature invalid', { ip: req.ip });
+      res.status(401).json({ success: false, error: { code: 'INVALID_SIGNATURE', message: 'Invalid webhook signature' } });
+      return;
+    }
+    next();
     return;
   }
 
-  const expected = crypto.createHmac('sha256', secret).update(JSON.stringify(req.body)).digest('hex');
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  // timingSafeEqual throws on length mismatch — guard so a short/garbage sig is a clean 401.
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-    logger.warn('EMR webhook signature invalid', { ip: req.ip });
-    res.status(401).json({ success: false, error: { code: 'INVALID_SIGNATURE', message: 'Invalid webhook signature' } });
-    return;
-  }
-
+  // Neither configured — the endpoint is open. Log loudly and pass through so we do not
+  // drop live review ingestion, but this MUST be closed by setting the token.
+  logger.error(
+    'EMR webhook verification SKIPPED — neither EMBEDMYREVIEWS_WEBHOOK_TOKEN nor _SECRET is set. '
+    + 'POST /api/reviews/webhook is UNAUTHENTICATED. Set EMBEDMYREVIEWS_WEBHOOK_TOKEN (and append '
+    + '?token=<value> to the webhook URL registered in EMR) to enforce.',
+  );
   next();
 }
