@@ -33,12 +33,14 @@ function formatClient(
   locations: Record<string, unknown>[],
   email: string,
   integrations: Record<string, unknown>[],
+  emailVerified: boolean,
 ) {
   const google = integrations.find((i) => i.provider === 'google');
   const facebook = integrations.find((i) => i.provider === 'facebook');
   return {
     id: client.id,
     email,
+    emailVerified,
     businessName: client.business_name,
     industry: client.industry,
     productLine: (client.product_line as string | null) ?? 'pro',
@@ -81,7 +83,7 @@ export async function getClient(req: Request, res: Response, next: NextFunction)
       db('users').where({ id: req.client.user_id }).first(),
       db('integrations').where({ client_id: req.clientId }),
     ]);
-    ok(res, formatClient(req.client, locations, (user as Record<string, unknown>)?.email as string ?? '', integrations as Record<string, unknown>[]));
+    ok(res, formatClient(req.client, locations, (user as Record<string, unknown>)?.email as string ?? '', integrations as Record<string, unknown>[], Boolean((user as Record<string, unknown>)?.email_verified)));
   } catch (e) {
     next(e);
   }
@@ -106,7 +108,7 @@ export async function updateClient(req: Request, res: Response, next: NextFuncti
       db('users').where({ id: req.client.user_id }).first(),
       db('integrations').where({ client_id: req.clientId }),
     ]);
-    ok(res, formatClient(updated as Record<string, unknown>, locations, (user as Record<string, unknown>)?.email as string ?? '', integrations as Record<string, unknown>[]));
+    ok(res, formatClient(updated as Record<string, unknown>, locations, (user as Record<string, unknown>)?.email as string ?? '', integrations as Record<string, unknown>[], Boolean((user as Record<string, unknown>)?.email_verified)));
 
   } catch (e) {
     next(e);

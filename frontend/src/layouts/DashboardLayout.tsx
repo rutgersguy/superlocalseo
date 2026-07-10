@@ -3,7 +3,7 @@ import { NavLink, Link, Outlet, useNavigate } from 'react-router-dom';
 import { Home, BarChart2, Star, Link2, Settings, LogOut, Menu, X, FileText, Megaphone, Users2, ClipboardList, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useClient } from '../hooks/useClient';
-import { fetcher } from '../services/api';
+import { fetcher, apiFetch } from '../services/api';
 import { NAV_ITEMS as PLAN_NAV } from '../config/planFeatures';
 import useSWR from 'swr';
 
@@ -185,6 +185,52 @@ function TrialBanner() {
   );
 }
 
+// Non-blocking nudge for unverified emails. Verification is NOT required to use the app;
+// this just prompts the user and offers a resend. Dismissible for the session.
+function VerifyEmailBanner() {
+  const { role } = useAuth();
+  const { data } = useSWR<{ success: boolean; data: { email: string; emailVerified: boolean } }>(
+    role === 'client' ? '/clients' : null,
+    fetcher,
+  );
+  const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const client = data?.data;
+  if (!client || client.emailVerified || dismissed) return null;
+
+  const resend = async () => {
+    setSending(true);
+    try {
+      await apiFetch('/auth/resend-verification', { method: 'POST', body: JSON.stringify({ email: client.email }) });
+      setSent(true);
+    } catch { /* non-critical — ignore */ }
+    finally { setSending(false); }
+  };
+
+  return (
+    <div className="px-4 py-2 text-sm flex items-center justify-between gap-4 bg-blue-600 text-white">
+      <span>
+        {sent
+          ? 'Verification email sent — check your inbox.'
+          : 'Please verify your email address to secure your account and keep receiving reports.'}
+      </span>
+      <div className="flex items-center gap-3 shrink-0">
+        {!sent && (
+          <button
+            onClick={() => void resend()}
+            disabled={sending}
+            className="text-xs font-semibold underline hover:no-underline disabled:opacity-60"
+          >
+            {sending ? 'Sending…' : 'Resend email'}
+          </button>
+        )}
+        <button onClick={() => setDismissed(true)} aria-label="Dismiss" className="text-xs opacity-80 hover:opacity-100">✕</button>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { isAuthenticated } = useAuth();
@@ -257,6 +303,7 @@ export default function DashboardLayout() {
             </button>
           </header>
 
+          <VerifyEmailBanner />
           <TrialBanner />
 
           {/* Page content */}

@@ -6,6 +6,7 @@ import type { Plan } from '../config/planFeatures';
 export interface ClientData {
   id: string;
   email: string;
+  emailVerified: boolean;
   businessName: string;
   industry: string | null;
   productLine: Plan;
