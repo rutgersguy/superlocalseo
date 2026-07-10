@@ -142,19 +142,25 @@ The webhook handler at `POST /api/reviews/webhook` processes:
 - `review.created` — new review ingested
 - `review.updated` — review modified (rating changed, reply added, hidden toggled)
 
-**Validation:** Every incoming webhook is validated with HMAC-SHA256:
-```typescript
-const sig = req.headers['x-emr-signature'];
-const expected = crypto.createHmac('sha256', config.embedmyreviews.webhookSecret)
-  .update(JSON.stringify(req.body)).digest('hex');
-timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
-```
+**Validation:** EMR publishes no webhook signing secret or signature header (their
+webhook docs are unfinished and the dashboard only accepts a destination URL). So the
+webhook is authenticated by a **shared token we control** (`EMBEDMYREVIEWS_WEBHOOK_TOKEN`),
+sent as a `?token=` query param on the registered URL or an `X-Webhook-Token` header, and
+compared in constant time (`verifyEmrWebhook`). When neither the token nor the legacy
+`EMBEDMYREVIEWS_WEBHOOK_SECRET` (HMAC-SHA256, kept only in case EMR ever documents real
+signing) is set, the endpoint logs a loud error and passes through — so it never drops
+live ingestion, but stays UNAUTHENTICATED until the token is set.
+
+> Note: a query-param token appears in nginx access logs. It's a rotatable bearer secret
+> over HTTPS — rotate by changing `EMBEDMYREVIEWS_WEBHOOK_TOKEN` and the EMR URL together.
 
 ### Registration
 
-1. In EMR dashboard → Settings → Webhooks, add: `https://superlocalseo.com/api/reviews/webhook`
-2. Enable events: `review.created`, `review.updated`
-3. Copy the webhook secret into `EMBEDMYREVIEWS_WEBHOOK_SECRET`
+1. Generate a token: `openssl rand -hex 32`.
+2. Set `EMBEDMYREVIEWS_WEBHOOK_TOKEN=<value>` in `.env` and restart the API.
+3. In the EMR dashboard, add the webhook URL **with the token appended**:
+   `https://superlocalseo.com/api/reviews/webhook?token=<value>`
+4. Enable the review events (EMR names them e.g. `ReviewCreated`).
 
 ### Rate Limits
 
