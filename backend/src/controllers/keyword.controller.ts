@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
-import { ok, created, noContent, notFound, err } from '../utils/response';
+import { ok, created, noContent, notFound } from '../utils/response';
 import { getAggregatedSearchVolumes } from '../services/dataforseo.service';
 
 export const keywordSchema = z.object({
@@ -57,30 +57,37 @@ export async function create(req: Request, res: Response, next: NextFunction): P
       return;
     }
 
-    // Check for duplicate
-    const existing = await db('keywords').where({ location_id: body.locationId, keyword: body.keyword }).first();
-    if (existing) {
-      err(res, 'Keyword already exists for this location', 409, 'KEYWORD_EXISTS');
-      return;
+    // Idempotent insert against the (location_id, keyword) unique index. This makes a
+    // duplicate a harmless no-op instead of a race-prone SELECT-then-INSERT: a rapid
+    // double-submit (the reported "input didn't clear + 'already exists'" bug) now
+    // returns the existing keyword as success rather than a misleading 409.
+    const [inserted] = await db('keywords')
+      .insert({
+        location_id: body.locationId,
+        keyword: body.keyword,
+        created_at: new Date(),
+        updated_at: new Date(),
+      })
+      .onConflict(['location_id', 'keyword'])
+      .ignore()
+      .returning('*');
+
+    // onConflict().ignore() returns no row when the keyword already existed — re-select it.
+    const keyword = inserted
+      ?? await db('keywords').where({ location_id: body.locationId, keyword: body.keyword }).first();
+
+    // Only fetch search volume for a genuinely new keyword (skip on duplicate no-op).
+    if (inserted) {
+      const serviceArea = (location.service_area as string[]) ?? [];
+      void getAggregatedSearchVolumes([body.keyword], serviceArea, location.city as string | null, location.state as string | null).then(([result]) => {
+        if (result?.monthlySearchVolume != null) {
+          return db('keywords').where({ id: (keyword as Record<string, unknown>).id }).update({
+            monthly_search_volume: result.monthlySearchVolume,
+            updated_at: new Date(),
+          });
+        }
+      });
     }
-
-    const [keyword] = await db('keywords').insert({
-      location_id: body.locationId,
-      keyword: body.keyword,
-      created_at: new Date(),
-      updated_at: new Date(),
-    }).returning('*');
-
-    // Fetch search volume in background — don't block the response
-    const serviceArea = (location.service_area as string[]) ?? [];
-    void getAggregatedSearchVolumes([body.keyword], serviceArea, location.city as string | null, location.state as string | null).then(([result]) => {
-      if (result?.monthlySearchVolume != null) {
-        return db('keywords').where({ id: (keyword as Record<string, unknown>).id }).update({
-          monthly_search_volume: result.monthlySearchVolume,
-          updated_at: new Date(),
-        });
-      }
-    });
 
     created(res, formatKeyword(keyword as Record<string, unknown>));
   } catch (e) {

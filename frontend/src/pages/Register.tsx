@@ -125,7 +125,7 @@ export default function Register() {
                   >
                     <p className="font-semibold text-sm text-slate-900 capitalize">{p}</p>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {p === 'lite' ? '$99/mo · 1 location · No setup fee' : '$349/mo + $499 setup'}
+                      {p === 'lite' ? '$99/mo · 1 location · No setup fee' : '$349/mo · No setup fee'}
                     </p>
                   </button>
                 ))}

@@ -246,7 +246,7 @@ function SubscribeCTA({ billing }: { billing: BillingStatusResponse['data'] | un
               <span className="text-4xl font-bold text-white">$349</span>
               <span className="text-sm" style={{ color: '#94a3b8' }}>/mo</span>
             </div>
-            <p className="text-xs mt-0.5" style={{ color: '#64748b' }}>+ $499 one-time setup</p>
+            <p className="text-xs mt-0.5" style={{ color: '#64748b' }}>No setup fee · cancel anytime</p>
           </div>
           <a
             href="/billing"

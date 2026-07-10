@@ -69,8 +69,8 @@ export async function logout(req: Request, res: Response, next: NextFunction): P
 export async function verifyEmail(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { token } = z.object({ token: z.string() }).parse(req.query);
-    await authService.verifyEmail(token);
-    ok(res, { message: 'Email verified' });
+    const result = await authService.verifyEmail(token);
+    ok(res, { message: result.alreadyVerified ? 'Email already verified' : 'Email verified', alreadyVerified: result.alreadyVerified });
   } catch (e) { next(e); }
 }
 

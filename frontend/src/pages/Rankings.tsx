@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import {
@@ -260,9 +260,13 @@ function KeywordsPanel({ onChanged }: { onChanged: () => void }) {
   const { data: kwData, mutate: mutateKw } = useSWR<KeywordsListResponse>(kwUrl, fetcher);
   const keywords = kwData?.data ?? [];
 
+  // Synchronous in-flight guard: setAdding() is async, so two clicks in the same tick
+  // both read adding===false and double-POST. This blocks the second fire immediately.
+  const addingRef = useRef(false);
   const handleAdd = async () => {
     const kw = newKeyword.trim();
-    if (!kw || !activeLocationId) return;
+    if (!kw || !activeLocationId || addingRef.current) return;
+    addingRef.current = true;
     setAdding(true);
     setAddError(null);
     try {
@@ -279,6 +283,7 @@ function KeywordsPanel({ onChanged }: { onChanged: () => void }) {
       onChanged();
     } finally {
       setAdding(false);
+      addingRef.current = false;
     }
   };
 
