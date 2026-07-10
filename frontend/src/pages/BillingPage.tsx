@@ -106,6 +106,33 @@ const FEATURES = [
   'Unlimited team members & roles',
 ];
 
+// Plan-specific checkout summary. Pricing must mirror what the backend actually
+// bills: Lite = $99/mo single location, Pro = $349/mo + $125/mo per extra location.
+// The $499 setup fee is WAIVED by default (backend requires STRIPE_SETUP_FEE_ENABLED;
+// it's kept only as a struck-through anchor on Pro). Keep these in sync with
+// stripe.service.ts and the Landing/Register pricing copy.
+const PLAN_DETAILS = {
+  lite: {
+    name: 'Lite',
+    monthly: 99,
+    locationNote: '1 location · cancel anytime',
+    perLocationNote: '',
+    features: [
+      'Daily rank tracking across all keywords',
+      'Review Monitoring + AI Replies',
+      'Review request campaigns via email & SMS',
+      'Automated monthly PDF reports',
+    ],
+  },
+  pro: {
+    name: 'Pro',
+    monthly: 349,
+    locationNote: '1 location · cancel anytime',
+    perLocationNote: ' +$125/mo per additional location.',
+    features: FEATURES,
+  },
+} as const;
+
 export default function BillingPage() {
   const { logout } = useAuth();
   const { data: statusData } = useSWR<{ success: boolean; data: BillingStatus }>('/billing/status', fetcher);
@@ -142,6 +169,12 @@ export default function BillingPage() {
   const planForCheckout: 'lite' | 'pro' =
     storedPlan === 'lite' || storedPlan === 'pro' ? storedPlan : (billing?.productLine ?? 'pro');
   const isUpgrade = new URLSearchParams(window.location.search).get('upgrade') === '1';
+
+  // Checkout summary reflects the plan actually being charged (planForCheckout is what
+  // we POST to /billing/subscription-intent). An upgrade always lands on Pro.
+  const summaryPlan: 'lite' | 'pro' = isUpgrade ? 'pro' : planForCheckout;
+  const details = PLAN_DETAILS[summaryPlan];
+  const dueToday = details.monthly; // setup fee is waived; first charge is one month
 
   // Fetch subscription intent when status is known and user needs to subscribe
   useEffect(() => {
@@ -363,28 +396,32 @@ export default function BillingPage() {
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">What you're subscribing to</p>
             <div className="flex items-center justify-between py-2 border-b border-slate-100">
               <div>
-                <p className="text-sm font-medium text-slate-800">Monthly subscription</p>
-                <p className="text-xs text-slate-400 mt-0.5">1 location · cancel anytime</p>
+                <p className="text-sm font-medium text-slate-800">{details.name} monthly subscription</p>
+                <p className="text-xs text-slate-400 mt-0.5">{details.locationNote}</p>
               </div>
-              <span className="text-sm font-semibold text-slate-900">$349/mo</span>
+              <span className="text-sm font-semibold text-slate-900">${details.monthly}/mo</span>
             </div>
             <div className="flex items-center justify-between py-2 border-b border-slate-100">
               <div>
                 <p className="text-sm font-medium text-slate-800">One-time setup fee</p>
-                <p className="text-xs text-slate-400 mt-0.5">Onboarding, configuration & citation audit</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {summaryPlan === 'pro' ? 'Onboarding & citation audit — waived' : 'No setup fee on Lite'}
+                </p>
               </div>
-              <span className="text-sm font-semibold text-slate-900">$499</span>
+              <span className="text-sm font-semibold text-slate-900">
+                {summaryPlan === 'pro' && <span className="line-through text-slate-400 mr-1">$499</span>}$0
+              </span>
             </div>
             <div className="flex items-center justify-between pt-1">
               <p className="text-sm font-semibold text-slate-900">Due today</p>
-              <p className="text-lg font-bold text-slate-900">$848</p>
+              <p className="text-lg font-bold text-slate-900">{isUpgrade ? 'Prorated' : `$${dueToday}`}</p>
             </div>
-            <p className="text-xs text-slate-400">Then $349/mo. +$125/mo per additional location. Cancel anytime.</p>
+            <p className="text-xs text-slate-400">Then ${details.monthly}/mo.{details.perLocationNote} Cancel anytime.</p>
           </div>
 
           {/* Feature list */}
           <ul className="space-y-2.5">
-            {FEATURES.map((f) => (
+            {details.features.map((f) => (
               <li key={f} className="flex items-start gap-3 text-sm text-slate-700">
                 <span className="mt-0.5 w-4 h-4 rounded-full shrink-0 flex items-center justify-center text-xs font-bold"
                   style={{ background: 'rgba(99,102,241,0.12)', color: '#6366f1' }}>✓</span>
@@ -403,7 +440,11 @@ export default function BillingPage() {
         {/* ── Right: Payment Form ────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8">
           <h2 className="text-base font-semibold text-slate-900 mb-1">Payment details</h2>
-          <p className="text-xs text-slate-400 mb-5">Your card will be charged $848 today, then $349/mo.</p>
+          <p className="text-xs text-slate-400 mb-5">
+            {isUpgrade
+              ? 'Your card will be charged the prorated upgrade amount today.'
+              : `Your card will be charged $${dueToday} today, then $${details.monthly}/mo.`}
+          </p>
 
           {/* Promo code */}
           {!promoApplied ? (
