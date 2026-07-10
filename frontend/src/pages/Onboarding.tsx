@@ -348,9 +348,11 @@ export default function Onboarding() {
 
   // ── Step 3 helpers — save to DB immediately ─────────────────────────────────
 
+  // Synchronous per-location in-flight guard against double-submit (setKwSaving is async).
+  const kwSavingRef = useRef<Record<number, boolean>>({});
   const addKeyword = async (locIdx: number) => {
     const kw = (kwInput[locIdx] ?? '').trim();
-    if (!kw) return;
+    if (!kw || kwSavingRef.current[locIdx]) return;
 
     const loc = locations[locIdx];
     if (!loc?.id) {
@@ -359,6 +361,7 @@ export default function Onboarding() {
       return;
     }
 
+    kwSavingRef.current[locIdx] = true;
     setKwSaving((prev) => ({ ...prev, [locIdx]: true }));
     setKwError((prev) => ({ ...prev, [locIdx]: '' }));
     try {
@@ -379,6 +382,7 @@ export default function Onboarding() {
       setKwError((prev) => ({ ...prev, [locIdx]: 'Network error — please try again' }));
     } finally {
       setKwSaving((prev) => ({ ...prev, [locIdx]: false }));
+      kwSavingRef.current[locIdx] = false;
     }
   };
 

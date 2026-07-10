@@ -17,12 +17,12 @@ export default function VerifyEmail() {
       return;
     }
 
-    apiFetch<{ success: boolean; message?: string }>(`/auth/verify?token=${encodeURIComponent(token)}`)
+    apiFetch<{ success: boolean; error?: { message?: string } }>(`/auth/verify?token=${encodeURIComponent(token)}`)
       .then((res) => {
         if (res.success) {
           setStatus('success');
         } else {
-          setErrorMsg(res.message ?? 'Verification failed.');
+          setErrorMsg(res.error?.message ?? 'This verification link is invalid or has expired.');
           setStatus('error');
         }
       })

@@ -69,11 +69,20 @@ export async function logout(userId: string, tokenId: string): Promise<void> {
   await revokeRefreshToken(userId, tokenId);
 }
 
-export async function verifyEmail(token: string): Promise<void> {
+export async function verifyEmail(token: string): Promise<{ alreadyVerified: boolean }> {
   const userId = await redis.get(`verify:${token}`);
-  if (!userId) throw Object.assign(new Error('Invalid or expired verification link'), { status: 400 });
+  if (!userId) throw Object.assign(new Error('This verification link is invalid or has expired.'), { status: 400 });
+
+  const user = await db('users').where({ id: userId }).first();
+  if (user?.email_verified) return { alreadyVerified: true };
+
   await db('users').where({ id: userId }).update({ email_verified: true });
-  await redis.del(`verify:${token}`);
+  // Intentionally do NOT delete the token here. Email link-prefetchers / safe-link
+  // scanners (Outlook, Gmail, corporate gateways) issue an automated GET before the
+  // human clicks; deleting on first hit made the real click — and StrictMode's dev
+  // double-fire — fail with "invalid/expired", which dead-ended users into re-registering
+  // (the reported "account already exists"). The token expires on its own 24h TTL.
+  return { alreadyVerified: false };
 }
 
 export async function requestPasswordReset(email: string): Promise<void> {

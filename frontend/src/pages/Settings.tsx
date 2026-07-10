@@ -1575,9 +1575,12 @@ function KeywordsTab({ isAdmin }: { isAdmin: boolean }) {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Synchronous in-flight guard against double-submit (setAdding is async).
+  const addingRef = useRef(false);
   async function handleAdd() {
     const kw = newKeyword.trim();
-    if (!kw || !activeLocationId) return;
+    if (!kw || !activeLocationId || addingRef.current) return;
+    addingRef.current = true;
     setAdding(true);
     setAddError(null);
     try {
@@ -1595,6 +1598,7 @@ function KeywordsTab({ isAdmin }: { isAdmin: boolean }) {
       setAddError('Network error');
     } finally {
       setAdding(false);
+      addingRef.current = false;
     }
   }
 
@@ -2223,6 +2227,10 @@ export default function Settings() {
                   : 'Sync Facebook page ratings and reviews'
               }
               connected={client?.integrations?.facebook?.connected ?? false}
+              // FACEBOOK_APP_ID/SECRET are not provisioned yet, so /integrations/facebook/auth-url
+              // returns 503. Show "Coming soon" instead of letting users hit a raw error.
+              // Remove comingSoon once the Facebook app credentials are set in the API env.
+              comingSoon
               onConnect={connectFacebook}
               onDisconnect={disconnectFacebook}
             />
