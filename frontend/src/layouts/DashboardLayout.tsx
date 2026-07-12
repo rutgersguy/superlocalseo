@@ -178,8 +178,8 @@ function TrialBanner() {
           ? 'Your trial has expired.'
           : `Your trial ends in ${billing.trialDaysLeft} day${billing.trialDaysLeft === 1 ? '' : 's'}.`}
       </span>
-      <a href="/billing/checkout" className="shrink-0 text-xs font-semibold underline hover:no-underline">
-        Subscribe now →
+      <a href="/billing" className="shrink-0 text-xs font-semibold underline hover:no-underline">
+        Choose your plan →
       </a>
     </div>
   );
