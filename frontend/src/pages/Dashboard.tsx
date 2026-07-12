@@ -218,19 +218,19 @@ function SubscribeCTA({ billing }: { billing: BillingStatusResponse['data'] | un
                   : { background: 'rgba(99,102,241,0.25)', border: '1px solid rgba(99,102,241,0.4)', color: '#a5b4fc' }}
               >
                 <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: urgent ? '#fbbf24' : '#818cf8' }} />
-                {days === 1 ? '1 day left in trial' : `${days ?? '15'} days left in trial`}
+                {days === 1 ? '1 day left in trial' : `${days ?? '7'} days left in trial`}
               </div>
               <h2 className="text-xl sm:text-2xl font-bold leading-snug text-white">
                 Turn your trial into results.<br className="hidden sm:block" /> Subscribe today.
               </h2>
               <p className="text-sm leading-relaxed" style={{ color: '#cbd5e1' }}>
-                Lock in your rankings tracker, review monitoring, and citation health — all in one platform built to get you found locally.
+                Lock in your rankings tracker and review monitoring — all in one platform built to get you found locally. Pick Lite or Pro at checkout.
               </p>
             </>
           )}
 
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm" style={{ color: '#94a3b8' }}>
-            {['Daily Rank Tracking', 'Review Monitoring + AI Replies', 'Competitor Analysis', 'Citation Builder'].map((f) => (
+            {['Daily Rank Tracking', 'Review Monitoring + AI Replies', 'Review Request Campaigns', 'Automated Monthly Reports'].map((f) => (
               <li key={f} className="flex items-center gap-2">
                 <span className="w-4 h-4 rounded-full flex items-center justify-center shrink-0 text-xs font-bold" style={{ background: 'rgba(99,102,241,0.3)', color: '#a5b4fc' }}>✓</span>
                 {f}
@@ -242,8 +242,9 @@ function SubscribeCTA({ billing }: { billing: BillingStatusResponse['data'] | un
         {/* Pricing + CTA */}
         <div className="sm:text-right space-y-4 shrink-0 sm:min-w-[180px]">
           <div>
+            <p className="text-xs" style={{ color: '#94a3b8' }}>from</p>
             <div className="flex items-baseline gap-1 sm:justify-end">
-              <span className="text-4xl font-bold text-white">$349</span>
+              <span className="text-4xl font-bold text-white">$99</span>
               <span className="text-sm" style={{ color: '#94a3b8' }}>/mo</span>
             </div>
             <p className="text-xs mt-0.5" style={{ color: '#64748b' }}>No setup fee · cancel anytime</p>
@@ -253,7 +254,7 @@ function SubscribeCTA({ billing }: { billing: BillingStatusResponse['data'] | un
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm transition-all"
             style={{ background: '#6366f1', color: '#fff', boxShadow: '0 4px 20px rgba(99,102,241,0.45)' }}
           >
-            {expired ? 'Reactivate now →' : 'Subscribe now →'}
+            {expired ? 'Reactivate now →' : 'Choose your plan →'}
           </a>
           <p className="text-xs" style={{ color: '#475569' }}>Cancel anytime. No hidden fees.</p>
         </div>
