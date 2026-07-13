@@ -49,7 +49,7 @@ export async function provisionClient(clientId: string): Promise<void> {
     customerId = result.customerId;
     emrPassword = result.password;
   } catch (e) {
-    logger.warn('EMR agency sub-account creation failed', {
+    logger.error('EMR agency sub-account creation failed', {
       clientId,
       error: (e as Error).message,
     });
@@ -57,10 +57,14 @@ export async function provisionClient(clientId: string): Promise<void> {
 
   const now = new Date();
 
+  // Only claim 'provisioned' when we actually got a customer id back. This used to be set
+  // unconditionally, so a failed createCustomer was permanently marked done — and the early
+  // return at the top of this function meant it could never be retried. 'failed' leaves the
+  // door open for a retry (and is visible in the DB instead of silently looking healthy).
   await db('clients').where({ id: clientId }).update({
     ...(customerId ? { emr_customer_id: customerId } : {}),
     ...(emrPassword ? { emr_password_encrypted: encrypt(emrPassword) } : {}),
-    emr_provisioning_status: 'provisioned',
+    emr_provisioning_status: customerId ? 'provisioned' : 'failed',
     updated_at: now,
   });
 
