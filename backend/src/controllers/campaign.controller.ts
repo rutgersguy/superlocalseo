@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
-import { sendInvite, fetchUnsubscribes, fetchCredits, fetchCampaignTemplates, createCampaign as createEMRCampaign } from '../services/embedmyreviews.service';
+import { sendInvite, fetchUnsubscribes, fetchCampaignTemplates, createCampaign as createEMRCampaign } from '../services/embedmyreviews.service';
 import { getClientEMRKey } from '../services/emr_provisioning';
 import { logger } from '../utils/logger';
 
@@ -227,19 +227,24 @@ function maskContact(contact: string, type: 'email' | 'sms'): string {
 
 const getApiKey = getClientEMRKey;
 
+/**
+ * EMR exposes NO endpoint for reading a customer's remaining credits — verified against their
+ * API reference (2026-07-13). The only credit endpoint is agency-level `POST
+ * /customers/{customer}/add-credits`, which *adds* credits and returns the new balance.
+ *
+ * fetchCredits() has therefore been hitting `/api/v1/account/credits` → 404 on every call
+ * since it was written. The 404 was swallowed here, so the UI just quietly hid the credit
+ * badge — while CreditBadge polls this route every 60s per open tab, firing a doomed request
+ * to EMR each time (and burning the emrFetch retry/backoff path).
+ *
+ * Short-circuit instead of calling out. See docs/INTEGRATIONS.md "Open vendor questions" —
+ * we've asked EMR whether a balance endpoint exists outside the public docs; if it does, wire
+ * fetchCredits() to it and restore the call.
+ */
 export async function getCredits(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const apiKey = await getApiKey(req.clientId);
-    if (!apiKey) {
-      ok(res, { email: 0, sms: 0, total: 0, connected: false, available: false });
-      return;
-    }
-    try {
-      const credits = await fetchCredits(apiKey);
-      ok(res, { ...credits, connected: true, available: true });
-    } catch {
-      ok(res, { email: 0, sms: 0, total: 0, connected: true, available: false });
-    }
+    ok(res, { email: 0, sms: 0, total: 0, connected: !!apiKey, available: false });
   } catch (e) {
     next(e);
   }

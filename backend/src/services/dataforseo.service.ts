@@ -220,6 +220,45 @@ function businessMatches(
   return false;
 }
 
+/**
+ * Matches a SERP result against ANY of the business's known names.
+ *
+ * Clients sign up under a brand/account name (`clients.business_name`, e.g. "AirServe of
+ * Tulsa") while the SERP shows the Google Business Profile listing name (`locations.name`,
+ * e.g. "Aire Serv of South Tulsa"). Those legitimately differ — onboarding even tells users
+ * to enter the location name exactly as it appears on their GBP. Matching on the client name
+ * alone means the name check never fires, and we silently depend on the website/phone match.
+ *
+ * Also guards the substring check: businessMatches() does `a.includes(b) || b.includes(a)`,
+ * so a short name ("Air") would match an unrelated result ("Airtron Heating") and report a
+ * COMPETITOR's rank as the client's. Require a reasonably specific name before trusting
+ * containment; below that, demand an exact match.
+ */
+const MIN_CONTAINMENT_LEN = 6;
+
+function businessMatchesAny(
+  resultTitle: string | null | undefined,
+  resultUrl: string | null | undefined,
+  resultPhone: string | null | undefined,
+  names: Array<string | null | undefined>,
+  websiteUrl: string | null | undefined,
+  phone: string | null | undefined,
+): boolean {
+  for (const name of names) {
+    if (!name) continue;
+    const normalized = normalizeNameForMatch(name);
+    // Too short to trust `includes()` — fall back to exact equality on the name, but still
+    // let the URL/phone signals inside businessMatches() decide.
+    if (normalized.length < MIN_CONTAINMENT_LEN && resultTitle) {
+      if (normalizeNameForMatch(resultTitle) === normalized) return true;
+      if (businessMatches(null, resultUrl, resultPhone, name, websiteUrl, phone)) return true;
+      continue;
+    }
+    if (businessMatches(resultTitle, resultUrl, resultPhone, name, websiteUrl, phone)) return true;
+  }
+  return false;
+}
+
 export async function getRankForCoordinate(params: {
   keyword: string;
   lat: number;
@@ -286,6 +325,8 @@ export async function getRankForKeyword(params: {
           rank_group?: number;
           url?: string;
           title?: string;
+          // Present on flat local_pack items — the shape DataForSEO actually returns.
+          phone?: string;
           items?: Array<{ type: string; rank_group?: number; title?: string; url?: string; phone?: string }>;
         }>;
       }>;
@@ -294,13 +335,14 @@ export async function getRankForKeyword(params: {
 
   const items = data.tasks?.[0]?.result?.[0]?.items ?? [];
 
-  // Local pack first (higher value for local SEO)
+  // Local pack first (higher value for local SEO). DataForSEO returns local_pack as FLAT
+  // items — see the note in matchInItems(); `item.items` is normally undefined, so guarding
+  // on it silently skipped every local-pack result.
   for (const item of items) {
-    if (item.type === 'local_pack' && item.items) {
-      for (const sub of item.items) {
-        if (businessMatches(sub.title, sub.url, sub.phone, params.businessName, params.websiteUrl, params.phone)) {
-          return { rank: sub.rank_group ?? null, url: sub.url ?? null, rankType: 'local_pack' };
-        }
+    if (item.type !== 'local_pack') continue;
+    for (const sub of item.items ?? [item]) {
+      if (businessMatches(sub.title, sub.url, sub.phone, params.businessName, params.websiteUrl, params.phone)) {
+        return { rank: sub.rank_group ?? null, url: sub.url ?? null, rankType: 'local_pack' };
       }
     }
   }
@@ -342,22 +384,30 @@ type RawItem = {
 
 function matchInItems(
   items: RawItem[],
-  name: string,
+  name: string | Array<string | null | undefined>,
   website: string | null | undefined,
   phone: string | null | undefined,
 ): SerpRankResult {
+  const names = Array.isArray(name) ? name : [name];
+  // Local pack first (higher value for local SEO).
+  //
+  // DataForSEO returns local_pack as FLAT items — one `local_pack` item per business, with
+  // title/url/phone/rank_group directly on the item. It is NOT a container with a nested
+  // `.items` array. The old code guarded on `item.items`, which is always undefined, so the
+  // local-pack branch never ran and EVERY result fell through to organic. That's why no
+  // local_pack snapshot was written after 2026-05-07. Keep the nested shape supported in case
+  // some SERP layouts return it, but don't require it.
   for (const item of items) {
-    if (item.type === 'local_pack' && item.items) {
-      for (const sub of item.items) {
-        if (businessMatches(sub.title, sub.url, sub.phone, name, website, phone)) {
-          return { rank: sub.rank_group ?? null, url: sub.url ?? null, rankType: 'local_pack' };
-        }
+    if (item.type !== 'local_pack') continue;
+    for (const sub of item.items ?? [item]) {
+      if (businessMatchesAny(sub.title, sub.url, sub.phone, names, website, phone)) {
+        return { rank: sub.rank_group ?? null, url: sub.url ?? null, rankType: 'local_pack' };
       }
     }
   }
   for (const item of items) {
     if (item.type === 'organic') {
-      if (businessMatches(item.title, item.url, null, name, website, phone)) {
+      if (businessMatchesAny(item.title, item.url, null, names, website, phone)) {
         return { rank: item.rank_group ?? null, url: item.url ?? null, rankType: 'organic' };
       }
     }
@@ -369,6 +419,12 @@ export async function getSerpRanks(params: {
   keyword: string;
   locationName: string;
   businessName: string;
+  /**
+   * Additional names to match the client against — in practice the GBP listing name from
+   * `locations.name`, which is what actually appears in the SERP and routinely differs from
+   * the signup brand name in `clients.business_name`. See businessMatchesAny().
+   */
+  altBusinessNames?: Array<string | null | undefined>;
   websiteUrl?: string | null;
   phone?: string | null;
   competitors?: Array<{ id: string; name: string; website: string | null }>;
@@ -388,7 +444,14 @@ export async function getSerpRanks(params: {
 
   const items = data.tasks?.[0]?.result?.[0]?.items ?? [];
 
-  const client = matchInItems(items, params.businessName, params.websiteUrl, params.phone);
+  // The GBP listing name (altBusinessNames, from locations.name) is what actually shows in
+  // the SERP; the signup brand name often doesn't. Try both.
+  const client = matchInItems(
+    items,
+    [params.businessName, ...(params.altBusinessNames ?? [])],
+    params.websiteUrl,
+    params.phone,
+  );
 
   const competitors: CompetitorSerpRank[] = (params.competitors ?? []).map((c) => ({
     id: c.id,
