@@ -89,6 +89,11 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
             keyword: kw.keyword as string,
             locationName,
             businessName,
+            // locations.name is the GBP listing name (onboarding asks for it "exactly as it
+            // appears on your Google Business Profile"), which is what the SERP shows —
+            // clients.business_name is the signup brand name and often differs
+            // ("Aire Serv of South Tulsa" vs "AirServe of Tulsa").
+            altBusinessNames: [location.name as string | null],
             websiteUrl: location.website as string | null,
             phone: location.phone as string | null,
             competitors,
