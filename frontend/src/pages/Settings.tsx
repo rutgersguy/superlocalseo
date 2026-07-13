@@ -2212,9 +2212,12 @@ export default function Settings() {
           <div className="space-y-4">
             {/* EMR credentials — operator admin only */}
             {isPlatformAdmin && <EMRCredentialsCard />}
+            {/* Google's Q&A API was discontinued 2025-11-03 (no vendor can read/post GBP Q&A),
+                and business-info write-back is not built — so neither is advertised here.
+                Review sync stays pending until our GBP API quota request is approved. */}
             <OAuthCard
               name="Google Business Profile"
-              description="Sync reviews, Q&A, and business info from Google"
+              description="Connect now to sync your Google reviews — activates as soon as Google approves our API access"
               connected={client?.integrations?.google?.connected ?? false}
               onConnect={connectGoogle}
               onDisconnect={disconnectGoogle}

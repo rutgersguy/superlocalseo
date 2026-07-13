@@ -45,7 +45,7 @@ Monthly health score (NAP consistency, citation count, review velocity, Google c
 Create per-client EMR sub-accounts via the agency API. Required for the agency/reseller plan. Current single-account approach doesn't scale past ~20 clients.
 
 ### 4. Reputation Manager (BL-3)
-Respond to Google reviews through BrightLocal's GMB-authenticated API — no per-client Google OAuth required. Removes the #1 onboarding friction point.
+Respond to Google reviews through BrightLocal's API. **Correction (2026-07-13):** this does NOT remove the per-client Google OAuth step — BrightLocal's own docs have the client grant BrightLocal access via a Google consent screen. What it removes is our dependency on *our* pending GBP API quota, since BrightLocal executes the call against its own approved Google project. Client consent is still required; only the approval blocker goes away.
 
 ### 5. Rank Type Splits (BL-5)
 BL already returns `rank_type` (organic / local-pack / paid) in every response — we just don't store or display it. One-day fix that reveals whether a client is winning in the local-pack vs. organic, which is very different signal for SMBs.
@@ -469,7 +469,17 @@ Map from BL response `nap_detail` object in `fetchCitations()`.
 **Dependencies:** BL Reputation Manager access; location must have BL campaign
 
 ### What and why
-BrightLocal's `/v4/gbp/*` endpoints let us read and write Google Business Profile data (categories, hours, description, attributes) using BL's authenticated GMB connection — same benefit as BL-3, applied to profile management rather than review replies. Clients can update their GBP from our dashboard without needing their own Google OAuth in place.
+**Rewritten 2026-07-13 — the previous version of this ticket was wrong on two counts.**
+
+It claimed BrightLocal exposes `/v4/gbp/*` endpoints. **No such endpoints appear in BrightLocal's API reference** (https://apidocs.brightlocal.com/) and we could not verify them anywhere. Do not build against them.
+
+The real product is **Active Sync / the Listings Management API** (https://www.brightlocal.com/listings-management/active-sync/), which writes business info — categories, hours, description, GBP attributes, NAP — to Google, Apple, Facebook, Bing, and Yelp, and alerts on/lets us reject Google suggested edits. It runs on BrightLocal's own approved Google project, so **it routes around our pending GBP API quota approval** (our `quota_limit_value: 0` never enters the picture, because we never call Google — BrightLocal does).
+
+It does **not** remove the client Google OAuth step; the client grants BrightLocal access via a Google consent screen instead of ours.
+
+**Also dropped from this ticket: GBP Q&A.** Google discontinued the My Business Q&A API on 2025-11-03 ("you can no longer read or post questions and answers using the API", https://developers.google.com/my-business/content/qanda/change-log) and is removing the public Q&A surface from Business Profiles. No vendor can do this. Do not build it.
+
+**Open questions before committing (ask BrightLocal sales):** (1) can the GBP OAuth connect be initiated via API, or is it UI-only — if UI-only it punches a hole in our white-label UX; (2) exact plan tier required for the Listings Management API (their API page says Grow, their help center says Track/Manage — the docs conflict); (3) the per-request API fee schedule charged on top of the plan.
 
 ### Schema
 **Migration:** `20260501960000_gbp_listings.ts`
