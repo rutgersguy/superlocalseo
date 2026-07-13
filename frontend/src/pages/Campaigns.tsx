@@ -3,7 +3,6 @@ import useSWR, { useSWRConfig } from 'swr';
 import { Mail, Upload, Send, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, UserX, Plus, X } from 'lucide-react';
 import { fetcher, apiFetch } from '../services/api';
 import EMRSetupBanner from '../components/EMRSetupBanner';
-import { useAuth } from '../hooks/useAuth';
 
 interface Campaign {
   id: string;
@@ -629,8 +628,6 @@ function UnsubscribedSection() {
 // ── Page ────────────────────────────────────────────────────────────────────
 
 export default function Campaigns() {
-  const { role: platformRole } = useAuth();
-  const isPlatformAdmin = platformRole === 'admin';
   const { data, error, isLoading } = useSWR<CampaignsResponse>('/campaigns', fetcher);
   const { data: creditsData } = useSWR<CreditsResponse>('/campaigns/credits', fetcher, { refreshInterval: 60_000 });
   const [showNewCampaign, setShowNewCampaign] = useState(false);
@@ -647,7 +644,8 @@ export default function Campaigns() {
   }
 
   // EMR setup banner is only relevant for the operator admin account (platform-level)
-  const showEMRBanner = isPlatformAdmin && !isLoading && campaigns.length === 0;
+  // Ungated: clients need their own review-portal credentials to create campaigns at all.
+  const showEMRBanner = !isLoading && campaigns.length === 0;
 
   return (
     <div className="space-y-6">
