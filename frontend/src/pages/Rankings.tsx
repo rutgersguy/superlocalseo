@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -7,7 +7,7 @@ import {
 import { MapContainer, CircleMarker, Popup, TileLayer } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useClient } from '../hooks/useClient';
-import { BarChart2, Search } from 'lucide-react';
+import { BarChart2, MapPin, Search } from 'lucide-react';
 import { apiFetch, fetcher } from '../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -310,7 +310,15 @@ function KeywordsPanel({ onChanged }: { onChanged: () => void }) {
           ))}
         </select>
       </div>
-      {!activeLocationId ? (
+      {locations.length === 0 ? (
+        <p className="text-sm text-slate-500">
+          You don't have a location yet, and keywords are tracked per location.{' '}
+          <Link to="/settings?tab=locations" className="font-medium text-brand-600 underline hover:text-brand-700">
+            Add a location in Settings
+          </Link>{' '}
+          to start adding keywords.
+        </p>
+      ) : !activeLocationId ? (
         <p className="text-sm text-slate-400">Select a location to manage its keywords.</p>
       ) : (
         <div className="space-y-2">
@@ -539,7 +547,7 @@ export default function Rankings() {
   // Wait for the plan to load so a Lite user doesn't fire a transient 403.
   const { data: roiData, mutate: roiMutate } = useSWR<{ success: boolean; data: RoiData }>(planLoading || isLite ? null : '/analytics/roi', fetcher);
   const { data: allKwData, mutate: mutateAllKw } = useSWR<KeywordsListResponse>('/keywords', fetcher);
-  const { data: locData } = useSWR<LocationsResponse>('/locations', fetcher);
+  const { data: locData, isLoading: locLoading } = useSWR<LocationsResponse>('/locations', fetcher);
 
   const trendKey = selectedRow
     ? `/rankings/trend?keywordId=${selectedRow.keywordId}&locationId=${selectedRow.locationId}${trendRange > 0 ? `&days=${trendRange}` : ''}${rankType !== 'all' ? `&rankType=${rankType}` : ''}`
@@ -611,8 +619,27 @@ export default function Rankings() {
   const roiConfig = roiData?.data?.roiConfig;
   const roiConfigured = (roiConfig?.avgCustomerValue ?? 0) > 0;
 
+  // Keywords are tracked per location, so with no location there is nowhere to attach
+  // one — the Keywords panel's location picker is empty and the add flow is a dead end.
+  const hasNoLocations = !locLoading && (locData?.data?.length ?? 0) === 0;
+
   return (
     <div className="space-y-6">
+      {hasNoLocations && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <MapPin className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+          <div className="text-sm">
+            <p className="font-medium text-amber-900">Add a location to start tracking keywords</p>
+            <p className="text-amber-700 mt-0.5">
+              Keywords are tracked per location, so you'll need one before you can add any.{' '}
+              <Link to="/settings?tab=locations" className="font-medium underline hover:text-amber-900">
+                Add your first location
+              </Link>{' '}
+              in Settings, then come back here to add keywords.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-900 tracking-tight">Rankings</h1>
         <div className="flex gap-1 sm:gap-2">
