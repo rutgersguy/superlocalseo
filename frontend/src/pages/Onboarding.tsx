@@ -721,9 +721,9 @@ export default function Onboarding() {
                   <div>
                     <h3 className="text-sm font-semibold text-gray-900">
                       Google Business Profile
-                      <FieldTooltip content="Connecting your Google Business Profile lets us pull your reviews directly and improves Google's confidence in your listing data. You can connect it later in Settings → Integrations." />
+                      <FieldTooltip content="Connecting your Google Business Profile lets us pull your reviews directly and improves Google's confidence in your listing data. Review syncing switches on as soon as Google approves our API access — connecting now means it starts the moment that lands. You can also connect later in Settings → Integrations." />
                     </h3>
-                    <p className="text-xs text-gray-500 mt-0.5">Sync reviews, Q&A, and business info from Google</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Connect now to sync your Google reviews — activates as soon as Google approves our API access</p>
                   </div>
                 </div>
                 <button
