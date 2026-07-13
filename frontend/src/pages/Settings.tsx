@@ -1955,8 +1955,7 @@ function BillingTab({ onGoToLocations, isAdmin, isPlatformAdmin }: { onGoToLocat
               // checkout. Showing a price here would be quoting a plan they haven't picked.
               <>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold text-slate-900">Free trial</span>
-                  <span className="text-sm text-slate-500">full Pro access</span>
+                  <span className="text-3xl font-bold text-slate-900">Free with full Pro Access</span>
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5">No card required · subscribe whenever you're ready</p>
               </>
@@ -1981,7 +1980,6 @@ function BillingTab({ onGoToLocations, isAdmin, isPlatformAdmin }: { onGoToLocat
             tradeoff as two comparable cards rather than a paragraph. */}
         {isTrialing && (
           <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-2">When your trial ends</p>
             <div className="grid sm:grid-cols-2 gap-3">
               <div className="relative rounded-xl border-2 border-brand-500 bg-brand-50/50 p-4">
                 <span className="absolute top-3 right-3 text-[10px] font-semibold uppercase tracking-wide text-brand-700 bg-brand-100 px-2 py-0.5 rounded-full">
@@ -2014,15 +2012,12 @@ function BillingTab({ onGoToLocations, isAdmin, isPlatformAdmin }: { onGoToLocat
           </div>
         )}
 
-        {/* Trial countdown */}
-        {isTrialing && billing.trialDaysLeft !== null && (
-          <div className={`rounded-lg px-4 py-3 text-sm ${billing.trialDaysLeft <= 2 ? 'bg-red-50 text-red-800 border border-red-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
-            {billing.trialDaysLeft === 0
-              ? 'Your trial has expired. Subscribe to continue using SuperLocalSEO.'
-              : `Trial ends in ${billing.trialDaysLeft} day${billing.trialDaysLeft === 1 ? '' : 's'}.`}
-            {billing.trialEndsAt && billing.trialDaysLeft > 0 && (
-              <span className="text-xs ml-1 opacity-70">({new Date(billing.trialEndsAt).toLocaleDateString()})</span>
-            )}
+        {/* The day-count banner was redundant with the plan cards above and the Dashboard
+            banner, so it's gone. An EXPIRED trial is not redundant — it's the only thing
+            here telling them why the app stopped working. */}
+        {isTrialing && billing.trialDaysLeft === 0 && (
+          <div className="rounded-lg px-4 py-3 text-sm bg-red-50 text-red-800 border border-red-200">
+            Your trial has expired. Choose a plan below to continue using SuperLocalSEO.
           </div>
         )}
 
@@ -2102,7 +2097,7 @@ function BillingTab({ onGoToLocations, isAdmin, isPlatformAdmin }: { onGoToLocat
           // useless to them. Send them to the plan picker so they can end the trial and
           // start paying whenever they want — they don't have to wait it out.
           <a
-            href="/billing"
+            href="/billing?subscribe=1"
             className="w-full py-2.5 rounded-lg text-sm font-semibold bg-brand-500 text-white hover:bg-brand-600 flex items-center justify-center gap-2 transition-colors"
           >
             Choose your plan &amp; subscribe now →
