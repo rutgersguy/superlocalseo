@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, type ChangeEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useSWR, { mutate as swrMutate } from 'swr';
-import { QrCode, Download, Trash2, Plus, AlertCircle, CheckCircle2, ExternalLink, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
+import { QrCode, Download, Trash2, Plus, AlertCircle, CheckCircle2, ExternalLink, ChevronDown, ChevronUp, Copy, Check, MapPin } from 'lucide-react';
 import { apiFetch, fetcher } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { useClient } from '../hooks/useClient';
@@ -1558,7 +1558,7 @@ interface Keyword {
   keyword: string;
 }
 
-function KeywordsTab({ isAdmin }: { isAdmin: boolean }) {
+function KeywordsTab({ isAdmin, onGoToLocations }: { isAdmin: boolean; onGoToLocations: () => void }) {
   const { data: locsData } = useSWR<{ success: boolean; data: Location[] }>('/locations', fetcher);
   const locations = locsData?.data ?? [];
 
@@ -1617,7 +1617,19 @@ function KeywordsTab({ isAdmin }: { isAdmin: boolean }) {
 
   if (locations.length === 0) {
     return (
-      <p className="text-sm text-slate-400">Add a location first before managing keywords.</p>
+      <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+        <MapPin className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+        <div className="text-sm">
+          <p className="font-medium text-amber-900">Add a location to start tracking keywords</p>
+          <p className="text-amber-700 mt-0.5">
+            Keywords are tracked per location, so you'll need one before you can add any.{' '}
+            <button onClick={onGoToLocations} className="font-medium underline hover:text-amber-900">
+              Add your first location
+            </button>
+            .
+          </p>
+        </div>
+      </div>
     );
   }
 
@@ -2142,7 +2154,7 @@ export default function Settings() {
         {activeTab === 'locations' && <LocationsTab isAdmin={isAdmin} />}
 
         {/* Keywords tab */}
-        {activeTab === 'keywords' && <KeywordsTab isAdmin={isAdmin} />}
+        {activeTab === 'keywords' && <KeywordsTab isAdmin={isAdmin} onGoToLocations={() => setActiveTab('locations')} />}
 
         {/* Account tab */}
         {activeTab === 'account' && (
