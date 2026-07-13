@@ -135,7 +135,7 @@ const PLAN_DETAILS = {
 
 export default function BillingPage() {
   const { logout } = useAuth();
-  const { data: statusData } = useSWR<{ success: boolean; data: BillingStatus }>('/billing/status', fetcher);
+  const { data: statusData, error: statusError } = useSWR<{ success: boolean; data: BillingStatus }>('/billing/status', fetcher);
   const billing = statusData?.data;
 
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -143,7 +143,12 @@ export default function BillingPage() {
   const [intentError, setIntentError] = useState('');
   const [loadingIntent, setLoadingIntent] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [proceedEarly, setProceedEarly] = useState(false);
+  // ?subscribe=1 means the user explicitly clicked "subscribe now" (e.g. from Settings →
+  // Billing). Skip the early-trial soft landing — telling someone who just asked to pay
+  // that "no payment is needed yet" is a dead end.
+  const [proceedEarly, setProceedEarly] = useState(
+    () => new URLSearchParams(window.location.search).get('subscribe') === '1',
+  );
 
   const [promoInput, setPromoInput] = useState('');
   const [promoLoading, setPromoLoading] = useState(false);
@@ -277,6 +282,18 @@ export default function BillingPage() {
       '.Tab--selected': { borderColor: '#6366f1', backgroundColor: '#eef2ff' },
     },
   };
+
+  // Hold the page until /billing/status resolves. Without this, `billing` is undefined on
+  // the first paint, every branch below falls through, and the Stripe payment form flashes
+  // up for a moment before being replaced by the trial soft landing. (On error we fall
+  // through rather than spin forever — an unauthenticated hit still gets a usable page.)
+  if (!billing && !statusError) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <span className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   // Already subscribed — but let an active Lite subscriber who chose to upgrade
   // (?upgrade=1) fall through to the upgrade payment form below.
