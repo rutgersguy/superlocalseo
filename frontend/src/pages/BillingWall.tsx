@@ -2,6 +2,12 @@ import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { apiFetch } from '../services/api';
 
+/**
+ * NOTE: this component is currently unrouted — nothing imports it. Before reviving it,
+ * fix the checkout call below: it POSTs /billing/checkout with no `plan`, and the backend
+ * defaults to 'pro', so the user is billed Pro with no chance to pick Lite. Send them to
+ * the /billing plan picker instead.
+ */
 export default function BillingWall() {
   const { logout } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -41,10 +47,11 @@ export default function BillingWall() {
 
         <div className="bg-slate-50 rounded-xl p-4 text-left space-y-2">
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold text-slate-900">$349</span>
+            <span className="text-sm text-slate-500">from</span>
+            <span className="text-3xl font-bold text-slate-900">$99</span>
             <span className="text-slate-500 text-sm">/mo</span>
           </div>
-          <p className="text-xs text-slate-500">+ $499 one-time setup fee · $125/mo per extra location</p>
+          <p className="text-xs text-slate-500">No setup fee · choose Lite or Pro at checkout</p>
           <ul className="mt-3 space-y-1.5">
             {['Daily rank tracking', 'Review monitoring + AI responses', 'Citation health', 'Monthly PDF reports', 'Review request campaigns'].map((f) => (
               <li key={f} className="text-xs text-slate-600 flex items-center gap-1.5">
