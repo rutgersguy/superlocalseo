@@ -1314,9 +1314,9 @@ function LocationForm({
                 {suggestions.map((s, i) => (
                   <li key={`${s.label}-${i}`}>
                     <button type="button" onMouseDown={(e) => { e.preventDefault(); selectSuggestion(s); }}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-brand-50 flex items-baseline gap-1.5">
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-brand-50 flex items-baseline gap-1">
                       <span className="font-medium text-slate-800">{s.city}</span>
-                      {s.state && <span className="text-slate-500">, {s.state}</span>}
+                      {s.state && <span className="text-slate-500">- {s.state}</span>}
                     </button>
                   </li>
                 ))}
