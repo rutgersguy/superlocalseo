@@ -3,6 +3,7 @@ import { config } from '../config';
 import { db } from '../db/connection';
 import { logger } from '../utils/logger';
 import { sendPaymentFailedEmail } from './email.service';
+import { deprovisionClient } from './emr_provisioning';
 
 export const stripe = new Stripe(config.stripe.secretKey);
 
@@ -346,10 +347,25 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
 
     case 'customer.subscription.deleted': {
       const sub = event.data.object as Stripe.Subscription;
-      await db('clients').where({ stripe_subscription_id: sub.id }).update({
-        subscription_status: 'canceled',
-        updated_at: new Date(),
-      });
+      const canceled = await db('clients')
+        .where({ stripe_subscription_id: sub.id })
+        .update({ subscription_status: 'canceled', updated_at: new Date() })
+        .returning('id') as Array<{ id: string }>;
+
+      // Pause the EMR sub-account too. Nothing used to call this, so canceled clients kept
+      // live EMR accounts forever — they had to be cleaned up by hand. Non-fatal: a failure
+      // here must not break Stripe webhook processing (Stripe would retry the whole event),
+      // but it is logged at error level and is reconcilable via `npm run emr:reconcile`.
+      for (const { id } of canceled) {
+        try {
+          await deprovisionClient(id);
+        } catch (e) {
+          logger.error('EMR deprovision on subscription cancel failed', {
+            clientId: id,
+            error: (e as Error).message,
+          });
+        }
+      }
       break;
     }
 

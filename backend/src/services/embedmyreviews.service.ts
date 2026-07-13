@@ -275,18 +275,97 @@ export async function deleteCustomer(customerId: string): Promise<void> {
   }
 }
 
+/**
+ * Pauses a customer's EMR subscription.
+ *
+ * NOTE: this previously called `POST /customers/{id}/suspend`, which DOES NOT EXIST — the
+ * documented endpoint is `PUT /customers/{customer}/pause`. Because the failure was swallowed
+ * as a warning, every cancellation silently no-op'd and EMR sub-accounts piled up. Failures
+ * now log at error level so they show up instead of rotting.
+ *
+ * Per EMR docs, pause/resume is "only available when the plan is not linked to Stripe" — a
+ * Stripe-linked plan returns an error, which we surface rather than hide.
+ */
 export async function suspendCustomer(customerId: string): Promise<void> {
   const operatorKey = config.embedmyreviews.agencyKey || config.embedmyreviews.apiKey;
   if (!operatorKey) return;
 
-  const res = await emrFetch(`/customers/${encodeURIComponent(customerId)}/suspend`, operatorKey, {
-    method: 'POST',
+  const res = await emrFetch(`/customers/${encodeURIComponent(customerId)}/pause`, operatorKey, {
+    method: 'PUT',
   }, AGENCY_BASE_URL());
 
   if (!res.ok && res.status !== 404) {
     const body = await res.text();
-    logger.warn('EMR suspendCustomer failed (non-fatal)', { customerId, status: res.status, body });
+    logger.error('EMR suspendCustomer (pause) failed', { customerId, status: res.status, body });
+    throw new Error(`EMR pause failed: ${res.status} ${body}`);
   }
+}
+
+/** Resumes a paused EMR customer subscription (counterpart to suspendCustomer). */
+export async function resumeCustomer(customerId: string): Promise<void> {
+  const operatorKey = config.embedmyreviews.agencyKey || config.embedmyreviews.apiKey;
+  if (!operatorKey) return;
+
+  const res = await emrFetch(`/customers/${encodeURIComponent(customerId)}/resume`, operatorKey, {
+    method: 'PUT',
+  }, AGENCY_BASE_URL());
+
+  if (!res.ok && res.status !== 404) {
+    const body = await res.text();
+    logger.error('EMR resumeCustomer failed', { customerId, status: res.status, body });
+    throw new Error(`EMR resume failed: ${res.status} ${body}`);
+  }
+}
+
+export interface EMRAgencyCustomer {
+  id: string;
+  name: string | null;
+  company: string | null;
+  email: string | null;
+}
+
+/**
+ * Lists every customer in the agency account (paginated). Used to reconcile EMR against our
+ * own `clients.emr_customer_id` and find orphans — sub-accounts whose client no longer exists.
+ */
+export async function listAllCustomers(): Promise<EMRAgencyCustomer[]> {
+  const operatorKey = config.embedmyreviews.agencyKey || config.embedmyreviews.apiKey;
+  if (!operatorKey) throw new Error('EMBEDMYREVIEWS_AGENCY_KEY not configured');
+
+  const out: EMRAgencyCustomer[] = [];
+  let page = 1;
+
+  // Hard page cap: a malformed/looping response must not spin forever.
+  for (; page <= 100; page++) {
+    const res = await emrFetch(`/customers?page=${page}`, operatorKey, {}, AGENCY_BASE_URL());
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`EMR listAllCustomers failed: ${res.status} ${body}`);
+    }
+
+    const json = await res.json() as {
+      data?: Array<{ id?: number | string; name?: string; company?: string; email?: string }>;
+      meta?: { current_page?: number; last_page?: number };
+      links?: { next?: string | null };
+    };
+
+    const rows = json.data ?? [];
+    for (const r of rows) {
+      if (r.id == null) continue;
+      out.push({
+        id: String(r.id),
+        name: r.name ?? null,
+        company: r.company ?? null,
+        email: r.email ?? null,
+      });
+    }
+
+    const lastPage = json.meta?.last_page;
+    const hasNext = lastPage != null ? page < lastPage : !!json.links?.next && rows.length > 0;
+    if (!hasNext) break;
+  }
+
+  return out;
 }
 
 export interface EMRFeedback {
