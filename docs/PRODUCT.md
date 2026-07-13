@@ -535,7 +535,12 @@ SuperLocalSEO is a white-label local SEO platform built for agencies and multi-l
 - Plan upgrade / downgrade flow UI
 - Yelp OAuth integration
 - Facebook OAuth integration
-- Google Business Profile data sync (Q&A, automated review pull via GBP API)
+- Google Business Profile automated review pull via GBP API — **blocked**: our Google Cloud
+  project's GBP API quota request is still pending approval (`quota_limit_value: 0`), so this
+  returns nothing for every client until Google grants it
+- ~~Google Business Profile Q&A sync~~ — **CANCELLED.** Google discontinued the My Business Q&A
+  API on 2025-11-03 and is removing the public Q&A surface from Business Profiles. No vendor can
+  read or post GBP Q&A. Do not build this. (See `INTEGRATIONS.md`.)
 - Admin cross-client analytics dashboard
 - White-label reseller program
 - Mobile app (iOS / Android)
