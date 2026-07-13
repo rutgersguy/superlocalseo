@@ -64,7 +64,11 @@ export const PLAN_ROUTE_GATES: RouteGate[] = [
     plans: ['lite', 'pro'],
     subPaths: [
       { path: 'rankings/export', plans: ['pro'] },
-      { path: 'rankings/sync',   plans: ['pro'] },
+      // Lite is allowed through the route gate but gets exactly ONE manual scan ever
+      // (enforced in ranking.controller via clients.manual_scan_used_at) so a new Lite
+      // client isn't stuck waiting for the nightly job to see any data. Pro keeps the
+      // rolling 24h refresh.
+      { path: 'rankings/sync',   plans: ['lite', 'pro'] },
     ],
   },
 ];

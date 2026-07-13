@@ -80,6 +80,38 @@ describe('Plan gate — requireProPlan middleware', () => {
     }
   });
 
+  describe('Lite client — single manual rankings scan', () => {
+    it('rankings/sync is not Pro-gated for Lite (they get one scan)', () => {
+      expect(isPlanAllowed('rankings/sync', 'lite')).toBe(true);
+      expect(isPlanAllowed('rankings/sync', 'pro')).toBe(true);
+      // ...but export stays Pro-only.
+      expect(isPlanAllowed('rankings/export', 'lite')).toBe(false);
+    });
+
+    it('POST /api/rankings/sync → 403 LITE_SCAN_USED once the scan is spent', async () => {
+      const user = await db('users').where({ email: 'lite-user@example.com' }).first();
+      await db('clients').where({ user_id: user!.id }).update({ manual_scan_used_at: new Date() });
+
+      const res = await request(app)
+        .post('/api/rankings/sync')
+        .set('Authorization', `Bearer ${liteToken}`);
+
+      expect(res.status).toBe(403);
+      expect((res.body as { error?: { code?: string } }).error?.code).toBe('LITE_SCAN_USED');
+
+      // Reset so ordering can't leak into other tests.
+      await db('clients').where({ user_id: user!.id }).update({ manual_scan_used_at: null });
+    });
+
+    it('POST /api/rankings/sync → not 403 while the scan is unused', async () => {
+      const res = await request(app)
+        .post('/api/rankings/sync')
+        .set('Authorization', `Bearer ${liteToken}`);
+
+      expect(res.status).not.toBe(403);
+    });
+  });
+
   describe('Pro client — all routes pass the gate', () => {
     const proRoutes = [
       ['GET', '/api/citations'],
