@@ -1726,6 +1726,7 @@ interface BillingStatus {
   currentPeriodEnd: string | null;
   paymentFailedAt: string | null;
   publishableKey: string | null;
+  productLine: string | null;
 }
 
 interface BillingResponse {
@@ -1926,6 +1927,7 @@ function BillingTab({ onGoToLocations, isAdmin, isPlatformAdmin }: { onGoToLocat
   const isCanceled = billing.status === 'canceled';
   const needsSubscription = !isActive && !isTrialing;
   const extraLocations = Math.max(0, billing.locationCount - billing.locationsLimit);
+  const isLitePlan = billing.productLine === 'lite';
 
   const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
     active:    { label: 'Active', cls: 'bg-green-100 text-green-700' },
@@ -1945,17 +1947,48 @@ function BillingTab({ onGoToLocations, isAdmin, isPlatformAdmin }: { onGoToLocat
       <div className="border border-slate-200 rounded-xl p-5 space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-1">Current plan</p>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl font-bold text-slate-900">$349</span>
-              <span className="text-slate-500 text-sm">/mo</span>
-            </div>
-            <p className="text-xs text-slate-400 mt-0.5">+ $499 setup · $125/mo per extra location</p>
+            <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-1">
+              {isTrialing ? 'Your trial' : 'Current plan'}
+            </p>
+            {isTrialing ? (
+              // Trials run as Pro (product_line defaults to 'pro'); the plan is only chosen at
+              // checkout. Showing a price here would be quoting a plan they haven't picked.
+              <>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-3xl font-bold text-slate-900">Free trial</span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">All Pro features included · no card required</p>
+              </>
+            ) : (
+              <>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-3xl font-bold text-slate-900">{isLitePlan ? '$99' : '$349'}</span>
+                  <span className="text-slate-500 text-sm">/mo</span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {isLitePlan ? 'Lite · 1 location · no setup fee' : 'Pro · no setup fee · $125/mo per extra location'}
+                </p>
+              </>
+            )}
           </div>
           <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusInfo.cls}`}>
             {statusInfo.label}
           </span>
         </div>
+
+        {/* What happens at checkout — trials get Pro features, Lite gives some up. */}
+        {isTrialing && (
+          <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-xs text-slate-600 space-y-1.5">
+            <p className="font-medium text-slate-800">Your trial includes every Pro feature.</p>
+            <p>
+              At checkout you choose your plan. <strong>Pro ($349/mo)</strong> keeps everything you have now.{' '}
+              <strong>Lite ($99/mo)</strong> costs less but is limited to one location and drops citations,
+              geo-grid heatmaps, competitor deep-dives, SEO audits, reputation tools, team members, QR codes,
+              and CSV exports.
+            </p>
+            <p className="text-slate-500">Neither plan has a setup fee, and you can upgrade from Lite to Pro anytime.</p>
+          </div>
+        )}
 
         {/* Trial countdown */}
         {isTrialing && billing.trialDaysLeft !== null && (

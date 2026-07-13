@@ -871,7 +871,14 @@ export default function Rankings() {
                       <td className="px-6 py-3 font-medium text-slate-700">{pk.keyword}</td>
                       <td className="hidden sm:table-cell px-6 py-3 text-slate-500">{locName}</td>
                       <td className="px-6 py-3 text-right">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Awaiting scan</span>
+                        <span
+                          title={isLite
+                            ? 'Rankings are scanned automatically every night. This keyword will have results after the next scan.'
+                            : 'Rankings are scanned automatically every night. This keyword will have results after the next scan — or click Refresh to scan now.'}
+                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500 cursor-help"
+                        >
+                          Awaiting scan
+                        </span>
                       </td>
                       <td className="px-6 py-3 text-right text-slate-300 text-sm">—</td>
                       <td className="hidden sm:table-cell px-6 py-3 text-slate-300 text-sm">—</td>
@@ -884,6 +891,13 @@ export default function Rankings() {
               )}
             </tbody>
           </table>
+        )}
+        {pendingKeywords.length > 0 && (
+          <p className="px-6 py-3 text-xs text-slate-500 border-t border-slate-100">
+            {pendingKeywords.length === 1 ? '1 keyword is' : `${pendingKeywords.length} keywords are`} awaiting their first scan.
+            Rankings are scanned automatically every night, so results appear within 24 hours — no action needed
+            {isLite ? '.' : ', or click Refresh to scan now.'}
+          </p>
         )}
       </div>
 
