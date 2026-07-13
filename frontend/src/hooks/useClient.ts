@@ -10,6 +10,7 @@ export interface ClientData {
   businessName: string;
   industry: string | null;
   productLine: Plan;
+  manualScanUsed: boolean;
   onboardingStep: number;
   billing: { plan: string; status: string };
   integrations: {

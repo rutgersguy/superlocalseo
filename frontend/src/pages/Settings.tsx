@@ -1954,10 +1954,11 @@ function BillingTab({ onGoToLocations, isAdmin, isPlatformAdmin }: { onGoToLocat
               // Trials run as Pro (product_line defaults to 'pro'); the plan is only chosen at
               // checkout. Showing a price here would be quoting a plan they haven't picked.
               <>
-                <div className="flex items-baseline gap-1.5">
+                <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-bold text-slate-900">Free trial</span>
+                  <span className="text-sm text-slate-500">full Pro access</span>
                 </div>
-                <p className="text-xs text-slate-400 mt-0.5">All Pro features included · no card required</p>
+                <p className="text-xs text-slate-400 mt-0.5">No card required · subscribe whenever you're ready</p>
               </>
             ) : (
               <>
@@ -1976,17 +1977,40 @@ function BillingTab({ onGoToLocations, isAdmin, isPlatformAdmin }: { onGoToLocat
           </span>
         </div>
 
-        {/* What happens at checkout — trials get Pro features, Lite gives some up. */}
+        {/* Trials run with full Pro access; Lite is cheaper but gives features up. Show the
+            tradeoff as two comparable cards rather than a paragraph. */}
         {isTrialing && (
-          <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-xs text-slate-600 space-y-1.5">
-            <p className="font-medium text-slate-800">Your trial includes every Pro feature.</p>
-            <p>
-              At checkout you choose your plan. <strong>Pro ($349/mo)</strong> keeps everything you have now.{' '}
-              <strong>Lite ($99/mo)</strong> costs less but is limited to one location and drops citations,
-              geo-grid heatmaps, competitor deep-dives, SEO audits, reputation tools, team members, QR codes,
-              and CSV exports.
-            </p>
-            <p className="text-slate-500">Neither plan has a setup fee, and you can upgrade from Lite to Pro anytime.</p>
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-2">When your trial ends</p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div className="relative rounded-xl border-2 border-brand-500 bg-brand-50/50 p-4">
+                <span className="absolute top-3 right-3 text-[10px] font-semibold uppercase tracking-wide text-brand-700 bg-brand-100 px-2 py-0.5 rounded-full">
+                  Your trial
+                </span>
+                <p className="text-sm font-semibold text-slate-900">Pro</p>
+                <div className="flex items-baseline gap-1 mt-1">
+                  <span className="text-2xl font-bold text-slate-900">$349</span>
+                  <span className="text-xs text-slate-500">/mo</span>
+                </div>
+                <p className="text-xs text-slate-600 mt-2 leading-relaxed">Keeps everything you have today, unchanged.</p>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">Extra locations $125/mo each.</p>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-900">Lite</p>
+                <div className="flex items-baseline gap-1 mt-1">
+                  <span className="text-2xl font-bold text-slate-900">$99</span>
+                  <span className="text-xs text-slate-500">/mo</span>
+                </div>
+                <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                  Rank tracking, review monitoring with AI replies, review campaigns, monthly reports.
+                </p>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  One location. No citations, geo-grid, audits, competitors, reputation tools, team, QR codes or exports.
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-400 mt-2">No setup fee on either plan · upgrade from Lite to Pro anytime</p>
           </div>
         )}
 
@@ -2073,7 +2097,17 @@ function BillingTab({ onGoToLocations, isAdmin, isPlatformAdmin }: { onGoToLocat
         </div>
 
         {/* Action buttons */}
-        {needsSubscription ? (
+        {isTrialing ? (
+          // A trialing client has no Stripe subscription yet, so the billing portal is
+          // useless to them. Send them to the plan picker so they can end the trial and
+          // start paying whenever they want — they don't have to wait it out.
+          <a
+            href="/billing"
+            className="w-full py-2.5 rounded-lg text-sm font-semibold bg-brand-500 text-white hover:bg-brand-600 flex items-center justify-center gap-2 transition-colors"
+          >
+            Choose your plan &amp; subscribe now →
+          </a>
+        ) : needsSubscription ? (
           <button
             onClick={() => void startCheckout()}
             disabled={checkoutLoading}

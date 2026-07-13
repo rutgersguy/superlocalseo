@@ -526,7 +526,10 @@ function GeoGridPanel() {
 // ─── Main component ────────────────────────────────────────────────────────────
 
 export default function Rankings() {
-  const { isLite, loading: planLoading } = useClient();
+  const { isLite, client, loading: planLoading, mutate: mutateClient } = useClient();
+  // Lite gets a single manual scan so a new client isn't stuck waiting for the nightly
+  // job; once spent, the button goes away and only the nightly scan applies.
+  const liteScanAvailable = isLite && client?.manualScanUsed === false;
   const [searchParams] = useSearchParams();
   const [sortKey, setSortKey] = useState<SortKey>('rank');
   const [mainTab, setMainTab] = useState<MainTab>('table');
@@ -602,6 +605,8 @@ export default function Rankings() {
       if (isOk) {
         await mutateRankings();
         await mutateAllKw();
+        // Lite's single scan may now be spent — refetch so the button reflects that.
+        if (isLite) mutateClient();
       }
     } catch (e) {
       setSyncMessage({ text: (e as Error).message ?? 'Refresh failed.', ok: false });
@@ -643,13 +648,16 @@ export default function Rankings() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-900 tracking-tight">Rankings</h1>
         <div className="flex gap-1 sm:gap-2">
-          {!isLite && (
+          {(!isLite || liteScanAvailable) && (
             <button
               onClick={() => void handleSync()}
               disabled={syncing}
+              title={liteScanAvailable
+                ? 'Run your one-time scan now instead of waiting for tonight. Rankings update automatically every night after that.'
+                : undefined}
               className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
             >
-              {syncing ? 'Refreshing…' : 'Refresh'}
+              {syncing ? 'Scanning…' : liteScanAvailable ? 'Scan now' : 'Refresh'}
             </button>
           )}
           <button
@@ -896,7 +904,9 @@ export default function Rankings() {
           <p className="px-6 py-3 text-xs text-slate-500 border-t border-slate-100">
             {pendingKeywords.length === 1 ? '1 keyword is' : `${pendingKeywords.length} keywords are`} awaiting their first scan.
             Rankings are scanned automatically every night, so results appear within 24 hours — no action needed
-            {isLite ? '.' : ', or click Refresh to scan now.'}
+            {liteScanAvailable
+              ? ", or use your one-time Scan now to see results immediately."
+              : isLite ? '.' : ', or click Refresh to scan now.'}
           </p>
         )}
       </div>

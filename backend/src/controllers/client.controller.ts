@@ -44,6 +44,8 @@ function formatClient(
     businessName: client.business_name,
     industry: client.industry,
     productLine: (client.product_line as string | null) ?? 'pro',
+    // Lite gets one manual rankings scan; Pro refreshes on a 24h cooldown instead.
+    manualScanUsed: client.manual_scan_used_at != null,
     billing: {
       plan: client.subscription_tier ?? 'free',
       status: client.subscription_status ?? 'inactive',

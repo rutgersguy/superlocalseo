@@ -141,6 +141,26 @@ export async function trend(req: Request, res: Response, next: NextFunction): Pr
 
 export async function sync(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
+    // Lite gets exactly one manual scan, ever — enough to avoid waiting a full day for
+    // first results, without handing Lite the rolling refresh that Pro pays for. Tracked
+    // in the DB (not the Redis cooldown below) so a flush can't mint extra free scans.
+    const client = await db('clients')
+      .where({ id: req.clientId as string })
+      .select('product_line', 'manual_scan_used_at')
+      .first();
+
+    const isLite = client?.product_line === 'lite';
+
+    if (isLite && client?.manual_scan_used_at) {
+      err(
+        res,
+        'You have already used your one manual refresh. Rankings still update automatically every night — upgrade to Pro for on-demand refreshes.',
+        403,
+        'LITE_SCAN_USED',
+      );
+      return;
+    }
+
     const cooldownKey = `rankings:sync:cooldown:${req.clientId as string}`;
     const lastSyncStr = await redis.get(cooldownKey);
 
@@ -162,6 +182,14 @@ export async function sync(req: Request, res: Response, next: NextFunction): Pro
     await redis.set(cooldownKey, new Date().toISOString(), 'EX', 24 * 60 * 60);
 
     const result = await syncRankingsForClient(req.clientId as string);
+
+    // Only burn Lite's single scan when it actually produced data — a scan that found no
+    // keywords, or failed upstream, must not cost them their one shot.
+    if (isLite && result.snapshotsSaved > 0) {
+      await db('clients')
+        .where({ id: req.clientId as string })
+        .update({ manual_scan_used_at: new Date() });
+    }
 
     ok(res, {
       ...result,
