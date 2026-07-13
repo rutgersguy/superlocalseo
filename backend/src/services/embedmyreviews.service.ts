@@ -1,3 +1,4 @@
+import { randomInt } from 'crypto';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
@@ -224,6 +225,37 @@ export interface EMRCustomer {
   apiKey: string;
 }
 
+/**
+ * Generates the password for a client's EMR sub-account.
+ *
+ * Uses crypto.randomBytes, NOT Math.random() — Math.random is a non-cryptographic PRNG whose
+ * output is predictable from observed values, and this is a real credential handed to a
+ * customer. Kept to a guaranteed-satisfiable shape (lower + upper + digit + symbol) so EMR's
+ * password policy can't reject it.
+ */
+function generateEmrPassword(): string {
+  const LOWER = 'abcdefghijkmnopqrstuvwxyz';   // no 'l'
+  const UPPER = 'ABCDEFGHJKLMNPQRSTUVWXYZ';    // no 'I', 'O'
+  const DIGIT = '23456789';                    // no '0', '1'
+  const SYMBOL = '!@#$%^&*';
+  const ALL = LOWER + UPPER + DIGIT + SYMBOL;
+
+  const pick = (set: string): string => set[randomInt(set.length)];
+
+  // One of each class up front, then fill to 20 chars, then shuffle so the classes aren't
+  // in a predictable position.
+  const chars = [pick(LOWER), pick(UPPER), pick(DIGIT), pick(SYMBOL)];
+  while (chars.length < 20) chars.push(pick(ALL));
+
+  // Fisher-Yates with a CSPRNG source.
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+
+  return chars.join('');
+}
+
 export async function createCustomer(
   businessName: string,
   email: string,
@@ -231,7 +263,7 @@ export async function createCustomer(
   const operatorKey = config.embedmyreviews.agencyKey || config.embedmyreviews.apiKey;
   if (!operatorKey) throw new Error('EMBEDMYREVIEWS_AGENCY_KEY not configured');
 
-  const password = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10).toUpperCase() + '!1';
+  const password = generateEmrPassword();
 
   // Try with plain business name first; fall back to "Name (email)" if company name is taken.
   for (const company of [businessName, `${businessName} (${email})`]) {

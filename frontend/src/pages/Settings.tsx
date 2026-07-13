@@ -2284,8 +2284,12 @@ export default function Settings() {
         {/* Integrations tab */}
         {activeTab === 'integrations' && (
           <div className="space-y-4">
-            {/* EMR credentials — operator admin only */}
-            {isPlatformAdmin && <EMRCredentialsCard />}
+            {/* Every client needs these — the review portal is where they link their Google,
+                Yelp and Facebook profiles, and without that EMR has nothing to sync. This was
+                gated to operator admins, which meant normal clients were never shown the
+                account we provisioned for them. (The endpoint was never admin-gated anyway —
+                only the UI hid it, so this protected nothing.) */}
+            <EMRCredentialsCard />
             {/* Google's Q&A API was discontinued 2025-11-03 (no vendor can read/post GBP Q&A),
                 and business-info write-back is not built — so neither is advertised here.
                 Review sync stays pending until our GBP API quota request is approved. */}
