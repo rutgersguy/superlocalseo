@@ -126,6 +126,42 @@ BRIGHTLOCAL_API_KEY=            # Data API key
 - Campaign management (email + SMS review request funnels)
 - Smart review gating: happy customers → public review link; unhappy → private feedback form
 
+### ⚠️ The API is much larger than what we wrap (audited 2026-07-13)
+
+Our `embedmyreviews.service.ts` wraps a small fraction of the documented API
+(https://www.embedmyreviews.com/docs/api/ — note `api.embedmyreviews.com` is a misleadingly
+thin stub). Findings that change the architecture:
+
+**`POST /api/agency/v1/connect-links` — solves the second-login problem.** Mints a single-use,
+location-scoped OAuth link ("no platform login"). We hand the `connect_url` to the client in
+*our* branding via *our* email; they sign in with Google directly and never see EMR. Lifecycle
+fields (`status`, `completed_oauth_at`, `expires_at`) let us poll for completion; companion
+endpoints list/revoke. `send_google_connect_link` can also be set at customer creation.
+**Blocker:** it requires an EMR `location_id`, and the docs reference `/api/v1/locations` but
+never document it. Open question with their support.
+
+**EMR CANNOT publish a review reply to Google via API.** `PUT /api/v1/reviews/{id}` has no
+`reply` field and 403s on synced (Google/Facebook) reviews. The only reply-write surface is an
+MCP tool, `draft_review_response`, whose drafts are "always held for agency approval and never
+auto-sent" — a human must approve in the EMR UI. Live posting requires an Auto-Respond rule with
+approval disabled, which is UI-only configuration we cannot script.
+
+**Google replies require Grant Access, not Public Access.** Public Access (Place ID, no auth)
+explicitly does not support direct replies.
+
+**Likely (INFERRED, not confirmed): EMR holds its own approved GBP project.** They serve
+`GET /api/v1/gbp/metrics` and `/gbp/search-terms` (impressions, call clicks, direction requests)
+— surfaces that require Google-approved GBP access and are not obtainable from the Places API.
+If true, routing through EMR **sidesteps our pending quota entirely**. No EMR doc states this.
+**Confirm before architecting around it** — see Open vendor questions.
+
+### Known bug in our wrapper
+
+`suspendCustomer()` calls `POST /customers/{id}/suspend`; the documented endpoint is
+**`PUT /api/agency/v1/customers/{customer}/pause`** (counterpart: `/resume`). The function
+swallows failures as a non-fatal warning, so this fails **silently** on every cancellation.
+Not yet fixed.
+
 ### Endpoints Used
 
 | Operation | Endpoint | When |
@@ -231,6 +267,43 @@ On success: creates or updates `users` record, sets `google_id`, issues JWT + re
 
 On success: stores OAuth access token + refresh token in `integrations` table (encrypted at rest).
 
+> **⚠️ CURRENTLY INERT — GBP API quota approval is PENDING (as of 2026-07-13).**
+>
+> Our Google Cloud project (`724720371422`) has `quota_limit_value: 0` on
+> `mybusinessaccountmanagement.googleapis.com`. Clients can complete the OAuth flow and the
+> integration shows as connected, but **`syncGBPReviews` returns nothing for every client** —
+> including freshly-connected, healthy ones. This is a Google-side approval blocker, not a
+> code bug. Until it clears, GBP review sync delivers zero value.
+>
+> **What we hold the `business.manage` scope for but never use:** we only ever READ. Nothing
+> in the codebase posts a review reply back to Google (`reviewReply` is never called). The AI
+> draft flow in `Reviews.tsx` tells the user to copy/paste the text themselves. The only code
+> that actually publishes a reply is the BrightLocal path in `reputation.controller.ts`.
+>
+> **Q&A and business-info sync are NOT available through this integration** — see below.
+
+### ❌ GBP Q&A — DEAD, DO NOT BUILD
+
+Google **discontinued the My Business Q&A API on 2025-11-03**:
+
+> "On November 3, 2025, we will be discontinuing the My Business Q&A API… You can no longer
+> read or post questions and answers using the API."
+> — https://developers.google.com/my-business/content/qanda/change-log
+
+Google is also removing the public Q&A section from Business Profiles, replacing it with AI
+answers. **No vendor can do this** — not BrightLocal, not EmbedMyReviews, not Yext. It is not a
+"later" item; it does not exist. Product copy advertising Q&A sync was removed in PR #123.
+
+### GBP business-info sync — only via BrightLocal Active Sync
+
+Writing business info (categories, hours, description, attributes, NAP) to GBP is **not built**
+and cannot be built directly while our quota is pending. The viable path is **BrightLocal Active
+Sync / the Listings Management API**, which executes writes against **BrightLocal's own approved
+Google project** — so our `quota_limit_value: 0` never enters the picture. It does *not* remove
+the client OAuth step; the client consents to BrightLocal instead of to us.
+
+See `API_GAPS.md` BL-7 and **Open vendor questions** below.
+
 ### Console Setup
 
 1. Google Cloud Console → Create Project → Enable: **Google+ API**, **Google Business Profile API**
@@ -330,6 +403,53 @@ Used for all transactional email.
 2. Backend DSN → `SENTRY_DSN` in `.env.prod`
 3. Frontend DSN → `VITE_SENTRY_DSN` in `frontend/.env.production`
 4. Set up Sentry alerts: email on first occurrence of new error type; Slack on volume spike.
+
+---
+
+## Open vendor questions (sent 2026-07-13, awaiting reply)
+
+These gate the review/GBP architecture. **Do not build around the inferred answers.**
+
+### EmbedMyReviews
+
+1. **How do we create/list locations via API?** The docs cite `/api/v1/locations` but never
+   document it — and `connect-links` is unusable without a `location_id`.
+2. **Can a reply be published to Google via API** without a human approving in the EMR UI
+   (e.g. an Auto-Respond rule with approval disabled, or an undocumented reply endpoint)?
+3. **Do you hold your own approved Google Business Profile API access**, so our customers'
+   reviews/replies/metrics flow through your Google project and not ours? ← **most important**;
+   if yes, we can sideline our own (quota-blocked) GBP connection entirely.
+
+### BrightLocal
+
+1. **Can the GBP OAuth connect be initiated via API**, or is it UI-only? If UI-only, our clients
+   hit a second, differently-branded login and it punches a hole in our white-label UX.
+   (EMR solves this with `connect-links` — see above.) ← **deal-shaping**
+2. **Which plan tier does the Listings Management API require?** Their API Solutions page says
+   Grow; their help center says Track/Manage. The docs conflict.
+3. **What are the per-request API fees** on top of the plan subscription?
+4. **Confirm Active Sync writes via BrightLocal's own approved Google project** (i.e. our
+   pending quota is irrelevant to it).
+5. **Actual pricing** at 10 / 50 / 100 locations — their pricing page renders per-location
+   prices behind a JS slider and shows "Price on request".
+6. Smaller: does Active Sync push **photos**, or text fields only? Does **Reputation Manager**
+   post replies live to Google, and does that need the client's Google OAuth?
+
+### What we know without them
+
+| Question | Status |
+|---|---|
+| GBP Q&A | ❌ **Dead.** Google killed the API 2025-11-03. No vendor can do it. Do not build. |
+| GBP business-info write | ✅ Possible via BrightLocal Active Sync (their approved Google project) |
+| GBP review sync (ours) | ⛔ Blocked on our pending Google quota approval |
+| Reply publishing to Google | ⚠️ Not possible via EMR API. Only BrightLocal Reputation Manager posts replies today. |
+| Second-login friction (EMR) | ✅ Solvable via `connect-links` — pending the `locations` endpoint answer |
+| BrightLocal pricing | ❓ ~$9/location/mo is a **third-party estimate, unverified**. Plus unknown API fees. We are on a **free** account today — this is new spend. |
+
+**Throttled-sync note:** rate limits are a non-issue (BrightLocal allows 100 writes/min; 100
+locations synced monthly is ~4 orders of magnitude of headroom). But throttling **saves nothing**
+— Active Sync is priced per *location subscription*, not per API call. Cost is the constraint,
+not throughput. Sync as often as is useful.
 
 ---
 

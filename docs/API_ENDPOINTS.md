@@ -311,7 +311,13 @@ Historical rank series for a specific keyword.
 ---
 
 ### `POST /rankings/sync`
-**Requires:** team admin. Queues an immediate ranking pull (subject to 24h cooldown).
+**Requires:** team admin.  Queues an immediate ranking pull.
+
+Plan-dependent:
+- **Pro** — rolling refresh, 24h cooldown (`429 SYNC_COOLDOWN` while the Redis key is live).
+- **Lite** — **one manual scan, ever.** Returns `403 LITE_SCAN_USED` once spent. Tracked in
+  `clients.manual_scan_used_at`; only marked used when the scan actually saved snapshots, so a
+  no-keyword or failed run doesn't cost the client their one shot. See `FEATURES.md` §7.
 
 ---
 

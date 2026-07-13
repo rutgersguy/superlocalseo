@@ -41,8 +41,8 @@ Monorepo: `backend/` (Express API) + `frontend/` (React SPA) + `nginx.conf` prox
 **External APIs:**
 - **BrightLocal Data API** (`api.brightlocal.com`, `x-api-key` header, pay-per-request) — rankings (5 engines), geo-grid heatmap (coordinate-based), citation auditing (per-directory listing find). No subscription or campaign ID required.
 - **BrightLocal Management API** (`tools.brightlocal.com`) — citation submission to 40+ directories only. Requires paid BL plan — pending confirmation. Not currently in use; guided manual workflow is the active fallback.
-- **EmbedMyReviews** — review aggregation, 6h polling + webhook.
-- **Google OAuth** — sign-in + Business Profile connect (separate scopes).
+- **EmbedMyReviews** — review aggregation, 6h polling + webhook. We wrap only a fraction of their API; `connect-links` (branded OAuth handoff) and `/gbp/metrics` exist and are unused. **No API path publishes a reply to Google.** See `docs/INTEGRATIONS.md`.
+- **Google OAuth** — sign-in + Business Profile connect (separate scopes). ⚠️ **GBP review sync is currently INERT: our Google Cloud project's GBP API quota request is still pending approval (`quota_limit_value: 0`), so it returns nothing for every client.** We hold the `business.manage` (write) scope but only ever read — nothing posts replies back to Google. **GBP Q&A is dead: Google discontinued the API 2025-11-03. Do not build it.**
 - **Stripe** — subscriptions + per-location billing.
 - **Resend** — transactional email + monthly report delivery.
 - **Puppeteer/Chromium** — PDF report generation (Alpine: `apk add chromium`, `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser`).
@@ -63,7 +63,8 @@ Monorepo: `backend/` (Express API) + `frontend/` (React SPA) + `nginx.conf` prox
 - **`docker compose restart` does not apply volume changes.** Use `docker compose up -d --force-recreate <service>` after editing `docker-compose.yml`.
 - **Static assets** in `frontend/public/` are served by Vite at `/`. Both `frontend/src` and `frontend/public` are bind-mounted into the web container.
 - **Workers** are enabled by default. Setting `DISABLE_WORKERS=true` in the API environment will silently stop all background jobs (rankings pulls, report generation, etc.).
-- **Rankings cooldown** key: `rankings:sync:cooldown:{clientId}` in Redis — stores the ISO timestamp of last manual trigger, enforces 24h window.
+- **Rankings cooldown** key: `rankings:sync:cooldown:{clientId}` in Redis — stores the ISO timestamp of last manual trigger, enforces 24h window (**Pro**). **Lite gets exactly ONE manual scan, ever**, tracked in `clients.manual_scan_used_at` — deliberately in Postgres, **not** Redis, so a cache flush can't mint free scans. It's only marked used when the scan actually saved snapshots (a no-keyword or failed run must not cost their one shot).
+- **Never hardcode prices or the setup fee in UI.** Derive from `productLine`. This has shipped to prod twice (#113, #125). The $499 setup fee is **waived** (`STRIPE_SETUP_FEE_ENABLED` unset) and trials run as **Pro** — so a trialing client has not chosen a plan and must not be shown one as "theirs". See `docs/PRICING.md`.
 - **BrightLocal dual-API**: Data API and Management API are completely separate base URLs and auth headers. Data API uses `x-api-key` header on `api.brightlocal.com`. Management API (not currently active) uses `api-key` query param on `tools.brightlocal.com`. Never mix them up.
 - **PDF reports** use `page-break-before: always` CSS for section breaks. Body background must be `#ffffff` (not `#f3f4f6`) to avoid grey bleed areas.
 

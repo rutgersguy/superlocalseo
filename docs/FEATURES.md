@@ -330,6 +330,33 @@ Rankings data flows from BrightLocal via the daily pull job. BrightLocal runs se
 
 All results are stored as **immutable snapshots** in `ranking_snapshots` — historical data is never overwritten, enabling trend analysis over any date range.
 
+### Manual scan — plan behaviour (`POST /api/rankings/sync`)
+
+The automatic scan runs nightly (`0 6 * * *`, the API container is UTC → ~1:00 AM US Central), and
+`processRankings` fans out across every client whose `subscription_status` is not `canceled` or
+`past_due`. A newly added keyword therefore populates on its own within 24 hours — no user action
+is required. The UI says so explicitly (an "Awaiting scan" chip plus a note under the table);
+don't remove that copy without replacing the explanation.
+
+| Plan | Manual scan |
+|---|---|
+| **Pro** | Rolling refresh, 24h cooldown (Redis key `rankings:sync:cooldown:{clientId}`) |
+| **Lite** | **Exactly one manual scan, ever** — then `403 LITE_SCAN_USED` |
+
+Lite was previously blocked from `rankings/sync` entirely, which meant a new Lite client had to
+wait for the nightly job to see *any* data at all. They now get a single "Scan now" (PR #126).
+
+Two deliberate design choices, both load-bearing:
+
+- **The scan is tracked in `clients.manual_scan_used_at` (Postgres), NOT in Redis.** Pro's cooldown
+  lives in Redis, but Lite's one-shot must not be resettable by a cache flush — that would mint
+  unlimited free scans for every Lite account.
+- **The scan is only marked used when it actually saved snapshots** (`result.snapshotsSaved > 0`).
+  A run that finds no keywords, or fails upstream at DataForSEO, must not cost the client their
+  one shot.
+
+`GET /clients` exposes `manualScanUsed` so the frontend knows whether to render the button.
+
 ### Rankings API
 
 **`GET /api/rankings`**

@@ -13,6 +13,39 @@
 - Stripe prices (sandbox): Lite `STRIPE_LITE_BASE_PRICE_ID` ($99/mo) · Pro base $349/mo · setup $499 (anchor only, not charged) · additional location $125/mo. The flip is driven by the `invoice.payment_succeeded` webhook.
 - Enforcement architecture: `config/planFeatures.ts` capability map + `requireProPlan`/`enforcePlanGate`. See [LITE_PRO_PROGRESS.md](LITE_PRO_PROGRESS.md).
 
+### ⚠️ Where pricing is displayed — keep these in sync
+
+Hardcoded pricing has shipped to production **twice** (PR #113: `BillingPage` checkout summary
+was hardcoded to Pro and charged Lite users the wrong displayed amount; PR #125: the Settings
+"Current plan" card quoted **$349 + the waived $499 setup fee to trialing users**, who have not
+picked a plan at all). **Derive from `productLine`; never hardcode a price or a setup fee.**
+
+| Surface | File | Notes |
+|---|---|---|
+| Checkout summary | `BillingPage.tsx` | Derives from `planForCheckout` via the `PLAN_DETAILS` map — display must equal charge |
+| Current-plan card | `Settings.tsx` (BillingTab) | Reads `productLine` from `/billing/status` |
+| Trial upsell banner | `Dashboard.tsx` | "from $99/mo · No setup fee" |
+| Registration plan picker | `Register.tsx` | |
+| Landing page + FAQ | `Landing.tsx` | |
+| `BillingWall.tsx` | — | **Dead code — unrouted.** Its checkout call POSTs no `plan`, so the backend defaults to `'pro'`: reviving it as-is would bill Pro with no chance to pick Lite. |
+
+### Trial UX (Option B funnel)
+
+Trials run with **full Pro access** (`product_line` is `NOT NULL DEFAULT 'pro'`, so it is never
+null — the `?? 'pro'` fallback in `billing.controller.ts` is dead defensive code). The plan is
+chosen **at checkout**, and `product_line` only flips to `lite` on a paid Lite invoice.
+
+Because of this, **a trialing client must never be shown a plan price as though it were "their"
+plan** — they haven't chosen one. Settings → Billing shows "Free with full Pro Access" plus two
+comparable plan cards (Pro badged as what the trial already gives them, Lite beside it with what
+it costs and what it gives up).
+
+**Subscribing early:** the backend has always allowed it (`checkout` / `subscription-intent` do
+not check trial status) — but the UI didn't offer it. Settings → Billing now links to
+`/billing?subscribe=1`, which seeds `proceedEarly` and skips the early-trial soft landing.
+Without that flag, `/billing` shows a "you're on a free trial, no payment needed yet" splash to
+anyone with >3 days left, which is a dead end for someone who just clicked "subscribe now".
+
 ---
 
 ## Legacy Tier 1/2/3 model (SUPERSEDED — kept for unit-economics reference)
