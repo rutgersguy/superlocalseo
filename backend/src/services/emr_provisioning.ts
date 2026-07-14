@@ -5,50 +5,84 @@ import { logger } from '../utils/logger';
 import {
   deleteCustomer,
   suspendCustomer,
+  createOrganization,
+  renameLocation,
   createLocation,
-  listOrganizations,
 } from './embedmyreviews.service';
 
 /**
- * Ensures the client has its OWN EMR location, and returns its id.
+ * Ensures the client has its OWN EMR organization AND location. Returns the location id.
  *
- * This is the unit of tenancy. The agency operator key is the only key we can use (EMR mints
- * per-customer tokens in its dashboard only, and an agency token can't scope to a customer's
- * data), so isolation has to come from the location: `connect-links` attaches a client's
- * Google profile to a location, and `GET /reviews?location_id=` reads back only that
- * client's reviews. Without this every client shared the org-wide review set.
+ * BOTH are required, because EMR scopes the two things we sync differently:
+ *   - reviews   filter by location_id
+ *   - campaigns filter by organization_id  (there is NO location filter)
+ * so a client sharing an organization cannot have isolated campaigns, and a client sharing a
+ * location cannot have isolated reviews.
  *
- * Idempotent — returns the stored id if one already exists.
+ * Every client used to live in the single agency org (id 1), which meant campaigns could not
+ * be isolated at all — reviews.job had to refuse to sync them. Each client now gets a
+ * dedicated org; EMR auto-creates a "Default Location" inside it, which we rename and use.
+ *
+ * A location CANNOT be moved between organizations — PUT /locations/{id} accepts
+ * organization_id, returns 200, and silently ignores it (verified 2026-07-14). So a client
+ * stuck in the shared org must be re-provisioned into a fresh org + location, which means
+ * reconnecting Google. `force` opts into that.
+ *
+ * Idempotent: returns the stored location when the client already has a dedicated org.
  */
-export async function ensureEmrLocation(clientId: string): Promise<number | null> {
+export async function ensureEmrTenancy(clientId: string, force = false): Promise<number | null> {
   const client = await db('clients').where({ id: clientId }).first();
   if (!client) throw new Error(`Client ${clientId} not found`);
 
-  if (client.emr_location_id) return client.emr_location_id as number;
-
   const operatorKey = config.embedmyreviews.apiKey;
   if (!operatorKey) {
-    logger.warn('EMR not configured — cannot provision location', { clientId });
+    logger.warn('EMR not configured — cannot provision tenancy', { clientId });
     return null;
   }
 
-  const orgs = await listOrganizations(operatorKey);
-  const org = orgs[0];
-  if (!org) throw new Error('EMR: no organization on the agency account');
+  const orgId = client.emr_organization_id as number | null;
+  const locationId = client.emr_location_id as number | null;
 
-  // Name it so a human staring at the EMR dashboard can tell whose location this is.
+  if (!force && orgId && locationId) {
+    // Only trust it if the org is genuinely this client's alone. Anything shared cannot
+    // isolate campaigns.
+    const others = await db('clients')
+      .where({ emr_organization_id: orgId })
+      .whereNot({ id: clientId })
+      .count('* as n')
+      .first();
+    if (Number(others?.n ?? 0) === 0) return locationId;
+
+    logger.warn('Client sits in a SHARED EMR organization — re-provisioning into its own', {
+      clientId, organizationId: orgId,
+    });
+  }
+
   const label = `${(client.business_name as string) ?? 'Client'} [${clientId.slice(0, 8)}]`;
-  const location = await createLocation(operatorKey, org.id, label);
+
+  const org = await createOrganization(operatorKey, label);
+  let newLocationId = org.defaultLocationId;
+
+  if (newLocationId) {
+    await renameLocation(operatorKey, newLocationId, label);
+  } else {
+    // Shouldn't happen (EMR auto-creates one), but don't leave the client without a location.
+    const created = await createLocation(operatorKey, org.id, label);
+    newLocationId = created.id;
+  }
 
   await db('clients').where({ id: clientId }).update({
-    emr_organization_id: location.organizationId,
-    emr_location_id: location.id,
+    emr_organization_id: org.id,
+    emr_location_id: newLocationId,
     updated_at: new Date(),
   });
 
-  logger.info('EMR location provisioned', { clientId, locationId: location.id, orgId: location.organizationId });
-  return location.id;
+  logger.info('EMR tenancy provisioned', { clientId, organizationId: org.id, locationId: newLocationId });
+  return newLocationId;
 }
+
+/** @deprecated Use ensureEmrTenancy — a location alone does not isolate campaigns. */
+export const ensureEmrLocation = ensureEmrTenancy;
 
 /**
  * Returns the EMR API key to use for a given client.
@@ -101,7 +135,7 @@ export async function provisionClient(clientId: string): Promise<void> {
   const now = new Date();
 
   try {
-    await ensureEmrLocation(clientId);
+    await ensureEmrTenancy(clientId);
     await db('clients').where({ id: clientId }).update({
       emr_provisioning_status: 'provisioned',
       updated_at: now,
