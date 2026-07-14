@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import useSWR from 'swr';
-import EMRSetupBanner, { CredentialsModal } from '../components/EMRSetupBanner';
+import EMRSetupBanner from '../components/EMRSetupBanner';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer,
@@ -318,7 +318,7 @@ function PostReplyModal({ review, onClose, onPosted }: { review: Review; onClose
 
 // ─── Review card ──────────────────────────────────────────────────────────────
 
-function ReviewCard({ review, onReplyPosted, onOpenCreds }: { review: Review; onReplyPosted: () => void; onOpenCreds: () => void }) {
+function ReviewCard({ review, onReplyPosted }: { review: Review; onReplyPosted: () => void }) {
   const [showResponse, setShowResponse] = useState(false);
   const [showReplyModal, setShowReplyModal] = useState(false);
 
@@ -377,15 +377,7 @@ function ReviewCard({ review, onReplyPosted, onOpenCreds }: { review: Review; on
             >
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
-          ) : (
-            <button
-              onClick={onOpenCreds}
-              className="p-1.5 text-slate-400 hover:text-brand-500 hover:bg-brand-50 rounded-lg transition-colors"
-              title="Open Review Management"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-            </button>
-          )}
+          ) : null}
           <button
             onClick={() => setShowResponse((v) => !v)}
             className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
@@ -408,13 +400,11 @@ function FeedbackTab() {
   const { data, isLoading } = useSWR<{ success: boolean; data: { feedback: any[]; total: number } }>('/reviews/feedback', fetcher);
   const feedback = data?.data?.feedback ?? [];
   const total = data?.data?.total ?? 0;
-  const [showCredsModal, setShowCredsModal] = useState(false);
 
   if (isLoading) return <div className="text-sm text-slate-500">Loading...</div>;
 
   return (
     <>
-      {showCredsModal && <CredentialsModal onClose={() => setShowCredsModal(false)} />}
       {feedback.length === 0 ? (
         <div className="text-center py-16 text-slate-400">
           <p className="font-medium text-slate-600 mb-1">No private feedback yet</p>
@@ -441,13 +431,7 @@ function FeedbackTab() {
                   <span className="text-xs text-slate-400 whitespace-nowrap">
                     {new Date(f.receivedAt).toLocaleDateString()}
                   </span>
-                  <button
-                    onClick={() => setShowCredsModal(true)}
-                    className="p-1.5 text-slate-400 hover:text-brand-500 hover:bg-brand-50 rounded-lg transition-colors"
-                    title="Open Review Management"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </button>
+
                 </div>
               </div>
             </div>
@@ -472,7 +456,6 @@ export default function Reviews() {
   const [rating, setRating] = useState('All');
   const [status, setStatus] = useState('All');
   const [search, setSearch] = useState('');
-  const [showCredsModal, setShowCredsModal] = useState(false);
   const [trendRange, setTrendRange] = useState<TrendRange>(30);
 
   const params = new URLSearchParams();
@@ -507,7 +490,6 @@ export default function Reviews() {
 
   return (
     <div className="space-y-6">
-      {showCredsModal && <CredentialsModal onClose={() => setShowCredsModal(false)} />}
       {showEMRBanner && <EMRSetupBanner context="reviews" />}
       <div>
         <div className="flex items-center justify-between">
@@ -518,12 +500,7 @@ export default function Reviews() {
               className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
               Export CSV
             </button>
-            <button
-              onClick={() => setShowCredsModal(true)}
-              className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors flex items-center gap-1.5"
-            >
-              Review Management <ExternalLink className="w-3.5 h-3.5" />
-            </button>
+
           </div>
         </div>
         <p className="text-sm text-slate-500 mt-1">Manage and monitor customer reviews across platforms</p>
@@ -641,7 +618,7 @@ export default function Reviews() {
             </div>
           ) : (
             <div className="grid gap-4">
-              {reviews.map((review) => <ReviewCard key={review.id} review={review} onReplyPosted={() => void mutateReviews()} onOpenCreds={() => setShowCredsModal(true)} />)}
+              {reviews.map((review) => <ReviewCard key={review.id} review={review} onReplyPosted={() => void mutateReviews()} />)}
             </div>
           )}
         </>

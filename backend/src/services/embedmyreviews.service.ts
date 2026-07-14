@@ -143,6 +143,84 @@ export async function fetchAllReviews(apiKey: string, locationId?: string): Prom
   return all;
 }
 
+export interface EMRConnectLink {
+  token: string;
+  provider: 'google' | 'facebook';
+  locationId: number;
+  connectUrl: string;
+  status: 'active' | 'used' | 'expired' | 'revoked';
+  completedOauthAt: string | null;
+  expiresAt: string | null;
+}
+
+function mapConnectLink(d: Record<string, unknown>): EMRConnectLink {
+  return {
+    token: String(d.token),
+    provider: d.provider as 'google' | 'facebook',
+    locationId: Number(d.location_id),
+    connectUrl: String(d.connect_url),
+    status: (d.status as EMRConnectLink['status']) ?? 'active',
+    completedOauthAt: (d.completed_oauth_at as string | null) ?? null,
+    expiresAt: (d.expires_at as string | null) ?? null,
+  };
+}
+
+/**
+ * Mints a single-use, location-scoped OAuth link for a client to connect Google (or
+ * Facebook) to THEIR EMR location.
+ *
+ * This is what replaces both dead ends we had:
+ *   - our own Google OAuth, which is inert while our GBP API quota approval is pending;
+ *   - the "log into the review portal" credentials card, which attaches the profile to the
+ *     client's SUB-ACCOUNT org — data our agency key cannot read (see migration
+ *     20260714000000).
+ *
+ * The returned connect_url is on our white-label domain (app.superlocalseo.com/connect/...),
+ * so the client never sees EMR branding, and EMR's own Google API approval does the work —
+ * ours is not required.
+ *
+ * EMR allows ONE active link per (location, provider); re-issuing auto-revokes the previous.
+ */
+export async function createConnectLink(
+  apiKey: string,
+  provider: 'google' | 'facebook',
+  locationId: number,
+  ttlDays = 14,
+): Promise<EMRConnectLink> {
+  const res = await emrFetch('/connect-links', apiKey, {
+    method: 'POST',
+    body: JSON.stringify({ provider, location_id: locationId, ttl_days: ttlDays }),
+  }, AGENCY_BASE_URL());
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`EMR createConnectLink failed: ${res.status} ${body}`);
+  }
+
+  const json = await res.json() as { data?: Record<string, unknown> };
+  if (!json.data) throw new Error('EMR createConnectLink: no data in response');
+  return mapConnectLink(json.data);
+}
+
+/** Lists connect links for a location, so we can report whether the client finished OAuth. */
+export async function listConnectLinks(
+  apiKey: string,
+  locationId: number,
+  provider?: 'google' | 'facebook',
+): Promise<EMRConnectLink[]> {
+  const params = new URLSearchParams({ location_id: String(locationId) });
+  if (provider) params.set('provider', provider);
+
+  const res = await emrFetch(`/connect-links?${params.toString()}`, apiKey, {}, AGENCY_BASE_URL());
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`EMR listConnectLinks failed: ${res.status} ${body}`);
+  }
+
+  const json = await res.json() as { data?: Array<Record<string, unknown>> };
+  return (json.data ?? []).map(mapConnectLink);
+}
+
 export interface EMROrganization {
   id: number;
   name: string;

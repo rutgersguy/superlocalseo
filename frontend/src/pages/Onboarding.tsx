@@ -135,6 +135,7 @@ export default function Onboarding() {
 
   // Step 4 state
   const [googleConnecting, setGoogleConnecting] = useState(false);
+  const [googleConnectStarted, setGoogleConnectStarted] = useState(false);
   const [provisioning, setProvisioning] = useState(false);
   const [gbpInfoOpen, setGbpInfoOpen] = useState(false);
 
@@ -401,11 +402,21 @@ export default function Onboarding() {
 
   // ── Step 4 helpers ──────────────────────────────────────────────────────────
 
+  // Connect Google through EMR's connect-link, not our own OAuth. EMR holds approved Google
+  // Business Profile API access, so the client consents to EMR's Google project and reviews
+  // flow immediately — our own GBP quota request is still pending at Google and syncs nothing.
+  // Opens in a new tab so the client doesn't lose their place in onboarding.
   const connectGoogle = async () => {
     setGoogleConnecting(true);
     try {
-      const res = await apiFetch<{ success: boolean; data: { url: string } }>('/integrations/google/auth-url');
-      if (res.success && res.data?.url) window.location.href = res.data.url;
+      const res = await apiFetch<{ success: boolean; data: { connectUrl: string | null } }>(
+        '/integrations/emr/google/connect-link',
+        { method: 'POST' },
+      );
+      if (res.success && res.data?.connectUrl) {
+        window.open(res.data.connectUrl, '_blank', 'noopener,noreferrer');
+        setGoogleConnectStarted(true);
+      }
     } finally {
       setGoogleConnecting(false);
     }
@@ -721,9 +732,9 @@ export default function Onboarding() {
                   <div>
                     <h3 className="text-sm font-semibold text-gray-900">
                       Google Business Profile
-                      <FieldTooltip content="Connecting your Google Business Profile lets us pull your reviews directly and improves Google's confidence in your listing data. Review syncing switches on as soon as Google approves our API access — connecting now means it starts the moment that lands. You can also connect later in Settings → Integrations." />
+                      <FieldTooltip content="Sign in with the Google account that manages your Business Profile. We'll pull your reviews in automatically and let you reply to them from your dashboard. You can also connect later in Settings → Integrations." />
                     </h3>
-                    <p className="text-xs text-gray-500 mt-0.5">Connect now to sync your Google reviews — activates as soon as Google approves our API access</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Sync your Google reviews and reply to them from your dashboard</p>
                   </div>
                 </div>
                 <button
@@ -731,8 +742,13 @@ export default function Onboarding() {
                   disabled={googleConnecting}
                   className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50"
                 >
-                  {googleConnecting ? 'Redirecting...' : 'Connect Google'}
+                  {googleConnecting ? 'Opening Google…' : googleConnectStarted ? 'Connect again' : 'Connect Google'}
                 </button>
+                {googleConnectStarted && (
+                  <p className="text-xs text-gray-500">
+                    Finish signing in with Google in the new tab — you can carry on here in the meantime.
+                  </p>
+                )}
 
                 {/* No GBP yet? collapsible */}
                 <div className="border-t border-gray-100 pt-3">
