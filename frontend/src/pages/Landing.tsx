@@ -42,7 +42,7 @@ const faqs = [
   },
   {
     q: 'What do I need to get started?',
-    a: 'Just your business info. Rank tracking and citation monitoring activate automatically — no extra tools or accounts needed on your end. During onboarding you can also connect your Google Business Profile, which starts syncing your Google reviews as soon as Google approves our API access.',
+    a: 'Just your business info and a Google account. Rank tracking and citation monitoring activate automatically — no extra tools needed on your end. During onboarding you connect your Google Business Profile, which starts syncing your reviews and lets you reply to them straight from your dashboard.',
   },
   {
     q: 'Can I add locations over time?',

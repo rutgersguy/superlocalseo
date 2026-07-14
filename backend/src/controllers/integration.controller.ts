@@ -3,6 +3,84 @@ import { db } from '../db/connection';
 import { ok, noContent, notFound, err } from '../utils/response';
 import { config } from '../config';
 import { logger } from '../utils/logger';
+import { createConnectLink, listConnectLinks } from '../services/embedmyreviews.service';
+import { ensureEmrLocation } from '../services/emr_provisioning';
+
+/**
+ * GET  /integrations/emr/google/connect-link — status of the client's Google connection
+ * POST /integrations/emr/google/connect-link — mint a fresh branded OAuth link
+ *
+ * This is how a client connects Google now. It replaces two dead ends:
+ *   - our own Google OAuth, inert while our GBP API quota request is pending at Google;
+ *   - "log into the review portal", which attaches the profile to the client's EMR
+ *     sub-account org — data our agency key cannot read.
+ *
+ * EMR holds its own approved Google Business Profile API access, so the client consents to
+ * EMR's Google project rather than ours, and the reviews land on OUR location (which we can
+ * read). The link lives on app.superlocalseo.com, so no EMR branding is visible.
+ */
+async function loadEmrConnectState(clientId: string) {
+  const operatorKey = config.embedmyreviews.apiKey;
+  if (!operatorKey) return null;
+
+  const locationId = await ensureEmrLocation(clientId);
+  if (!locationId) return null;
+
+  const links = await listConnectLinks(operatorKey, locationId, 'google');
+  // A completed OAuth is the signal that Google is actually linked to this location.
+  const completed = links.find((l) => l.completedOauthAt !== null);
+  const active = links.find((l) => l.status === 'active');
+
+  return { operatorKey, locationId, links, completed, active };
+}
+
+export async function getEmrGoogleConnectLink(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const state = await loadEmrConnectState(req.clientId as string);
+    if (!state) {
+      err(res, 'Review platform is not configured', 503, 'NOT_CONFIGURED');
+      return;
+    }
+
+    ok(res, {
+      connected: !!state.completed,
+      connectedAt: state.completed?.completedOauthAt ?? null,
+      connectUrl: state.active?.connectUrl ?? null,
+      expiresAt: state.active?.expiresAt ?? null,
+    });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function createEmrGoogleConnectLink(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const state = await loadEmrConnectState(req.clientId as string);
+    if (!state) {
+      err(res, 'Review platform is not configured', 503, 'NOT_CONFIGURED');
+      return;
+    }
+
+    if (state.completed) {
+      ok(res, { connected: true, connectedAt: state.completed.completedOauthAt, connectUrl: null });
+      return;
+    }
+
+    // EMR allows one active link per (location, provider) and auto-revokes the previous on
+    // re-issue, so minting again is safe and always hands back a usable URL.
+    const link = await createConnectLink(state.operatorKey, 'google', state.locationId);
+
+    logger.info('EMR Google connect link minted', {
+      clientId: req.clientId,
+      locationId: state.locationId,
+      expiresAt: link.expiresAt,
+    });
+
+    ok(res, { connected: false, connectUrl: link.connectUrl, expiresAt: link.expiresAt });
+  } catch (e) {
+    next(e);
+  }
+}
 
 function formatIntegration(integration: Record<string, unknown>) {
   return {

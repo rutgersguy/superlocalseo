@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, type ChangeEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useSWR, { mutate as swrMutate } from 'swr';
-import { QrCode, Download, Trash2, Plus, AlertCircle, CheckCircle2, ExternalLink, ChevronDown, ChevronUp, Copy, Check, MapPin } from 'lucide-react';
+import { QrCode, Download, Trash2, Plus, AlertCircle, CheckCircle2, ExternalLink, ChevronDown, ChevronUp, MapPin } from 'lucide-react';
 import { apiFetch, fetcher } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { useClient } from '../hooks/useClient';
@@ -121,6 +121,110 @@ interface OAuthCardProps {
   onDisconnect: () => Promise<void>;
 }
 
+interface EmrConnectState {
+  connected: boolean;
+  connectedAt: string | null;
+  connectUrl: string | null;
+  expiresAt: string | null;
+}
+
+/**
+ * Google Business Profile connection, via EMR's connect-link.
+ *
+ * EMR holds its own approved Google Business Profile API access, so the client authorizes
+ * EMR's Google project — ours (whose quota request is still pending) isn't involved. The
+ * link lives on app.superlocalseo.com, so the client never sees EMR branding.
+ *
+ * This replaces two dead ends: our own OAuth (inert until Google approves our quota) and
+ * "log into the review portal" (which attached the profile to the client's sub-account org,
+ * whose data our agency key cannot read).
+ */
+function GoogleConnectCard() {
+  const { data, mutate, isLoading } = useSWR<{ success: boolean; data: EmrConnectState }>(
+    '/integrations/emr/google/connect-link',
+    fetcher,
+  );
+  const state = data?.data;
+  const [working, setWorking] = useState(false);
+  const [waiting, setWaiting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Once they've been sent to Google, poll so the card flips to Connected on its own when
+  // they finish — they come back to a tab that already knows.
+  useEffect(() => {
+    if (!waiting || state?.connected) return;
+    const t = setInterval(() => void mutate(), 5000);
+    return () => clearInterval(t);
+  }, [waiting, state?.connected, mutate]);
+
+  useEffect(() => {
+    if (state?.connected) setWaiting(false);
+  }, [state?.connected]);
+
+  const connect = async () => {
+    setWorking(true);
+    setError(null);
+    try {
+      const res = await apiFetch<{ success: boolean; data: EmrConnectState; error?: { message: string } }>(
+        '/integrations/emr/google/connect-link',
+        { method: 'POST' },
+      );
+      if (!res.success || !res.data?.connectUrl) {
+        setError(res.error?.message ?? 'Could not start the Google connection');
+        return;
+      }
+      window.open(res.data.connectUrl, '_blank', 'noopener,noreferrer');
+      setWaiting(true);
+      await mutate();
+    } catch (e) {
+      setError((e as Error).message ?? 'Could not start the Google connection');
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  return (
+    <div className="border border-slate-200 rounded-xl p-5">
+      <div className="flex items-start justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">Google Business Profile</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {state?.connected
+              ? 'Connected — your Google reviews sync automatically'
+              : 'Connect to sync your Google reviews and reply to them from here'}
+          </p>
+        </div>
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+          isLoading ? 'bg-slate-100 text-slate-400'
+            : state?.connected ? 'bg-green-100 text-green-700'
+            : 'bg-slate-100 text-slate-500'
+        }`}>
+          {isLoading ? '…' : state?.connected ? 'Connected' : 'Not connected'}
+        </span>
+      </div>
+
+      {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
+
+      {!state?.connected && !isLoading && (
+        <>
+          <button
+            onClick={() => void connect()}
+            disabled={working}
+            className="mt-4 px-4 py-2 text-sm font-medium bg-brand-500 text-white rounded-lg hover:bg-brand-600 disabled:opacity-50 transition-colors"
+          >
+            {working ? 'Opening Google…' : waiting ? 'Waiting for Google…' : 'Connect Google'}
+          </button>
+          {waiting && (
+            <p className="text-xs text-slate-500 mt-2">
+              Finish signing in with Google in the new tab. This page updates automatically once you're done.
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function OAuthCard({ name, description, connected, comingSoon, onConnect, onDisconnect }: OAuthCardProps) {
   const [loading, setLoading] = useState(false);
 
@@ -174,88 +278,6 @@ function OAuthCard({ name, description, connected, comingSoon, onConnect, onDisc
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-// ─── EMR Credentials card ─────────────────────────────────────────────────────
-
-interface EMRCreds {
-  ready: boolean;
-  loginUrl: string;
-  email: string | null;
-  password: string | null;
-}
-
-function EMRCredentialsCard() {
-  const { data, isLoading } = useSWR<{ success: boolean; data: EMRCreds }>('/clients/emr-credentials', fetcher);
-  const creds = data?.data;
-  const [copiedField, setCopiedField] = useState<string | null>(null);
-
-  const copy = async (value: string, field: string) => {
-    await navigator.clipboard.writeText(value);
-    setCopiedField(field);
-    setTimeout(() => setCopiedField(null), 2000);
-  };
-
-  const fields = creds?.ready
-    ? [
-        { label: 'Login URL', value: creds.loginUrl, field: 'url' },
-        { label: 'Email', value: creds.email!, field: 'email' },
-        { label: 'Password', value: creds.password!, field: 'password' },
-      ]
-    : [];
-
-  return (
-    <div className="border border-slate-200 rounded-xl p-5">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="text-sm font-semibold text-slate-900">Review Management</h3>
-          <p className="text-xs text-slate-500 mt-0.5">Login credentials for your review management portal</p>
-        </div>
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-          isLoading ? 'bg-slate-100 text-slate-400'
-          : creds?.ready ? 'bg-green-100 text-green-700'
-          : 'bg-amber-100 text-amber-600'
-        }`}>
-          {isLoading ? '…' : creds?.ready ? 'Active' : 'Setting up'}
-        </span>
-      </div>
-
-      {!isLoading && !creds?.ready && (
-        <p className="text-sm text-slate-500 mb-4">Your review management account is being set up. Check back in a moment.</p>
-      )}
-
-      {creds?.ready && (
-        <div className="space-y-3 bg-slate-50 rounded-lg p-4 mb-4">
-          {fields.map(({ label, value, field }) => (
-            <div key={field}>
-              <p className="text-xs font-medium text-slate-500 mb-1">{label}</p>
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm text-slate-800 font-mono break-all">{value}</span>
-                <button
-                  onClick={() => void copy(value, field)}
-                  className="flex-shrink-0 text-slate-400 hover:text-slate-700 transition-colors"
-                  title="Copy"
-                >
-                  {copiedField === field
-                    ? <Check className="w-3.5 h-3.5 text-green-600" />
-                    : <Copy className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <a
-        href="https://app.superlocalseo.com/login"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1.5 px-4 py-2 bg-brand-500 text-white text-sm font-semibold rounded-lg hover:bg-brand-600 transition-colors"
-      >
-        Open Review Management <ExternalLink className="w-3.5 h-3.5" />
-      </a>
     </div>
   );
 }
@@ -2174,15 +2196,8 @@ export default function Settings() {
     }
   };
 
-  const connectGoogle = async () => {
-    const res = await apiFetch<{ success: boolean; data: { url: string } }>('/integrations/google/auth-url');
-    if (res.success && res.data?.url) window.location.href = res.data.url;
-  };
-
-  const disconnectGoogle = async () => {
-    await apiFetch('/integrations/google', { method: 'DELETE' });
-    await mutate();
-  };
+  // Google is connected via GoogleConnectCard (EMR connect-link) — our own OAuth is inert
+  // until Google grants our GBP API quota, so no handler is wired to it here.
 
   const connectFacebook = async () => {
     const res = await apiFetch<{ success: boolean; data: { url: string } }>('/integrations/facebook/auth-url');
@@ -2284,22 +2299,13 @@ export default function Settings() {
         {/* Integrations tab */}
         {activeTab === 'integrations' && (
           <div className="space-y-4">
-            {/* Every client needs these — the review portal is where they link their Google,
-                Yelp and Facebook profiles, and without that EMR has nothing to sync. This was
-                gated to operator admins, which meant normal clients were never shown the
-                account we provisioned for them. (The endpoint was never admin-gated anyway —
-                only the UI hid it, so this protected nothing.) */}
-            <EMRCredentialsCard />
-            {/* Google's Q&A API was discontinued 2025-11-03 (no vendor can read/post GBP Q&A),
-                and business-info write-back is not built — so neither is advertised here.
-                Review sync stays pending until our GBP API quota request is approved. */}
-            <OAuthCard
-              name="Google Business Profile"
-              description="Connect now to sync your Google reviews — activates as soon as Google approves our API access"
-              connected={client?.integrations?.google?.connected ?? false}
-              onConnect={connectGoogle}
-              onDisconnect={disconnectGoogle}
-            />
+            {/* Google now connects through EMR's connect-link (their approved GBP access), so
+                the client no longer needs the review-portal login to link a profile — and that
+                path was in fact a dead end: it attached Google to their SUB-ACCOUNT org, whose
+                data our agency key cannot read. The credentials card is therefore gone; the
+                portal remains reachable for operator admins via the DB if ever needed.
+                Q&A is not offered at all — Google discontinued that API on 2025-11-03. */}
+            <GoogleConnectCard />
             <OAuthCard
               name="Facebook"
               description={
