@@ -143,6 +143,77 @@ export async function fetchAllReviews(apiKey: string, locationId?: string): Prom
   return all;
 }
 
+/** Thrown when EMR refuses the reply for a reason the user needs to hear, not a 500. */
+export class EMRReplyError extends Error {
+  readonly httpStatus: number;
+  readonly code: string;
+  constructor(message: string, httpStatus: number, code: string) {
+    super(message);
+    this.name = 'EMRReplyError';
+    this.httpStatus = httpStatus;
+    this.code = code;
+  }
+}
+
+/**
+ * Publishes a reply to a review. It goes LIVE on the platform immediately — EMR's docs:
+ * "The reply goes live on the platform IMMEDIATELY — there is no approval step."
+ *
+ * This is the ONLY way we can post a reply to Google. BrightLocal told us plainly they don't
+ * support review response via API (2026-07-14), and our own GBP write scope is useless while
+ * the quota request is pending.
+ *
+ * Known refusals, surfaced as EMRReplyError rather than a generic 500:
+ *  - 402: the organisation's plan lacks the auto-respond feature.
+ *  - 403/422: the review's source can't be replied to (e.g. a Place-ID / "public access"
+ *    Google source rather than a real API connection).
+ *  - 409: Facebook only allows one reply; Google replies UPDATE the existing one.
+ */
+export async function replyToReview(
+  apiKey: string,
+  emrReviewId: string,
+  message: string,
+): Promise<void> {
+  const res = await emrFetch(`/reviews/${encodeURIComponent(emrReviewId)}/reply`, apiKey, {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });
+
+  if (res.ok) return;
+
+  const body = await res.text();
+  logger.error('EMR replyToReview failed', { emrReviewId, status: res.status, body });
+
+  if (res.status === 402) {
+    throw new EMRReplyError(
+      'Replying to reviews is not enabled on this account yet. Contact support.',
+      402,
+      'REPLY_NOT_ON_PLAN',
+    );
+  }
+  if (res.status === 403 || res.status === 422) {
+    throw new EMRReplyError(
+      'This review cannot be replied to — its source is not connected through Google.',
+      res.status,
+      'REPLY_SOURCE_UNSUPPORTED',
+    );
+  }
+  if (res.status === 409) {
+    throw new EMRReplyError('This review already has a reply and cannot be replied to again.', 409, 'ALREADY_REPLIED');
+  }
+  if (res.status === 404) {
+    // We hold a review row whose EMR id no longer resolves — deleted upstream, or our copy is
+    // stale. Don't 500; tell the user it's out of sync (the next poll will reconcile).
+    throw new EMRReplyError(
+      'This review is no longer available on the review platform — it may have been removed.',
+      404,
+      'REVIEW_NOT_FOUND',
+    );
+  }
+
+  throw new Error(`EMR replyToReview failed: ${res.status} ${body}`);
+}
+
 export interface EMRConnectLink {
   token: string;
   provider: 'google' | 'facebook';

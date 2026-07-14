@@ -30,6 +30,9 @@ function formatReview(r: Record<string, unknown>) {
     ingestedAt: r.ingested_at,
     platformUrl: r.platform_url,
     locationId: r.location_id,
+    // Only EMR-sourced reviews can be replied to via the API (BrightLocal can't reply at all,
+    // and our own GBP write is quota-blocked), so the UI needs to know where each came from.
+    source: r.source,
     replied: r.replied,
     replyDate: r.reply_date,
     emrReplyText: r.emr_reply_text,

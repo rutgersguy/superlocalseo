@@ -436,24 +436,10 @@ export async function fetchReputationReviews(
   return { reviews, total: data?.response?.total ?? reviews.length };
 }
 
-export async function replyToReview(
-  campaignId: string,
-  blReviewId: string,
-  replyText: string,
-): Promise<{ success: boolean; replyId?: string }> {
-  const apiKey = config.brightlocal.apiKey;
-  assertApiKey(apiKey);
-  const res = await blFetch('/v4/rf/reply', apiKey, {
-    method: 'POST',
-    body: JSON.stringify({ campaign_id: campaignId, review_id: blReviewId, reply_text: replyText }),
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`BrightLocal replyToReview failed: ${res.status} ${body}`);
-  }
-  const data = (await res.json()) as { response?: { reply_id?: string; success?: boolean } };
-  return { success: data?.response?.success ?? true, replyId: data?.response?.reply_id };
-}
+// replyToReview() REMOVED (2026-07-14). It POSTed to /v4/rf/reply. BrightLocal, in writing:
+// "We don't support Review Response via API." The endpoint we were calling is not a supported
+// API and this code could never have worked. Replies to Google publish through EMR —
+// see embedmyreviews.service.replyToReview() and POST /api/reviews/:id/publish.
 
 // ─── Locations Management API v1 ─────────────────────────────────────────────
 // Base: https://api.brightlocal.com/manage/v1/locations
