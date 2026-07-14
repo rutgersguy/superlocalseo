@@ -107,14 +107,14 @@ const FEATURES = [
 ];
 
 // Plan-specific checkout summary. Pricing must mirror what the backend actually
-// bills: Lite = $99/mo single location, Pro = $349/mo + $125/mo per extra location.
+// bills: Lite = $149/mo single location, Pro = $349/mo + $125/mo per extra location.
 // The $499 setup fee is WAIVED by default (backend requires STRIPE_SETUP_FEE_ENABLED;
 // it's kept only as a struck-through anchor on Pro). Keep these in sync with
 // stripe.service.ts and the Landing/Register pricing copy.
 const PLAN_DETAILS = {
   lite: {
     name: 'Lite',
-    monthly: 99,
+    monthly: 149,
     locationNote: '1 location · cancel anytime',
     perLocationNote: '',
     features: [
