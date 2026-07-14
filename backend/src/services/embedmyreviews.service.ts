@@ -121,19 +121,73 @@ export async function fetchReviews(
   return { reviews, hasMore };
 }
 
-export async function fetchAllReviews(apiKey: string): Promise<EMRReview[]> {
+/**
+ * Fetches every review visible to `apiKey`, optionally scoped to a single EMR location.
+ *
+ * ALWAYS pass a locationId for per-client syncs. Without it the agency operator key returns
+ * the whole organization's reviews, which is how every client ended up sharing one review
+ * set (see migration 20260714000000).
+ */
+export async function fetchAllReviews(apiKey: string, locationId?: string): Promise<EMRReview[]> {
   const all: EMRReview[] = [];
   let page = 1;
   let hasMore = true;
 
   while (hasMore) {
-    const result = await fetchReviews(apiKey, { page });
+    const result = await fetchReviews(apiKey, { page, locationId });
     all.push(...result.reviews);
     hasMore = result.hasMore;
     page++;
   }
 
   return all;
+}
+
+export interface EMROrganization {
+  id: number;
+  name: string;
+  defaultLocationId: number | null;
+}
+
+/** Lists organizations on the agency account. Ours is the single tenant org. */
+export async function listOrganizations(apiKey: string): Promise<EMROrganization[]> {
+  const res = await emrFetch('/organizations', apiKey);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`EMR listOrganizations failed: ${res.status} ${body}`);
+  }
+  const json = await res.json() as {
+    data?: Array<{ id: number; name: string; default_location_id?: number | null }>;
+  };
+  return (json.data ?? []).map((o) => ({
+    id: o.id,
+    name: o.name,
+    defaultLocationId: o.default_location_id ?? null,
+  }));
+}
+
+/**
+ * Creates an EMR location. One per client — this is the unit `connect-links` attaches a
+ * Google profile to, and the unit `GET /reviews?location_id=` filters by, so it's what
+ * makes per-client review isolation possible.
+ */
+export async function createLocation(
+  apiKey: string,
+  organizationId: number,
+  name: string,
+): Promise<{ id: number; organizationId: number }> {
+  const res = await emrFetch('/locations', apiKey, {
+    method: 'POST',
+    body: JSON.stringify({ organization_id: organizationId, name }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`EMR createLocation failed: ${res.status} ${body}`);
+  }
+  const json = await res.json() as { data?: { id?: number; organization_id?: number } };
+  const id = json?.data?.id;
+  if (!id) throw new Error('EMR createLocation: no location id in response');
+  return { id, organizationId: json?.data?.organization_id ?? organizationId };
 }
 
 export async function fetchCampaigns(apiKey: string): Promise<EMRCampaign[]> {

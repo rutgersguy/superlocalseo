@@ -8,14 +8,33 @@ import { logger } from '../utils/logger';
 
 export async function processReviews(_job: Job): Promise<void> {
   const integrations = await db('integrations')
-    .where({ provider: 'embedmyreviews', status: 'connected' })
-    .whereNotNull('api_key_encrypted')
-    .select('id', 'client_id', 'api_key_encrypted');
+    .join('clients', 'clients.id', 'integrations.client_id')
+    .where({ 'integrations.provider': 'embedmyreviews', 'integrations.status': 'connected' })
+    .whereNotNull('integrations.api_key_encrypted')
+    .select(
+      'integrations.id',
+      'integrations.client_id',
+      'integrations.api_key_encrypted',
+      'clients.emr_location_id',
+    );
 
   for (const integration of integrations) {
     try {
       const apiKey = decrypt(integration.api_key_encrypted as string);
-      const reviews = await fetchAllReviews(apiKey);
+
+      // Every client's integration row holds the SAME agency operator key, so an unscoped
+      // fetch returns the whole organization's reviews — i.e. every client would be handed
+      // every other client's reviews. The EMR location is the tenancy boundary; without one
+      // we must not sync at all. (See migration 20260714000000.)
+      const emrLocationId = integration.emr_location_id as number | null;
+      if (!emrLocationId) {
+        logger.warn('Skipping EMR review sync — client has no EMR location', {
+          clientId: integration.client_id,
+        });
+        continue;
+      }
+
+      const reviews = await fetchAllReviews(apiKey, String(emrLocationId));
 
       const now = new Date();
 
@@ -41,7 +60,7 @@ export async function processReviews(_job: Job): Promise<void> {
             avatar_url: review.avatarUrl,
             verified: review.verified,
           })
-          .onConflict(['platform', 'external_review_id'])
+          .onConflict(['client_id', 'platform', 'external_review_id'])
           .merge({
             author_name: review.author,
             rating: review.rating,
