@@ -51,7 +51,7 @@ export async function createCheckoutSession(
   userId: string,
   plan: 'lite' | 'pro' = 'pro',
 ): Promise<Stripe.Checkout.Session> {
-  // Lite: single $99/mo recurring item, no setup fee, no extra locations.
+  // Lite: single $149/mo recurring item, no setup fee, no extra locations.
   // Pro: $349/mo base. The $499 setup fee is waived unless STRIPE_SETUP_FEE_ENABLED=true.
   const chargeSetupFee = config.stripe.setupFeeEnabled && !!config.stripe.prices.setup;
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = plan === 'lite'
