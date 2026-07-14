@@ -406,50 +406,83 @@ Used for all transactional email.
 
 ---
 
-## Open vendor questions (sent 2026-07-13, awaiting reply)
+## Vendor answers (both replied 2026-07-14) — ANSWERED
 
-These gate the review/GBP architecture. **Do not build around the inferred answers.**
+### EmbedMyReviews — all three blockers cleared
 
-### EmbedMyReviews
-
-1. **How do we create/list locations via API?** The docs cite `/api/v1/locations` but never
-   document it — and `connect-links` is unusable without a `location_id`.
-2. **Can a reply be published to Google via API** without a human approving in the EMR UI
-   (e.g. an Auto-Respond rule with approval disabled, or an undocumented reply endpoint)?
-3. **Do you hold your own approved Google Business Profile API access**, so our customers'
-   reviews/replies/metrics flow through your Google project and not ours? ← **most important**;
-   if yes, we can sideline our own (quota-blocked) GBP connection entirely.
-
-### BrightLocal
-
-1. **Can the GBP OAuth connect be initiated via API**, or is it UI-only? If UI-only, our clients
-   hit a second, differently-branded login and it punches a hole in our white-label UX.
-   (EMR solves this with `connect-links` — see above.) ← **deal-shaping**
-2. **Which plan tier does the Listings Management API require?** Their API Solutions page says
-   Grow; their help center says Track/Manage. The docs conflict.
-3. **What are the per-request API fees** on top of the plan subscription?
-4. **Confirm Active Sync writes via BrightLocal's own approved Google project** (i.e. our
-   pending quota is irrelevant to it).
-5. **Actual pricing** at 10 / 50 / 100 locations — their pricing page renders per-location
-   prices behind a JS slider and shows "Price on request".
-6. Smaller: does Active Sync push **photos**, or text fields only? Does **Reputation Manager**
-   post replies live to Google, and does that need the client's Google OAuth?
-
-### What we know without them
-
-| Question | Status |
+| Question | Answer |
 |---|---|
-| GBP Q&A | ❌ **Dead.** Google killed the API 2025-11-03. No vendor can do it. Do not build. |
-| GBP business-info write | ✅ Possible via BrightLocal Active Sync (their approved Google project) |
-| GBP review sync (ours) | ⛔ Blocked on our pending Google quota approval |
-| Reply publishing to Google | ⚠️ Not possible via EMR API. Only BrightLocal Reputation Manager posts replies today. |
-| Second-login friction (EMR) | ✅ Solvable via `connect-links` — pending the `locations` endpoint answer |
-| BrightLocal pricing | ❓ ~$9/location/mo is a **third-party estimate, unverified**. Plus unknown API fees. We are on a **free** account today — this is new spend. |
+| Create/list locations via API? | ✅ **Yes** — `GET`/`POST /api/v1/locations`. Unblocks `connect-links` (needs a `location_id`). |
+| Publish a reply to Google via API? | ✅ **Yes** — `POST /api/v1/reviews/{id}/reply`. *"The reply goes live on the platform IMMEDIATELY — there is no approval step."* |
+| Do you hold approved GBP API access? | ✅ **Yes** — *"we are approved for GBP access, you are not required to set anything up on your side. EMR branding is not visible to your customers."* |
 
-**Throttled-sync note:** rate limits are a non-issue (BrightLocal allows 100 writes/min; 100
-locations synced monthly is ~4 orders of magnitude of headroom). But throttling **saves nothing**
-— Active Sync is priced per *location subscription*, not per API call. Cost is the constraint,
-not throughput. Sync as often as is useful.
+**This corrects an earlier WRONG finding in this repo.** A prior audit concluded "EMR cannot
+publish a reply via API; drafts are always held for UI approval." That was false — the REST
+reply endpoint exists. Do not re-derive the old conclusion.
+
+Consequences, now implemented (PRs #133, #134):
+- Our own Google OAuth is **no longer needed for reviews**. EMR's Google approval does the work;
+  our pending quota is irrelevant. The route stays mounted but nothing points at it.
+- Clients connect Google via a **branded connect-link** on `app.superlocalseo.com` — no EMR
+  branding, no second login.
+- Reviews are read **per EMR location** (the tenancy boundary — see migration 20260714000000).
+
+**Reply endpoint caveats (from their docs, not yet exercised):** requires the **auto-respond
+feature on the organisation's plan** (else **402**); only reviews synced via a Google/Facebook
+**API connection** can be replied to (not Place-ID/"public access" sources); replying again to a
+Google review **updates** the existing reply, but a second Facebook reply **409s**. Token needs
+`reviews:read + reviews:update`.
+
+### BrightLocal — answered
+
+| Question | Answer |
+|---|---|
+| GBP OAuth initiated via API? | ✅ **Yes** — they have documentation for the API-initiated set-up. **White-label UX is preserved.** |
+| Plan tier for Listings Management? | **Manage** or **Grow**. (Custom enterprise plan at 250+ locations.) |
+| Per-request API fees? | ❌ **None.** It's a management API — no per-request cost, just the subscription. Rate limit **300/min**. |
+| Active Sync writes via BrightLocal's own approved Google project? | ✅ **Confirmed.** Our pending Google quota is irrelevant to it. |
+| Photos? | ❌ **Text-only.** Name, address, phone, hours, categories, description, attributes. **Never promise photo sync.** |
+| Reputation Manager — post replies to Google via API? | ❌ **"We don't support Review Response via API."** |
+
+**Pricing (from BrightLocal, 2026-07-14). Annual is 25% cheaper than monthly.**
+
+| Locations | Manage /mo | Manage /yr | Grow /mo | Grow /yr |
+|---|---|---|---|---|
+| 10 | $109 | $980 | $131 | $1,178 |
+| 50 | $384 | $3,455 | $494 | $4,445 |
+| 100 | $769 | $6,920 | $989 | $8,900 |
+
+Effective per-location on **Manage**: ~$10.90 (10 locs), ~$7.68 (50), ~$7.69 (100). Against Pro
+at $349/mo/client (+$125/mo per extra location), the margin is not a concern.
+
+**Take Manage, not Grow.** Grow's premium is review monitoring/response — and BrightLocal
+**cannot post review replies via API at all**. EMR does reviews and replies. Paying for Grow buys
+nothing we can use.
+
+**Throttling is pointless** (as suspected): no per-request fee and a 300/min limit, while Active
+Sync is billed per *location subscription*. Sync as often as is useful; cost is per location, not
+per call.
+
+### ⚠️ Our BrightLocal review-reply code is built on an unsupported API
+
+`brightlocal.service.replyToReview()` POSTs to `/v4/rf/reply`, and it is wired into
+`POST /api/reputation/reviews/:reviewId/reply` (exposed in `Reviews.tsx` when a review has a
+`blReviewId`). BrightLocal states plainly they **do not support review response via API**. This
+path can never work. It has never fired in production only because no client has a BrightLocal
+reputation campaign. **EMR's reply endpoint is the only way to publish a reply to Google** —
+that's phase 3. Remove or replace the BL path; do not build on it.
+
+### Status after both replies
+
+| Capability | Status |
+|---|---|
+| GBP Q&A | ❌ **Dead at Google.** API discontinued 2025-11-03. No vendor can do it. Do not build. |
+| Review sync from Google | ✅ **EMR** (their approved GBP access). Our quota is irrelevant. |
+| Reply publishing to Google | ✅ **EMR only** (`POST /reviews/{id}/reply`). ❌ NOT BrightLocal. Plan gating (402) unverified. |
+| Client connects Google, white-labelled | ✅ **EMR connect-links** (live). BrightLocal also supports API-initiated OAuth. |
+| GBP business-info write (hours, categories, NAP) | ✅ **BrightLocal Active Sync only** — needs a paid **Manage** plan (we're on a free account: new spend). |
+| GBP photo sync | ❌ Not supported by Active Sync (text-only). |
+| Our own Google GBP API | ⛔ Still quota-blocked — and now **only** needed if we ever want to talk to Google directly. |
 
 ---
 

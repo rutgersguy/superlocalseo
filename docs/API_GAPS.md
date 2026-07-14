@@ -44,8 +44,16 @@ Monthly health score (NAP consistency, citation count, review velocity, Google c
 ### 3. EMR Customer Provisioning (EMR-1)
 Create per-client EMR sub-accounts via the agency API. Required for the agency/reseller plan. Current single-account approach doesn't scale past ~20 clients.
 
-### 4. Reputation Manager (BL-3)
-Respond to Google reviews through BrightLocal's API. **Correction (2026-07-13):** this does NOT remove the per-client Google OAuth step — BrightLocal's own docs have the client grant BrightLocal access via a Google consent screen. What it removes is our dependency on *our* pending GBP API quota, since BrightLocal executes the call against its own approved Google project. Client consent is still required; only the approval blocker goes away.
+### 4. ~~Reputation Manager (BL-3)~~ — ❌ CANCELLED (2026-07-14)
+**BrightLocal, in writing: "We don't support Review Response via API."**
+
+Do not build this, and do not trust the existing code: `brightlocal.service.replyToReview()`
+POSTs to `/v4/rf/reply` and is wired into `POST /api/reputation/reviews/:reviewId/reply`. That
+endpoint is not a supported API. It has never fired in production only because no client has a
+BrightLocal reputation campaign.
+
+**Replies to Google go through EMR** — `POST /api/v1/reviews/{id}/reply`, which publishes live
+with no approval step. See `INTEGRATIONS.md`.
 
 ### 5. Rank Type Splits (BL-5)
 BL already returns `rank_type` (organic / local-pack / paid) in every response — we just don't store or display it. One-day fix that reveals whether a client is winning in the local-pack vs. organic, which is very different signal for SMBs.
@@ -208,10 +216,19 @@ pollAuditReport(reportId: string): Promise<{
 
 ---
 
-## BL-3 — Reputation Manager (Respond to Google Reviews via BL)
+## BL-3 — ❌ CANCELLED — Reputation Manager (Respond to Google Reviews via BL)
 
-**Priority:** HIGH  
-**Effort:** 1.5 weeks  
+> **CANCELLED 2026-07-14.** BrightLocal, in writing: **"We don't support Review Response via
+> API."** This ticket cannot be built. Replies to Google go through **EMR**
+> (`POST /api/v1/reviews/{id}/reply` — publishes live, no approval step).
+>
+> The existing `replyToReview()` → `/v4/rf/reply` path in `brightlocal.service.ts`, and the
+> `POST /api/reputation/reviews/:reviewId/reply` route that calls it, are built on an
+> unsupported API and must be removed or repointed at EMR. Everything below is retained only
+> as a record of what was planned.
+
+**Priority:** ~~HIGH~~ — cancelled  
+**Effort:** ~~1.5 weeks~~  
 **Dependencies:** Locations must have a BL campaign configured; requires paid BrightLocal Management API plan
 
 **Note:** `replyToReview()` uses the Management API (`tools.brightlocal.com`) and requires a paid BrightLocal plan. The function exists in `brightlocal.service.ts` but is gated behind `brightlocal_campaign_id`. This feature remains in the backlog as-is until Management API access is confirmed.

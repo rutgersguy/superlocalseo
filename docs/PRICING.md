@@ -29,6 +29,26 @@ picked a plan at all). **Derive from `productLine`; never hardcode a price or a 
 | Landing page + FAQ | `Landing.tsx` | |
 | `BillingWall.tsx` | — | **Dead code — unrouted.** Its checkout call POSTs no `plan`, so the backend defaults to `'pro'`: reviving it as-is would bill Pro with no chance to pick Lite. |
 
+### Vendor cost: BrightLocal Active Sync (quoted 2026-07-14)
+
+GBP business-info sync (hours, categories, description, NAP, attributes — **text only, no
+photos**) is only available via BrightLocal **Active Sync**, which needs a paid **Manage** or
+**Grow** plan. We are on a **free** account today, so this is **new spend**. No per-request API
+fees; rate limit 300/min.
+
+| Locations | Manage /mo | Manage /yr | Grow /mo | Grow /yr |
+|---|---|---|---|---|
+| 10 | $109 | $980 | $131 | $1,178 |
+| 50 | $384 | $3,455 | $494 | $4,445 |
+| 100 | $769 | $6,920 | $989 | $8,900 |
+
+Effective per-location on Manage: ~$10.90 (10), ~$7.68 (50), ~$7.69 (100). Annual saves 25%.
+Against Pro at $349/mo/client (+$125/mo per extra location), margin is not a concern.
+
+**Take Manage, not Grow.** Grow's premium is review monitoring/response — and BrightLocal
+**cannot post review replies via API at all** ("We don't support Review Response via API").
+Reviews and replies both go through EMR. Grow buys nothing we can use.
+
 ### Trial UX (Option B funnel)
 
 Trials run with **full Pro access** (`product_line` is `NOT NULL DEFAULT 'pro'`, so it is never
