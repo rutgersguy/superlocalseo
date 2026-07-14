@@ -11,7 +11,6 @@
     "test:coverage": "jest --coverage",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
-    "emr:reconcile": "ts-node src/scripts/emr_reconcile.ts",
     "migrate": "knex --knexfile knexfile.ts migrate:latest",
     "migrate:rollback": "knex --knexfile knexfile.ts migrate:rollback",
     "seed": "knex --knexfile knexfile.ts seed:run"

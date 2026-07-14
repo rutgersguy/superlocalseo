@@ -186,25 +186,5 @@ export async function retryProvision(req: Request, res: Response, next: NextFunc
   }
 }
 
-export async function emrCredentials(req: Request, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const client = await db('clients')
-      .where({ id: req.clientId })
-      .select('emr_customer_id', 'emr_provisioning_status', 'emr_password_encrypted')
-      .first();
-
-    const user = await db('users').where({ id: req.userId }).select('email').first();
-
-    const ready = !!client?.emr_customer_id && !!client?.emr_password_encrypted;
-    const password = ready ? decrypt(client.emr_password_encrypted as string) : null;
-
-    ok(res, {
-      ready,
-      loginUrl: 'https://app.superlocalseo.com/login',
-      email: ready ? (user?.email as string) : null,
-      password,
-    });
-  } catch (e) {
-    next(e);
-  }
-}
+// emrCredentials() REMOVED (2026-07-14) — see routes/clients.ts. EMR sub-accounts are no
+// longer created; tenancy is the EMR organization + location.
