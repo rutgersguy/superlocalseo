@@ -324,6 +324,51 @@ export interface EMROrganization {
   defaultLocationId: number | null;
 }
 
+/**
+ * Creates an EMR organization. ONE PER CLIENT — this is the campaign tenancy boundary.
+ *
+ * Campaigns filter by organization_id and nothing else (no location filter), so clients
+ * sharing an organization cannot have isolated campaigns. Reviews filter by location_id, so a
+ * client needs both: its own org, and a location inside it.
+ *
+ * EMR auto-creates a "Default Location" inside every new organization — we use that rather
+ * than making a second one, so an org maps 1:1 to a client's single location.
+ */
+export async function createOrganization(
+  apiKey: string,
+  name: string,
+): Promise<{ id: number; defaultLocationId: number | null }> {
+  const res = await emrFetch('/organizations', apiKey, {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`EMR createOrganization failed: ${res.status} ${body}`);
+  }
+  const json = await res.json() as {
+    data?: { id?: number; default_location_id?: number | null; locations?: Array<{ id: number }> };
+  };
+  const id = json?.data?.id;
+  if (!id) throw new Error('EMR createOrganization: no organization id in response');
+  return {
+    id,
+    defaultLocationId: json.data?.default_location_id ?? json.data?.locations?.[0]?.id ?? null,
+  };
+}
+
+/** Renames a location (used to label a new org's auto-created Default Location). */
+export async function renameLocation(apiKey: string, locationId: number, name: string): Promise<void> {
+  const res = await emrFetch(`/locations/${encodeURIComponent(String(locationId))}`, apiKey, {
+    method: 'PUT',
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    logger.warn('EMR renameLocation failed (non-fatal)', { locationId, status: res.status, body });
+  }
+}
+
 /** Lists organizations on the agency account. Ours is the single tenant org. */
 export async function listOrganizations(apiKey: string): Promise<EMROrganization[]> {
   const res = await emrFetch('/organizations', apiKey);
