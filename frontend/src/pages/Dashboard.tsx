@@ -244,7 +244,7 @@ function SubscribeCTA({ billing }: { billing: BillingStatusResponse['data'] | un
           <div>
             <p className="text-xs" style={{ color: '#94a3b8' }}>from</p>
             <div className="flex items-baseline gap-1 sm:justify-end">
-              <span className="text-4xl font-bold text-white">$99</span>
+              <span className="text-4xl font-bold text-white">$149</span>
               <span className="text-sm" style={{ color: '#94a3b8' }}>/mo</span>
             </div>
             <p className="text-xs mt-0.5" style={{ color: '#64748b' }}>No setup fee · cancel anytime</p>

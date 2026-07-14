@@ -6,6 +6,8 @@ const router = Router();
 
 router.get('/', requireClient, competitor.list);
 router.get('/gap', requireClient, competitor.gap);
+// Review-count deltas — the input to "your competitor gained 18 reviews this month".
+router.get('/review-trend', requireClient, competitor.reviewTrend);
 router.get('/head-to-head', requireClient, competitor.headToHead);
 router.get('/search', requireClient, competitor.search);
 router.post('/', requireClient, requireTeamAdmin, competitor.create);

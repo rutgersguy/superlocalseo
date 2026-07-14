@@ -2002,7 +2002,7 @@ function BillingTab({ onGoToLocations, isAdmin, isPlatformAdmin }: { onGoToLocat
             ) : (
               <>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-3xl font-bold text-slate-900">{isLitePlan ? '$99' : '$349'}</span>
+                  <span className="text-3xl font-bold text-slate-900">{isLitePlan ? '$149' : '$349'}</span>
                   <span className="text-slate-500 text-sm">/mo</span>
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5">
@@ -2037,7 +2037,7 @@ function BillingTab({ onGoToLocations, isAdmin, isPlatformAdmin }: { onGoToLocat
               <div className="rounded-xl border border-slate-200 p-4">
                 <p className="text-sm font-semibold text-slate-900">Lite</p>
                 <div className="flex items-baseline gap-1 mt-1">
-                  <span className="text-2xl font-bold text-slate-900">$99</span>
+                  <span className="text-2xl font-bold text-slate-900">$149</span>
                   <span className="text-xs text-slate-500">/mo</span>
                 </div>
                 <p className="text-xs text-slate-600 mt-2 leading-relaxed">

@@ -48,7 +48,7 @@ export default function BillingWall() {
         <div className="bg-slate-50 rounded-xl p-4 text-left space-y-2">
           <div className="flex items-baseline gap-2">
             <span className="text-sm text-slate-500">from</span>
-            <span className="text-3xl font-bold text-slate-900">$99</span>
+            <span className="text-3xl font-bold text-slate-900">$149</span>
             <span className="text-slate-500 text-sm">/mo</span>
           </div>
           <p className="text-xs text-slate-500">No setup fee · choose Lite or Pro at checkout</p>

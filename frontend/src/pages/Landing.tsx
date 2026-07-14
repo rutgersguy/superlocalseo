@@ -34,11 +34,11 @@ const faqs = [
   },
   {
     q: 'How does the free trial work?',
-    a: 'You get 7 days completely free — no credit card required to start. Trials run with full Pro access so you can try everything. At checkout you choose the plan that fits — Lite ($99/mo) or Pro ($349/mo) — and that\'s when billing begins. If you don\'t subscribe, access is paused until you do.',
+    a: 'You get 7 days completely free — no credit card required to start. Trials run with full Pro access so you can try everything. At checkout you choose the plan that fits — Lite ($149/mo) or Pro ($349/mo) — and that\'s when billing begins. If you don\'t subscribe, access is paused until you do.',
   },
   {
     q: 'What\'s the difference between Lite and Pro?',
-    a: 'Lite ($99/mo) covers the essentials for a single location — daily rank tracking, review monitoring with AI responses, review request campaigns, and a monthly PDF report. Pro ($349/mo) adds citation building, geo-grid visibility heatmaps, competitor intelligence, full SEO audits, ROI attribution, team members, QR codes, CSV exports, and lets you add more locations ($125/mo each). Neither plan has a setup fee, and you can start on Lite and upgrade to Pro anytime.',
+    a: 'Lite ($149/mo) covers the essentials for a single location — daily rank tracking, review monitoring with AI responses, review request campaigns, and a monthly PDF report. Pro ($349/mo) adds citation building, geo-grid visibility heatmaps, competitor intelligence, full SEO audits, ROI attribution, team members, QR codes, CSV exports, and lets you add more locations ($125/mo each). Neither plan has a setup fee, and you can start on Lite and upgrade to Pro anytime.',
   },
   {
     q: 'What do I need to get started?',
@@ -275,7 +275,7 @@ export default function Landing() {
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 h-full flex flex-col">
               <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Lite</div>
               <div className="flex items-end gap-2 mb-2">
-                <span className="text-5xl font-bold text-slate-900">$99</span>
+                <span className="text-5xl font-bold text-slate-900">$149</span>
                 <span className="text-slate-500 mb-1">/mo</span>
               </div>
               <p className="text-sm text-slate-500 mb-1">No setup fee</p>

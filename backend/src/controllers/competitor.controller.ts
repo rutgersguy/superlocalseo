@@ -14,6 +14,71 @@ const createSchema = z.object({
   googlePlaceId: z.string().max(255).optional(),
 });
 
+/**
+ * GET /competitors/review-trend?days=30 — how each competitor's review count MOVED.
+ *
+ * This is the feed for "Next Best Actions": a rating on its own is a fact, but a delta is a
+ * reason to do something. "Your competitor gained 18 reviews this month" is what makes
+ * "request 10 reviews this week" land.
+ *
+ * Also returns the client's own gain over the same window (from the reviews table) so the
+ * comparison is like-for-like — the number that matters is whether they're pulling away.
+ */
+export async function reviewTrend(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const days = Math.min(Math.max(parseInt(String(req.query.days ?? '30'), 10) || 30, 1), 365);
+    const since = new Date(Date.now() - days * 86_400_000);
+    const sinceDate = since.toISOString().slice(0, 10);
+
+    const snapshots = await db('competitor_review_snapshots as s')
+      .join('competitors as c', 'c.id', 's.competitor_id')
+      .where('s.client_id', req.clientId as string)
+      .andWhere('s.captured_on', '>=', sinceDate)
+      .select('s.competitor_id', 'c.name', 's.google_rating', 's.google_review_count', 's.captured_on')
+      .orderBy('s.captured_on', 'asc');
+
+    // First and last snapshot in the window give the delta.
+    const byCompetitor = new Map<string, { name: string; first: typeof snapshots[0]; last: typeof snapshots[0] }>();
+    for (const s of snapshots) {
+      const key = s.competitor_id as string;
+      const existing = byCompetitor.get(key);
+      if (!existing) byCompetitor.set(key, { name: s.name as string, first: s, last: s });
+      else existing.last = s;
+    }
+
+    const competitors = Array.from(byCompetitor.entries()).map(([id, v]) => {
+      const firstCount = v.first.google_review_count as number | null;
+      const lastCount = v.last.google_review_count as number | null;
+      return {
+        competitorId: id,
+        name: v.name,
+        reviewCount: lastCount,
+        reviewsGained: firstCount != null && lastCount != null ? lastCount - firstCount : null,
+        rating: v.last.google_rating != null ? parseFloat(String(v.last.google_rating)) : null,
+        ratingChange: v.first.google_rating != null && v.last.google_rating != null
+          ? parseFloat((parseFloat(String(v.last.google_rating)) - parseFloat(String(v.first.google_rating))).toFixed(1))
+          : null,
+        // Only one snapshot so far — a delta needs two days of history.
+        hasHistory: v.first.captured_on !== v.last.captured_on,
+      };
+    }).sort((a, b) => (b.reviewsGained ?? -1) - (a.reviewsGained ?? -1));
+
+    const ownGained = await db('reviews')
+      .where({ client_id: req.clientId as string })
+      .andWhere('review_date', '>=', since)
+      .count('* as n')
+      .first();
+
+    ok(res, {
+      days,
+      you: { reviewsGained: Number(ownGained?.n ?? 0) },
+      competitors,
+    });
+  } catch (e) {
+    next(e);
+  }
+}
+
 export async function list(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const competitors = await db('competitors')
@@ -469,12 +534,40 @@ export async function syncCompetitorPlaces(competitorId: string, placeId: string
     throw new Error(`Places API error: ${data.status ?? 'unknown'}`);
   }
 
-  await db('competitors').where({ id: competitorId }).update({
-    google_rating: data.result?.rating ?? null,
-    google_review_count: data.result?.user_ratings_total ?? null,
-    last_synced_at: new Date(),
-    updated_at: new Date(),
-  });
+  const rating = data.result?.rating ?? null;
+  const reviewCount = data.result?.user_ratings_total ?? null;
+  const now = new Date();
+
+  const [competitor] = await db('competitors').where({ id: competitorId }).update({
+    google_rating: rating,
+    google_review_count: reviewCount,
+    last_synced_at: now,
+    updated_at: now,
+  }).returning('client_id');
+
+  // Snapshot the history. The columns above are overwritten on every sync, so without this we
+  // know what a competitor's rating IS but never what it DID — and "your competitor gained 18
+  // reviews this month" is the single most actionable thing we can tell a customer.
+  //
+  // Every refresh path (daily job, manual re-sync, on-create) funnels through here, so one
+  // row per competitor per day with last-write-wins keeps it idempotent.
+  if (competitor?.client_id) {
+    await db('competitor_review_snapshots')
+      .insert({
+        competitor_id: competitorId,
+        client_id: competitor.client_id,
+        google_rating: rating,
+        google_review_count: reviewCount,
+        captured_on: now.toISOString().slice(0, 10),
+        captured_at: now,
+      })
+      .onConflict(['competitor_id', 'captured_on'])
+      .merge({
+        google_rating: rating,
+        google_review_count: reviewCount,
+        captured_at: now,
+      });
+  }
 }
 
 function formatCompetitor(c: Record<string, unknown>) {
