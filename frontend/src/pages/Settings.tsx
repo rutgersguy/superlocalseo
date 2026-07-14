@@ -126,6 +126,9 @@ interface EmrConnectState {
   connectedAt: string | null;
   connectUrl: string | null;
   expiresAt: string | null;
+  sources?: string[];
+  // Signed in with Google, but no profile got attached — see GoogleConnectCard.
+  oauthCompletedButNoSource?: boolean;
 }
 
 /**
@@ -204,6 +207,20 @@ function GoogleConnectCard() {
       </div>
 
       {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
+
+      {/* Signed in with Google, but no profile attached. Real and observed (2026-07-14): the
+          consent screen completed, then the review platform failed to reach Google to list the
+          profiles ("We could not reach Google"). Without this, the card would just say "Not
+          connected" and the user would keep retrying the same thing forever. */}
+      {state?.oauthCompletedButNoSource && (
+        <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5">
+          <p className="text-xs font-medium text-amber-900">Google sign-in finished, but your profile wasn't linked</p>
+          <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+            This usually means the review platform couldn't reach Google while listing your profiles.
+            Try connecting again below — if it keeps failing, contact support and we'll chase it up.
+          </p>
+        </div>
+      )}
 
       {!state?.connected && !isLoading && (
         <>

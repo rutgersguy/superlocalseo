@@ -292,6 +292,32 @@ export async function listConnectLinks(
   return (json.data ?? []).map(mapConnectLink);
 }
 
+export interface EMRReviewSource {
+  id: number;
+  name: string;
+}
+
+/**
+ * Lists the review sources actually ATTACHED to a location.
+ *
+ * This — not `completed_oauth_at` — is the real test of whether a client's Google profile is
+ * linked. Observed 2026-07-14: a client completed the Google consent screen (EMR recorded
+ * `completed_oauth_at`), but EMR then failed to reach Google to list their profiles ("We could
+ * not reach Google"), so NO source was ever attached and no review could ever sync. The OAuth
+ * flag said connected; reality said otherwise. Trust the attached source.
+ */
+export async function listReviewSources(apiKey: string, locationId: number): Promise<EMRReviewSource[]> {
+  const res = await emrFetch(`/reviews/sources?location_id=${encodeURIComponent(String(locationId))}`, apiKey);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`EMR listReviewSources failed: ${res.status} ${body}`);
+  }
+  const json = await res.json() as { data?: Array<{ id?: number; name?: string }> };
+  return (json.data ?? [])
+    .filter((s) => s.id != null)
+    .map((s) => ({ id: s.id as number, name: s.name ?? '' }));
+}
+
 export interface EMROrganization {
   id: number;
   name: string;
