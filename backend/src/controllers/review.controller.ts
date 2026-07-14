@@ -221,7 +221,7 @@ export async function webhook(req: Request, res: Response, next: NextFunction): 
           avatar_url: payload.avatar ?? null,
           verified: payload.verified ?? null,
         })
-        .onConflict(['platform', 'external_review_id'])
+        .onConflict(['client_id', 'platform', 'external_review_id'])
         .merge({
           author_name: authorName,
           rating: payload.rating ?? null,

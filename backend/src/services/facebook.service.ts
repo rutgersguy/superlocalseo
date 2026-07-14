@@ -85,7 +85,7 @@ export async function syncFacebookReviews(
         avatar_url: null,
         verified: null,
       })
-      .onConflict(['platform', 'external_review_id'])
+      .onConflict(['client_id', 'platform', 'external_review_id'])
       .merge({
         author_name: rating.reviewer?.name ?? 'Anonymous',
         rating: rating.rating,

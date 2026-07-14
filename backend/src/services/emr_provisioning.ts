@@ -2,7 +2,54 @@ import { db } from '../db/connection';
 import { encrypt, decrypt } from '../utils/crypto';
 import { config } from '../config';
 import { logger } from '../utils/logger';
-import { createCustomer, deleteCustomer, suspendCustomer } from './embedmyreviews.service';
+import {
+  createCustomer,
+  deleteCustomer,
+  suspendCustomer,
+  createLocation,
+  listOrganizations,
+} from './embedmyreviews.service';
+
+/**
+ * Ensures the client has its OWN EMR location, and returns its id.
+ *
+ * This is the unit of tenancy. The agency operator key is the only key we can use (EMR mints
+ * per-customer tokens in its dashboard only, and an agency token can't scope to a customer's
+ * data), so isolation has to come from the location: `connect-links` attaches a client's
+ * Google profile to a location, and `GET /reviews?location_id=` reads back only that
+ * client's reviews. Without this every client shared the org-wide review set.
+ *
+ * Idempotent — returns the stored id if one already exists.
+ */
+export async function ensureEmrLocation(clientId: string): Promise<number | null> {
+  const client = await db('clients').where({ id: clientId }).first();
+  if (!client) throw new Error(`Client ${clientId} not found`);
+
+  if (client.emr_location_id) return client.emr_location_id as number;
+
+  const operatorKey = config.embedmyreviews.apiKey;
+  if (!operatorKey) {
+    logger.warn('EMR not configured — cannot provision location', { clientId });
+    return null;
+  }
+
+  const orgs = await listOrganizations(operatorKey);
+  const org = orgs[0];
+  if (!org) throw new Error('EMR: no organization on the agency account');
+
+  // Name it so a human staring at the EMR dashboard can tell whose location this is.
+  const label = `${(client.business_name as string) ?? 'Client'} [${clientId.slice(0, 8)}]`;
+  const location = await createLocation(operatorKey, org.id, label);
+
+  await db('clients').where({ id: clientId }).update({
+    emr_organization_id: location.organizationId,
+    emr_location_id: location.id,
+    updated_at: new Date(),
+  });
+
+  logger.info('EMR location provisioned', { clientId, locationId: location.id, orgId: location.organizationId });
+  return location.id;
+}
 
 /**
  * Returns the EMR API key to use for a given client.
@@ -91,6 +138,15 @@ export async function provisionClient(clientId: string): Promise<void> {
         updated_at: now,
       });
     }
+  }
+
+  // The location is what actually makes review reads client-scoped (see ensureEmrLocation).
+  // Non-fatal: a client with no location simply syncs no reviews, which is strictly better
+  // than the old behaviour of syncing SOMEONE ELSE'S reviews.
+  try {
+    await ensureEmrLocation(clientId);
+  } catch (e) {
+    logger.error('EMR location provisioning failed', { clientId, error: (e as Error).message });
   }
 
   logger.info('EMR provisioned for client', { clientId, customerId: customerId ?? 'none', hasPassword: !!emrPassword });

@@ -87,7 +87,7 @@ router.post('/emr', async (req: Request, res: Response) => {
           avatar_url: (data.avatar ?? null) as string | null,
           verified: (data.verified ?? null) as boolean | null,
         })
-        .onConflict(['platform', 'external_review_id'])
+        .onConflict(['client_id', 'platform', 'external_review_id'])
         .merge({
           author_name: (data.author ?? null) as string | null,
           rating: (data.rating ?? null) as number | null,

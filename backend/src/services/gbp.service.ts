@@ -261,7 +261,7 @@ export async function syncGBPReviews(
             avatar_url: review.reviewer.profilePhotoUrl ?? null,
             verified: null,
           })
-          .onConflict(['platform', 'external_review_id'])
+          .onConflict(['client_id', 'platform', 'external_review_id'])
           .merge({
             author_name: review.reviewer.displayName,
             rating,
