@@ -3,7 +3,7 @@ import { db } from '../db/connection';
 import { ok, noContent, notFound, err } from '../utils/response';
 import { config } from '../config';
 import { logger } from '../utils/logger';
-import { createConnectLink, listConnectLinks, listReviewSources } from '../services/embedmyreviews.service';
+import { createConnectLink, listConnectLinks, fetchAllReviews } from '../services/embedmyreviews.service';
 import { ensureEmrLocation } from '../services/emr_provisioning';
 
 /**
@@ -30,15 +30,28 @@ async function loadEmrConnectState(clientId: string) {
   const oauthCompleted = links.find((l) => l.completedOauthAt !== null);
   const active = links.find((l) => l.status === 'active');
 
-  // `completed_oauth_at` is NOT proof of a working connection. Observed 2026-07-14: a client
-  // finished Google's consent screen (EMR set completed_oauth_at), but EMR then failed to
-  // reach Google to list their profiles — "We could not reach Google" — so no source was ever
-  // attached and no review could ever sync. Reporting that as "Connected" would be a lie the
-  // user acts on. The attached source is the truth.
-  const sources = await listReviewSources(operatorKey, locationId);
-  const connected = sources.length > 0;
+  // EMR exposes NO endpoint that answers "is Google connected to this location?" (verified
+  // 2026-07-14): there is no /integrations route; /reviews/sources lists only custom/testimonial
+  // sources and returns [] even for a fully-connected profile; /gbp/metrics returns 200 for
+  // connected AND unconnected locations alike.
+  //
+  // And `completed_oauth_at` alone is NOT proof: we watched a client finish Google's consent
+  // screen (EMR stamped completed_oauth_at) while EMR then failed to reach Google to list the
+  // profiles — no profile attached, no review ever synced. So the flag was set on a connection
+  // that did not exist.
+  //
+  // The only signal that cannot lie is reviews actually arriving. We therefore report three
+  // states rather than fake a binary we cannot determine:
+  //   - not started       : no completed OAuth
+  //   - reviews arriving  : reviews present  -> genuinely connected
+  //   - awaiting reviews  : OAuth done, nothing yet -> either still syncing, a profile with no
+  //                         reviews, or the half-failed state above. We say exactly that.
+  const reviewCount = oauthCompleted
+    ? (await fetchAllReviews(operatorKey, String(locationId))).length
+    : 0;
+  const connected = reviewCount > 0;
 
-  return { operatorKey, locationId, links, oauthCompleted, active, sources, connected };
+  return { operatorKey, locationId, links, oauthCompleted, active, reviewCount, connected };
 }
 
 export async function getEmrGoogleConnectLink(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -54,10 +67,12 @@ export async function getEmrGoogleConnectLink(req: Request, res: Response, next:
       connectedAt: state.oauthCompleted?.completedOauthAt ?? null,
       connectUrl: state.active?.connectUrl ?? null,
       expiresAt: state.active?.expiresAt ?? null,
-      sources: state.sources.map((s) => s.name),
-      // Signed in with Google, but EMR never attached a profile — a real, observed state, and
-      // one the user must be told about rather than left staring at a permanently empty page.
-      oauthCompletedButNoSource: !!state.oauthCompleted && !state.connected,
+      reviewCount: state.reviewCount,
+      // Signed in with Google, but no reviews have arrived. Could be a still-running first
+      // sync, a profile with genuinely no reviews, or EMR's half-failed connect (observed
+      // 2026-07-14). We cannot tell these apart via their API — so say so rather than show a
+      // green "Connected" for a connection that may not exist.
+      awaitingReviews: !!state.oauthCompleted && !state.connected,
     });
   } catch (e) {
     next(e);
