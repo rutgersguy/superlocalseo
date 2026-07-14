@@ -126,9 +126,9 @@ interface EmrConnectState {
   connectedAt: string | null;
   connectUrl: string | null;
   expiresAt: string | null;
-  sources?: string[];
-  // Signed in with Google, but no profile got attached — see GoogleConnectCard.
-  oauthCompletedButNoSource?: boolean;
+  reviewCount?: number;
+  // Signed in with Google, but no reviews yet — see GoogleConnectCard.
+  awaitingReviews?: boolean;
 }
 
 /**
@@ -193,7 +193,7 @@ function GoogleConnectCard() {
           <h3 className="text-sm font-semibold text-slate-900">Google Business Profile</h3>
           <p className="text-xs text-slate-500 mt-0.5">
             {state?.connected
-              ? 'Connected — your Google reviews sync automatically'
+              ? `Connected — ${state.reviewCount} review${state.reviewCount === 1 ? '' : 's'} syncing from Google`
               : 'Connect to sync your Google reviews and reply to them from here'}
           </p>
         </div>
@@ -208,16 +208,17 @@ function GoogleConnectCard() {
 
       {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
 
-      {/* Signed in with Google, but no profile attached. Real and observed (2026-07-14): the
-          consent screen completed, then the review platform failed to reach Google to list the
-          profiles ("We could not reach Google"). Without this, the card would just say "Not
-          connected" and the user would keep retrying the same thing forever. */}
-      {state?.oauthCompletedButNoSource && (
+      {/* Signed in, but nothing has arrived yet. This is genuinely ambiguous — a first sync
+          still running, a profile with no reviews, or a half-failed connect (observed
+          2026-07-14: consent completed, then the platform failed to reach Google and attached
+          nothing). We can't distinguish these via their API, so don't pretend to. */}
+      {state?.awaitingReviews && (
         <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5">
-          <p className="text-xs font-medium text-amber-900">Google sign-in finished, but your profile wasn't linked</p>
+          <p className="text-xs font-medium text-amber-900">Signed in with Google — waiting for your reviews</p>
           <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
-            This usually means the review platform couldn't reach Google while listing your profiles.
-            Try connecting again below — if it keeps failing, contact support and we'll chase it up.
+            Your first sync can take a few minutes. If nothing appears within an hour (and your
+            Google listing does have reviews), connect again below — occasionally the profile
+            doesn't finish linking.
           </p>
         </div>
       )}
