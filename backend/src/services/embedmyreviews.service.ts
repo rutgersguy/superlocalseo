@@ -365,8 +365,20 @@ export async function createLocation(
   return { id, organizationId: json?.data?.organization_id ?? organizationId };
 }
 
-export async function fetchCampaigns(apiKey: string): Promise<EMRCampaign[]> {
-  const res = await emrFetch('/request-reviews/campaigns', apiKey);
+/**
+ * Lists review-request campaigns for ONE organization.
+ *
+ * Campaigns are scoped to an ORGANIZATION, not a location (EMR's list endpoint filters by
+ * `organization_id`; `location_id` is not a supported filter). Reviews are the opposite —
+ * they scope by location. So the location-per-client model that isolates reviews does NOT
+ * isolate campaigns: every client currently sits in the same org, and an unscoped call
+ * returns the whole org's campaigns, which reviews.job would then write under every client.
+ *
+ * organizationId is therefore REQUIRED. Isolating campaigns for real needs one EMR
+ * organization per client — see the org-per-client migration.
+ */
+export async function fetchCampaigns(apiKey: string, organizationId: number): Promise<EMRCampaign[]> {
+  const res = await emrFetch(`/request-reviews/campaigns?organization_id=${encodeURIComponent(String(organizationId))}`, apiKey);
 
   if (!res.ok) {
     const body = await res.text();

@@ -3,7 +3,6 @@ import { encrypt, decrypt } from '../utils/crypto';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import {
-  createCustomer,
   deleteCustomer,
   suspendCustomer,
   createLocation,
@@ -72,108 +71,109 @@ export async function getClientEMRKey(clientId: string): Promise<string | null> 
 }
 
 /**
- * Creates an EMR sub-account for a client and stores the per-client API key
- * in the integrations table.  Safe to call multiple times — idempotent.
+ * Provisions a client's EMR presence: an organization + a location.
+ *
+ * NOTE: this no longer creates an EMR "customer" sub-account. Those were vestigial and
+ * actively harmful:
+ *   - We cannot read a sub-account's data at all (an agency token can't scope to a customer,
+ *     and EMR mints per-customer tokens only in its dashboard), so reviews never came from
+ *     there — a client who linked Google inside that portal would see nothing, forever.
+ *   - The credentials card that surfaced those logins is gone (PR #134).
+ *   - A failed createCustomer left behind a scary `emr_provisioning_status = 'failed'` on an
+ *     otherwise perfectly working client (observed on Family Tree Roofing).
+ *
+ * Tenancy lives in the ORGANIZATION + LOCATION instead:
+ *   - reviews  filter by location_id
+ *   - campaigns filter by organization_id  (they do NOT accept a location filter)
+ * so a client needs its own organization for campaigns to be isolated, and its own location
+ * for reviews to be isolated. Idempotent.
  */
 export async function provisionClient(clientId: string): Promise<void> {
   const client = await db('clients').where({ id: clientId }).first();
   if (!client) throw new Error(`Client ${clientId} not found`);
 
-  if (client.emr_provisioning_status === 'provisioned') {
-    logger.info('EMR already provisioned for client, skipping', { clientId });
+  const operatorKey = config.embedmyreviews.apiKey;
+  if (!operatorKey) {
+    logger.warn('EMR not configured — skipping provisioning', { clientId });
     return;
-  }
-
-  const user = await db('users').where({ id: client.user_id }).first();
-  const email = (user?.email as string) ?? `client+${clientId}@superlocalseo.com`;
-  const businessName = (client.business_name as string) ?? 'Business';
-
-  let customerId: string | undefined;
-  let emrPassword: string | undefined;
-
-  try {
-    const result = await createCustomer(businessName, email);
-    customerId = result.customerId;
-    emrPassword = result.password;
-  } catch (e) {
-    logger.error('EMR agency sub-account creation failed', {
-      clientId,
-      error: (e as Error).message,
-    });
   }
 
   const now = new Date();
 
-  // Only claim 'provisioned' when we actually got a customer id back. This used to be set
-  // unconditionally, so a failed createCustomer was permanently marked done — and the early
-  // return at the top of this function meant it could never be retried. 'failed' leaves the
-  // door open for a retry (and is visible in the DB instead of silently looking healthy).
-  await db('clients').where({ id: clientId }).update({
-    ...(customerId ? { emr_customer_id: customerId } : {}),
-    ...(emrPassword ? { emr_password_encrypted: encrypt(emrPassword) } : {}),
-    emr_provisioning_status: customerId ? 'provisioned' : 'failed',
-    updated_at: now,
-  });
-
-  // Keep integrations row pointing to the shared operator key for review reads
-  const operatorKey = config.embedmyreviews.apiKey;
-  if (operatorKey) {
-    const existing = await db('integrations')
-      .where({ client_id: clientId, provider: 'embedmyreviews' })
-      .first();
-    if (existing) {
-      await db('integrations').where({ id: existing.id }).update({
-        api_key_encrypted: encrypt(operatorKey),
-        status: 'connected',
-        error_message: null,
-        updated_at: now,
-      });
-    } else {
-      await db('integrations').insert({
-        client_id: clientId,
-        provider: 'embedmyreviews',
-        api_key_encrypted: encrypt(operatorKey),
-        status: 'connected',
-        created_at: now,
-        updated_at: now,
-      });
-    }
-  }
-
-  // The location is what actually makes review reads client-scoped (see ensureEmrLocation).
-  // Non-fatal: a client with no location simply syncs no reviews, which is strictly better
-  // than the old behaviour of syncing SOMEONE ELSE'S reviews.
   try {
     await ensureEmrLocation(clientId);
+    await db('clients').where({ id: clientId }).update({
+      emr_provisioning_status: 'provisioned',
+      updated_at: now,
+    });
   } catch (e) {
-    logger.error('EMR location provisioning failed', { clientId, error: (e as Error).message });
+    logger.error('EMR provisioning failed', { clientId, error: (e as Error).message });
+    await db('clients').where({ id: clientId }).update({
+      emr_provisioning_status: 'failed',
+      updated_at: now,
+    }).catch(() => undefined);
+    return;
   }
 
-  logger.info('EMR provisioned for client', { clientId, customerId: customerId ?? 'none', hasPassword: !!emrPassword });
+  // The integrations row carries the operator key — the only key we can use. Isolation comes
+  // from the location/organization scoping, not from the key.
+  const existing = await db('integrations')
+    .where({ client_id: clientId, provider: 'embedmyreviews' })
+    .first();
+  if (existing) {
+    await db('integrations').where({ id: existing.id }).update({
+      api_key_encrypted: encrypt(operatorKey),
+      status: 'connected',
+      error_message: null,
+      updated_at: now,
+    });
+  } else {
+    await db('integrations').insert({
+      client_id: clientId,
+      provider: 'embedmyreviews',
+      api_key_encrypted: encrypt(operatorKey),
+      status: 'connected',
+      created_at: now,
+      updated_at: now,
+    });
+  }
+
+  logger.info('EMR provisioned for client', { clientId });
 }
 
 /**
- * Suspends the EMR sub-account when a subscription is canceled.
- * Does not delete — data is retained for potential reactivation.
+ * Called when a subscription is canceled. Stops review syncing for the client.
+ *
+ * We no longer create EMR sub-accounts, so there is nothing to "suspend" upstream — and
+ * pausing is not what protects us anyway. Marking the integration disconnected is: reviews.job
+ * only syncs `status = 'connected'` rows, so this genuinely stops the pull. Legacy clients
+ * that still carry an emr_customer_id also get their sub-account paused, for tidiness.
  */
 export async function deprovisionClient(clientId: string): Promise<void> {
   const client = await db('clients').where({ id: clientId }).first();
-  if (!client?.emr_customer_id) return;
+  if (!client) return;
 
-  try {
-    await suspendCustomer(client.emr_customer_id as string);
-    await db('clients').where({ id: clientId }).update({
-      emr_provisioning_status: 'deprovisioned',
-      updated_at: new Date(),
-    });
-    await db('integrations')
-      .where({ client_id: clientId, provider: 'embedmyreviews' })
-      .update({ status: 'disconnected', updated_at: new Date() });
+  const now = new Date();
 
-    logger.info('EMR customer deprovisioned', { clientId, customerId: client.emr_customer_id });
-  } catch (e) {
-    logger.warn('EMR deprovision failed (non-fatal)', { clientId, error: (e as Error).message });
+  await db('integrations')
+    .where({ client_id: clientId, provider: 'embedmyreviews' })
+    .update({ status: 'disconnected', updated_at: now });
+
+  await db('clients').where({ id: clientId }).update({
+    emr_provisioning_status: 'deprovisioned',
+    updated_at: now,
+  });
+
+  // Legacy only — new clients have no sub-account.
+  if (client.emr_customer_id) {
+    try {
+      await suspendCustomer(client.emr_customer_id as string);
+    } catch (e) {
+      logger.warn('EMR legacy sub-account pause failed (non-fatal)', { clientId, error: (e as Error).message });
+    }
   }
+
+  logger.info('EMR deprovisioned — review sync stopped', { clientId });
 }
 
 /**

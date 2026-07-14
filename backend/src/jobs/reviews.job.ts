@@ -6,7 +6,21 @@ import { syncGBPReviews, GBPAuthError } from '../services/gbp.service';
 import { syncFacebookReviews } from '../services/facebook.service';
 import { logger } from '../utils/logger';
 
+/** Marker: campaign sync deliberately skipped (not an error worth alarming about). */
+class SkipCampaigns extends Error {}
+
 export async function processReviews(_job: Job): Promise<void> {
+  // An EMR organization shared by more than one client cannot host isolated campaigns —
+  // campaigns filter by organization_id only. Detect those orgs up front and refuse to sync
+  // campaigns for any client sitting in one.
+  const orgCounts = await db('clients')
+    .whereNotNull('emr_organization_id')
+    .select('emr_organization_id')
+    .count('* as n')
+    .groupBy('emr_organization_id') as Array<{ emr_organization_id: number; n: string }>;
+  const sharedOrgIds = new Set(
+    orgCounts.filter((r) => Number(r.n) > 1).map((r) => Number(r.emr_organization_id)),
+  );
   const integrations = await db('integrations')
     .join('clients', 'clients.id', 'integrations.client_id')
     .where({ 'integrations.provider': 'embedmyreviews', 'integrations.status': 'connected' })
@@ -16,6 +30,7 @@ export async function processReviews(_job: Job): Promise<void> {
       'integrations.client_id',
       'integrations.api_key_encrypted',
       'clients.emr_location_id',
+      'clients.emr_organization_id',
     );
 
   for (const integration of integrations) {
@@ -77,9 +92,30 @@ export async function processReviews(_job: Job): Promise<void> {
           });
       }
 
-      // Sync campaigns and their funnel metrics
+      // Sync campaigns and their funnel metrics.
+      //
+      // Campaigns scope to an EMR ORGANIZATION, not a location (reviews are the other way
+      // round). Every client currently shares organization 1, so syncing campaigns would
+      // write the SAME org-wide campaign set under every client_id — the exact leak that was
+      // fixed for reviews in migration 20260714000000. Until each client has its own EMR
+      // organization, refuse to sync rather than fabricate cross-tenant data.
+      const emrOrgId = integration.emr_organization_id as number | null;
+      const orgIsShared = sharedOrgIds.has(emrOrgId ?? -1);
+
       try {
-        const campaigns = await fetchCampaigns(apiKey);
+        if (!emrOrgId) {
+          logger.warn('Skipping campaign sync — client has no EMR organization', { clientId: integration.client_id });
+          throw new SkipCampaigns();
+        }
+        if (orgIsShared) {
+          logger.warn('Skipping campaign sync — client shares an EMR organization with other clients (would leak campaigns)', {
+            clientId: integration.client_id,
+            organizationId: emrOrgId,
+          });
+          throw new SkipCampaigns();
+        }
+
+        const campaigns = await fetchCampaigns(apiKey, emrOrgId);
         for (const c of campaigns) {
           await db('emr_campaigns')
             .insert({
@@ -108,11 +144,13 @@ export async function processReviews(_job: Job): Promise<void> {
             });
         }
       } catch (campaignErr) {
-        // Non-fatal — campaign fetch may fail if not set up
-        logger.warn('Failed to sync EMR campaigns', {
-          clientId: integration.client_id,
-          error: (campaignErr as Error).message,
-        });
+        // A deliberate skip already logged its reason; don't double-log it as a failure.
+        if (!(campaignErr instanceof SkipCampaigns)) {
+          logger.warn('Failed to sync EMR campaigns', {
+            clientId: integration.client_id,
+            error: (campaignErr as Error).message,
+          });
+        }
       }
 
       // Private feedback is now received via EMR webhook (POST /webhooks/emr)
@@ -136,11 +174,27 @@ export async function processReviews(_job: Job): Promise<void> {
     }
   }
 
-  // GBP sync
-  const gbpIntegrations = await db('integrations')
-    .where({ provider: 'google', status: 'connected' })
-    .whereNotNull('oauth_access_token')
-    .select('client_id', 'oauth_access_token', 'oauth_refresh_token', 'oauth_expires_at');
+  // --- GBP sync (our own Google OAuth) — OFF by default ---
+  //
+  // Our Google Cloud project's GBP API quota request is still pending (quota_limit_value: 0),
+  // so syncGBPReviews returns nothing for every client. Worse, on auth errors it flips the
+  // integration to 'disconnected' — churn for a path that cannot produce data. Reviews come
+  // from EMR now (they hold their own approved GBP access), and nothing in the UI points at
+  // our OAuth any more.
+  //
+  // Kept, not deleted: if Google ever grants our quota, direct access is still worth having
+  // for business-info and metrics. Set GBP_SYNC_ENABLED=true to switch it back on.
+  const gbpSyncEnabled = process.env.GBP_SYNC_ENABLED === 'true';
+  if (!gbpSyncEnabled) {
+    logger.info('GBP sync skipped — disabled (our Google quota request is still pending; reviews come from EMR)');
+  }
+
+  const gbpIntegrations = gbpSyncEnabled
+    ? await db('integrations')
+        .where({ provider: 'google', status: 'connected' })
+        .whereNotNull('oauth_access_token')
+        .select('client_id', 'oauth_access_token', 'oauth_refresh_token', 'oauth_expires_at')
+    : [];
 
   for (const intg of gbpIntegrations) {
     try {
