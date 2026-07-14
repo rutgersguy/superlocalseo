@@ -62,7 +62,7 @@ test.describe('Suite 08 — Lite plan gating', () => {
   test('TEST-LITE-03 — Register shows the plan picker (Lite default)', async ({ page }) => {
     await page.goto('/register');
     await expect(page.getByText('Choose your plan')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(/\$99\/mo/)).toBeVisible();
+    await expect(page.getByText(/\$149\/mo/)).toBeVisible();
     await expect(page.getByText(/\$349\/mo/)).toBeVisible();
   });
 

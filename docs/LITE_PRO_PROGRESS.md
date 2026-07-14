@@ -4,7 +4,7 @@ Working branch: **`feat/lite-pro-split`** (off `main`).
 Spec of record: **`docs/IMPLEMENTATION_SPEC.md` on branch `proposed_rework`** (rev 3).
 
 Goal: a `product_line: 'lite' | 'pro'` gate across the stack. **All existing clients
-default to `'pro'` — zero disruption.** Lite = $99/mo, single location, no setup fee.
+default to `'pro'` — zero disruption.** Lite = $149/mo, single location, no setup fee.
 
 ---
 
@@ -42,7 +42,7 @@ failures, unrelated). Lite e2e: 3/3 green.
 ## Stripe (sandbox / test mode — acct `…cjar`)
 
 Nothing more needed to build. Set up this session:
-- Lite price **`price_1TlzpiBqpgOWcjarAXDqP1kT`** ($99/mo) → `STRIPE_LITE_BASE_PRICE_ID` in `/opt/superlocalseo/.env` (api container recreated, env loaded).
+- Lite price **`price_1TtCXEBqpgOWcjaruyh8y6QZ`** ($149/mo) → `STRIPE_LITE_BASE_PRICE_ID` in `/opt/superlocalseo/.env` (api container recreated, env loaded). Raised from $99 on 2026-07-14; the old $99 price `price_1TlzpiBqpgOWcjarAXDqP1kT` is archived in Stripe. No client was on Lite, so nothing was grandfathered.
 - Webhook `invoice.payment_succeeded` already enabled on the endpoint.
 - Pro base $349 · setup $499 · location $125 (unchanged).
 - **For live launch:** recreate the Lite price + webhook event in live mode and set the live env var.

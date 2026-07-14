@@ -128,7 +128,7 @@
 Features designed to increase ARPU from $780 → $1,025+ and reduce churn. See [Epic #67](https://github.com/rutgersguy/superlocalseo/issues/67) for financial projections.
 
 ### Plan Tiering (Lite/Pro)
-- [x] **Lite/Pro split** (PR #102/#103) — $99 Lite vs $349 Pro tier via a `product_line` gate across the full stack; existing clients default to Pro (zero disruption). Lite is excluded from geo-grid, citations, competitor intelligence, SEO audits, team, QR, and analytics/CSV exports, with upgrade CTAs + a blurred Competitors teaser. Self-serve Lite→Pro upgrade (setup fee waived), verified end-to-end against sandbox Stripe. See [docs/LITE_PRO_PROGRESS.md](docs/LITE_PRO_PROGRESS.md). This makes every Pro-gated feature below the **Pro value-prop**.
+- [x] **Lite/Pro split** (PR #102/#103) — $149 Lite vs $349 Pro tier via a `product_line` gate across the full stack; existing clients default to Pro (zero disruption). Lite is excluded from geo-grid, citations, competitor intelligence, SEO audits, team, QR, and analytics/CSV exports, with upgrade CTAs + a blurred Competitors teaser. Self-serve Lite→Pro upgrade (setup fee waived), verified end-to-end against sandbox Stripe. See [docs/LITE_PRO_PROGRESS.md](docs/LITE_PRO_PROGRESS.md). This makes every Pro-gated feature below the **Pro value-prop**.
 
 ### Quick Wins
 - [x] **#68 Audit Report Lead Magnet** — free public `/audit` page, Google Places scan, 5-category score, email gate, register CTA
@@ -202,7 +202,7 @@ Features designed to increase ARPU from $780 → $1,025+ and reduce churn. See [
 
 | Plan | Monthly | Setup | Locations | Scope |
 |---|---|---|---|---|
-| **Lite** | $99/mo | — | 1 only | Dashboard, Rankings (read-only), Reviews, Campaigns, Reports, Settings + a blurred Competitors upgrade teaser |
+| **Lite** | $149/mo | — | 1 only | Dashboard, Rankings (read-only), Reviews, Campaigns, Reports, Settings + a blurred Competitors upgrade teaser |
 | **Pro** | $349/mo | $499 one-time | 1 (+$125/mo each) | Full suite: geo-grid, citations, competitor intelligence, SEO audits, team members, QR codes, analytics/CSV exports |
 
 - All existing clients default to **Pro** (zero disruption). New signups pick a plan at registration; **trials run as Pro**, and the plan applies at checkout.
