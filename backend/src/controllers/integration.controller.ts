@@ -3,7 +3,7 @@ import { db } from '../db/connection';
 import { ok, noContent, notFound, err } from '../utils/response';
 import { config } from '../config';
 import { logger } from '../utils/logger';
-import { createConnectLink, listConnectLinks } from '../services/embedmyreviews.service';
+import { createConnectLink, listConnectLinks, listReviewSources } from '../services/embedmyreviews.service';
 import { ensureEmrLocation } from '../services/emr_provisioning';
 
 /**
@@ -27,11 +27,18 @@ async function loadEmrConnectState(clientId: string) {
   if (!locationId) return null;
 
   const links = await listConnectLinks(operatorKey, locationId, 'google');
-  // A completed OAuth is the signal that Google is actually linked to this location.
-  const completed = links.find((l) => l.completedOauthAt !== null);
+  const oauthCompleted = links.find((l) => l.completedOauthAt !== null);
   const active = links.find((l) => l.status === 'active');
 
-  return { operatorKey, locationId, links, completed, active };
+  // `completed_oauth_at` is NOT proof of a working connection. Observed 2026-07-14: a client
+  // finished Google's consent screen (EMR set completed_oauth_at), but EMR then failed to
+  // reach Google to list their profiles — "We could not reach Google" — so no source was ever
+  // attached and no review could ever sync. Reporting that as "Connected" would be a lie the
+  // user acts on. The attached source is the truth.
+  const sources = await listReviewSources(operatorKey, locationId);
+  const connected = sources.length > 0;
+
+  return { operatorKey, locationId, links, oauthCompleted, active, sources, connected };
 }
 
 export async function getEmrGoogleConnectLink(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -43,10 +50,14 @@ export async function getEmrGoogleConnectLink(req: Request, res: Response, next:
     }
 
     ok(res, {
-      connected: !!state.completed,
-      connectedAt: state.completed?.completedOauthAt ?? null,
+      connected: state.connected,
+      connectedAt: state.oauthCompleted?.completedOauthAt ?? null,
       connectUrl: state.active?.connectUrl ?? null,
       expiresAt: state.active?.expiresAt ?? null,
+      sources: state.sources.map((s) => s.name),
+      // Signed in with Google, but EMR never attached a profile — a real, observed state, and
+      // one the user must be told about rather than left staring at a permanently empty page.
+      oauthCompletedButNoSource: !!state.oauthCompleted && !state.connected,
     });
   } catch (e) {
     next(e);
@@ -61,8 +72,12 @@ export async function createEmrGoogleConnectLink(req: Request, res: Response, ne
       return;
     }
 
-    if (state.completed) {
-      ok(res, { connected: true, connectedAt: state.completed.completedOauthAt, connectUrl: null });
+    // Only short-circuit when a source is genuinely attached. If they completed OAuth but EMR
+    // never linked a profile, minting a fresh link is exactly what they need — and it's what
+    // EMR's own error tells them to ask us for ("ask your service provider to issue a new
+    // connect link").
+    if (state.connected) {
+      ok(res, { connected: true, connectedAt: state.oauthCompleted?.completedOauthAt ?? null, connectUrl: null });
       return;
     }
 
