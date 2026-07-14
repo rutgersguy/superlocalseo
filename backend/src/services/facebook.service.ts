@@ -68,6 +68,9 @@ export async function syncFacebookReviews(
       .insert({
         client_id: clientId,
         location_id: null,
+        // Direct Facebook OAuth sync, not EMR — so its id is Facebook's, not an EMR review id,
+        // and it cannot be replied to through EMR's reply endpoint.
+        source: 'facebook',
         platform: 'facebook',
         external_review_id: externalReviewId,
         author_name: rating.reviewer?.name ?? 'Anonymous',

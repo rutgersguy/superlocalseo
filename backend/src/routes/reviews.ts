@@ -19,5 +19,7 @@ router.get('/feedback', requireAuth, requireClient, ctrl.listFeedback);
 router.get('/:id/response', requireAuth, requireClient, responseCtrl.get);
 router.post('/:id/response/draft', aiLimiter, requireAuth, requireClient, responseCtrl.draft);
 router.patch('/:id/response', requireAuth, requireClient, responseCtrl.update);
+// Publishes the reply live on Google via EMR (the only API that can — BrightLocal cannot).
+router.post('/:id/publish', requireAuth, requireClient, responseCtrl.publish);
 
 export default router;

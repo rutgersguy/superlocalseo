@@ -43,6 +43,7 @@ export async function processReviews(_job: Job): Promise<void> {
           .insert({
             client_id: integration.client_id,
             location_id: null,
+            source: 'emr',
             platform: review.platform,
             external_review_id: review.id,
             author_name: review.author,

@@ -18,9 +18,9 @@ interface Review {
   reviewDate: string;
   body: string;
   status: 'new' | 'responded';
-  blReviewId?: string | null;
-  blReplyStatus?: string | null;
-  blReplyPostedAt?: string | null;
+  source?: string | null;
+  replied?: boolean | null;
+  replyDate?: string | null;
   platformUrl?: string | null;
 }
 
@@ -29,7 +29,7 @@ interface ReviewResponse {
   reviewId: string;
   draftBody: string;
   finalBody: string | null;
-  status: 'draft' | 'approved';
+  status: 'draft' | 'approved' | 'posted';
   approvedAt: string | null;
 }
 
@@ -221,7 +221,11 @@ function ResponsePanel({ reviewId, reviewBody }: { reviewId: string; reviewBody:
             )}
           </div>
           {response.status === 'approved' && (
-            <p className="text-xs text-slate-400">Copy this text and paste it as your reply on {response.reviewId && 'the platform'}.</p>
+            // No longer copy/paste: "Post to Google" on the review publishes this live via EMR.
+            <p className="text-xs text-slate-400">Ready to publish — use <span className="font-medium text-slate-500">Post to Google</span> above to put this live on your listing.</p>
+          )}
+          {response.status === 'posted' && (
+            <p className="text-xs text-green-600">Published live on Google.</p>
           )}
         </div>
       )}
@@ -270,10 +274,12 @@ function PostReplyModal({ review, onClose, onPosted }: { review: Review; onClose
     setPosting(true);
     setError(null);
     try {
-      await apiFetch(`/reputation/reviews/${review.id}/reply`, {
-        method: 'POST',
-        body: JSON.stringify({ replyText: effectiveText }),
-      });
+      // Publishes live on Google via EMR — BrightLocal cannot reply via API at all.
+      const res = await apiFetch<{ success: boolean; error?: { message: string } }>(
+        `/reviews/${review.id}/publish`,
+        { method: 'POST', body: JSON.stringify({ body: effectiveText }) },
+      );
+      if (!res.success) throw new Error(res.error?.message ?? 'Failed to post reply');
       onPosted();
     } catch (e) {
       setError((e as Error).message ?? 'Failed to post reply');
@@ -322,8 +328,10 @@ function ReviewCard({ review, onReplyPosted }: { review: Review; onReplyPosted: 
   const [showResponse, setShowResponse] = useState(false);
   const [showReplyModal, setShowReplyModal] = useState(false);
 
-  const canPostBL = !!review.blReviewId && review.blReplyStatus !== 'posted';
-  const alreadyPosted = review.blReplyStatus === 'posted';
+  // Replies publish through EMR, so only EMR-sourced reviews qualify. A GBP/Facebook-sourced
+  // row carries that platform's own id, which EMR's reply endpoint would not recognise.
+  const canReply = review.source === 'emr' && !review.replied;
+  const alreadyPosted = !!review.replied;
 
   return (
     <div className="bg-white rounded-xl shadow-card p-5">
@@ -346,7 +354,7 @@ function ReviewCard({ review, onReplyPosted }: { review: Review; onReplyPosted: 
               )}
               {alreadyPosted && (
                 <span className="text-xs bg-green-100 text-green-700 font-medium px-2 py-0.5 rounded-full">
-                  ✓ Replied {review.blReplyPostedAt ? new Date(review.blReplyPostedAt).toLocaleDateString() : ''}
+                  ✓ Replied {review.replyDate ? new Date(review.replyDate).toLocaleDateString() : ''}
                 </span>
               )}
             </div>
@@ -359,7 +367,7 @@ function ReviewCard({ review, onReplyPosted }: { review: Review; onReplyPosted: 
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {canPostBL && (
+          {canReply && (
             <button
               onClick={() => setShowReplyModal(true)}
               className="px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50"

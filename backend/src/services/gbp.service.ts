@@ -244,6 +244,7 @@ export async function syncGBPReviews(
           .insert({
             client_id: clientId,
             location_id: null,
+            source: 'gbp',
             platform: 'google',
             external_review_id: review.reviewId,
             author_name: review.reviewer.displayName,
