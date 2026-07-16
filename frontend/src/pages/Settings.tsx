@@ -209,16 +209,19 @@ function GoogleConnectCard() {
       {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
 
       {/* Signed in, but nothing has arrived yet. This is genuinely ambiguous — a first sync
-          still running, a profile with no reviews, or a half-failed connect (observed
-          2026-07-14: consent completed, then the platform failed to reach Google and attached
-          nothing). We can't distinguish these via their API, so don't pretend to. */}
+          still running, a profile with no reviews, or a half-failed connect. The main cause of
+          the last one (confirmed by the review platform, 2026-07-16): the client unticked the
+          "manage your Business Profile" permission on Google's consent screen — sign-in still
+          succeeds, but profiles can't be read. So the retry guidance names that checkbox. */}
       {state?.awaitingReviews && (
         <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5">
           <p className="text-xs font-medium text-amber-900">Signed in with Google — waiting for your reviews</p>
           <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
             Your first sync can take a few minutes. If nothing appears within an hour (and your
-            Google listing does have reviews), connect again below — occasionally the profile
-            doesn't finish linking.
+            Google listing does have reviews), connect again below — and on Google&apos;s
+            permission screen, make sure <span className="font-medium">&ldquo;See, edit, create and
+            delete your Business Profile&rdquo;</span> stays ticked. Skipping that box is the most
+            common reason reviews never arrive.
           </p>
         </div>
       )}
@@ -234,7 +237,10 @@ function GoogleConnectCard() {
           </button>
           {waiting && (
             <p className="text-xs text-slate-500 mt-2">
-              Finish signing in with Google in the new tab. This page updates automatically once you're done.
+              Finish signing in with Google in the new tab — and keep the{' '}
+              <span className="font-medium">&ldquo;See, edit, create and delete your Business
+              Profile&rdquo;</span> permission ticked, or your reviews can&apos;t sync. This page
+              updates automatically once you&apos;re done.
             </p>
           )}
         </>

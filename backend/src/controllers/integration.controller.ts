@@ -40,6 +40,13 @@ async function loadEmrConnectState(clientId: string) {
   // profiles — no profile attached, no review ever synced. So the flag was set on a connection
   // that did not exist.
   //
+  // ROOT CAUSE (confirmed by EMR support, 2026-07-16): the client completed Google SIGN-IN but
+  // the "See, edit, create and delete your Business Profile" scope checkbox was unticked on
+  // Google's consent screen. Sign-in succeeds without it (stamping completed_oauth_at); the
+  // profile-listing step then fails for lack of that one scope. OAuth success != scope granted.
+  // EMR now surfaces the missing permission at sign-in in their flow, but the stamp semantics
+  // are unchanged — reviews-arriving remains the only trustworthy signal.
+  //
   // The only signal that cannot lie is reviews actually arriving. We therefore report three
   // states rather than fake a binary we cannot determine:
   //   - not started       : no completed OAuth
