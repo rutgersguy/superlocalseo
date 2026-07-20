@@ -50,10 +50,16 @@ router.post('/emr', async (req: Request, res: Response) => {
 
   logger.info('EMR webhook received', { eventType, organizationId });
 
-  // Resolve our client from the EMR organization ID
+  // Resolve our client from the EMR organization ID.
+  // The webhook's organization_id maps to clients.emr_organization_id (an integer column) —
+  // NOT emr_customer_id (the EMR sub-account id, a different value). Matching the wrong column
+  // silently dropped every inbound review.
   let clientId: string | null = null;
   if (organizationId) {
-    const client = await db('clients').where({ emr_customer_id: organizationId }).first<{ id: string }>();
+    const orgIdNum = Number(organizationId);
+    const client = Number.isFinite(orgIdNum)
+      ? await db('clients').where({ emr_organization_id: orgIdNum }).first<{ id: string }>()
+      : null;
     clientId = client?.id ?? null;
     if (!clientId) {
       logger.warn('EMR webhook: no client matched organization', { organizationId, eventType });
