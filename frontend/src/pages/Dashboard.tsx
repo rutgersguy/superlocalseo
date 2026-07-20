@@ -319,11 +319,19 @@ function GBPNudgeBanner() {
   if (dismissed) return null;
   // Only show once onboarding is fully complete
   if ((clientData?.data?.onboardingStep ?? 0) < 4) return null;
-  // Hide once Google is connected
-  const googleConnected = (integrationsData?.data ?? []).some(
+  const integrations = integrationsData?.data ?? [];
+  // Hide once Google is connected via native OAuth.
+  const googleConnected = integrations.some(
     (i) => i.provider === 'google' && i.status === 'connected',
   );
-  if (googleConnected) return null;
+  // Also hide when review sync is already live through EmbedMyReviews — our default review
+  // pipeline. The native Google OAuth above is a SEPARATE (currently quota-blocked) connection,
+  // and rankings come from the SERP provider, not GBP. So an EMR-connected client already has
+  // the "review sync and ranking data" this banner offers; nagging them to reconnect is wrong.
+  const emrConnected = integrations.some(
+    (i) => i.provider === 'embedmyreviews' && i.status === 'connected',
+  );
+  if (googleConnected || emrConnected) return null;
   // Wait for both fetches before rendering to avoid flash
   if (!clientData || !integrationsData) return null;
 
