@@ -2,6 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **Host doctrine — `/root/CLAUDE.md`.** Machine-wide rules live there: the deploy-source map,
+> credential setup, the testing bar (*"working" means you ran it and saw the expected output*),
+> the commit-and-survive-a-rebuild requirement, and triage order.
+> **This repo is outside `/root`, so that file is NOT auto-loaded — read it at the start of any
+> non-trivial task here.** This file governs *how* to build in this repo; for anything ambiguous
+> or unstated here, defer to `/root/CLAUDE.md`.
+
 ## Common Commands
 
 ```bash
