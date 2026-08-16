@@ -1,41 +1,28 @@
-import { chromium } from '@playwright/test';
-import { registerViaAPI } from './helpers/auth';
-import { cleanupTestUsers, dbQuery } from './helpers/db';
-import * as fs from 'fs';
+import { cleanupTestUsers } from './helpers/db';
+import { BASE_URL, IS_PRODUCTION_TARGET } from './config';
 
-const BASE_URL = 'http://localhost:5173';
-
-async function uiLogin(email: string, password: string, authPath: string) {
-  const browser = await chromium.launch();
-  const ctx = await browser.newContext({ baseURL: BASE_URL });
-  const page = await ctx.newPage();
-  await page.goto('/login');
-  await page.locator('input[type="email"]').fill(email);
-  await page.locator('input[type="password"]').fill(password);
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await page.waitForURL(/\/(dashboard|onboarding|admin)/, { timeout: 20_000 });
-  await ctx.storageState({ path: authPath });
-  await browser.close();
-}
-
+/**
+ * Global setup is deliberately minimal.
+ *
+ * It used to UI-login the admin and a throwaway client and write storageState to
+ * tests/e2e/.auth/*.json — roughly 30s of browser work per run producing artifacts
+ * that NO spec ever read (`grep -rn storageState tests/` → zero hits). Specs log in
+ * fresh in beforeEach instead, because the refresh token is single-use and rotates:
+ * a reused storageState logs the next test out mid-run.
+ *
+ * That dead code also made the whole suite fail hard if the hardcoded admin
+ * password ever changed. Removed 2026-08-16.
+ */
 async function globalSetup() {
+  if (IS_PRODUCTION_TARGET) {
+    // Loud, because it is: these specs write to the live customer database.
+    console.warn(
+      `\n  ⚠  e2e target is PRODUCTION (${BASE_URL}).\n` +
+      `     Test users (pw-*@test.com) are created and deleted in the live DB.\n` +
+      `     Set E2E_BASE_URL to a test stack as soon as one exists.\n`
+    );
+  }
   cleanupTestUsers();
-  fs.mkdirSync('tests/e2e/.auth', { recursive: true });
-
-  // Admin session
-  await uiLogin('hello@superlocalseo.com', 'Admin#Test2026!', 'tests/e2e/.auth/admin.json');
-
-  // Create client user for dashboard tests
-  const clientEmail = `pw-dashboard-${Date.now()}@test.com`;
-  const clientPassword = 'TestPass123!';
-  await registerViaAPI(clientEmail, clientPassword, 'Dashboard Test Biz');
-  dbQuery(`UPDATE clients SET onboarding_step = 4, subscription_status = 'trialing', trial_ends_at = NOW() + INTERVAL '7 days' WHERE user_id = (SELECT id FROM users WHERE email = '${clientEmail}')`);
-  dbQuery(`UPDATE users SET email_verified = true WHERE email = '${clientEmail}'`);
-
-  // Client session — separate browser to avoid cookie contamination
-  await uiLogin(clientEmail, clientPassword, 'tests/e2e/.auth/client.json');
-
-  fs.writeFileSync('tests/e2e/.auth/meta.json', JSON.stringify({ clientEmail }));
 }
 
 export default globalSetup;

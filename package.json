@@ -1,5 +1,15 @@
 {
+  "name": "superlocalseo-e2e",
+  "private": true,
+  "scripts": {
+    "e2e": "playwright test",
+    "e2e:list": "playwright test --list",
+    "e2e:typecheck": "./backend/node_modules/.bin/tsc -p tsconfig.e2e.json",
+    "e2e:new-user": "playwright test 09-new-user-zero-data",
+    "e2e:pricing": "playwright test 10-pricing-consistency"
+  },
   "devDependencies": {
-    "@playwright/test": "^1.59.1"
+    "@playwright/test": "^1.59.1",
+    "@types/node": "^20.19.43"
   }
 }

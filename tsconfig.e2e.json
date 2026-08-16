@@ -2,10 +2,15 @@
   "compilerOptions": {
     "target": "ES2020",
     "module": "commonjs",
-    "lib": ["ES2020"],
+    "moduleResolution": "node",
+    // DOM is required: Playwright's types reference HTMLElement/Node, and
+    // page.evaluate() callbacks run in a browser context.
+    "lib": ["ES2020", "DOM"],
+    "types": ["node"],
     "strict": true,
     "esModuleInterop": true,
-    "outDir": "dist",
+    "skipLibCheck": true,
+    "noEmit": true,
     "baseUrl": "."
   },
   "include": ["tests/e2e/**/*.ts", "playwright.config.ts"]
