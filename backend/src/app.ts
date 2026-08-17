@@ -25,7 +25,14 @@ app.disable('etag'); // prevent 304s on authenticated API responses
 // hop count of 1 resolves req.ip to the real client. See issue #161.
 app.set('trust proxy', 1);
 
-// Stripe webhook needs raw body — must come before json parser
+// Log first, so webhook traffic is visible. /webhooks was previously mounted
+// ABOVE requestLogger, which meant inbound Stripe and EMR requests never
+// appeared in the request log at all — the reason it was impossible to tell
+// what EMR was actually sending, or whether it was sending anything (#148).
+app.use(requestLogger);
+
+// Webhooks need the RAW body for signature verification, so they must be
+// mounted before express.json() (see the RAW_BODY_PATHS note below).
 app.use('/webhooks', express.raw({ type: 'application/json' }), webhookRouter);
 
 app.use(helmet());
@@ -63,7 +70,6 @@ app.use((req, res, next) => {
   return jsonParser(req, res, next);
 });
 app.use(cookieParser());
-app.use(requestLogger);
 app.use(httpMetricsMiddleware);
 app.use(generalLimiter);
 

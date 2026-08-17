@@ -156,94 +156,9 @@ interface WebhookPayload {
   verified?: boolean | null;
 }
 
-export async function webhook(req: Request, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const payload = req.body as WebhookPayload;
-
-    // EMR uses 'source' for platform name in webhook payloads
-    const platform = payload.platform ?? payload.source;
-    if (!payload.id || !platform) {
-      err(res, 'Missing required fields', 400, 'BAD_REQUEST');
-      return;
-    }
-
-    // Find the client by matching API key (webhook includes client context)
-    const locationId = payload.location_id ?? null;
-    let clientId: string | null = null;
-
-    if (locationId) {
-      const location = await db('locations').where({ id: locationId }).first();
-      if (location) clientId = location.client_id as string;
-    }
-
-    if (!clientId) {
-      logger.warn('Webhook received but could not associate with a client', { externalId: payload.id });
-      res.status(200).json({ received: true });
-      return;
-    }
-
-    const event = payload.event ?? 'review.created';
-    const now = new Date();
-
-    if (event === 'review.updated') {
-      // Sync reply/status fields only — don't overwrite user-visible review content
-      await db('reviews')
-        .where({ platform, external_review_id: payload.id })
-        .update({
-          replied: payload.replied ?? !!payload.reply,
-          reply_date: payload.reply_date ? new Date(payload.reply_date) : null,
-          emr_reply_text: payload.reply ?? null,
-          hidden: payload.hidden ?? false,
-          ingested_at: now,
-        });
-    } else {
-      // review.created — full upsert
-      const reviewDate = payload.date ? new Date(payload.date) : now;
-      const authorName = payload.author_name ?? payload.author ?? 'Unknown';
-      const body = payload.body ?? payload.message ?? null;
-      const platformUrl = payload.url ?? payload.source_url ?? null;
-
-      await db('reviews')
-        .insert({
-          client_id: clientId,
-          location_id: locationId,
-          platform,
-          external_review_id: payload.id,
-          author_name: authorName,
-          rating: payload.rating ?? null,
-          body,
-          sentiment: null,
-          status: 'new',
-          review_date: reviewDate,
-          ingested_at: now,
-          platform_url: platformUrl,
-          replied: payload.replied ?? !!payload.reply,
-          reply_date: payload.reply_date ? new Date(payload.reply_date) : null,
-          emr_reply_text: payload.reply ?? null,
-          hidden: payload.hidden ?? false,
-          avatar_url: payload.avatar ?? null,
-          verified: payload.verified ?? null,
-        })
-        .onConflict(['client_id', 'platform', 'external_review_id'])
-        .merge({
-          author_name: authorName,
-          rating: payload.rating ?? null,
-          body,
-          platform_url: platformUrl,
-          replied: payload.replied ?? !!payload.reply,
-          reply_date: payload.reply_date ? new Date(payload.reply_date) : null,
-          emr_reply_text: payload.reply ?? null,
-          hidden: payload.hidden ?? false,
-          avatar_url: payload.avatar ?? null,
-          verified: payload.verified ?? null,
-          ingested_at: now,
-        });
-    }
-
-    logger.info('EMR webhook processed', { event, externalId: payload.id, platform });
-    res.status(200).json({ received: true });
-  } catch (e) {
-    next(e);
-  }
-}
+// NOTE: the inbound EMR webhook handler that used to live here has been removed.
+// It matched clients on locations.id — a value EMR never sends — so it silently
+// dropped every payload, while the endpoint that DID work (/webhooks/emr) had no
+// authentication at all. Both URLs now share one authenticated implementation in
+// controllers/emr_webhook.controller.ts (issue #148).
 

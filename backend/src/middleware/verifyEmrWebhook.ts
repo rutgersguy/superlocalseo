@@ -68,7 +68,8 @@ export function verifyEmrWebhook(req: Request, res: Response, next: NextFunction
   // drop live review ingestion, but this MUST be closed by setting the token.
   logger.error(
     'EMR webhook verification SKIPPED — neither EMBEDMYREVIEWS_WEBHOOK_TOKEN nor _SECRET is set. '
-    + 'POST /api/reviews/webhook is UNAUTHENTICATED. Set EMBEDMYREVIEWS_WEBHOOK_TOKEN (and append '
+    + 'POST /webhooks/emr and POST /api/reviews/webhook are UNAUTHENTICATED. Set '
+    + 'EMBEDMYREVIEWS_WEBHOOK_TOKEN (and append '
     + '?token=<value> to the webhook URL registered in EMR) to enforce.',
   );
   next();
