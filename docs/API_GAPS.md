@@ -496,7 +496,19 @@ It does **not** remove the client Google OAuth step; the client grants BrightLoc
 
 **Also dropped from this ticket: GBP Q&A.** Google discontinued the My Business Q&A API on 2025-11-03 ("you can no longer read or post questions and answers using the API", https://developers.google.com/my-business/content/qanda/change-log) and is removing the public Q&A surface from Business Profiles. No vendor can do this. Do not build it.
 
-**Open questions before committing (ask BrightLocal sales):** (1) can the GBP OAuth connect be initiated via API, or is it UI-only — if UI-only it punches a hole in our white-label UX; (2) exact plan tier required for the Listings Management API (their API page says Grow, their help center says Track/Manage — the docs conflict); (3) the per-request API fee schedule charged on top of the plan.
+**~~Open questions before committing~~ — ALL ANSWERED by BrightLocal 2026-07-14** (see the
+"BrightLocal — answered" table in `INTEGRATIONS.md`): (1) GBP OAuth **can** be initiated via API,
+so white-label UX is preserved; (2) the tier is **Manage** or Grow — take **Manage**, since Grow's
+premium is review response and BrightLocal cannot post replies via API at all; (3) there are **no
+per-request fees**, just the subscription, with a 300/min rate limit. What remains is a purchase
+decision (~$109/mo at 10 locations), not a vendor question.
+
+**The one question still outstanding (2026-08-17):** the **Data API** (`api.brightlocal.com/data/v1`)
+returns `401 {"message":"Unauthorized."}` on every call, while the **Management API** on the same
+host with the **same key** returns 200. A deliberately invalid key produces a byte-identical
+response, and there are no rate-limit headers, so we cannot tell from outside whether the key
+lacks Data API entitlement or a quota has been exhausted — issue #80 noted BrightLocal returns 401
+rather than 429 for quota. This is what has left Citations serving 90-day-old data. See #149.
 
 ### Schema
 **Migration:** `20260501960000_gbp_listings.ts`
