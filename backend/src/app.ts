@@ -40,7 +40,28 @@ app.use(cors({
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 }));
-app.use(express.json({ limit: '100kb' }));
+// Paths whose handlers need the RAW request body for signature verification.
+//
+// express.json() sets req._body = true, which makes any downstream express.raw()
+// a no-op — so a route-level raw parser cannot rescue a path that this has
+// already consumed. Stripe then receives a parsed object where it requires the
+// original bytes and every signature check fails with:
+//   "Webhook payload must be provided as a string or a Buffer ...
+//    Signature verification is impossible without the original signed material."
+//
+// That is exactly what happened to /api/billing/webhook — the endpoint Stripe
+// was actually configured to call — so NO Stripe event was ever processed in
+// production and paying did not activate a plan (issue #147).
+//
+// /webhooks/* is already safe: it is mounted above with express.raw() BEFORE
+// this line. This list covers the legacy path that is not.
+const RAW_BODY_PATHS = new Set(['/api/billing/webhook']);
+
+const jsonParser = express.json({ limit: '100kb' });
+app.use((req, res, next) => {
+  if (RAW_BODY_PATHS.has(req.path)) return next();
+  return jsonParser(req, res, next);
+});
 app.use(cookieParser());
 app.use(requestLogger);
 app.use(httpMetricsMiddleware);

@@ -90,6 +90,14 @@ Monorepo: `backend/` (Express API) + `frontend/` (React SPA) + `nginx.conf` prox
   no source mount. **`docker compose restart api` now silently re-runs the OLD code** — always
   `docker compose build api && docker compose up -d --no-deps api`. A broken file fails the build
   and never reaches the container.
+- **Signature-verifying webhooks must live under `/webhooks/*`.** That prefix is mounted with
+  `express.raw()` *before* the global JSON parser (`app.ts`). Anything under `/api` is parsed by
+  `express.json()` first, which sets `req._body = true` and makes a route-level `express.raw()` a
+  silent no-op — the handler then receives a parsed object and every signature check fails. That
+  broke the Stripe webhook in production for weeks (#147): no event was ever processed, so paying
+  did not activate a plan. `/api/billing/webhook` still works via an explicit exemption
+  (`RAW_BODY_PATHS` in `app.ts`), but **new** webhooks should use `/webhooks/*` rather than
+  extending that list.
 - **Migrations changed with #131.** The production image installs with `--omit=dev` and never
   copies `knexfile.ts`, so there is no knex CLI and `npx knex migrate:latest` no longer works. Use
   `docker exec superlocalseo-api node dist/db/migrate.js` (`status` / `rollback` also accepted).
