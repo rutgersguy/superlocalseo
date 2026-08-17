@@ -3,7 +3,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection';
 import { redis, storeRefreshToken, validateRefreshToken, revokeRefreshToken, revokeAllRefreshTokens } from '../db/redis';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt';
-import { createCustomer } from './stripe.service';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWelcomeEmail } from './email.service';
 import { logger } from '../utils/logger';
 
@@ -19,9 +18,18 @@ export async function register(email: string, password: string, businessName: st
   }
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-  const stripeCustomerId = await createCustomer(email, businessName);
 
-  const [user] = await db('users').insert({ email, password_hash: passwordHash, role: 'client', stripe_customer_id: stripeCustomerId }).returning('*');
+  // No Stripe call here, deliberately. This used to await a Stripe customer creation
+  // unguarded, so a Stripe outage or a rejected key returned 500 and NOBODY could
+  // sign up — before any row was written, so there was nothing to recover either
+  // (issue #177). Note the email sends below are already tolerated with .catch();
+  // Stripe was the one external dependency that could take signup down.
+  //
+  // The customer is created lazily at checkout instead, which is the only place
+  // it is needed — trials run 7 days with no card. billing.controller already
+  // calls getOrCreateStripeCustomer() on both checkout paths, so nothing else
+  // has to change.
+  const [user] = await db('users').insert({ email, password_hash: passwordHash, role: 'client' }).returning('*');
   const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   const [client] = await db('clients').insert({ user_id: user.id, business_name: businessName, subscription_tier: 1, subscription_status: 'trialing', trial_ends_at: trialEndsAt }).returning('*');
 
@@ -128,13 +136,13 @@ export async function googleSignIn(googleId: string, email: string, displayName:
       status = 'linked';
     } else {
       // Brand-new user via Google
-      const stripeCustomerId = await createCustomer(email, displayName);
+      // Same reasoning as the password path above — no Stripe on the signup
+      // critical path; the customer is created lazily at checkout (#177).
       const [newUser] = await db('users').insert({
         email,
         google_id: googleId,
         password_hash: null,
         role: 'client',
-        stripe_customer_id: stripeCustomerId,
         email_verified: true,
       }).returning('*');
       await db('clients').insert({

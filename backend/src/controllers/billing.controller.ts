@@ -92,8 +92,11 @@ export async function validatePromo(req: Request, res: Response, next: NextFunct
 export async function portal(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const user = await db('users').where({ id: req.userId }).first();
-    if (!user?.stripe_customer_id) { err(res, 'No billing account found', 400, 'NO_STRIPE_CUSTOMER'); return; }
-    const url = await getBillingPortalUrl(user.stripe_customer_id as string, `${config.appUrl}/dashboard/settings?tab=billing`);
+    if (!user?.email) { err(res, 'No billing account found', 400, 'NO_STRIPE_CUSTOMER'); return; }
+    // Customers are created lazily now (#177), so a user who has never checked
+    // out has no stripe_customer_id yet. Create on demand rather than erroring.
+    const customerId = await getOrCreateStripeCustomer(req.userId!, user.email as string);
+    const url = await getBillingPortalUrl(customerId, `${config.appUrl}/dashboard/settings?tab=billing`);
     ok(res, { url });
   } catch (e) { next(e); }
 }
