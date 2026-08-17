@@ -5,6 +5,7 @@ import { QrCode, Download, Trash2, Plus, AlertCircle, CheckCircle2, ExternalLink
 import { apiFetch, fetcher } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { useClient } from '../hooks/useClient';
+import UnauditedDirectories from '../components/UnauditedDirectories';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1477,6 +1478,10 @@ function LocationsTab({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div className="space-y-4">
+      {/* Apple Maps and Bing Places cannot be audited automatically — the NAP
+          shown here is what the customer must match when claiming them (#173). */}
+      <UnauditedDirectories />
+
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-slate-600">
