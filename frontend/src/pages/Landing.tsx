@@ -50,7 +50,7 @@ const faqs = [
   },
   {
     q: 'What goes in the monthly PDF report?',
-    a: 'Each report includes an executive summary, keyword ranking trends with deltas vs. the prior month, review volume and rating breakdown, citation health score, and a recommendations section. Reports are generated on the 1st of each month and emailed automatically.',
+    a: 'Each report includes an executive summary, keyword ranking trends with deltas vs. the prior month, review volume and rating breakdown, and a recommendations section. Reports are generated on the 1st of each month and emailed automatically.',
   },
   {
     q: 'Can I add team members?',
@@ -94,8 +94,8 @@ const featureCards = [
     Icon: Star,
   },
   {
-    title: 'Citation Health',
-    desc: 'See which directories list your business — and exactly where your name, address or phone has drifted out of sync.',
+    title: 'Citation Building',
+    desc: 'A guided workflow to get your business listed consistently across the directories that matter for local search.',
     Icon: MapPin,
   },
   {
@@ -110,7 +110,7 @@ const featureCards = [
   },
   {
     title: 'Automated Monthly Reports',
-    desc: 'A PDF report lands in your inbox on the 1st of every month — rankings, reviews, citations, and recommendations.',
+    desc: 'A PDF report lands in your inbox on the 1st of every month — rankings, reviews, and recommendations.',
     Icon: FileText,
   },
   {
@@ -323,7 +323,7 @@ export default function Landing() {
               <ul className="space-y-3 mb-8 flex-1">
                 {[
                   { label: 'Everything in Lite', pro: true },
-                  { label: 'Citation building & health monitoring', pro: true },
+                  { label: 'Guided citation building across 40+ directories', pro: true },
                   { label: 'Geo-grid visibility heatmaps', pro: true },
                   { label: 'Competitor benchmarking & intelligence', pro: true },
                   { label: 'Full local SEO audits', pro: true },
