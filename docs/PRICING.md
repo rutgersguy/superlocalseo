@@ -27,6 +27,7 @@ picked a plan at all). **Derive from `productLine`; never hardcode a price or a 
 | Trial upsell banner | `Dashboard.tsx` | "from $149/mo · No setup fee" |
 | Registration plan picker | `Register.tsx` | |
 | Landing page + FAQ | `Landing.tsx` | |
+| **SEO structured data** | `frontend/index.html` | JSON-LD `AggregateOffer` `lowPrice`/`highPrice`. **Easy to miss — it is not React.** It shipped the retired $350–$1200 tiers to Google for months (#153). |
 | `BillingWall.tsx` | — | **Dead code — unrouted.** Its checkout call POSTs no `plan`, so the backend defaults to `'pro'`: reviving it as-is would bill Pro with no chance to pick Lite. |
 
 ### Vendor cost: BrightLocal Active Sync (quoted 2026-07-14)

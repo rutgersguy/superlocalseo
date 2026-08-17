@@ -74,6 +74,9 @@ function formatLocation(l: Record<string, unknown>) {
     lng: l.lng != null ? Number(l.lng) : null,
     isPrimary: l.is_primary,
     brightlocalCampaignId: l.brightlocal_campaign_id,
+    // Needed by the QR-code review-URL auto-fill. It was never serialised, so
+    // even once the dropdown was populated the auto-fill could not fire (#155).
+    googlePlaceId: l.google_place_id ?? null,
     serviceArea: (l.service_area as string[]) ?? [],
     createdAt: l.created_at,
   };

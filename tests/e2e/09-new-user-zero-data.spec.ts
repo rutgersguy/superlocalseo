@@ -299,15 +299,11 @@ test.describe('Suite 09 — New user, zero data', () => {
   // ---------------------------------------------------------- known live defect
 
   test('TEST-ZD-13 — the add-a-location link goes to Settings, not the marketing site', async ({ page }) => {
-    // KNOWN FAILURE — documented in the QA plan as suite F.
-    // Rankings.tsx:316 and :640 link to "/settings?tab=locations", which is not a
-    // route. App.tsx's catch-all then redirects to "/", so a logged-in user
-    // following the app's own guidance lands on the marketing homepage.
-    // Correct target: /dashboard/settings?tab=locations
-    //
-    // test.fail() means this is expected to fail today and will alert us the
-    // moment it starts passing, i.e. when the bug is fixed.
-    test.fail();
+    // Regression guard. Rankings.tsx:316 and :640 used to link to
+    // "/settings?tab=locations", which is not a route — App.tsx's catch-all then
+    // redirected to "/", so a logged-in user following the app's own guidance
+    // landed on the marketing homepage. Fixed in #152; this now asserts the real
+    // behaviour rather than documenting the bug.
 
     await loginViaUI(page, client.email, client.password);
     await page.goto('/dashboard/rankings');

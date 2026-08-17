@@ -755,12 +755,16 @@ interface QRCodeEntry {
 interface Location {
   id: string;
   name: string;
-  google_place_id: string | null;
+  googlePlaceId: string | null;
 }
 
 function QRTab() {
   const { data, isLoading } = useSWR<{ success: boolean; data: { qrCodes: QRCodeEntry[] } }>('/qr', fetcher);
-  const { data: locsData } = useSWR<{ success: boolean; data: { locations: Location[] } }>('/locations', fetcher);
+  // GET /locations returns a bare array in `data` (location.controller.ts:85),
+  // not { locations: [...] }. Reading data.locations therefore always yielded
+  // undefined, so this dropdown was permanently empty and the Google
+  // review-URL auto-fill below could never fire (issue #155).
+  const { data: locsData } = useSWR<{ success: boolean; data: Location[] }>('/locations', fetcher);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: '', targetUrl: '', locationId: '' });
   const [saving, setSaving] = useState(false);
@@ -769,11 +773,11 @@ function QRTab() {
   const imgRef = useRef<HTMLImageElement>(null);
 
   const qrCodes = data?.data?.qrCodes ?? [];
-  const locations = locsData?.data?.locations ?? [];
+  const locations = locsData?.data ?? [];
 
   function getReviewUrl(loc: Location) {
-    if (!loc.google_place_id) return '';
-    return `https://search.google.com/local/writereview?placeid=${loc.google_place_id}`;
+    if (!loc.googlePlaceId) return '';
+    return `https://search.google.com/local/writereview?placeid=${loc.googlePlaceId}`;
   }
 
   function handleLocationChange(locId: string) {
@@ -881,7 +885,7 @@ function QRTab() {
             <p className="text-xs text-slate-400 mt-1">
               Get your Google review link from{' '}
               <a href="https://business.google.com" target="_blank" rel="noopener noreferrer" className="text-brand-500 hover:underline">Google Business Profile</a>.
-              {form.locationId && locations.find((l) => l.id === form.locationId)?.google_place_id && (
+              {form.locationId && locations.find((l) => l.id === form.locationId)?.googlePlaceId && (
                 <span className="text-green-600 ml-1">Auto-filled from location.</span>
               )}
             </p>

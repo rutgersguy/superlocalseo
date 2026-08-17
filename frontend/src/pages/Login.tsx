@@ -35,8 +35,23 @@ export default function Login() {
         setGoogleOnlyHint(true);
       } else if (e.code === 'USER_NOT_FOUND') {
         setNoAccountHint(true);
-      } else {
+      } else if (e.code === 'INVALID_CREDENTIALS') {
         setError('Invalid email or password');
+      } else {
+        // NOT a credentials problem. Everything unrecognised used to land on
+        // "Invalid email or password", so any outage — a 5xx, a proxy
+        // misconfiguration, the API being down — told every user their password
+        // was wrong. They reset it, fail again, and churn, and nobody reports an
+        // outage because it doesn't look like one (issue #150).
+        //
+        // apiFetch throws `Server error (<status>) — please try again.` for
+        // non-JSON responses, so that message is already meaningful; surface it
+        // rather than overwriting it.
+        setError(
+          e.message && /server error/i.test(e.message)
+            ? e.message
+            : "We couldn't reach the server. Please try again in a moment.",
+        );
       }
     } finally {
       setLoading(false);

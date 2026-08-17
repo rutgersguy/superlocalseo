@@ -194,6 +194,7 @@ function VerifyEmailBanner() {
     fetcher,
   );
   const [sent, setSent] = useState(false);
+  const [resendError, setResendError] = useState('');
   const [sending, setSending] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const client = data?.data;
@@ -202,10 +203,22 @@ function VerifyEmailBanner() {
   const resend = async () => {
     setSending(true);
     try {
-      await apiFetch('/auth/resend-verification', { method: 'POST', body: JSON.stringify({ email: client.email }) });
-      setSent(true);
-    } catch { /* non-critical — ignore */ }
-    finally { setSending(false); }
+      // apiFetch does NOT throw on 4xx/5xx when the response is JSON — it returns
+      // the parsed error body. So `setSent(true)` used to run even on failure,
+      // and because the button renders behind {!sent} it then vanished, leaving
+      // no way to retry and a user waiting for an email that never sent (#154).
+      const res = await apiFetch<{ success: boolean; error?: { message: string } }>(
+        '/auth/resend-verification',
+        { method: 'POST', body: JSON.stringify({ email: client.email }) },
+      );
+      if (res?.success) {
+        setSent(true);
+      } else {
+        setResendError(res?.error?.message ?? 'Could not send the email. Please try again.');
+      }
+    } catch (e) {
+      setResendError((e as Error).message || 'Could not send the email. Please try again.');
+    } finally { setSending(false); }
   };
 
   return (
@@ -213,7 +226,9 @@ function VerifyEmailBanner() {
       <span>
         {sent
           ? 'Verification email sent — check your inbox.'
-          : 'Please verify your email address to secure your account and keep receiving reports.'}
+          : resendError
+            ? resendError
+            : 'Please verify your email address to secure your account and keep receiving reports.'}
       </span>
       <div className="flex items-center gap-3 shrink-0">
         {!sent && (
