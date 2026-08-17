@@ -155,3 +155,26 @@ export async function assertRendered(page: Page, headingPattern: RegExp): Promis
     timeout: 15_000,
   });
 }
+
+/**
+ * Inserts a location_audit in a given state.
+ *
+ * `createdAt` is offset in hours so tests can place an audit inside or outside
+ * the 24h throttle and the 30-minute stale-processing cutoff.
+ */
+export function seedAudit(opts: {
+  email: string;
+  locationId: string;
+  status: 'processing' | 'failed' | 'complete';
+  hoursAgo?: number;
+}): string {
+  const clientId = clientIdFor(opts.email);
+  const hours = opts.hoursAgo ?? 0;
+  const score = opts.status === 'complete' ? '72' : 'NULL';
+  return dbScalar(`
+    INSERT INTO location_audits (client_id, location_id, status, composite_score, created_at, updated_at)
+    VALUES ('${clientId}', '${opts.locationId}', '${opts.status}', ${score},
+            NOW() - INTERVAL '${hours} hours', NOW() - INTERVAL '${hours} hours')
+    RETURNING id
+  `);
+}

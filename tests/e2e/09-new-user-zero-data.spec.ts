@@ -6,6 +6,7 @@ import {
   seedLocation,
   seedKeyword,
   seedRankingSnapshot,
+  seedAudit,
   watchPageErrors,
   assertRendered,
   TestClient,
@@ -301,6 +302,66 @@ test.describe('Suite 09 — New user, zero data', () => {
     await expect(page.getByRole('heading', { name: 'Rankings' })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('button', { name: 'Scan now' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Refresh' })).toHaveCount(0);
+  });
+
+  // ------------------------------------------------- audit trigger gating (#178)
+
+  test('TEST-ZD-14 — a stuck audit does not permanently disable Run Audit', async ({ page }) => {
+    // The throttle used to gate on the most recent audit of ANY status, so one run
+    // that hung disabled the button for 24h while the page said "No audit data yet"
+    // and the tooltip claimed it had run — "Run Audit does nothing" (#178, #100.3).
+    // 2h old: past the 30-minute stale cutoff, so it must be treated as dead.
+    const locationId = seedLocation(client.email, { name: 'Audit Office' });
+    seedAudit({ email: client.email, locationId, status: 'processing', hoursAgo: 2 });
+
+    await loginViaUI(page, client.email, client.password);
+    await page.goto('/dashboard/audit');
+    await page.waitForLoadState('networkidle');
+
+    const runAudit = page.getByRole('button', { name: /Run Audit/i });
+    await expect(runAudit).toBeVisible({ timeout: 15_000 });
+    await expect(runAudit).toBeEnabled();
+  });
+
+  test('TEST-ZD-15 — a failed audit leaves Run Audit available and says so', async ({ page }) => {
+    // A failed run must not consume the daily allowance.
+    const locationId = seedLocation(client.email, { name: 'Audit Office' });
+    seedAudit({ email: client.email, locationId, status: 'failed', hoursAgo: 1 });
+
+    await loginViaUI(page, client.email, client.password);
+    await page.goto('/dashboard/audit');
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.getByRole('button', { name: /Run Audit/i })).toBeEnabled({ timeout: 15_000 });
+    // And the page must not pretend no audit was ever attempted.
+    await expect(page.getByText(/didn't finish|did not finish/i)).toBeVisible();
+  });
+
+  test('TEST-ZD-16 — a recent COMPLETED audit still throttles for 24h', async ({ page }) => {
+    // The throttle itself is correct — it protects a metered upstream. Only the
+    // status-blindness was wrong.
+    const locationId = seedLocation(client.email, { name: 'Audit Office' });
+    seedAudit({ email: client.email, locationId, status: 'complete', hoursAgo: 2 });
+
+    await loginViaUI(page, client.email, client.password);
+    await page.goto('/dashboard/audit');
+    await page.waitForLoadState('networkidle');
+
+    const runAudit = page.getByRole('button', { name: /Run Audit/i });
+    await expect(runAudit).toBeVisible({ timeout: 15_000 });
+    await expect(runAudit).toBeDisabled();
+  });
+
+  test('TEST-ZD-17 — an audit genuinely in flight shows progress, not an empty state', async ({ page }) => {
+    const locationId = seedLocation(client.email, { name: 'Audit Office' });
+    seedAudit({ email: client.email, locationId, status: 'processing', hoursAgo: 0 });
+
+    await loginViaUI(page, client.email, client.password);
+    await page.goto('/dashboard/audit');
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.getByText(/Audit in progress/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('No audit data yet. Run your first audit to see your Local SEO score.')).toHaveCount(0);
   });
 
   // ---------------------------------------------------------- known live defect

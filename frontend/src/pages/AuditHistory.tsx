@@ -425,13 +425,39 @@ export default function AuditHistory() {
     if (curr == null || prev == null) return null;
     return Math.round(curr - prev);
   };
-  const recentAuditDaysAgo = (() => {
-    const recent = allAudits.find((a) => a.locationId === effectiveLocationId);
-    if (!recent) return null;
-    return Math.floor((Date.now() - new Date(recent.createdAt).getTime()) / (1000 * 60 * 60 * 24));
-  })();
+  // The 24h throttle exists to protect a metered upstream, so it must only count
+  // audits that actually produced a result. It used to gate on the most recent
+  // audit of ANY status, so a single run that hung or failed disabled the button
+  // for a full day while the page still said "No audit data yet" and the tooltip
+  // claimed the audit had run — the user's experience was "Run Audit does
+  // nothing" with no way forward (issue #178, the concrete defect behind #100.3).
+  const auditsForLocation = allAudits.filter((a) => a.locationId === effectiveLocationId);
+  // NB: the pre-existing `latestAudit` above is the latest COMPLETE audit and
+  // drives the score cards. This one is the latest audit of any status.
+  const mostRecentAudit = auditsForLocation[0] ?? null;
+  const lastCompleted = auditsForLocation.find((a) => a.status === 'complete') ?? null;
 
-  const canTrigger = recentAuditDaysAgo === null || recentAuditDaysAgo >= 1;
+  const hoursSince = (iso: string) => (Date.now() - new Date(iso).getTime()) / 3_600_000;
+
+  // A run stuck in `processing` must not block the feature forever — after this
+  // it is treated as dead and the button comes back.
+  const STALE_PROCESSING_HOURS = 0.5;
+  const auditInProgress =
+    mostRecentAudit?.status === 'processing' && hoursSince(mostRecentAudit.createdAt) < STALE_PROCESSING_HOURS;
+
+  const completedDaysAgo = lastCompleted
+    ? Math.floor(hoursSince(lastCompleted.createdAt) / 24)
+    : null;
+
+  // Blocked only while a run is genuinely in flight, or while a SUCCESSFUL audit
+  // is still inside its 24h window. A failed or stale run leaves it enabled.
+  const canTrigger = !auditInProgress && (completedDaysAgo === null || completedDaysAgo >= 1);
+
+  const triggerBlockedReason = auditInProgress
+    ? 'An audit is already running — this usually takes a couple of minutes.'
+    : !canTrigger
+      ? 'Your audit runs automatically every day. You can also run one manually again tomorrow.'
+      : '';
 
   const chartData = Object.values(
     historyAudits
@@ -514,10 +540,10 @@ export default function AuditHistory() {
           <button
             onClick={() => void handleTrigger()}
             disabled={triggering || !canTrigger}
-            title={!canTrigger ? 'Your audit runs automatically every day. You can also run one manually again tomorrow.' : ''}
+            title={triggerBlockedReason}
             className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {triggering ? 'Starting…' : 'Run Audit'}
+            {triggering ? 'Starting…' : auditInProgress ? 'Running…' : 'Run Audit'}
           </button>
           </div>
         </div>
@@ -628,9 +654,26 @@ export default function AuditHistory() {
         </div>
       )}
 
-      {!isLoading && allAudits.length === 0 && (
+      {/* Gated on the absence of a COMPLETED audit, not on allAudits.length. With a
+          processing/failed audit present, allAudits.length was 1, so this block did
+          not render — and neither did the score cards, which need a completed audit.
+          The page showed nothing at all, which is the blank Audit page in #100.3. */}
+      {!isLoading && !latestAudit && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-12 text-center">
-          <p className="text-gray-400 text-sm">No audit data yet. Run your first audit to see your Local SEO score.</p>
+          {/* These three states all used to render as "No audit data yet", which
+              actively misled: a stuck or failed run looked identical to never
+              having run one (#178). */}
+          {auditInProgress ? (
+            <p className="text-gray-500 text-sm">
+              Audit in progress — this usually takes a couple of minutes. Results will appear here automatically.
+            </p>
+          ) : mostRecentAudit && mostRecentAudit.status !== 'complete' ? (
+            <p className="text-amber-700 text-sm">
+              Your last audit didn&apos;t finish. You can run another one now.
+            </p>
+          ) : (
+            <p className="text-gray-400 text-sm">No audit data yet. Run your first audit to see your Local SEO score.</p>
+          )}
         </div>
       )}
     </div>
