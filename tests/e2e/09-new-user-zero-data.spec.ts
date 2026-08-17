@@ -364,6 +364,66 @@ test.describe('Suite 09 — New user, zero data', () => {
     await expect(page.getByText('No audit data yet. Run your first audit to see your Local SEO score.')).toHaveCount(0);
   });
 
+  // --------------------------------- directories we cannot audit (#173)
+
+  test('TEST-ZD-18 — Citations links out to Apple and Bing with the exact NAP to match', async ({ page }) => {
+    // Apple Maps and Bing Places do not publish indexable listings, so no
+    // search-based audit can reach them. Rather than pretend, we point the
+    // customer at the free self-serve portals with the NAP they must match.
+    seedLocation(client.email, { name: 'Claim Test Co', city: 'Tulsa', state: 'OK' });
+
+    await loginViaUI(page, client.email, client.password);
+    await page.goto('/dashboard/citations');
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.getByText(/claim yourself/i)).toBeVisible({ timeout: 15_000 });
+
+    const apple = page.getByRole('link', { name: /Apple Business Connect/i });
+    const bing = page.getByRole('link', { name: /Bing Places/i });
+    await expect(apple).toHaveAttribute('href', 'https://businessconnect.apple.com');
+    await expect(bing).toHaveAttribute('href', 'https://www.bingplaces.com');
+    await expect(apple).toHaveAttribute('target', '_blank');
+    await expect(apple).toHaveAttribute('rel', /noopener/);
+
+    // The NAP must be shown verbatim so it can be matched character for character.
+    await expect(page.getByText('Claim Test Co', { exact: false }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Copy$/ })).toBeVisible();
+
+    // The copy must not read as an outage or a temporary gap.
+    const body = await page.locator('body').innerText();
+    expect(body).not.toMatch(/temporarily unavailable|coming soon|we're working on/i);
+  });
+
+  test('TEST-ZD-19 — the claim card is dismissible and stays dismissed', async ({ page }) => {
+    seedLocation(client.email, { name: 'Dismiss Test Co' });
+
+    await loginViaUI(page, client.email, client.password);
+    await page.goto('/dashboard/citations');
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.getByText(/claim yourself/i)).toBeVisible({ timeout: 15_000 });
+    await page.getByRole('button', { name: 'Dismiss' }).first().click();
+    await expect(page.getByText(/claim yourself/i)).toHaveCount(0);
+
+    // Survives a reload — dismissal is persisted, not component state.
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByText(/claim yourself/i)).toHaveCount(0);
+  });
+
+  test('TEST-ZD-20 — the claim card also appears in Settings > Locations', async ({ page }) => {
+    seedLocation(client.email, { name: 'Settings Claim Co' });
+
+    await loginViaUI(page, client.email, client.password);
+    await page.goto('/dashboard/settings');
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('button', { name: 'Locations', exact: true }).click();
+    await page.waitForTimeout(1200);
+
+    await expect(page.getByText(/claim yourself/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('link', { name: /Apple Business Connect/i })).toBeVisible();
+  });
+
   // ---------------------------------------------------------- known live defect
 
   test('TEST-ZD-13 — the add-a-location link goes to Settings, not the marketing site', async ({ page }) => {

@@ -4,6 +4,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { fetcher } from '../services/api';
+import UnauditedDirectories from '../components/UnauditedDirectories';
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -366,6 +367,10 @@ export default function Citations() {
           <FreshnessNotice lastPulledAt={summary.lastPulledAt ?? null} />
         </div>
       ) : null}
+
+      {/* Apple Maps and Bing Places cannot be audited by any search-based
+          method — we link the customer to the self-serve portals instead (#173). */}
+      <UnauditedDirectories />
 
       {/* Completeness over time */}
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
