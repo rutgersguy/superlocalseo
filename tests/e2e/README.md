@@ -1,128 +1,136 @@
 # End-to-end suite
 
-## Status: written, **not yet run**
+## Status: **86 passed / 6 skipped / 0 failed**
 
-Suites 09, 10 and 11 were authored on 2026-08-16 and have been **type-checked and
-collected but never executed**, by request — they should not run until the
-production issues they were written against are fixed. Expect selector churn on
-the first real run.
+Run 2026-08-17 against the isolated test stack, 3.7 minutes. The 6 skips are
+deliberate: 4 in `02-audit-lead` (`describe.skip` — the feature moved off-app) and
+2 in `11-issue-100-repro` (gated behind `RUN_COSTLY=1`).
 
-Suites 01–08 were verified passing on 2026-08-16 (49/49 runnable) once the base
-URL was corrected.
-
-## Why the base URL moved
-
-The suite hardcoded `http://localhost:5173` in three places. Commit `1ce0f32`
-(2026-07-10) switched the web container from the Vite dev server to a static nginx
-production build, and `frontend/nginx-frontend.conf` deliberately does **not**
-proxy `/api` — the outer reverse proxy does that on the public domain only.
-
-Result: `POST http://localhost:5173/api/auth/login` → **405 Not Allowed**. Global
-setup timed out and **all 56 tests were unrunnable for five weeks**. Nobody
-noticed because CI never invokes Playwright.
-
-The target now lives in one place, `tests/e2e/config.ts`, and defaults to the
-public origin because that is currently the only origin serving both the SPA and
-`/api`.
+## Running it
 
 ```bash
-# default target: https://superlocalseo.com  (PRODUCTION — writes to the live DB)
-npx playwright test
+docker compose -f docker-compose.test.yml up -d --build
+docker compose -f docker-compose.test.yml exec api node dist/db/migrate.js
+docker compose -f docker-compose.test.yml exec api node dist/db/seed-test.js
 
-# point at a test stack once one exists
 E2E_BASE_URL=http://localhost:5273 npx playwright test
 
-# type-check without running anything
-./backend/node_modules/.bin/tsc -p tsconfig.e2e.json
-
-# collect tests without running them
-npx playwright test --list
+docker compose -f docker-compose.test.yml down -v     # -v wipes the data
 ```
 
-## ⚠️ These tests write to the production database
+Needs `.env.test` (gitignored — copy `.env.test.example`). Stripe **test-mode**
+keys only: registration calls `createCustomer` synchronously, so a placeholder key
+500s every signup and therefore every spec.
 
-`helpers/db.ts` shells out to `docker exec superlocalseo-postgres psql`. Specs
-register real users (`pw-*@test.com`) and delete them in `afterEach` plus global
-teardown. There is no isolation, no seeding and no rollback, which is also why
-`workers: 1` is mandatory.
+```bash
+npm run e2e:typecheck        # type-check without running
+npx playwright test --list   # collect without running
+```
 
-**This is the top item to fix.** A second compose stack with its own Postgres and
-an `/api` proxy in the frontend container removes the risk and unlocks parallelism.
+## The stack (#159)
 
-## ⚠️ Rate limiting is now enforced in production (since 2026-08-16)
+Self-contained: its own Postgres, Redis, API and web on **55432 / 56379 / 3100 /
+5273**, nothing shared with production.
 
-Issue #161 set `NODE_ENV=production`, which switches the rate limiters back on:
-`authLimiter` allows **10 auth requests per 15 minutes per client IP**.
+- **`NODE_ENV=test`** — rate limiters skip. Every spec authenticates and the whole
+  run comes from one IP, so `authLimiter` (10 per 15 min) would otherwise trip
+  part-way through and report failures that are not app defects (#164).
+- **`DISABLE_WORKERS=true`** — a run cannot spend DataForSEO or BrightLocal credit,
+  provision an EmbedMyReviews organization, or send email.
+- **web uses the `test` Dockerfile target** — the same production build plus an
+  `/api` proxy, so the stack is one origin. A target rather than a bind-mounted
+  config, because single-file bind mounts are inode-pinned on this host and
+  silently ignore edits.
 
-Every spec registers and logs in, and the whole suite runs from one IP, so a full
-run will trip the limiter and produce spurious 401/429 failures partway through.
-Verified: the 10th auth request from this host now returns
-`{"code":"RATE_LIMITED"}`.
+**Everything derives from `E2E_BASE_URL`** (`config.ts`): the DB container and
+name, the API container, and the admin credentials. That is deliberate — the
+helpers previously shelled into the *production* Postgres by name, so the browser
+would hit the test stack while the helpers mutated live data. Deriving them from
+one value makes that combination unreachable.
 
-Until the isolated test stack exists (#159), either run suites in small batches
-with a gap between them, or run the stack with `NODE_ENV=test` — the limiters skip
-`test` as well as `development`. The test stack should set `NODE_ENV=test` for
-exactly this reason.
+Production verified untouched after the run: users/clients/locations/reviews
+unchanged at 6/5/3/8, zero stray `pw-%` users.
 
-`scripts/qa.sh` already has `SKIP_RATE_LIMIT_TEST=1` for the same problem.
+## Fixtures
+
+`seed-test.js` is idempotent (it clears `%@fixture.test` first) and **refuses to
+run** unless `NODE_ENV=test` and the database name contains `test`.
+
+| Account | Plan / status | Data |
+|---|---|---|
+| `admin@fixture.test` | admin | — |
+| `pro@fixture.test` | pro / active | location, 3 keywords, rankings (2 engines, both rank types, one NULL), 5 reviews, private feedback, campaign, citations |
+| `lite@fixture.test` | lite / active | same |
+| `trialing@fixture.test` | pro / trialing | — |
+| `newuser@fixture.test` | pro / trialing, `onboarding_step 0` | none — the null-state account |
+
+Password for all: `TestPass123!`
+
+The reviews and campaigns matter: those suites were blocked for months because no
+account on this host had any.
+
+## Pointing at production
+
+`E2E_BASE_URL=https://superlocalseo.com` still works and the helpers follow it.
+It writes real users to the live database and cleans them up by email pattern —
+use the test stack unless you are specifically verifying production.
 
 ## Cost and side-effect guardrails
 
 | Action | Consequence |
 |---|---|
 | `POST /clients/complete-onboarding` (clicking **Finish**) | Provisions a real EmbedMyReviews organization, enqueues BrightLocal + DataForSEO pulls. **Spends real money.** |
-| Rankings sync / geo-grid scan | DataForSEO, ~$0.002 per keyword·geo; a 7×7 grid ≈ $0.10. Balance was **$23.82** on 2026-08-16. |
+| Rankings sync / geo-grid scan | DataForSEO, ~$0.002 per keyword·geo; a 7×7 grid ≈ $0.10 |
 | BrightLocal Citation Builder **confirm** | $2/site, up to $30 per aggregator. **Never automate.** |
 | "Post to Google" review reply | Publishes live and permanently to a real public Google listing. No sandbox, no undo. **Never automate.** |
 
-Suite 11 is gated behind `RUN_COSTLY=1` for exactly this reason and must never run
-in CI.
+`DISABLE_WORKERS=true` covers the background jobs; the table above is about
+user-initiated actions a spec might click. Suite 11 is gated behind `RUN_COSTLY=1`
+and must never run in CI.
 
 ## Suites
 
-| File | Covers | State |
-|---|---|---|
-| `01-auth` | login/register UX, error branches | passing |
-| `02-audit-lead` | in-app audit lead magnet | `describe.skip` — feature moved off-app, safe to delete |
-| `03/04/05-onboarding` | wizard, multi-location, skip & resume | passing |
-| `06-dashboard` | nav smoke | passing, but 8 of 11 only assert `innerText.length > 50` — worth rewriting |
-| `07-admin` | admin console + a real 403 check | passing |
-| `08-lite-plan` | Lite plan gating | passing — the model to copy |
-| `09-new-user-zero-data` | **the null-state account**: render sweep, empty states, null counting/sorting, actionable failures, Lite's one scan | new, unrun |
-| `10-pricing-consistency` | every price surface swept in one pass, asserted against the live Stripe price object | new, unrun |
-| `11-issue-100-repro` | fresh vs. deleted-and-re-created account | new, unrun, `RUN_COSTLY=1` |
+| File | Covers |
+|---|---|
+| `01-auth` | login/register UX and every error branch |
+| `02-audit-lead` | `describe.skip` — feature moved off-app, safe to delete |
+| `03/04/05-onboarding` | wizard, multi-location, skip & resume |
+| `06-dashboard` | nav smoke — 8 of 11 only assert `innerText.length > 50`, worth rewriting |
+| `07-admin` | admin console, plus a real 403 check |
+| `08-lite-plan` | Lite plan gating |
+| `09-new-user-zero-data` | the null-state account: render sweep, empty states, null counting/sorting, actionable failure paths, Lite's one scan |
+| `10-pricing-consistency` | every price surface in one pass, asserted against the live Stripe price object |
+| `11-issue-100-repro` | fresh vs. deleted-and-re-created account (`RUN_COSTLY=1`) |
 
-## Tests expected to fail
+## Lessons from the first real run
 
-Two use `test.fail()` to document live defects — they will alert when the bug is
-fixed:
+Worth knowing before writing more — all four cost real debugging time:
 
-- **TEST-ZD-13** — `Rankings.tsx:316,640` link to `/settings?tab=locations`, which
-  is not a route. The catch-all dumps logged-in users on the marketing homepage.
-  Correct target: `/dashboard/settings?tab=locations`.
-- **TEST-PRICE-12** — `frontend/index.html:35-36` ships JSON-LD advertising the
-  retired `$350–$1200` tiers.
-
-## Known blockers these suites cannot work around
-
-- **Stripe webhooks all fail signature verification.** Global `express.json()`
-  (`app.ts:36`) pre-parses the body, so the route-level `express.raw()` on
-  `/api/billing/webhook` is skipped. Paying does not flip `product_line`, so
-  "user converts from trial to paid" is untestable end to end until it is fixed.
-- **Citations returns no data.** BrightLocal's Data API 401s and
-  `jobs/citations.job.ts` discards rejections without logging. Latest snapshot is
-  2026-05-18. Assert the empty state, not data.
-- **No `data-testid` anywhere.** Every selector is coupled to visible copy,
-  placeholders or ARIA labels — which is what caused the 18-test breakage in
-  `f46666d`. Add testids to forms as they are touched.
+1. **`RETURNING id` with `psql -t` prints the value AND `INSERT 0 1`.** Using the
+   raw output as a uuid produced `…\nINSERT 0 1` and broke every downstream
+   foreign key. Use `dbScalar()`, not `dbQuery()`, for anything returning a value.
+2. **Fixture names collide with assertions.** A fixture called *Fixture Admin*
+   made `getByRole('link', {name: 'Admin'})` match the business-name pill as well
+   as the nav link; a location called *Ungeocoded Office* matched a
+   `/geocod/i` assertion inside an `<option>`. Name fixtures so they cannot appear
+   in an assertion, and scope selectors.
+3. **Never `waitForLoadState('networkidle')` on `/billing`.** Stripe's
+   PaymentElement iframe keeps polling, so the network never goes idle and the
+   wait times out before any assertion runs.
+4. **The Admin nav link is outside `<nav aria-label="Dashboard navigation">`.**
+   Scoping to that nav finds nothing.
 
 ## Conventions
 
-- `helpers/fixtures.ts` — `createTestClient()` for plan/status/onboarding state,
-  `seedLocation` / `seedKeyword` / `seedRankingSnapshot` for data, `watchPageErrors`
-  for crash detection, `assertRendered` for a stricter "did it render" bar.
-- Plan and subscription state is forced via SQL because `product_line` only flips
-  on a paid Stripe invoice, which currently cannot be delivered.
+- `helpers/fixtures.ts` — `createTestClient()` for plan/status/onboarding state;
+  `seedLocation` / `seedKeyword` / `seedRankingSnapshot` for data;
+  `watchPageErrors` for crash detection; `assertRendered` for a stricter
+  "did it render" bar than a character count.
+- Plan and subscription state is forced via SQL, because `product_line` only flips
+  on a paid Stripe invoice.
 - Don't reuse `storageState`. The refresh token is single-use and rotates; a reused
   state logs the next test out mid-run. Log in per test.
 - Prefer structural selectors (`following-sibling`) over Tailwind classes.
+- There are **no `data-testid` attributes** in the app — every selector is coupled
+  to visible copy, placeholders or ARIA labels. That caused the 18-test breakage in
+  `f46666d`. Add testids to forms as they are touched.

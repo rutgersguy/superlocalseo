@@ -21,7 +21,11 @@ export const authLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: () => isDev,
+  // Skips test as well as dev — generalLimiter and aiLimiter already did, and
+  // authLimiter not doing so was an oversight. Every e2e spec authenticates, and
+  // the whole suite runs from one IP, so 10 requests per 15 minutes trips
+  // part-way through and reports failures that are not app defects (issue #164).
+  skip: () => isDev || process.env.NODE_ENV === 'test',
   validate: false,
   message: { success: false, error: { message: 'Too many auth attempts', code: 'RATE_LIMITED' } },
 });

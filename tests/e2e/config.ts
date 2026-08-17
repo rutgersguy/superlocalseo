@@ -34,6 +34,38 @@ export const API_URL = process.env.E2E_API_URL ?? `${BASE_URL}/api`;
 export const IS_PRODUCTION_TARGET = /superlocalseo\.com/.test(BASE_URL);
 
 /**
+ * Which Postgres the DB helpers talk to.
+ *
+ * These MUST follow the base URL. The helpers shell into a container by name,
+ * so if the browser talks to the test stack while the helpers talk to
+ * production, the suite quietly creates and deletes users in the live customer
+ * database — the exact hazard #159 exists to remove. Deriving both from one
+ * value makes that combination impossible to reach by accident.
+ */
+export const DB_CONTAINER = process.env.E2E_DB_CONTAINER
+  ?? (IS_PRODUCTION_TARGET ? 'superlocalseo-postgres' : 'slseo-test-postgres');
+
+export const DB_NAME = process.env.E2E_DB_NAME
+  ?? (IS_PRODUCTION_TARGET ? 'superlocalseo' : 'superlocalseo_test');
+
+/** API container, for helpers that need to read the running service's env. */
+export const API_CONTAINER = process.env.E2E_API_CONTAINER
+  ?? (IS_PRODUCTION_TARGET ? 'superlocalseo-api' : 'slseo-test-api');
+
+/**
+ * Admin login used by the dashboard and admin suites.
+ *
+ * Against the test stack this is the seeded fixture; against production it is the
+ * real operator account. Hard-coding the production address meant those suites
+ * could ONLY run against production — the thing #159 exists to stop.
+ */
+export const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL
+  ?? (IS_PRODUCTION_TARGET ? 'hello@superlocalseo.com' : 'admin@fixture.test');
+
+export const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD
+  ?? (IS_PRODUCTION_TARGET ? 'Admin#Test2026!' : 'TestPass123!');
+
+/**
  * Opt-in flag for tests that cost real money or cause off-machine side effects:
  * completing onboarding provisions an EmbedMyReviews organization and enqueues
  * BrightLocal + DataForSEO pulls. Run with RUN_COSTLY=1 deliberately, never in CI.

@@ -1,6 +1,6 @@
 import { Page, expect } from '@playwright/test';
 import { uniqueEmail, registerViaAPI } from './auth';
-import { dbQuery } from './db';
+import { dbQuery, dbScalar } from './db';
 
 export const TEST_PASSWORD = 'TestPass123!';
 
@@ -60,7 +60,7 @@ export async function createTestClient(opts: ClientOpts = {}): Promise<TestClien
 }
 
 export function clientIdFor(email: string): string {
-  const id = dbQuery(
+  const id = dbScalar(
     `SELECT id FROM clients WHERE user_id = (SELECT id FROM users WHERE email = '${email}')`
   );
   if (!id) throw new Error(`No client row for ${email}`);
@@ -75,7 +75,7 @@ export function seedLocation(
   const clientId = clientIdFor(email);
   const lat = loc.lat == null ? 'NULL' : String(loc.lat);
   const lng = loc.lng == null ? 'NULL' : String(loc.lng);
-  return dbQuery(`
+  return dbScalar(`
     INSERT INTO locations (client_id, name, address, city, state, lat, lng, is_primary)
     VALUES ('${clientId}', '${loc.name}', '123 Test St', '${loc.city ?? 'Tulsa'}',
             '${loc.state ?? 'OK'}', ${lat}, ${lng}, true)
@@ -85,7 +85,7 @@ export function seedLocation(
 
 /** Inserts a keyword against a location. Returns its uuid. */
 export function seedKeyword(locationId: string, keyword: string): string {
-  return dbQuery(`
+  return dbScalar(`
     INSERT INTO keywords (location_id, keyword) VALUES ('${locationId}', '${keyword}')
     RETURNING id
   `);

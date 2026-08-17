@@ -12,3 +12,6 @@ data/reports/
 tests/e2e/.auth/
 test-results/
 playwright-report/
+
+# Test stack secrets (Stripe test-mode keys)
+.env.test
