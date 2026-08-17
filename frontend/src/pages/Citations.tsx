@@ -32,6 +32,8 @@ interface CitationsResponse {
     totalDirectories: number;
     listedCount: number;
     napAccuratePercent: number;
+    /** ISO timestamp of the newest snapshot, or null if there is no data at all. */
+    lastPulledAt: string | null;
   };
 }
 
@@ -188,6 +190,41 @@ function hasNapError(dir: Directory): boolean {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+/**
+ * How stale the citation data is.
+ *
+ * The scan runs daily, so anything older than ~2 days means the pull is failing.
+ * That state used to be invisible: the page rendered whatever was in the table as
+ * if it were current, so when BrightLocal's Data API began returning 401 for every
+ * request, clients kept seeing listing status that was months old with no
+ * indication anything was wrong (issue #149).
+ */
+const STALE_AFTER_DAYS = 2;
+
+function FreshnessNotice({ lastPulledAt }: { lastPulledAt: string | null }) {
+  if (!lastPulledAt) {
+    return (
+      <span className="text-sm text-gray-500">
+        Not scanned yet — your first scan runs within 24 hours.
+      </span>
+    );
+  }
+
+  const pulled = new Date(lastPulledAt);
+  const ageDays = (Date.now() - pulled.getTime()) / 86_400_000;
+  const when = pulled.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+  if (ageDays <= STALE_AFTER_DAYS) {
+    return <span className="text-sm text-gray-500">Last scanned {when}</span>;
+  }
+
+  return (
+    <span className="text-sm font-medium text-amber-700" title={`Last successful scan: ${pulled.toISOString()}`}>
+      ⚠ Last scanned {when} ({Math.floor(ageDays)} days ago) — this data may be out of date
+    </span>
+  );
+}
+
 export default function Citations() {
   const [trendDays, setTrendDays] = useState<TrendDays>(90);
   const [expandedDir, setExpandedDir] = useState<string | null>(null);
@@ -325,6 +362,8 @@ export default function Citations() {
               {summary.napAccuratePercent}%
             </span>
           </div>
+          <div className="h-6 w-px bg-gray-200" />
+          <FreshnessNotice lastPulledAt={summary.lastPulledAt ?? null} />
         </div>
       ) : null}
 
