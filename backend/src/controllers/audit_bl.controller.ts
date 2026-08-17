@@ -240,6 +240,11 @@ export async function pollPending(): Promise<void> {
     .where({ 'location_audits.status': 'complete' })
     .whereNull('location_audits.on_page_score')
     .whereNull('location_audits.bl_report_id')
+    // Skip rows we have already tried recently. Without this, a computation that
+    // legitimately returns null writes the row back unchanged, so it re-qualifies
+    // on the very next tick — forever (issue #158).
+    .where((q) => q.whereNull('location_audits.backfill_attempted_at')
+      .orWhere('location_audits.backfill_attempted_at', '<', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)))
     .join('locations', 'location_audits.location_id', 'locations.id')
     .join('clients', 'location_audits.client_id', 'clients.id')
     .whereNotNull('locations.website')
@@ -256,6 +261,10 @@ export async function pollPending(): Promise<void> {
       await db('location_audits').where({ id: row.auditId }).update({
         on_page_score: scores.onPageScore,
         on_page_details: scores.onPageDetails.length ? JSON.stringify(scores.onPageDetails) : null,
+        // Stamped whether or not a score came back — "we tried" is the fact that
+        // stops the loop. A null result is a legitimate outcome, not a reason to
+        // retry every 5 minutes indefinitely.
+        backfill_attempted_at: new Date(),
       });
       logger.info('On-page backfill complete', { auditId: row.auditId, score: scores.onPageScore });
     } catch (e) {
@@ -268,6 +277,11 @@ export async function pollPending(): Promise<void> {
     .where({ 'location_audits.status': 'complete' })
     .whereNull('location_audits.composite_score')
     .whereNull('location_audits.bl_report_id')
+    // Skip rows we have already tried recently. Without this, a computation that
+    // legitimately returns null writes the row back unchanged, so it re-qualifies
+    // on the very next tick — forever (issue #158).
+    .where((q) => q.whereNull('location_audits.backfill_attempted_at')
+      .orWhere('location_audits.backfill_attempted_at', '<', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)))
     .join('locations', 'location_audits.location_id', 'locations.id')
     .join('clients', 'location_audits.client_id', 'clients.id')
     .select(
@@ -288,6 +302,7 @@ export async function pollPending(): Promise<void> {
         on_page_details: scores.onPageDetails.length ? JSON.stringify(scores.onPageDetails) : null,
         dfs_on_page_task_id: scores.dfsLighthouseTaskId ?? null,
         completed_at: db.raw('COALESCE(completed_at, NOW())'),
+        backfill_attempted_at: new Date(),
       });
     } catch (e) {
       logger.warn('Null-score audit backfill failed', { auditId: row.auditId, error: (e as Error).message });
