@@ -1,8 +1,24 @@
+# Docker's default json-file driver is UNBOUNDED — container logs grow until the
+# disk does. Across this host they had reached 478MB with no ceiling.
+#
+# Also worth knowing: Docker deletes a container's logs when it is RECREATED, so
+# these files are not an error archive. With SENTRY_DSN empty, every deploy
+# destroys the API's error history. Rotation caps the disk risk; it does not
+# solve observability. See .env.example (SENTRY_DSN).
+#
+# Applies on next `up -d --force-recreate <service>` — it is not retroactive.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   postgres:
     image: postgres:15-alpine
     container_name: superlocalseo-postgres
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_DB: superlocalseo
       POSTGRES_USER: slseo
@@ -21,6 +37,7 @@ services:
     image: redis:7-alpine
     container_name: superlocalseo-redis
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "6399:6379"
     volumes:
@@ -37,6 +54,7 @@ services:
       target: dev
     container_name: superlocalseo-api
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "3000:3000"
     volumes:
@@ -63,6 +81,7 @@ services:
       target: production
     container_name: superlocalseo-web
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "5173:80"
     depends_on:
