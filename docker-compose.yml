@@ -51,14 +51,26 @@ services:
   api:
     build:
       context: ./backend
-      target: dev
+      # Production build: `tsc` to dist/, run with `node dist/index.js`.
+      # backend/src is deliberately NOT bind-mounted — it used to be, which made
+      # every save to a source file an instant production deploy, and a save that
+      # didn't compile 504'd the live API (issue #131, fired 2026-07-13).
+      #
+      # Deploy is now explicit and gated by the build:
+      #   docker compose build api && docker compose up -d --no-deps api
+      # A broken file fails `build` and never reaches the running container.
+      #
+      # Local dev with hot reload: add the override explicitly.
+      #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d api
+      # It is NOT named docker-compose.override.yml on purpose — compose loads
+      # that automatically, which would silently put this host back into dev mode.
+      target: production
     container_name: superlocalseo-api
     restart: unless-stopped
     logging: *default-logging
     ports:
       - "3000:3000"
     volumes:
-      - ./backend/src:/app/src
       - reports_data:/app/data/reports
     env_file:
       - .env

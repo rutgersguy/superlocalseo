@@ -77,7 +77,8 @@ Copy `.env.example` to `.env.prod` and fill every value:
 
 ## 8. Database
 
-- [ ] Migrations applied: `docker compose exec api npx knex migrate:latest`
+- [ ] Migrations applied: `docker exec superlocalseo-api node dist/db/migrate.js`
+      (the production image has no knex CLI and no `knexfile.ts` — see issue #131)
 - [ ] Seed data removed / not applied in production
 - [ ] Postgres `max_connections` ≥ 100
 - [ ] Daily backup cron active: `0 2 * * * /opt/superlocalseo/scripts/backup-db.sh`
@@ -123,7 +124,7 @@ docker compose build api
 docker compose up -d
 
 # Roll back latest migration
-docker compose exec api npx knex migrate:rollback
+docker exec superlocalseo-api node dist/db/migrate.js rollback
 ```
 
 Keep the previous Docker image tagged (`docker tag superlocalseo-api:latest superlocalseo-api:prev`) before each deploy.

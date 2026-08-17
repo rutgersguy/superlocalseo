@@ -15,9 +15,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Start all services
 docker compose up -d
 
-# Restart a single service after config changes (use up --force-recreate for volume changes)
+# Deploy the API — REBUILD, never `restart`. backend/src is no longer bind-mounted
+# (issue #131), so `restart` re-runs the OLD image and silently ships nothing.
+# A file that doesn't compile fails here and never reaches the container.
+docker compose build api && docker compose up -d --no-deps api
+
+# Deploy the frontend — also a rebuild (production static build since #119)
+docker compose build web && docker compose up -d --no-deps web
+
+# Restart a single service after config-only changes (use up --force-recreate for volume changes)
 docker compose restart api
-docker compose up -d --force-recreate web
+docker compose up -d --force-recreate --no-deps web
+
+# Local dev with hot reload — explicit overlay, never auto-loaded
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d api
 
 # View logs
 docker compose logs -f api
@@ -26,8 +37,10 @@ docker compose logs -f web
 # Frontend type-check
 docker exec superlocalseo-web npx tsc --noEmit
 
-# Run DB migrations
-docker exec superlocalseo-api npx knex migrate:latest
+# Run DB migrations (production image has no knex CLI and no knexfile.ts)
+docker exec superlocalseo-api node dist/db/migrate.js          # apply
+docker exec superlocalseo-api node dist/db/migrate.js status   # report only
+docker exec superlocalseo-api node dist/db/migrate.js rollback # undo last batch
 
 # Access DB directly
 psql postgresql://slseo:slseo@localhost:5433/superlocalseo
@@ -70,7 +83,19 @@ Monorepo: `backend/` (Express API) + `frontend/` (React SPA) + `nginx.conf` prox
 
 - **`docker compose restart` does not apply volume changes.** Use `docker compose up -d --force-recreate <service>` after editing `docker-compose.yml`.
 - **Static assets** in `frontend/public/` are served by Vite at `/`. Both `frontend/src` and `frontend/public` are bind-mounted into the web container.
-- **⚠️ `backend/src` is bind-mounted into the LIVE PROD API (nodemon + ts-node) — every save is a deploy.** A save that doesn't compile **crashes the production API** and users get a 504 until the next good save (this actually happened 2026-07-13). Host-side `tsc --noEmit` will NOT catch it, because it runs after your edits are done while the container compiles every intermediate save. So: **sequence edits so the file never compiles broken** (add imports first, define functions before calling them), and check `docker logs superlocalseo-api | grep TSError` after any backend edit. Being fixed properly in issue #131 (build the API to `dist/`, drop the bind mount).
+- **API deploys are a REBUILD, not a restart.** `backend/src` used to be bind-mounted into the
+  live API with nodemon + ts-node, which made every save an instant production deploy — a save
+  that didn't compile crash-looped the API and returned 504 to real users (this happened
+  2026-07-13). Fixed in issue #131: the API now runs `node dist/index.js` from a built image with
+  no source mount. **`docker compose restart api` now silently re-runs the OLD code** — always
+  `docker compose build api && docker compose up -d --no-deps api`. A broken file fails the build
+  and never reaches the container.
+- **Migrations changed with #131.** The production image installs with `--omit=dev` and never
+  copies `knexfile.ts`, so there is no knex CLI and `npx knex migrate:latest` no longer works. Use
+  `docker exec superlocalseo-api node dist/db/migrate.js` (`status` / `rollback` also accepted).
+  Note the `knex_migrations` table was renamed from `*.ts` to `*.js` filenames as part of the
+  switch — running migrations from a ts-node dev checkout against **this** database would now
+  report the directory as corrupt. Dev should use its own database.
 - **Workers** are enabled by default. Setting `DISABLE_WORKERS=true` in the API environment will silently stop all background jobs (rankings pulls, report generation, etc.).
 - **Rankings cooldown** key: `rankings:sync:cooldown:{clientId}` in Redis — stores the ISO timestamp of last manual trigger, enforces 24h window (**Pro**). **Lite gets exactly ONE manual scan, ever**, tracked in `clients.manual_scan_used_at` — deliberately in Postgres, **not** Redis, so a cache flush can't mint free scans. It's only marked used when the scan actually saved snapshots (a no-keyword or failed run must not cost their one shot).
 - **Never hardcode prices or the setup fee in UI.** Derive from `productLine`. This has shipped to prod twice (#113, #125). The $499 setup fee is **waived** (`STRIPE_SETUP_FEE_ENABLED` unset) and trials run as **Pro** — so a trialing client has not chosen a plan and must not be shown one as "theirs". See `docs/PRICING.md`.
