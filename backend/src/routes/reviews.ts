@@ -3,6 +3,7 @@ import { requireAuth } from '../middleware/auth';
 import { requireClient } from '../middleware/requireClient';
 import { validateQuery } from '../middleware/validate';
 import { aiLimiter } from '../middleware/rateLimit';
+import { handleEmrWebhook } from '../controllers/emr_webhook.controller';
 import { verifyEmrWebhook } from '../middleware/verifyEmrWebhook';
 import * as ctrl from '../controllers/review.controller';
 import * as responseCtrl from '../controllers/review_response.controller';
@@ -10,7 +11,10 @@ import * as responseCtrl from '../controllers/review_response.controller';
 const router = Router();
 
 // Webhook has no auth — verified via HMAC signature (verifyEmrWebhook)
-router.post('/webhook', verifyEmrWebhook, ctrl.webhook);
+// Legacy URL kept because it may still be the one registered in EMR. It now
+// runs the SAME authenticated handler as /webhooks/emr rather than a second,
+// divergent copy that matched on the wrong column and dropped everything (#148).
+router.post('/webhook', verifyEmrWebhook, handleEmrWebhook);
 
 router.get('/', requireAuth, requireClient, validateQuery(ctrl.listQuerySchema), ctrl.list);
 router.get('/feedback', requireAuth, requireClient, ctrl.listFeedback);
