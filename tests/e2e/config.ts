@@ -34,6 +34,21 @@ export const API_URL = process.env.E2E_API_URL ?? `${BASE_URL}/api`;
 export const IS_PRODUCTION_TARGET = /superlocalseo\.com/.test(BASE_URL);
 
 /**
+ * Which Postgres the DB helpers talk to.
+ *
+ * These MUST follow the base URL. The helpers shell into a container by name,
+ * so if the browser talks to the test stack while the helpers talk to
+ * production, the suite quietly creates and deletes users in the live customer
+ * database — the exact hazard #159 exists to remove. Deriving both from one
+ * value makes that combination impossible to reach by accident.
+ */
+export const DB_CONTAINER = process.env.E2E_DB_CONTAINER
+  ?? (IS_PRODUCTION_TARGET ? 'superlocalseo-postgres' : 'slseo-test-postgres');
+
+export const DB_NAME = process.env.E2E_DB_NAME
+  ?? (IS_PRODUCTION_TARGET ? 'superlocalseo' : 'superlocalseo_test');
+
+/**
  * Opt-in flag for tests that cost real money or cause off-machine side effects:
  * completing onboarding provisions an EmbedMyReviews organization and enqueues
  * BrightLocal + DataForSEO pulls. Run with RUN_COSTLY=1 deliberately, never in CI.

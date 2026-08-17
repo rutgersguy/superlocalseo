@@ -1,0 +1,125 @@
+# Isolated end-to-end test stack (issue #159).
+#
+# WHY THIS EXISTS
+# ---------------
+# The e2e suite used to run against PRODUCTION: it registered users in the live
+# database and deleted them by email pattern afterwards. That was tolerable while
+# the only accounts were internal; it stops being tolerable the moment there are
+# customers, because the cleanup is a raw `DELETE ... LIKE 'pw-%'` and everything
+# cascades from `users`.
+#
+# It also forced `workers: 1` (one shared database), made the suite host-bound,
+# and left Reviews/Campaigns coverage blocked because no account had seed data.
+#
+# USAGE
+#   docker compose -f docker-compose.test.yml up -d --build
+#   docker compose -f docker-compose.test.yml exec api node dist/db/seed-test.js
+#   E2E_BASE_URL=http://localhost:5273 npx playwright test
+#   docker compose -f docker-compose.test.yml down -v      # -v wipes the data
+#
+# Deliberate choices:
+#   * Own project name, container names, ports and volumes — nothing is shared
+#     with the production stack on this host.
+#   * NODE_ENV=test, so the rate limiters skip (middleware/rateLimit.ts). Without
+#     this the suite trips authLimiter partway through, because every spec logs in
+#     from one IP — see issue #164.
+#   * DISABLE_WORKERS=true, so a test run cannot spend DataForSEO or BrightLocal
+#     credit, provision an EmbedMyReviews organization, or send email. Override
+#     per-run if you are specifically testing a job.
+#   * The web container uses the `test` target: the same production build, plus an
+#     /api proxy, so the stack is one self-contained origin.
+name: superlocalseo-test
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: slseo-test-postgres
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_DB: superlocalseo_test
+      POSTGRES_USER: slseo
+      POSTGRES_PASSWORD: slseo
+    ports:
+      - "55432:5432"
+    volumes:
+      - test_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U slseo -d superlocalseo_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: slseo-test-redis
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "56379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+      target: production
+    image: superlocalseo-api:test
+    container_name: slseo-test-api
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "3100:3000"
+    environment:
+      NODE_ENV: test
+      PORT: "3000"
+      DATABASE_URL: postgresql://slseo:slseo@postgres:5432/superlocalseo_test
+      REDIS_URL: redis://redis:6379
+      DISABLE_WORKERS: "true"
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium-browser
+      APP_URL: http://localhost:5273
+      PUBLIC_URL: http://localhost:5273
+      # Deliberately fake. A test stack must never hold live credentials — a
+      # suite that can reach a real vendor can spend real money.
+      JWT_SECRET: test-jwt-secret-not-a-real-secret
+      JWT_REFRESH_SECRET: test-refresh-secret-not-a-real-secret
+      JWT_ACCESS_EXPIRY: 15m
+      JWT_REFRESH_EXPIRY: 7d
+      ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      STRIPE_SECRET_KEY: sk_test_placeholder
+      STRIPE_PUBLISHABLE_KEY: pk_test_placeholder
+      STRIPE_WEBHOOK_SECRET: whsec_test_placeholder
+      RESEND_API_KEY: re_test_placeholder
+      RESEND_FROM_EMAIL: test@example.invalid
+      RESEND_FROM_NAME: SuperLocalSEO Test
+      EMBEDMYREVIEWS_WEBHOOK_TOKEN: test-emr-webhook-token
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./frontend
+      target: test
+    image: superlocalseo-web:test
+    container_name: slseo-test-web
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "5273:80"
+    depends_on:
+      - api
+
+volumes:
+  test_pg_data:
