@@ -23,6 +23,7 @@ type ListQuery = z.infer<typeof listQuerySchema>;
 interface CitationRow {
   location_id: string;
   directory: string;
+  pulled_at: string | Date | null;
   listed: boolean;
   nap_match: boolean;
   listing_url: string | null;
@@ -89,11 +90,23 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
     const napAccurateCount = directories.filter((d) => d.listed && d.napMatch).length;
     const napAccuratePercent = listedCount > 0 ? Math.round((napAccurateCount / listedCount) * 100) : 0;
 
+    // When this data was last actually refreshed. The Citations page presented
+    // whatever was in the table as current, so when the BrightLocal Data API
+    // started 401ing (see #149) clients were shown 90-day-old listing status with
+    // nothing to indicate it was stale. Surfacing the timestamp lets the UI say so.
+    const pulledTimes = rows
+      .map((r) => (r.pulled_at ? new Date(r.pulled_at).getTime() : NaN))
+      .filter((t) => Number.isFinite(t));
+    const lastPulledAt = pulledTimes.length > 0
+      ? new Date(Math.max(...pulledTimes)).toISOString()
+      : null;
+
     ok(res, {
       directories,
       totalDirectories: directories.length,
       listedCount,
       napAccuratePercent,
+      lastPulledAt,
     });
   } catch (e) {
     next(e);
