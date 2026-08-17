@@ -18,6 +18,13 @@ if (config.sentry.dsn) {
 const app = express();
 app.disable('etag'); // prevent 304s on authenticated API responses
 
+// Behind Cloudflare -> nginx. Without this, req.ip is the nginx container's
+// address for EVERY request, so the rate limiters (which key on req.ip) would
+// collapse all traffic onto one bucket and 429 the entire site after 100
+// requests. nginx sets X-Forwarded-For to Cloudflare's CF-Connecting-IP, so a
+// hop count of 1 resolves req.ip to the real client. See issue #161.
+app.set('trust proxy', 1);
+
 // Stripe webhook needs raw body — must come before json parser
 app.use('/webhooks', express.raw({ type: 'application/json' }), webhookRouter);
 
