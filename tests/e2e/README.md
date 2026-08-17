@@ -49,6 +49,23 @@ teardown. There is no isolation, no seeding and no rollback, which is also why
 **This is the top item to fix.** A second compose stack with its own Postgres and
 an `/api` proxy in the frontend container removes the risk and unlocks parallelism.
 
+## ⚠️ Rate limiting is now enforced in production (since 2026-08-16)
+
+Issue #161 set `NODE_ENV=production`, which switches the rate limiters back on:
+`authLimiter` allows **10 auth requests per 15 minutes per client IP**.
+
+Every spec registers and logs in, and the whole suite runs from one IP, so a full
+run will trip the limiter and produce spurious 401/429 failures partway through.
+Verified: the 10th auth request from this host now returns
+`{"code":"RATE_LIMITED"}`.
+
+Until the isolated test stack exists (#159), either run suites in small batches
+with a gap between them, or run the stack with `NODE_ENV=test` — the limiters skip
+`test` as well as `development`. The test stack should set `NODE_ENV=test` for
+exactly this reason.
+
+`scripts/qa.sh` already has `SKIP_RATE_LIMIT_TEST=1` for the same problem.
+
 ## Cost and side-effect guardrails
 
 | Action | Consequence |
