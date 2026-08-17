@@ -79,6 +79,11 @@ services:
     logging: *default-logging
     ports:
       - "3100:3000"
+    # Stripe TEST-mode keys, gitignored (see .env.test.example). Registration
+    # calls Stripe createCustomer synchronously, so a placeholder key 500s every
+    # signup and therefore every spec. Test mode moves no real money.
+    env_file:
+      - .env.test
     environment:
       NODE_ENV: test
       PORT: "3000"
@@ -95,13 +100,9 @@ services:
       JWT_ACCESS_EXPIRY: 15m
       JWT_REFRESH_EXPIRY: 7d
       ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
-      STRIPE_SECRET_KEY: sk_test_placeholder
-      STRIPE_PUBLISHABLE_KEY: pk_test_placeholder
-      STRIPE_WEBHOOK_SECRET: whsec_test_placeholder
       RESEND_API_KEY: re_test_placeholder
       RESEND_FROM_EMAIL: test@example.invalid
       RESEND_FROM_NAME: SuperLocalSEO Test
-      EMBEDMYREVIEWS_WEBHOOK_TOKEN: test-emr-webhook-token
     depends_on:
       postgres:
         condition: service_healthy

@@ -222,7 +222,7 @@ test.describe('Suite 09 — New user, zero data', () => {
     // A null-coordinate location is rejected server-side BEFORE any DataForSEO
     // call, so this test costs nothing.
     const locationId = seedLocation(client.email, {
-      name: 'Ungeocoded Office',
+      name: 'Pending Location',
       lat: null,
       lng: null,
     });
@@ -246,8 +246,15 @@ test.describe('Suite 09 — New user, zero data', () => {
     await runScan.click();
 
     // The assertion is simply that SOMETHING is shown. Silence is the bug.
+    //
+    // Scoped away from <option>: an unscoped getByText matched the location's own
+    // name inside the dropdown, so the test "passed" on its own fixture rather
+    // than on the error message. The API returns 422 NO_COORDINATES with
+    // "Location has no coordinates — add lat/lng in Locations settings".
     await expect(
-      page.getByText(/coordinate|geocod|still being processed|try again/i).first()
+      page.locator('main, body').getByText(/coordinate|still being processed|try again/i)
+        .filter({ hasNot: page.locator('option') })
+        .first()
     ).toBeVisible({ timeout: 20_000 });
   });
 

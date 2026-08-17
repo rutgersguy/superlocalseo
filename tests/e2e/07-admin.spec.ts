@@ -2,8 +2,7 @@ import { test, expect } from '@playwright/test';
 import { uniqueEmail, registerViaAPI, loginViaUI } from './helpers/auth';
 import { cleanupTestUsers } from './helpers/db';
 
-const ADMIN_EMAIL = 'hello@superlocalseo.com';
-const ADMIN_PASSWORD = 'Admin#Test2026!';
+import { ADMIN_EMAIL, ADMIN_PASSWORD, API_URL } from './config';
 
 test.describe('Suite 07 — Admin Panel', () => {
   // Fresh login per test to avoid refresh token rotation issues
@@ -20,7 +19,11 @@ test.describe('Suite 07 — Admin Panel', () => {
 
   test('TEST-ADMIN-01 — Admin nav item visible for admin user', async ({ page }) => {
     // Admin role shows the Admin nav link in the sidebar
-    await expect(page.getByRole('link', { name: 'Admin' })).toBeVisible({ timeout: 10_000 });
+    // `exact` matters: the business-name pill is also a link, so a substring match
+    // collides with any business name containing 'Admin'. Note the Admin link sits
+    // OUTSIDE <nav aria-label="Dashboard navigation"> — it is rendered after it —
+    // so scoping to that nav finds nothing.
+    await expect(page.getByRole('link', { name: 'Admin', exact: true })).toBeVisible({ timeout: 10_000 });
   });
 
   test('TEST-ADMIN-02 — admin panel loads Overview tab', async ({ page }) => {
@@ -81,14 +84,14 @@ test.describe('Suite 07 — Admin Panel', () => {
     const email = uniqueEmail();
     await registerViaAPI(email, 'TestPass123!', 'Regular Biz');
     // Login as regular client via API
-    const loginRes = await request.post('http://localhost:3000/api/auth/login', {
+    const loginRes = await request.post(`${API_URL}/auth/login`, {
       data: { email, password: 'TestPass123!' },
     });
     const loginBody = await loginRes.json() as { success: boolean; data: { accessToken: string } };
     expect(loginBody.success).toBe(true);
     const token = loginBody.data.accessToken;
     // Try to access admin API endpoint — should be forbidden
-    const adminRes = await request.get('http://localhost:3000/api/admin/overview', {
+    const adminRes = await request.get(`${API_URL}/admin/overview`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(adminRes.status()).toBe(403);

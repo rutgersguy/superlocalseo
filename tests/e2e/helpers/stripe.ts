@@ -1,4 +1,5 @@
 import { execSync } from 'child_process';
+import { API_CONTAINER } from '../config';
 
 /**
  * Reads the price that Stripe will ACTUALLY charge, so pricing tests assert
@@ -18,7 +19,7 @@ import { execSync } from 'child_process';
 
 function containerEnv(name: string): string | null {
   try {
-    const value = execSync(`docker exec superlocalseo-api printenv ${name}`, {
+    const value = execSync(`docker exec ${API_CONTAINER} printenv ${name}`, {
       stdio: ['ignore', 'pipe', 'ignore'],
     })
       .toString()

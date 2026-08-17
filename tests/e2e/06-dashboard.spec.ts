@@ -1,8 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { loginViaUI } from './helpers/auth';
 
-const ADMIN_EMAIL = 'hello@superlocalseo.com';
-const ADMIN_PASSWORD = 'Admin#Test2026!';
+import { ADMIN_EMAIL, ADMIN_PASSWORD } from './config';
 
 test.describe('Suite 06 — Dashboard', () => {
   // Login fresh per test since refresh tokens rotate (single-use)

@@ -10,6 +10,17 @@ export function dbQuery(sql: string): string {
   ).toString().trim();
 }
 
+/**
+ * First non-empty line of a query result.
+ *
+ * `psql -t -c 'INSERT ... RETURNING id'` prints the returned value AND the
+ * "INSERT 0 1" status line. Using the raw output as a uuid produced
+ * "…-…\nINSERT 0 1", which then failed every downstream foreign key.
+ */
+export function dbScalar(sql: string): string {
+  return dbQuery(sql).split('\n')[0].trim();
+}
+
 export function cleanupTestUsers(): void {
   dbQuery("DELETE FROM users WHERE email LIKE 'pw-%@test.com'");
 }

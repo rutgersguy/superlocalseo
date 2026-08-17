@@ -48,6 +48,23 @@ export const DB_CONTAINER = process.env.E2E_DB_CONTAINER
 export const DB_NAME = process.env.E2E_DB_NAME
   ?? (IS_PRODUCTION_TARGET ? 'superlocalseo' : 'superlocalseo_test');
 
+/** API container, for helpers that need to read the running service's env. */
+export const API_CONTAINER = process.env.E2E_API_CONTAINER
+  ?? (IS_PRODUCTION_TARGET ? 'superlocalseo-api' : 'slseo-test-api');
+
+/**
+ * Admin login used by the dashboard and admin suites.
+ *
+ * Against the test stack this is the seeded fixture; against production it is the
+ * real operator account. Hard-coding the production address meant those suites
+ * could ONLY run against production — the thing #159 exists to stop.
+ */
+export const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL
+  ?? (IS_PRODUCTION_TARGET ? 'hello@superlocalseo.com' : 'admin@fixture.test');
+
+export const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD
+  ?? (IS_PRODUCTION_TARGET ? 'Admin#Test2026!' : 'TestPass123!');
+
 /**
  * Opt-in flag for tests that cost real money or cause off-machine side effects:
  * completing onboarding provisions an EmbedMyReviews organization and enqueues

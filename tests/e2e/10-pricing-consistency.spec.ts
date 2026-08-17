@@ -152,8 +152,9 @@ test.describe('Suite 10 — Pricing consistency', () => {
 
     // The plan carried into checkout comes from localStorage (Register.tsx:46).
     await page.evaluate(() => window.localStorage.setItem('selectedPlan', 'lite'));
-    await page.goto('/billing?subscribe=1');
-    await page.waitForLoadState('networkidle');
+    // NOT networkidle: Stripe's PaymentElement iframe keeps polling, so the
+    // network never goes idle and the wait times out before any assertion runs.
+    await page.goto('/billing?subscribe=1', { waitUntil: 'domcontentloaded' });
 
     const lite = prices?.lite ?? 149;
     await expect(page.getByText('Due today')).toBeVisible({ timeout: 20_000 });
@@ -169,8 +170,9 @@ test.describe('Suite 10 — Pricing consistency', () => {
   test('TEST-PRICE-09 — Pro checkout strikes the setup fee to zero', async ({ page }) => {
     await loginViaUI(page, client.email, client.password);
     await page.evaluate(() => window.localStorage.setItem('selectedPlan', 'pro'));
-    await page.goto('/billing?subscribe=1');
-    await page.waitForLoadState('networkidle');
+    // NOT networkidle: Stripe's PaymentElement iframe keeps polling, so the
+    // network never goes idle and the wait times out before any assertion runs.
+    await page.goto('/billing?subscribe=1', { waitUntil: 'domcontentloaded' });
 
     await expect(page.getByText('One-time setup fee')).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/Onboarding & citation audit — waived/)).toBeVisible();
@@ -184,8 +186,9 @@ test.describe('Suite 10 — Pricing consistency', () => {
     // Lite, so a mid-funnel Pro-intent trialing user would have been billed Lite.
     await loginViaUI(page, client.email, client.password);
     await page.evaluate(() => window.localStorage.removeItem('selectedPlan'));
-    await page.goto('/billing?subscribe=1');
-    await page.waitForLoadState('networkidle');
+    // NOT networkidle: Stripe's PaymentElement iframe keeps polling, so the
+    // network never goes idle and the wait times out before any assertion runs.
+    await page.goto('/billing?subscribe=1', { waitUntil: 'domcontentloaded' });
 
     // Falls back to the client's own productLine, which is 'pro' here.
     await expect(page.getByText('One-time setup fee')).toBeVisible({ timeout: 20_000 });

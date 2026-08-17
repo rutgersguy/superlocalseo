@@ -37,7 +37,7 @@ interface Fixture {
 }
 
 const FIXTURES: Fixture[] = [
-  { email: `admin${DOMAIN}`,     role: 'admin',  businessName: 'Fixture Admin',   productLine: 'pro',  status: 'active',   onboardingStep: 5, emailVerified: true,  withData: false },
+  { email: `admin${DOMAIN}`,     role: 'admin',  businessName: 'Fixture Operator Co',   productLine: 'pro',  status: 'active',   onboardingStep: 5, emailVerified: true,  withData: false },
   { email: `pro${DOMAIN}`,       role: 'client', businessName: 'Fixture Pro Co',  productLine: 'pro',  status: 'active',   onboardingStep: 5, emailVerified: true,  withData: true  },
   { email: `lite${DOMAIN}`,      role: 'client', businessName: 'Fixture Lite Co', productLine: 'lite', status: 'active',   onboardingStep: 5, emailVerified: true,  withData: true  },
   { email: `trialing${DOMAIN}`,  role: 'client', businessName: 'Fixture Trial Co',productLine: 'pro',  status: 'trialing', onboardingStep: 5, emailVerified: true,  withData: false },
