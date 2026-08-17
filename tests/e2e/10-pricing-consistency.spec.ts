@@ -217,11 +217,10 @@ test.describe('Suite 10 — Pricing consistency', () => {
   // ----------------------------------------------------------- known live defect
 
   test('TEST-PRICE-12 — structured data advertises the prices we actually sell', async () => {
-    // KNOWN FAILURE — frontend/index.html:35-36 still ships the retired three-tier
-    // model in JSON-LD: lowPrice 350, highPrice 1200. Real pricing is $149/$349.
-    // This is live on the homepage now and is the third occurrence of the
-    // hardcoded-price defect PRICING.md already warns about.
-    test.fail();
+    // Regression guard. index.html shipped the retired three-tier model in JSON-LD
+    // (lowPrice 350 / highPrice 1200) long after pricing became $149/$349 — the
+    // third occurrence of the hardcoded-price defect PRICING.md warns about.
+    // Fixed in #153. index.html is now in the PRICING.md sync list.
 
     const html = await (await fetch(BASE_URL)).text();
     const match = html.match(/"lowPrice":\s*"(\d+)"[\s\S]*?"highPrice":\s*"(\d+)"/);

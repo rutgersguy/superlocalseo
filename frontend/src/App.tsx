@@ -26,6 +26,7 @@ import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
 import BillingPage from './pages/BillingPage';
 import ProtectedRoute from './components/ProtectedRoute';
+import AdminRoute from './components/AdminRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 
 function ExternalRedirect({ to }: { to: string }) {
@@ -60,8 +61,10 @@ function App() {
           {/* Protected routes */}
           <Route element={<ProtectedRoute />}>
             <Route path="/onboarding" element={<Onboarding />} />
-            <Route path="/admin" element={<DashboardLayout />}>
-              <Route index element={<Admin />} />
+            <Route element={<AdminRoute />}>
+              <Route path="/admin" element={<DashboardLayout />}>
+                <Route index element={<Admin />} />
+              </Route>
             </Route>
             <Route path="/dashboard" element={<DashboardLayout />}>
               <Route index element={<Dashboard />} />

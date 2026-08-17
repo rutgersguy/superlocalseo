@@ -313,7 +313,7 @@ function KeywordsPanel({ onChanged }: { onChanged: () => void }) {
       {locations.length === 0 ? (
         <p className="text-sm text-slate-500">
           You don't have a location yet, and keywords are tracked per location.{' '}
-          <Link to="/settings?tab=locations" className="font-medium text-brand-600 underline hover:text-brand-700">
+          <Link to="/dashboard/settings?tab=locations" className="font-medium text-brand-600 underline hover:text-brand-700">
             Add a location in Settings
           </Link>{' '}
           to start adding keywords.
@@ -637,7 +637,7 @@ export default function Rankings() {
             <p className="font-medium text-amber-900">Add a location to start tracking keywords</p>
             <p className="text-amber-700 mt-0.5">
               Keywords are tracked per location, so you'll need one before you can add any.{' '}
-              <Link to="/settings?tab=locations" className="font-medium underline hover:text-amber-900">
+              <Link to="/dashboard/settings?tab=locations" className="font-medium underline hover:text-amber-900">
                 Add your first location
               </Link>{' '}
               in Settings, then come back here to add keywords.

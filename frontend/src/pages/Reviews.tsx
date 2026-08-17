@@ -504,7 +504,20 @@ export default function Reviews() {
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">Reviews</h1>
           <div className="flex gap-2">
             <SyncBLButton onSynced={() => void mutateReviews()} />
-            <button onClick={() => { window.location.href = '/api/analytics/export?type=reviews'; }}
+            {/* A plain navigation sends no Authorization header, and auth is a
+                Bearer token held in memory — so this always 401'd. Rankings was
+                fixed for this in 99c1ca6; Reviews was missed (issue #151). */}
+            <button
+              onClick={async () => {
+                const res = await apiFetch<never>('/analytics/export?type=reviews', {}, true);
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'reviews-export.csv';
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
               className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
               Export CSV
             </button>
