@@ -42,7 +42,7 @@ const faqs = [
   },
   {
     q: 'What do I need to get started?',
-    a: 'Just your business info and a Google account. Rank tracking and citation monitoring activate automatically — no extra tools needed on your end. During onboarding you connect your Google Business Profile, which starts syncing your reviews and lets you reply to them straight from your dashboard.',
+    a: 'Just your business info and a Google account. Rank tracking activates automatically — no extra tools needed on your end. During onboarding you connect your Google Business Profile, which starts syncing your reviews and lets you reply to them straight from your dashboard.',
   },
   {
     q: 'Can I add locations over time?',
@@ -95,7 +95,7 @@ const featureCards = [
   },
   {
     title: 'Citation Health',
-    desc: 'Know which directories list your business and whether your business data matches everywhere.',
+    desc: 'See which directories list your business — and exactly where your name, address or phone has drifted out of sync.',
     Icon: MapPin,
   },
   {
