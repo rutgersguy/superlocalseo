@@ -444,6 +444,80 @@ Google review **updates** the existing reply, but a second Facebook reply **409s
 | Photos? | ❌ **Text-only.** Name, address, phone, hours, categories, description, attributes. **Never promise photo sync.** |
 | Reputation Manager — post replies to Google via API? | ❌ **"We don't support Review Response via API."** |
 
+### ⛔ Citation auditing: the Data API is NOT available to us (decided 2026-08-17)
+
+BrightLocal support, 2026-08-17:
+
+> No, your current account does not have Data API access. This is only available on a
+> 12-month custom plan for **$500 per month minimum spend**. You made 1,014 requests in May.
+> The 'Manage' plan does **not** include Data API access.
+
+This is the root cause of Citations serving stale data since **2026-05-18** — an
+**entitlement** problem, never a quota. The 1,014 May requests line up exactly with our last
+successful snapshot.
+
+**Note the trap:** the 2026-07-14 answers pointed at buying **Manage** for Active Sync.
+Manage does **not** restore citation auditing. They are two separate purchases.
+
+**Decision: do not sign.** $500/mo × 12 = $6,000 committed, against Pro at $349/mo. The
+Data API's only remaining unique value is the citation *audit* — rankings moved to
+DataForSEO (#80), geo-grid already falls back to DataForSEO, replies were never possible
+via BrightLocal, and Citation Builder submission runs on the Management API, which works.
+
+### Citation auditing — the replacement, and its explicit gap
+
+**Chosen approach: DataForSEO SERP, one query per directory.** Verified 2026-08-17 against
+the live API. A `site:<directory> <business> <city>` query returns the listing URL *and* the
+NAP in the snippet:
+
+```
+site:yelp.com Aire Serv South Tulsa Bixby OK          cost $0.01
+  -> https://www.yelp.com/biz/aire-serv-bixby
+     "505 N Armstrong. Ste AB. Bixby, OK 74008 ... (918) 518-1492"
+```
+
+That yields everything `citation_snapshots` needs, including `listing_url`, `listed_name`,
+`listed_address` and `listed_phone` — the actionable fields. ~$0.01 per directory, so a
+42-directory audit is ~$0.42 per location.
+
+**⚠️ THE GAP — Apple Maps and Bing Places cannot be audited by ANY search-based method.**
+
+Verified, not assumed:
+
+```
+site:maps.apple.com Aire Serv Bixby      -> 1 junk result, no listing
+site:bing.com/maps  Aire Serv Bixby OK   -> 0 results
+```
+
+Their listings are **not published as indexable web pages**. No SERP provider can reach
+them at any price. Access requires a direct data partnership with Apple and Microsoft —
+which is precisely what BrightLocal, Yext and Uberall actually sell. The $500/mo floor buys
+their partnerships, not their API.
+
+**Mitigation (not a fix):** both platforms have free self-serve portals — Apple Business
+Connect and Bing Places for Business. We link customers there to claim and verify their own
+listings rather than pretending to audit them. See the linked issue.
+
+**Do not claim Apple Maps or Bing Places coverage in marketing, docs, or reports** until a
+listings-management partnership exists.
+
+### ⚠️ Implementation note: do NOT reuse the existing NAP normalisers
+
+`normalizeStr()` / `normalizePhone()` (`jobs/citations.job.ts`, `services/dataforseo.service.ts`)
+exist for *rankings* matching, where "Aire Serv" and "Aire Serv of South Tulsa" should match.
+Citation auditing is the opposite problem: NAP consistency is an **exact-match entity signal**,
+so `505 N Armstrong St Suite Ab` vs `505 N Armstrong. Ste AB.` **is a real inconsistency** and
+must be reported. Normalising it away would silently hide the very defect the feature exists to
+find. Citation comparison needs its own strict comparator.
+
+### Vendors evaluated and rejected
+
+| Vendor | Why not |
+|---|---|
+| **BrightLocal Data API** | $6,000/yr committed for one sub-feature, at zero paying customers |
+| **Local SEO Data** (localseodata.com) | Tested 2026-08-17 with a live key. Covers **9 of our 42** directories and **zero** industry verticals (no avvo/healthgrades/zillow/opentable...). Fixed list of 20 regardless of business — the advertised "50+"/`total_directories: 52` did not reproduce. Returns only boolean flags: **no found-values, no listing URLs**, so findings are not actionable. $0.25/call. |
+| **Whitespark** | No public developer API — UI tool only |
+
 **Pricing (from BrightLocal, 2026-07-14). Annual is 25% cheaper than monthly.**
 
 | Locations | Manage /mo | Manage /yr | Grow /mo | Grow /yr |
