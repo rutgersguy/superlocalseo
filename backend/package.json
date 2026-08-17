@@ -13,7 +13,9 @@
     "lint": "eslint src --ext .ts",
     "migrate": "knex --knexfile knexfile.ts migrate:latest",
     "migrate:rollback": "knex --knexfile knexfile.ts migrate:rollback",
-    "seed": "knex --knexfile knexfile.ts seed:run"
+    "seed": "knex --knexfile knexfile.ts seed:run",
+    "migrate:prod": "node dist/db/migrate.js",
+    "migrate:prod:status": "node dist/db/migrate.js status"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

@@ -1,0 +1,22 @@
+# Local development overlay — hot reload via nodemon + ts-node.
+#
+# Use explicitly, never automatically:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d api
+#
+# Deliberately NOT named docker-compose.override.yml. Compose auto-loads that
+# filename, and this repo is checked out on the production host — an auto-loaded
+# override would silently restore the bind mount that issue #131 removed, making
+# every source edit a live deploy again.
+services:
+  api:
+    # Distinct image tag. Without this, `build` with this overlay overwrites the
+    # SAME tag the production service uses, so the next `up -d api` on the host
+    # would silently start the dev image (nodemon + ts-node) in production.
+    image: superlocalseo-api:dev
+    build:
+      target: dev
+    volumes:
+      - ./backend/src:/app/src
+      - reports_data:/app/data/reports
+volumes:
+  reports_data:
