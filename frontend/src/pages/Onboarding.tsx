@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { mutate } from 'swr';
 import { apiFetch } from '../services/api';
+import { INDUSTRY_GROUPS } from '../config/industries';
 
 // ─── Field Tooltip ────────────────────────────────────────────────────────────
 
@@ -91,16 +92,6 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-const INDUSTRY_GROUPS: Array<{ group: string; options: string[] }> = [
-  { group: 'Home Services', options: ['Plumbing', 'HVAC', 'Electrical', 'Roofing', 'Landscaping', 'Cleaning', 'Pest Control', 'Painting', 'Flooring', 'Moving', 'General Contractor'] },
-  { group: 'Health & Fitness', options: ['Personal Training', 'Gym / Fitness Studio', 'Physical Therapy', 'Chiropractic', 'Massage Therapy', 'Dental'] },
-  { group: 'Legal', options: ['Law Firm', 'Family Law', 'Personal Injury'] },
-  { group: 'Food & Beverage', options: ['Restaurant', 'Coffee Shop', 'Food Truck', 'Bakery'] },
-  { group: 'Beauty & Personal Care', options: ['Hair Salon', 'Barbershop', 'Nail Salon', 'Med Spa'] },
-  { group: 'Automotive', options: ['Auto Repair', 'Auto Detailing'] },
-  { group: 'Professional Services', options: ['Accounting / CPA', 'Real Estate', 'Insurance', 'Veterinary', 'Photography', 'Tutoring'] },
-  { group: 'Other', options: ['Other'] },
-];
 
 export default function Onboarding() {
   const navigate = useNavigate();

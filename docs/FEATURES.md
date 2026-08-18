@@ -812,7 +812,7 @@ would have sent every one of those customers chasing a fault that does not exist
 
 ### Which directories are actually audited
 
-**32 directories**, chosen by measurement rather than ambition: 10 core plus 1–5
+**33 directories**, chosen by measurement rather than ambition: 10 core plus 1–5
 relevant to the industry, so any one business sees 11–15. A directory ships only
 where we demonstrated we can find listings on it — the bar is **25% found**, on
 34 businesses for core directories and 8 same-industry businesses for vertical
@@ -833,10 +833,24 @@ than most of the original core set, and was simply missing.
 | Health | Healthgrades 100%, WebMD 63%, Vitals 50%, ZocDoc 38%, RateMDs 25% |
 | Legal | Lawyers.com 63%, **Super Lawyers 63%**, FindLaw 50%, Justia 38% |
 | Food | TripAdvisor 100%, OpenTable 50%, HappyCow 25% |
-| Beauty | **Fresha 50%** |
+| Beauty | Fresha 38–50%, **Booksy 25%** |
 | Automotive | CarWise 25% |
 | Professional | ZoomInfo 50%, **Clutch 25%** |
 | Real estate | Realtor.com 50%, Zillow 25% |
+
+### One source of truth for the directory list
+
+`backend/src/config/directories.config.ts` is authoritative. `industry.config.ts`
+used to keep its own `CORE_DIRECTORIES` and `GROUP_DIRECTORIES` copies, which
+went stale the moment the shipped set was chosen by measurement — and
+`audit_score.service.ts` divided its citation score by that stale list, quietly
+depressing 40% of every affected customer's composite audit score with
+directories we had stopped auditing (#184). Those copies are gone;
+`getDirectoriesForIndustry()` now delegates.
+
+The frontend cannot import from the backend, so `frontend/src/config/industries.ts`
+is a hand-maintained mirror of the industry picker. It is one copy rather than the
+two that had already drifted, and it must be kept in step with `INDUSTRY_MAP`.
 
 ### Re-measure whenever the scanner changes
 
@@ -860,21 +874,25 @@ what BrightLocal, Yext and Uberall sell. They are surfaced as "claim this
 yourself" with links to the free portals and a self-attested checkbox. That
 attestation is the customer's word, not a verification, and feeds **no** score.
 
-**15 directories were dropped on evidence** and are neither scanned nor shown:
-Foursquare (0% across 34, twice), Trustpilot 3%, MerchantCircle 3%, Alignable 6%
-(20 of 34 unverified), Manta 21%, Porch 13%, Avvo 13%, Expertise.com 13%, and
-Bark, Zomato, Vagaro, Mindbody, StyleSeat, RepairPal and Trulia at 0%. The
-measured rate for each is recorded in `directories.config.ts`.
+**18 directories were dropped on evidence** and are neither scanned nor shown:
+Foursquare (0% across 34, twice), Trustpilot 3%, MerchantCircle 3%, Alignable 6%,
+Manta 22%, Porch 13%, Avvo 13%, Expertise.com 13%, ClassPass 13%, and Bark,
+Zomato, Vagaro, Mindbody, StyleSeat, RepairPal, Trulia, Schedulicity and
+Treatwell at 0%. The measured rate for each is recorded in
+`directories.config.ts`.
 
-**Manta is a near-miss worth revisiting** — 24% and 21% on two runs against a 25%
-bar. It is dropped for consistency with a pre-stated threshold, not because the
-evidence is clear-cut.
+**Manta was settled on a larger sample (#185).** It measured 24%, 21% and then
+23% on a fresh, independent 40-business corpus — ~22% pooled across 74 distinct
+businesses. Consistently below the 25% bar, so it is dropped on evidence rather
+than on one borderline run.
 
-**Beauty & Personal Care has only one directory.** Vagaro, Mindbody and StyleSeat
-all measured 0%; Fresha at 50% is the sole replacement, found by SERP mining.
-
-**Real Estate has no industries mapped to it** in `INDUSTRY_MAP`, so Zillow and
-Realtor.com are unreachable in production regardless of this config.
+**Beauty & Personal Care has two directories, and that is the honest ceiling
+today (#185).** Vagaro, Mindbody and StyleSeat all measured 0%. Mining a
+beauty-only corpus for untracked domains surfaced nothing worth testing — that
+space is dominated by listicles, gift-card resellers and AI-generated
+aggregators with no citation value — so the named candidates were measured
+directly: Booksy 25% (added), ClassPass 13%, Schedulicity 0%, Treatwell 0%
+(UK-focused, no US listings).
 
 A `not_found` on a supported directory still cannot be proven to be a true
 absence — no search-based method can establish that. The three-state model exists

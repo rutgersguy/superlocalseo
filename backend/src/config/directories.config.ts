@@ -84,7 +84,7 @@ export const DIRECTORIES: Record<string, DirectoryDef> = {
   yellowpages:    { key: 'yellowpages',    label: 'Yellow Pages',            domain: 'yellowpages.com',   strategy: 'auto' },
   foursquare:     { key: 'foursquare',     label: 'Foursquare',              domain: 'foursquare.com',    strategy: 'auto', unsupported: 'measured 0% found across 34 businesses, on two runs including a re-check under the corrected scanner — never once located a listing' },
   nextdoor:       { key: 'nextdoor',       label: 'Nextdoor',                domain: 'nextdoor.com',      strategy: 'auto' },
-  manta:          { key: 'manta',          label: 'Manta',                   domain: 'manta.com',         strategy: 'auto', unsupported: 'measured 21% found across 34 businesses — below the 25% bar on two separate runs (24%, 21%)' },
+  manta:          { key: 'manta',          label: 'Manta',                   domain: 'manta.com',         strategy: 'auto', unsupported: 'measured 24%, 21% and 23% across three runs — 74 distinct businesses pooled to ~22%, consistently below the 25% bar (#185)' },
   merchantcircle: { key: 'merchantcircle', label: 'Merchant Circle',         domain: 'merchantcircle.com',strategy: 'auto', unsupported: 'measured 3% found across 34 businesses, re-checked under the corrected scanner' },
   trustpilot:     { key: 'trustpilot',     label: 'Trustpilot',              domain: 'trustpilot.com',    strategy: 'auto', unsupported: 'measured 3% found across 34 businesses, re-checked under the corrected scanner' },
   linkedin:       { key: 'linkedin',       label: 'LinkedIn',                domain: 'linkedin.com',      strategy: 'snippet' },
@@ -136,6 +136,15 @@ export const DIRECTORIES: Record<string, DirectoryDef> = {
   // those businesses with the core set only. Fresha surfaced in the brand-query
   // mining and is a real booking platform for salons and spas.
   fresha:         { key: 'fresha',         label: 'Fresha',                  domain: 'fresha.com',        strategy: 'auto', vertical: 'beauty' },
+  // Measured for #185, where Beauty had only Fresha. Booksy earned its place at
+  // 25%; the other three did not. Mining brand-query SERPs for a beauty-only
+  // corpus turned up nothing else worth testing — that space is dominated by
+  // listicles, gift-card resellers and AI-generated aggregators with no citation
+  // value, so two directories is the honest ceiling for this vertical today.
+  booksy:         { key: 'booksy',         label: 'Booksy',                  domain: 'booksy.com',        strategy: 'auto', vertical: 'beauty' },
+  schedulicity:   { key: 'schedulicity',   label: 'Schedulicity',            domain: 'schedulicity.com',  strategy: 'auto', vertical: 'beauty', unsupported: 'measured 0% found across 8 beauty businesses — 8 of 8 unverified, nothing indexed for a brand query (#185)' },
+  classpass:      { key: 'classpass',      label: 'ClassPass',               domain: 'classpass.com',     strategy: 'auto', vertical: 'beauty', unsupported: 'measured 13% found across 8 beauty businesses (#185)' },
+  treatwell:      { key: 'treatwell',      label: 'Treatwell',               domain: 'treatwell.com',     strategy: 'auto', vertical: 'beauty', unsupported: 'measured 0% found across 8 US beauty businesses — UK-focused, no US listings surfaced (#185)' },
 
   // ── Automotive ──────────────────────────────────────────────────────────
   repairpal:      { key: 'repairpal',      label: 'RepairPal',               domain: 'repairpal.com',     strategy: 'auto', vertical: 'auto', unsupported: 'measured 0% found across 8 automotive businesses' },

@@ -12,8 +12,12 @@ const shared = {
   roots: ['<rootDir>/src'],
 };
 
+// Root level, not per-project: jest rejects testTimeout inside a project entry.
+const TIMEOUT_MS = 10000;
+
 /** @type {import('jest').Config} */
 module.exports = {
+  testTimeout: TIMEOUT_MS,
   collectCoverageFrom: ['src/**/*.ts', '!src/**/__tests__/**', '!src/db/migrations/**', '!src/db/seeds/**'],
   projects: [
     {
@@ -21,14 +25,12 @@ module.exports = {
       displayName: 'unit',
       testMatch: ['**/__tests__/unit/**/*.test.ts'],
       setupFiles: ['<rootDir>/src/__tests__/unit/env.ts'],
-      testTimeout: 10000,
     },
     {
       ...shared,
       displayName: 'integration',
       testMatch: ['**/__tests__/*.test.ts'],
       setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
-      testTimeout: 10000,
     },
   ],
 };

@@ -1,6 +1,8 @@
 // Industry definitions with keyword templates.
 // {city} is replaced at runtime with the location's city.
 
+import { directoriesForVertical, verticalForGroup } from './directories.config';
+
 export interface IndustryDef {
   label: string;
   group: string;
@@ -140,9 +142,19 @@ export const INDUSTRY_MAP: Record<string, IndustryDef> = {
     label: 'Accounting / CPA', group: 'Professional Services',
     keywords: ['accountant near me', 'cpa {city}', 'tax preparation {city}'],
   },
+  // ── Real Estate ────────────────────────────────────────────────────────────
+  // Its own group, not Professional Services (#184). GROUP_DIRECTORIES has
+  // always defined a 'Real Estate' group, but no industry pointed at it, so the
+  // group was unreachable and realtors were served ZoomInfo and Clutch instead
+  // of Zillow and Realtor.com. Both measured well enough to ship — Realtor.com
+  // 50%, Zillow 25% across 8 real-estate businesses — so this was lost coverage.
   'Real Estate': {
-    label: 'Real Estate', group: 'Professional Services',
+    label: 'Real Estate', group: 'Real Estate',
     keywords: ['realtor near me', 'real estate agent {city}', 'homes for sale {city}'],
+  },
+  'Property Management': {
+    label: 'Property Management', group: 'Real Estate',
+    keywords: ['property management near me', 'property manager {city}', 'rental management {city}'],
   },
   'Insurance': {
     label: 'Insurance', group: 'Professional Services',
@@ -198,28 +210,23 @@ export function getPrimaryKeyword(industry: string | null | undefined, city?: st
   return keywords[0] ?? null;
 }
 
-// Core directories checked for every location (universal — all industries)
-export const CORE_DIRECTORIES = [
-  'google', 'bing', 'apple', 'yelp', 'facebook', 'bbb', 'yellowpages',
-  'foursquare', 'nextdoor', 'manta', 'merchantcircle', 'trustpilot', 'linkedin',
-];
-
-// Additional directories per industry group
-const GROUP_DIRECTORIES: Record<string, string[]> = {
-  'Home Services': ['angi', 'houzz', 'thumbtack', 'porch', 'homeadvisor', 'bark'],
-  'Health & Fitness': ['healthgrades', 'zocdoc', 'webmd', 'vitals', 'ratemds'],
-  'Legal': ['avvo', 'justia', 'findlaw', 'lawyers'],
-  'Food & Beverage': ['tripadvisor', 'opentable', 'zomato', 'happycow'],
-  'Beauty & Personal Care': ['vagaro', 'mindbody', 'styleseat'],
-  'Automotive': ['repairpal', 'carwise'],
-  'Professional Services': ['expertise', 'zoominfo', 'bark'],
-  'Real Estate': ['zillow', 'realtor', 'trulia'],
-};
-
-// Returns the curated directory list for a given industry.
+/**
+ * The directories audited for a given industry.
+ *
+ * Delegates to directories.config, which is the single source of truth (#184).
+ *
+ * This file used to carry its OWN copies — `CORE_DIRECTORIES` and
+ * `GROUP_DIRECTORIES` — and they silently went stale the moment #174 chose the
+ * shipped set by measurement. The audit's citation score is computed as
+ * "listed / target directories", so it was dividing by directories the scanner
+ * no longer checks (bark, avvo, vagaro, styleseat and six others). Those can
+ * never appear as listed, so every affected customer's citation score — 40% of
+ * the composite audit score — was being pushed down by directories we had
+ * deliberately stopped auditing.
+ *
+ * Two lists that must agree will eventually disagree. There is now one.
+ */
 export function getDirectoriesForIndustry(industry: string | null | undefined): string[] {
-  if (!industry) return CORE_DIRECTORIES;
-  const def = INDUSTRY_MAP[industry];
-  const extras = def ? (GROUP_DIRECTORIES[def.group] ?? []) : [];
-  return [...CORE_DIRECTORIES, ...extras];
+  const group = industry ? INDUSTRY_MAP[industry]?.group : null;
+  return directoriesForVertical(verticalForGroup(group)).map((d) => d.key);
 }
