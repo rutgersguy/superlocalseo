@@ -18,10 +18,16 @@ interface NapDetail {
   listedPhone: string | null;
 }
 
+type VerificationStatus = 'listed' | 'not_found' | 'unverified';
+
 interface Directory {
   id: string;
   name: string;
+  /** Legacy boolean, kept for older payloads. verificationStatus is the truth. */
   listed: boolean;
+  verificationStatus?: VerificationStatus;
+  unverifiedReason?: string | null;
+  claimedAt?: string | null;
   napMatch: boolean | null;
   napDetail?: NapDetail;
 }
@@ -32,6 +38,10 @@ interface CitationsResponse {
     directories: Directory[];
     totalDirectories: number;
     listedCount: number;
+    notFoundCount?: number;
+    unverifiedCount?: number;
+    /** Directories that produced a definite answer — the honest denominator. */
+    checkedCount?: number;
     napAccuratePercent: number;
     /** ISO timestamp of the newest snapshot, or null if there is no data at all. */
     lastPulledAt: string | null;
@@ -181,9 +191,43 @@ function SmallXIcon() {
   );
 }
 
+/**
+ * "We could not determine this" — deliberately grey, never red.
+ *
+ * A directory we failed to check is our limitation, not the customer's problem,
+ * and colouring it as a failure would push them to fix something that may not
+ * be broken.
+ */
+function QuestionIcon() {
+  return (
+    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+/** A field we could not read. Distinct from "matches" — see SmallCheckIcon. */
+function SmallDashIcon() {
+  return (
+    <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14" />
+    </svg>
+  );
+}
+
+/**
+ * The directory's state, tolerating payloads that predate verificationStatus.
+ *
+ * Older snapshots only carried a boolean, so they can only be listed/not_found.
+ */
+function statusOf(dir: Directory): VerificationStatus {
+  return dir.verificationStatus ?? (dir.listed ? 'listed' : 'not_found');
+}
+
 
 function hasNapError(dir: Directory): boolean {
-  if (!dir.listed) return false;
+  if (statusOf(dir) !== 'listed') return false;
   const d = dir.napDetail;
   if (!d) return false;
   return d.nameMatch === false || d.addressMatch === false || d.phoneMatch === false;
@@ -194,19 +238,20 @@ function hasNapError(dir: Directory): boolean {
 /**
  * How stale the citation data is.
  *
- * The scan runs daily, so anything older than ~2 days means the pull is failing.
+ * The scan runs weekly (Monday 07:00 UTC), so anything past ~9 days means the
+ * pull is failing.
  * That state used to be invisible: the page rendered whatever was in the table as
  * if it were current, so when BrightLocal's Data API began returning 401 for every
  * request, clients kept seeing listing status that was months old with no
  * indication anything was wrong (issue #149).
  */
-const STALE_AFTER_DAYS = 2;
+const STALE_AFTER_DAYS = 9;
 
 function FreshnessNotice({ lastPulledAt }: { lastPulledAt: string | null }) {
   if (!lastPulledAt) {
     return (
       <span className="text-sm text-gray-500">
-        Not scanned yet — your first scan runs within 24 hours.
+        Not scanned yet — your first scan runs within a week.
       </span>
     );
   }
@@ -249,7 +294,12 @@ export default function Citations() {
   const filteredDirs = sortDirectories(
     showErrorsOnly
       ? directories.filter((dir) => {
-          if (!dir.listed) return true;
+          // Only genuine problems. An `unverified` directory is our gap, not the
+          // customer's — putting it in the fix-list sends them chasing something
+          // that may be perfectly fine.
+          const status = statusOf(dir);
+          if (status === 'unverified') return false;
+          if (status === 'not_found') return true;
           if (!dir.napDetail) return false;
           return hasNapError(dir);
         })
@@ -349,7 +399,19 @@ export default function Citations() {
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-6 py-4 flex flex-wrap gap-6 items-center">
           <div>
             <span className="text-2xl font-bold text-gray-900">{summary.listedCount}</span>
-            <span className="text-sm text-gray-500"> listed / {summary.totalDirectories} total directories</span>
+            {/*
+              Denominator is what we actually CHECKED, not every directory we
+              know about. Dividing by the full list silently counts our own
+              blind spots as the customer's missing listings.
+            */}
+            <span className="text-sm text-gray-500">
+              {' '}listed / {summary.checkedCount ?? summary.totalDirectories} checked
+            </span>
+            {!!summary.unverifiedCount && (
+              <span className="text-sm text-gray-400">
+                {' '}· {summary.unverifiedCount} couldn't be checked
+              </span>
+            )}
           </div>
           <div className="h-6 w-px bg-gray-200" />
           <div>
@@ -455,6 +517,7 @@ export default function Citations() {
           {filteredDirs.map((dir) => {
             const isExpanded = expandedDir === dir.name;
             const d = dir.napDetail;
+            const status = statusOf(dir);
             const hasDetail = d && (d.nameMatch !== null || d.addressMatch !== null || d.phoneMatch !== null);
 
             return (
@@ -476,20 +539,27 @@ export default function Citations() {
                   </div>
                   <div className="flex gap-6 mt-3">
                     <div className="flex items-center gap-1.5">
-                      {dir.listed ? <CheckIcon /> : <XIcon />}
-                      <span className={`text-xs font-medium ${dir.listed ? 'text-green-600' : 'text-red-500'}`}>
-                        {dir.listed ? 'Listed' : 'Not listed'}
+                      {status === 'listed' ? <CheckIcon /> : status === 'not_found' ? <XIcon /> : <QuestionIcon />}
+                      <span
+                        className={`text-xs font-medium ${
+                          status === 'listed' ? 'text-green-600'
+                            : status === 'not_found' ? 'text-red-500'
+                            : 'text-gray-500'
+                        }`}
+                      >
+                        {status === 'listed' ? 'Listed' : status === 'not_found' ? 'Not listed' : "Couldn't check"}
                       </span>
                     </div>
-                    {dir.listed && (
+                    {status === 'listed' && dir.napMatch !== null && (
                       <div className="flex items-center gap-1.5">
-                        {dir.napMatch === true ? <CheckIcon /> : dir.napMatch === false ? <XIcon /> : null}
-                        {dir.napMatch !== null && (
-                          <span className={`text-xs font-medium ${dir.napMatch ? 'text-green-600' : 'text-red-500'}`}>
-                            NAP {dir.napMatch ? 'match' : 'mismatch'}
-                          </span>
-                        )}
+                        {dir.napMatch ? <CheckIcon /> : <XIcon />}
+                        <span className={`text-xs font-medium ${dir.napMatch ? 'text-green-600' : 'text-red-500'}`}>
+                          NAP {dir.napMatch ? 'match' : 'mismatch'}
+                        </span>
                       </div>
+                    )}
+                    {status === 'listed' && dir.napMatch === null && (
+                      <span className="text-xs text-gray-400">Listing found — details not readable</span>
                     )}
                   </div>
                 </div>
@@ -497,33 +567,42 @@ export default function Citations() {
                 {isExpanded && hasDetail && d && (
                   <div className="border-t border-gray-100 px-5 py-3 bg-gray-50 space-y-2">
                     <div className="flex items-center gap-2">
-                      {d.nameMatch === false ? <SmallXIcon /> : <SmallCheckIcon />}
+                      {d.nameMatch === false ? <SmallXIcon /> : d.nameMatch === true ? <SmallCheckIcon /> : <SmallDashIcon />}
                       <span className="text-xs text-gray-600 font-medium w-14">Name</span>
                       {d.nameMatch === false && d.listedName && (
                         <span className="text-xs text-red-600 truncate">{d.listedName}</span>
                       )}
-                      {d.nameMatch !== false && (
+                      {d.nameMatch === true && (
                         <span className="text-xs text-gray-400">matches</span>
+                      )}
+                      {d.nameMatch === null && (
+                        <span className="text-xs text-gray-400">not checked</span>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      {d.addressMatch === false ? <SmallXIcon /> : <SmallCheckIcon />}
+                      {d.addressMatch === false ? <SmallXIcon /> : d.addressMatch === true ? <SmallCheckIcon /> : <SmallDashIcon />}
                       <span className="text-xs text-gray-600 font-medium w-14">Address</span>
                       {d.addressMatch === false && d.listedAddress && (
                         <span className="text-xs text-red-600 truncate">{d.listedAddress}</span>
                       )}
-                      {d.addressMatch !== false && (
+                      {d.addressMatch === true && (
                         <span className="text-xs text-gray-400">matches</span>
+                      )}
+                      {d.addressMatch === null && (
+                        <span className="text-xs text-gray-400">not checked</span>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      {d.phoneMatch === false ? <SmallXIcon /> : <SmallCheckIcon />}
+                      {d.phoneMatch === false ? <SmallXIcon /> : d.phoneMatch === true ? <SmallCheckIcon /> : <SmallDashIcon />}
                       <span className="text-xs text-gray-600 font-medium w-14">Phone</span>
                       {d.phoneMatch === false && d.listedPhone && (
                         <span className="text-xs text-red-600 truncate">{d.listedPhone}</span>
                       )}
-                      {d.phoneMatch !== false && (
+                      {d.phoneMatch === true && (
                         <span className="text-xs text-gray-400">matches</span>
+                      )}
+                      {d.phoneMatch === null && (
+                        <span className="text-xs text-gray-400">not checked</span>
                       )}
                     </div>
                   </div>
