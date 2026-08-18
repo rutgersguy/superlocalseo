@@ -5,6 +5,8 @@ import { config } from '../config';
 import { logger } from '../utils/logger';
 import { createConnectLink, listConnectLinks, fetchAllReviews } from '../services/embedmyreviews.service';
 import { ensureEmrLocation } from '../services/emr_provisioning';
+import { createHmac, timingSafeEqual } from 'crypto';
+import { checkGBPConnection } from '../services/gbp.service';
 
 /**
  * GET  /integrations/emr/google/connect-link — status of the client's Google connection
@@ -150,24 +152,51 @@ export async function getGoogleAuthUrl(req: Request, res: Response, next: NextFu
     }
 
     const redirectUri = `${config.appUrl}/api/integrations/google/callback`;
-    const scopes = [
-      'https://www.googleapis.com/auth/business.manage',
-    ].join(' ');
-
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: redirectUri,
       response_type: 'code',
-      scope: scopes,
+      scope: GBP_SCOPE,
       access_type: 'offline',
+      // Forces the consent screen every time, which is what makes Google return
+      // a refresh_token. Without one the connection works until the first
+      // access token expires (~1h) and then dies silently — which is precisely
+      // the state the existing integration row is in: connected once, no
+      // refresh token, "authorization expired" ever since.
       prompt: 'consent',
-      state: String(req.clientId),
+      state: signState(String(req.clientId)),
     });
 
     ok(res, { url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}` });
   } catch (e) {
     next(e);
   }
+}
+
+const GBP_SCOPE = 'https://www.googleapis.com/auth/business.manage';
+
+/**
+ * Signs the OAuth `state` so the callback cannot be driven with an arbitrary
+ * client id.
+ *
+ * `state` previously carried the raw client id and was trusted on the way back,
+ * which made it an instruction from the URL rather than from us. Signing it
+ * keeps the round-trip meaningful without needing server-side storage.
+ */
+function signState(clientId: string): string {
+  const mac = createHmac('sha256', config.jwt.secret).update(clientId).digest('hex').slice(0, 32);
+  return `${clientId}.${mac}`;
+}
+
+function verifyState(state: string): string | null {
+  const idx = state.lastIndexOf('.');
+  if (idx < 0) return null;
+  const clientId = state.slice(0, idx);
+  const mac = state.slice(idx + 1);
+  const expected = createHmac('sha256', config.jwt.secret).update(clientId).digest('hex').slice(0, 32);
+  // timingSafeEqual throws on length mismatch, so compare lengths first.
+  if (mac.length !== expected.length) return null;
+  return timingSafeEqual(Buffer.from(mac), Buffer.from(expected)) ? clientId : null;
 }
 
 export async function googleCallback(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -178,7 +207,11 @@ export async function googleCallback(req: Request, res: Response, next: NextFunc
       return;
     }
 
-    const clientId = state;
+    const clientId = verifyState(state);
+    if (!clientId) {
+      err(res, 'Invalid OAuth state', 400, 'INVALID_CALLBACK');
+      return;
+    }
     const clientSecret = config.google?.clientSecret;
     const googleClientId = config.google?.clientId;
     if (!googleClientId || !clientSecret) {
@@ -205,16 +238,57 @@ export async function googleCallback(req: Request, res: Response, next: NextFunc
       return;
     }
 
-    const tokens = await tokenRes.json() as { access_token: string; refresh_token?: string; expires_in: number };
+    const tokens = await tokenRes.json() as {
+      access_token: string; refresh_token?: string; expires_in: number; scope?: string;
+    };
     const now = new Date();
     const expiresAt = new Date(now.getTime() + tokens.expires_in * 1000);
 
     const existing = await db('integrations').where({ client_id: clientId, provider: 'google' }).first();
 
+    // OAuth SUCCESS IS NOT SCOPE GRANTED.
+    //
+    // Google's consent screen lets the user untick "See, edit, create and delete
+    // your Business Profile" and still complete sign-in. The token exchange then
+    // succeeds and every Business Profile call afterwards fails. We watched
+    // exactly this happen through EMR (confirmed by their support, 2026-07-16):
+    // a client finished consent, the flag was stamped, no profile was ever
+    // attached and no review ever synced.
+    //
+    // The token response says which scopes were actually granted, so refuse the
+    // connection here rather than storing a green status on something that
+    // cannot work.
+    const granted = (tokens.scope ?? '').split(' ');
+    if (!granted.includes(GBP_SCOPE)) {
+      const message = 'Google sign-in completed but Business Profile permission was not granted. '
+        + 'Reconnect and leave the "See, edit, create and delete your Business Profile" box ticked.';
+      if (existing) {
+        await db('integrations').where({ id: existing.id })
+          .update({ status: 'disconnected', error_message: message, updated_at: now });
+      }
+      res.redirect(`${config.appUrl}/dashboard/settings?tab=integrations&google_error=scope`);
+      return;
+    }
+
+    // No refresh token means the connection expires within the hour and cannot
+    // renew. Better to fail now, loudly, than in an hour, silently.
+    const refreshToken = tokens.refresh_token ?? (existing?.oauth_refresh_token as string | undefined);
+    if (!refreshToken) {
+      if (existing) {
+        await db('integrations').where({ id: existing.id }).update({
+          status: 'disconnected',
+          error_message: 'Google did not return a refresh token. Remove the app at myaccount.google.com/permissions, then reconnect.',
+          updated_at: now,
+        });
+      }
+      res.redirect(`${config.appUrl}/dashboard/settings?tab=integrations&google_error=no_refresh`);
+      return;
+    }
+
     if (existing) {
       await db('integrations').where({ id: existing.id }).update({
         oauth_access_token: tokens.access_token,
-        oauth_refresh_token: tokens.refresh_token ?? existing.oauth_refresh_token,
+        oauth_refresh_token: refreshToken,
         oauth_expires_at: expiresAt,
         status: 'connected',
         error_message: null,
@@ -225,7 +299,7 @@ export async function googleCallback(req: Request, res: Response, next: NextFunc
         client_id: clientId,
         provider: 'google',
         oauth_access_token: tokens.access_token,
-        oauth_refresh_token: tokens.refresh_token,
+        oauth_refresh_token: refreshToken,
         oauth_expires_at: expiresAt,
         status: 'connected',
         created_at: now,
@@ -367,6 +441,40 @@ export async function disconnect(req: Request, res: Response, next: NextFunction
       .update({ status: 'disconnected', oauth_access_token: null, oauth_refresh_token: null, updated_at: new Date() });
 
     noContent(res);
+  } catch (e) {
+    next(e);
+  }
+}
+
+/**
+ * Live GBP connection status (#78/#82).
+ *
+ * Reports what Google actually returns, not what our database remembers. The
+ * stored flag records only that a token exchange once succeeded; it cannot know
+ * whether the scope was granted or the token still refreshes.
+ */
+export async function googleStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const row = await db('integrations')
+      .where({ client_id: req.clientId, provider: 'google' })
+      .first('status', 'error_message', 'oauth_refresh_token', 'oauth_expires_at', 'updated_at');
+
+    if (!row) {
+      ok(res, { connected: false, checked: false, accounts: 0, locations: [], error: null, storedStatus: null });
+      return;
+    }
+
+    const check = await checkGBPConnection(req.clientId as string);
+    ok(res, {
+      connected: check.reachable,
+      checked: true,
+      accounts: check.accounts,
+      locations: check.locations,
+      error: check.error,
+      storedStatus: row.status,
+      hasRefreshToken: !!row.oauth_refresh_token,
+      lastUpdatedAt: row.updated_at,
+    });
   } catch (e) {
     next(e);
   }

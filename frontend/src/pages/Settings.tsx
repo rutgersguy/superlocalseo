@@ -135,6 +135,111 @@ interface EmrConnectState {
  * "log into the review portal" (which attached the profile to the client's sub-account org,
  * whose data our agency key cannot read).
  */
+interface GbpStatus {
+  connected: boolean;
+  checked: boolean;
+  accounts: number;
+  locations: Array<{ name: string; title: string | null }>;
+  error: string | null;
+  storedStatus: string | null;
+  hasRefreshToken?: boolean;
+}
+
+/**
+ * Direct Google Business Profile connection.
+ *
+ * Live since Google granted our Business Profile API quota (2026-08); before
+ * that the OAuth route existed but could not be used, so the only path was
+ * through EmbedMyReviews.
+ *
+ * Status comes from ACTUALLY CALLING Google, not from our stored flag. A stored
+ * "connected" only records that a token exchange once succeeded — it cannot know
+ * whether the user ticked the Business Profile permission, or whether the token
+ * still refreshes. Both have failed silently here before.
+ */
+function GBPDirectCard() {
+  const { data, isLoading, mutate: refresh } = useSWR<{ success: boolean; data: GbpStatus }>(
+    '/integrations/google/status',
+    fetcher,
+  );
+  const [connecting, setConnecting] = useState(false);
+  const s = data?.data;
+
+  // Surfaced by the callback when consent completed without the permission, or
+  // without a refresh token. Both look like success to the user otherwise.
+  const params = new URLSearchParams(window.location.search);
+  const oauthError = params.get('google_error');
+
+  const connect = async () => {
+    setConnecting(true);
+    try {
+      const res = await apiFetch<{ success: boolean; data: { url: string } }>('/integrations/google/auth-url');
+      if (res.success && res.data?.url) window.location.href = res.data.url;
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">Google Business Profile</h3>
+          <p className="text-sm text-slate-500 mt-1 max-w-xl">
+            Connect directly to Google to sync reviews and profile data.
+          </p>
+        </div>
+        <button
+          onClick={() => void connect()}
+          disabled={connecting}
+          className="shrink-0 px-4 py-2 text-sm font-medium bg-brand-500 text-white rounded-lg hover:bg-brand-600 disabled:opacity-50"
+        >
+          {connecting ? 'Opening…' : s?.connected ? 'Reconnect' : 'Connect'}
+        </button>
+      </div>
+
+      {oauthError === 'scope' && (
+        <p className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+          Sign-in worked, but the Business Profile permission wasn&apos;t granted. Reconnect and leave
+          the <strong>&ldquo;See, edit, create and delete your Business Profile&rdquo;</strong> box ticked —
+          it&apos;s easy to untick by accident, and nothing can sync without it.
+        </p>
+      )}
+      {oauthError === 'no_refresh' && (
+        <p className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+          Google didn&apos;t return a refresh token, so the connection would stop working within the hour.
+          Remove this app at <span className="font-mono text-xs">myaccount.google.com/permissions</span>, then reconnect.
+        </p>
+      )}
+
+      <div className="mt-3 text-sm">
+        {isLoading ? (
+          <span className="text-slate-400">Checking…</span>
+        ) : !s || (!s.checked && !s.connected) ? (
+          <span className="text-slate-500">Not connected.</span>
+        ) : s.connected ? (
+          <span className="text-green-700">
+            Connected — {s.accounts} account{s.accounts === 1 ? '' : 's'}, {s.locations.length} location
+            {s.locations.length === 1 ? '' : 's'} visible to us
+            {s.locations.length > 0 && (
+              <span className="text-slate-500"> ({s.locations.slice(0, 3).map((l) => l.title ?? l.name).join(', ')})</span>
+            )}
+          </span>
+        ) : (
+          // Never render a green tick off a stored flag when the live call failed.
+          <span className="text-red-600">
+            Not working{s.error ? `: ${s.error.slice(0, 160)}` : ''}
+          </span>
+        )}
+      </div>
+
+      <button onClick={() => void refresh()} className="mt-2 text-xs text-slate-500 hover:text-slate-700 underline">
+        Re-check
+      </button>
+    </div>
+  );
+}
+
 function GoogleConnectCard() {
   const { data, mutate, isLoading } = useSWR<{ success: boolean; data: EmrConnectState }>(
     '/integrations/emr/google/connect-link',
@@ -2233,8 +2338,9 @@ export default function Settings() {
     }
   };
 
-  // Google is connected via GoogleConnectCard (EMR connect-link) — our own OAuth is inert
-  // until Google grants our GBP API quota, so no handler is wired to it here.
+  // Google now has TWO paths: our own OAuth (GBPDirectCard, live since Google
+  // granted the Business Profile API quota in 2026-08) and the EMR connect-link
+  // (GoogleConnectCard), kept as a fallback for clients already on it.
 
   const connectFacebook = async () => {
     const res = await apiFetch<{ success: boolean; data: { url: string } }>('/integrations/facebook/auth-url');
@@ -2342,6 +2448,7 @@ export default function Settings() {
                 data our agency key cannot read. The credentials card is therefore gone; the
                 portal remains reachable for operator admins via the DB if ever needed.
                 Q&A is not offered at all — Google discontinued that API on 2025-11-03. */}
+            <GBPDirectCard />
             <GoogleConnectCard />
             <OAuthCard
               name="Facebook"
