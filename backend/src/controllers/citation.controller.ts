@@ -25,7 +25,9 @@ interface CitationRow {
   directory: string;
   pulled_at: string | Date | null;
   listed: boolean;
-  nap_match: boolean;
+  verification_status: 'listed' | 'not_found' | 'unverified';
+  unverified_reason: string | null;
+  nap_match: boolean | null;
   listing_url: string | null;
   nap_name_match: boolean | null;
   nap_address_match: boolean | null;
@@ -61,19 +63,36 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
 
     const rows = (await baseQuery) as CitationRow[];
 
-    // Aggregate across locations: if any location is listed for a directory, count it as listed.
+    // Aggregate across locations, best-known state wins: a listing confirmed at
+    // one location is the most informative answer for the directory, and an
+    // `unverified` must never displace a definite one.
+    const RANK: Record<string, number> = { listed: 3, not_found: 2, unverified: 1 };
     const byDirectory = new Map<string, CitationRow>();
     for (const row of rows) {
       const existing = byDirectory.get(row.directory);
-      if (!existing || (!existing.listed && row.listed)) {
+      const status = row.verification_status ?? (row.listed ? 'listed' : 'not_found');
+      const existingStatus = existing?.verification_status ?? (existing?.listed ? 'listed' : 'not_found');
+      if (!existing || (RANK[status] ?? 0) > (RANK[existingStatus] ?? 0)) {
         byDirectory.set(row.directory, row);
       }
     }
 
+    // Self-attested claims for the directories no audit can reach (#173).
+    const claimRows = await db('location_directory_claims')
+      .join('locations', 'location_directory_claims.location_id', 'locations.id')
+      .where('locations.client_id', req.clientId)
+      .modify((q) => { if (locationId) q.where('location_directory_claims.location_id', locationId); })
+      .select('location_directory_claims.directory', 'location_directory_claims.claimed_at');
+    const claims = new Map(claimRows.map((c: { directory: string; claimed_at: Date }) => [c.directory, c.claimed_at]));
+
     const directories = Array.from(byDirectory.values()).map((c) => ({
       id: c.directory,
       name: c.directory,
+      // `listed` is retained for older clients; verificationStatus is the truth.
       listed: c.listed,
+      verificationStatus: c.verification_status ?? (c.listed ? 'listed' : 'not_found'),
+      unverifiedReason: c.unverified_reason ?? null,
+      claimedAt: claims.get(c.directory) ?? null,
       napMatch: c.nap_match,
       listingUrl: c.listing_url,
       napDetail: {
@@ -86,9 +105,23 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
       },
     }));
 
-    const listedCount = directories.filter((d) => d.listed).length;
-    const napAccurateCount = directories.filter((d) => d.listed && d.napMatch).length;
-    const napAccuratePercent = listedCount > 0 ? Math.round((napAccurateCount / listedCount) * 100) : 0;
+    const listedCount = directories.filter((d) => d.verificationStatus === 'listed').length;
+    const notFoundCount = directories.filter((d) => d.verificationStatus === 'not_found').length;
+    // Counted and reported, never hidden. A directory we could not check is our
+    // limitation, so it is excluded from the denominator rather than counted
+    // against the customer.
+    const unverifiedCount = directories.filter((d) => d.verificationStatus === 'unverified').length;
+    // Divides by listings whose NAP we could READ. Dividing by every listed
+    // directory drags the figure down for listings we never compared — the
+    // customer would see "50% NAP accurate" and go hunting for a fault that
+    // does not exist.
+    const napCheckedCount = directories.filter(
+      (d) => d.verificationStatus === 'listed' && d.napMatch !== null,
+    ).length;
+    const napAccurateCount = directories.filter(
+      (d) => d.verificationStatus === 'listed' && d.napMatch === true,
+    ).length;
+    const napAccuratePercent = napCheckedCount > 0 ? Math.round((napAccurateCount / napCheckedCount) * 100) : 0;
 
     // When this data was last actually refreshed. The Citations page presented
     // whatever was in the table as current, so when the BrightLocal Data API
@@ -105,6 +138,11 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
       directories,
       totalDirectories: directories.length,
       listedCount,
+      notFoundCount,
+      unverifiedCount,
+      /** Directories that produced a definite answer — the honest denominator. */
+      checkedCount: listedCount + notFoundCount,
+      napCheckedCount,
       napAccuratePercent,
       lastPulledAt,
     });
@@ -360,5 +398,60 @@ export async function pollSubmissions(): Promise<void> {
     } catch (e) {
       logger.warn('Citation campaign poll failed', { campaignId: row.bl_submission_id, error: (e as Error).message });
     }
+  }
+}
+
+
+// ─── Self-attested directory claims (#173) ───────────────────────────────────
+//
+// Apple Maps and Bing Places publish nothing indexable, so no audit we can run
+// will ever see them. The customer claims them through the free self-serve
+// portals and ticks them off here.
+//
+// This is self-attestation and is recorded as such: it MUST NOT feed any score
+// or be presented as verified, because we have checked precisely nothing.
+
+const claimSchema = z.object({
+  locationId: z.string().uuid(),
+  directory: z.string().min(1).max(50),
+});
+
+/** Confirms the location belongs to the caller. Never trust a body-supplied id. */
+async function assertOwnedLocation(clientId: string | undefined, locationId: string): Promise<boolean> {
+  const row = await db('locations').where({ id: locationId, client_id: clientId }).first('id');
+  return !!row;
+}
+
+export async function claimDirectory(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const parsed = claimSchema.safeParse(req.body);
+    if (!parsed.success) { err(res, parsed.error.errors[0]?.message ?? 'Validation error', 400, 'VALIDATION_ERROR'); return; }
+    const { locationId, directory } = parsed.data;
+
+    if (!(await assertOwnedLocation(req.clientId, locationId))) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
+
+    await db('location_directory_claims')
+      .insert({ location_id: locationId, directory })
+      .onConflict(['location_id', 'directory'])
+      .merge({ claimed_at: db.fn.now() });
+
+    ok(res, { locationId, directory, claimed: true });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function unclaimDirectory(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const parsed = claimSchema.safeParse(req.body);
+    if (!parsed.success) { err(res, parsed.error.errors[0]?.message ?? 'Validation error', 400, 'VALIDATION_ERROR'); return; }
+    const { locationId, directory } = parsed.data;
+
+    if (!(await assertOwnedLocation(req.clientId, locationId))) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
+
+    await db('location_directory_claims').where({ location_id: locationId, directory }).del();
+    ok(res, { locationId, directory, claimed: false });
+  } catch (e) {
+    next(e);
   }
 }

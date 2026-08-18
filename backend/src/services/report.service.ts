@@ -41,6 +41,8 @@ export interface ReportData {
     listed: number;
     total: number;
     napAccurate: number;
+    /** Listings whose NAP we could actually read — the denominator for napAccurate. */
+    napChecked: number;
   };
   competitors: Array<{
     name: string;
@@ -235,7 +237,7 @@ export async function gatherReportData(
   let citationRows: Array<{
     directory: string;
     listed: boolean;
-    nap_match: boolean;
+    nap_match: boolean | null;
   }> = [];
 
   if (locationIds.length > 0) {
@@ -251,13 +253,17 @@ export async function gatherReportData(
       .orderByRaw('location_id, directory, pulled_at DESC')) as Array<{
       directory: string;
       listed: boolean;
-      nap_match: boolean;
+      nap_match: boolean | null;
     }>;
   }
 
   const citationTotal = citationRows.length;
   const citationListed = citationRows.filter((c) => c.listed).length;
-  const citationNapAccurate = citationRows.filter((c) => c.listed && c.nap_match).length;
+  // nap_match null = we found the listing but could not read its NAP. It is
+  // neither accurate nor inaccurate, so it is excluded from BOTH sides rather
+  // than counted as a failure the customer should act on.
+  const citationNapChecked = citationRows.filter((c) => c.listed && c.nap_match !== null).length;
+  const citationNapAccurate = citationRows.filter((c) => c.listed && c.nap_match === true).length;
   const citationScore =
     citationTotal > 0 ? Math.round((citationListed / citationTotal) * 100) : 0;
 
@@ -417,6 +423,8 @@ export async function gatherReportData(
       listed: citationListed,
       total: citationTotal,
       napAccurate: citationNapAccurate,
+      /** Listings whose NAP we could actually read — the denominator for napAccurate. */
+      napChecked: citationNapChecked,
     },
     competitors: competitorRows.map((c) => ({
       name: c.name,

@@ -763,7 +763,129 @@ Returns available invitation templates from EMR.
 
 A **citation** is any mention of a business's NAP (Name, Address, Phone) in an online directory (Google, Yelp, Bing, Apple Maps, Yellow Pages, etc.). Citation consistency (exact NAP matches) is a known local SEO ranking factor.
 
-BrightLocal audits ~80+ directories for each location, tracking whether the business is listed and whether the NAP information is accurate.
+### How the audit works, and what it does NOT cover
+
+Citation auditing runs on **DataForSEO**, not BrightLocal. The BrightLocal Listing
+Find API is not on our account (12-month contract, $500/mo minimum — declined,
+issue #149); it returned 401 for every call for three months while the job
+reported success, so clients were shown 90-day-old data as if it were current.
+
+Discovery uses two independent routes, unioned:
+
+1. One quoted brand query at depth 100, read for every directory at once.
+2. A `site:<domain>` query per directory.
+
+Both are needed. Measured across 34 real businesses they disagree in **both**
+directions — the brand query found Facebook for 65% against `site:`'s 38%, while
+`site:` found Yellow Pages for 47% against the brand query's 24%. `site:` alone
+cannot be trusted on its own: `site:manta.com Anytime Plumber Beattyville`
+returns nothing for a page that `site:manta.com plumber` returns.
+
+Google is not searched at all. Maps listings are not indexed as web pages, so a
+`site:google.com/maps` query can never match. Google goes through
+`business_data/google/my_business_info`, which returns name, address and phone as
+structured fields — 97% found across the corpus.
+
+**Every scan lands on one of three states**, and the third one matters:
+
+| state | meaning | shown as |
+|---|---|---|
+| `listed` | found, identity confirmed | green; NAP then compared |
+| `not_found` | searched, no listing | red; actionable — create one |
+| `unverified` | we could not determine | grey, excluded from scoring |
+
+`unverified` exists because a false `not_found` is worse than no answer: it tells
+a customer to create a listing they already have, and duplicate listings actively
+damage local ranking. It is never presented as the customer's problem, never
+counted against them, and the summary divides by what was actually **checked**
+rather than by every directory we know of.
+
+NAP comparison is **strict**. "505 N Armstrong St Suite Ab" and "505 N Armstrong.
+Ste AB." are a genuine inconsistency — NAP is an exact-match entity signal and
+formatting artifacts are precisely the defect worth surfacing. Matching is fuzzy
+only to answer "is this the same business?", never to answer "is it correct?".
+
+A listing found whose NAP could not be read is `listed` with all match fields
+**null** ("not checked"), not `false`. Facebook snippets carry no address, and
+that case resolved for 30 of 34 businesses — reporting them as NAP mismatches
+would have sent every one of those customers chasing a fault that does not exist.
+
+### Which directories are actually audited
+
+**32 directories**, chosen by measurement rather than ambition: 10 core plus 1–5
+relevant to the industry, so any one business sees 11–15. A directory ships only
+where we demonstrated we can find listings on it — the bar is **25% found**, on
+34 businesses for core directories and 8 same-industry businesses for vertical
+ones.
+
+The bar is about **evidence, not accuracy**. A 25% find rate does not mean 75% of
+businesses are absent; many genuinely are not on Houzz. But where we never once
+found a listing, we have no grounds to tell anyone they are missing one.
+
+Four of these were found by mining brand-query SERPs for domains the registry
+never contained — MapQuest appeared for 27 of 34 businesses, a higher hit rate
+than most of the original core set, and was simply missing.
+
+| scope | directories (measured find rate) |
+|---|---|
+| Core | Google 97%, Yelp 94%, Facebook 85%, **MapQuest 82%**, **Yahoo Local 62%**, LinkedIn 59%, **BirdEye 59%**, BBB 53%, Nextdoor 41%, Yellow Pages 32% |
+| Home services | Angi 50%, HomeAdvisor 38%, Houzz 25%, Thumbtack 25% |
+| Health | Healthgrades 100%, WebMD 63%, Vitals 50%, ZocDoc 38%, RateMDs 25% |
+| Legal | Lawyers.com 63%, **Super Lawyers 63%**, FindLaw 50%, Justia 38% |
+| Food | TripAdvisor 100%, OpenTable 50%, HappyCow 25% |
+| Beauty | **Fresha 50%** |
+| Automotive | CarWise 25% |
+| Professional | ZoomInfo 50%, **Clutch 25%** |
+| Real estate | Realtor.com 50%, Zillow 25% |
+
+### Re-measure whenever the scanner changes
+
+A directory disqualified under buggy code is still disqualified on no evidence.
+Fixing the phone-extraction and empty-result defects moved **ZocDoc 13% → 38%**
+and **Thumbtack, RateMDs and HappyCow 13% → 25%** — all four were restored — while
+**Porch fell 25% → 13%** and **Manta 24% → 21%**, and both were dropped.
+
+`backend/src/scripts/measure-keys.ts` re-checks an explicit list of keys and
+deliberately bypasses the `unsupported` filter, because that flag is what is
+under test. Run it against the dropped set after any change to matching or
+extraction.
+
+### The gaps — stated explicitly
+
+**Apple Maps and Bing Places cannot be audited by us, or by any search-based
+method.** Neither publishes indexable listings: `site:maps.apple.com <business>`
+returns one junk result and `site:bing.com/maps <business>` returns nothing.
+Reading them needs a direct data partnership with Apple and Microsoft, which is
+what BrightLocal, Yext and Uberall sell. They are surfaced as "claim this
+yourself" with links to the free portals and a self-attested checkbox. That
+attestation is the customer's word, not a verification, and feeds **no** score.
+
+**15 directories were dropped on evidence** and are neither scanned nor shown:
+Foursquare (0% across 34, twice), Trustpilot 3%, MerchantCircle 3%, Alignable 6%
+(20 of 34 unverified), Manta 21%, Porch 13%, Avvo 13%, Expertise.com 13%, and
+Bark, Zomato, Vagaro, Mindbody, StyleSeat, RepairPal and Trulia at 0%. The
+measured rate for each is recorded in `directories.config.ts`.
+
+**Manta is a near-miss worth revisiting** — 24% and 21% on two runs against a 25%
+bar. It is dropped for consistency with a pre-stated threshold, not because the
+evidence is clear-cut.
+
+**Beauty & Personal Care has only one directory.** Vagaro, Mindbody and StyleSeat
+all measured 0%; Fresha at 50% is the sole replacement, found by SERP mining.
+
+**Real Estate has no industries mapped to it** in `INDUSTRY_MAP`, so Zillow and
+Realtor.com are unreachable in production regardless of this config.
+
+A `not_found` on a supported directory still cannot be proven to be a true
+absence — no search-based method can establish that. The three-state model exists
+so this limit is visible rather than hidden.
+
+### Cadence
+
+The scan runs **weekly**, Monday 07:00 UTC (was daily). Citations change over
+weeks, so daily scanning bought nothing but seven times the metered API cost.
+Weekly refresh is a genuine differentiator worth stating in marketing: most
+competitors at this price re-audit monthly or on demand.
 
 ### Citation Data
 

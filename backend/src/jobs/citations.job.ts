@@ -1,13 +1,37 @@
 import { Job } from 'bullmq';
 import { db } from '../db/connection';
-import { createListingFindRequest, fetchListingFindResult } from '../services/brightlocal.service';
-import { getDirectoriesForIndustry } from '../config/industry.config';
+import { INDUSTRY_MAP } from '../config/industry.config';
+import { directoriesForVertical, verticalForGroup, UNAUDITABLE_KEYS } from '../config/directories.config';
+import { scanLocation, LocationNap } from '../services/citation_scan.service';
 import { logger } from '../utils/logger';
 
-const POLL_MAX = 24;
-const POLL_INTERVAL_MS = 5000;
-const BATCH_SIZE = 10;
-
+/**
+ * Weekly citation audit (#174).
+ *
+ * REPLACES BRIGHTLOCAL
+ * --------------------
+ * This job used to call BrightLocal's Listing Find API, which is not on our
+ * account — a 12-month, $500/mo minimum contract we declined (#149). It ran for
+ * three months returning 401 for every call while reporting success, so clients
+ * saw 90-day-old data presented as current. Discovery now runs on DataForSEO,
+ * which we already pay for.
+ *
+ * MATCHING IS STRICT, DELIBERATELY
+ * --------------------------------
+ * The BrightLocal path compared NAP with fuzzy `normalizeStr` containment, which
+ * treats "505 N Armstrong St Suite Ab" and "505 N Armstrong. Ste AB." as equal.
+ * They are not: NAP consistency is an exact-match entity signal, and formatting
+ * artifacts are exactly the defect this feature exists to surface. The scanner
+ * matches fuzzily to decide "is this us?" and strictly to decide "is it right?".
+ *
+ * THREE STATES
+ * ------------
+ * Every scan lands on listed / not_found / unverified. `unverified` is not a
+ * failure to be smoothed over — it is the honest answer when we could not
+ * determine the truth, and it is excluded from scoring rather than counted
+ * against the customer. A false `not_found` sends someone to create a duplicate
+ * listing, which actively harms local ranking, so we never guess.
+ */
 interface LocationRow {
   locationId: string;
   clientId: string;
@@ -77,139 +101,85 @@ export async function processCitations(job: Job): Promise<void> {
 }
 
 async function syncCitationsForLocation(loc: LocationRow): Promise<void> {
-  const directories = getDirectoriesForIndustry(loc.industry);
+  const group = loc.industry ? INDUSTRY_MAP[loc.industry]?.group : null;
+  const dirs = directoriesForVertical(verticalForGroup(group));
+
+  const nap: LocationNap = {
+    name: loc.name,
+    address: loc.address,
+    city: loc.city,
+    state: loc.state,
+    zip: loc.postcode,
+    phone: loc.telephone,
+  };
+
+  const results = await scanLocation(nap, dirs);
   const now = new Date();
-  let failedRequests = 0;
-  let succeededRequests = 0;
 
-  for (let i = 0; i < directories.length; i += BATCH_SIZE) {
-    const batch = directories.slice(i, i + BATCH_SIZE);
-
-    // Fire all find requests in this batch
-    const settled = await Promise.allSettled(
-      batch.map((directory) =>
-        createListingFindRequest({
-          businessNames: [loc.name],
-          country: 'USA',
-          region: loc.state,
-          city: loc.city,
-          postcode: loc.postcode,
-          directory,
-          telephone: loc.telephone,
-          streetAddress: loc.address,
-        }).then((requestId) => ({ directory, requestId })),
-      ),
-    );
-
-    const fired = settled
-      .filter((r): r is PromiseFulfilledResult<{ directory: string; requestId: string }> => r.status === 'fulfilled')
-      .map((r) => r.value);
-    succeededRequests += fired.length;
-
-    // Rejections used to be dropped here with no logging at all. When BrightLocal's
-    // Data API started returning 401 for every call, `fired` was always empty, the
-    // poll loop never ran, the "timed out" warning never fired, and the job logged
-    // a clean success while writing nothing. Citations silently served data that
-    // was 90 days stale (issue #149).
-    const rejected = settled.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
-    if (rejected.length > 0) {
-      failedRequests += rejected.length;
-      logger.error('Citation find requests failed', {
-        locationId: loc.locationId,
-        failed: rejected.length,
-        of: batch.length,
-        // One representative error — logging all of them is noise when the
-        // upstream is down and every single call fails identically.
-        error: (rejected[0].reason as Error)?.message ?? String(rejected[0].reason),
-      });
-    }
-
-    // Poll until all ready or max attempts
-    const done = new Set<string>();
-    for (let attempt = 0; attempt < POLL_MAX && done.size < fired.length; attempt++) {
-      if (attempt > 0) await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-
-      await Promise.allSettled(
-        fired
-          .filter((p) => !done.has(p.requestId))
-          .map(async (p) => {
-            const result = await fetchListingFindResult(p.requestId);
-            if (!result.ready) return;
-            done.add(p.requestId);
-
-            const nameMatch = result.profile.title
-              ? normalizeStr(result.profile.title).includes(normalizeStr(loc.name)) ||
-                normalizeStr(loc.name).includes(normalizeStr(result.profile.title))
-              : null;
-            const addressMatch =
-              result.profile.nap?.address && loc.address
-                ? normalizeStr(result.profile.nap.address).includes(normalizeStr(loc.address)) ||
-                  normalizeStr(loc.address).includes(normalizeStr(result.profile.nap.address))
-                : null;
-            const phoneMatch =
-              result.profile.nap?.telephone && loc.telephone
-                ? normalizePhone(result.profile.nap.telephone) === normalizePhone(loc.telephone)
-                : null;
-
-            const napMatch = !!(
-              nameMatch !== false &&
-              addressMatch !== false &&
-              phoneMatch !== false &&
-              (nameMatch || addressMatch || phoneMatch)
-            );
-
-            await db('citation_snapshots').insert({
-              location_id: loc.locationId,
-              directory: p.directory,
-              listed: result.success,
-              nap_match: napMatch,
-              listing_url: result.profile.urls?.profile ?? null,
-              pulled_at: now,
-              nap_name_match: nameMatch,
-              nap_address_match: addressMatch,
-              nap_phone_match: phoneMatch,
-              listed_name: result.profile.title ?? null,
-              listed_address: result.profile.nap?.address ?? null,
-              listed_phone: result.profile.nap?.telephone ?? null,
-            });
-          }),
-      );
-    }
-
-    const timedOut = fired.filter((p) => !done.has(p.requestId));
-    if (timedOut.length > 0) {
-      logger.warn('Citation find timed out', {
-        locationId: loc.locationId,
-        directories: timedOut.map((p) => p.directory),
-      });
-    }
+  // An upstream outage must never be written as "not listed". If NOTHING could
+  // be determined for this location, treat it as a failure so the job surfaces
+  // it, rather than silently persisting a wall of unverified rows that reads to
+  // the customer as a completed scan.
+  const determined = results.filter((r) => r.status !== 'unverified').length;
+  if (results.length > 0 && determined === 0) {
+    throw new Error(`Every directory returned unverified for location ${loc.locationId}`);
   }
 
-  // If EVERY request failed, the upstream is down — not "this location has no
-  // listings". Throwing marks the BullMQ job failed, which triggers the operator
-  // alert in jobs/queue.ts. Previously this path logged a clean success and wrote
-  // nothing, so Citations served 90-day-old data with no signal anywhere (#149).
-  if (succeededRequests === 0 && failedRequests > 0) {
-    throw new Error(
-      `Citation sync failed for every directory (${failedRequests} requests). `
-      + 'BrightLocal Data API is unreachable or the key is not entitled to it — '
-      + 'note it returns 401 for BOTH an invalid key and an exhausted quota.',
-    );
-  }
+  const rows = results.map((r) => ({
+    location_id: loc.locationId,
+    directory: r.directory,
+    // Retained for older readers of this table; verification_status is the truth.
+    listed: r.status === 'listed',
+    verification_status: r.status,
+    unverified_reason: r.unverifiedReason ?? null,
+    // null = not checked, false = genuinely wrong. Collapsing the two made the
+    // UI print "NAP mismatch" and the monthly PDF count a penalty for a listing
+    // we never read — see migration 20260818010000.
+    nap_match:
+      r.status !== 'listed' ? false
+        : r.napUnreadable ? null
+        : r.nameMatch !== false && r.addressMatch !== false && r.phoneMatch !== false,
+    listing_url: r.listingUrl ?? null,
+    pulled_at: now,
+    nap_name_match: r.nameMatch ?? null,
+    nap_address_match: r.addressMatch ?? null,
+    nap_phone_match: r.phoneMatch ?? null,
+    listed_name: r.foundName ?? null,
+    listed_address: r.foundAddress ?? null,
+    listed_phone: r.foundPhone ?? null,
+  }));
 
-  if (failedRequests > 0) {
-    logger.warn('Citation sync partially failed', {
-      locationId: loc.locationId,
-      succeeded: succeededRequests,
-      failed: failedRequests,
+  // The directories no search-based method can reach are recorded explicitly as
+  // unverified rather than omitted, so the UI can show them as "claim this
+  // yourself" instead of leaving a silent hole the customer reads as a pass.
+  for (const key of UNAUDITABLE_KEYS) {
+    rows.push({
+      location_id: loc.locationId,
+      directory: key,
+      listed: false,
+      verification_status: 'unverified',
+      unverified_reason: 'directory does not publish indexable listings',
+      nap_match: false,
+      listing_url: null,
+      pulled_at: now,
+      nap_name_match: null,
+      nap_address_match: null,
+      nap_phone_match: null,
+      listed_name: null,
+      listed_address: null,
+      listed_phone: null,
     });
   }
-}
 
-function normalizeStr(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, '');
-}
+  if (rows.length > 0) await db('citation_snapshots').insert(rows);
 
-function normalizePhone(s: string): string {
-  return s.replace(/\D/g, '');
+  const listed = results.filter((r) => r.status === 'listed').length;
+  const unverified = results.filter((r) => r.status === 'unverified').length;
+  logger.info('Citation scan complete', {
+    locationId: loc.locationId,
+    directories: results.length,
+    listed,
+    notFound: results.length - listed - unverified,
+    unverified,
+  });
 }

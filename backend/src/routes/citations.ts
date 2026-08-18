@@ -17,4 +17,8 @@ router.get('/campaign/:campaignId/lookup', requireAuth, requireClient, ctrl.getC
 router.post('/campaign/:campaignId/confirm', requireAuth, requireClient, ctrl.confirmCampaign);
 router.get('/campaign/:campaignId', requireAuth, requireClient, ctrl.getCampaignStatus);
 
+// Self-attested claims for the directories no search-based audit can reach.
+router.post('/claim', requireAuth, requireClient, ctrl.claimDirectory);
+router.post('/unclaim', requireAuth, requireClient, ctrl.unclaimDirectory);
+
 export default router;

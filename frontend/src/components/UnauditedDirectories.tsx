@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import { ExternalLink, Check, Copy } from 'lucide-react';
-import { fetcher } from '../services/api';
+import { apiFetch, fetcher } from '../services/api';
 
 /**
  * Apple Maps and Bing Places are the two directories our citation scan cannot
@@ -35,12 +35,14 @@ interface LocationRow {
 
 const PORTALS = [
   {
+    key: 'apple',
     name: 'Apple Business Connect',
     url: 'https://businessconnect.apple.com',
     why: 'Powers Apple Maps and Siri on every iPhone.',
     note: 'Free. Apple verifies by phone call or postcard.',
   },
   {
+    key: 'bing',
     name: 'Bing Places for Business',
     url: 'https://www.bingplaces.com',
     why: 'Feeds Bing and Microsoft Copilot.',
@@ -55,8 +57,41 @@ function formatNap(loc: LocationRow): string {
     .join('\n');
 }
 
+/**
+ * Self-attested claim state for one location.
+ *
+ * These are the customer's own word that they have claimed a listing — we have
+ * verified nothing, and cannot. So it is recorded and displayed as a personal
+ * checklist and MUST NOT feed any score or completeness figure; presenting an
+ * unverified assertion as a verified result is the exact dishonesty the
+ * three-state model exists to avoid.
+ */
+function useClaims(locationId: string) {
+  const key = `/citations?locationId=${locationId}`;
+  const { data, mutate } = useSWR<{
+    success: boolean;
+    data: { directories: Array<{ id: string; claimedAt: string | null }> };
+  }>(key, fetcher);
+
+  const claimed = new Set(
+    (data?.data?.directories ?? []).filter((d) => d.claimedAt).map((d) => d.id),
+  );
+
+  const toggle = async (directory: string, next: boolean) => {
+    await apiFetch(next ? '/citations/claim' : '/citations/unclaim', {
+      method: 'POST',
+      body: JSON.stringify({ locationId, directory }),
+    });
+    await mutate();
+  };
+
+  return { claimed, toggle };
+}
+
 function LocationCard({ loc, onDismiss }: { loc: LocationRow; onDismiss: () => void }) {
   const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const { claimed, toggle } = useClaims(loc.id);
   const nap = formatNap(loc);
 
   const copy = async () => {
@@ -106,6 +141,24 @@ function LocationCard({ loc, onDismiss }: { loc: LocationRow; onDismiss: () => v
             </a>
             <p className="text-xs text-gray-600 mt-1">{p.why}</p>
             <p className="text-xs text-gray-400 mt-1">{p.note}</p>
+            <label className="flex items-center gap-2 mt-3 pt-2 border-t border-gray-100 cursor-pointer">
+              <input
+                type="checkbox"
+                className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                checked={claimed.has(p.key)}
+                disabled={busy === p.key}
+                onChange={async (e) => {
+                  const next = e.target.checked;
+                  setBusy(p.key);
+                  try {
+                    await toggle(p.key, next);
+                  } finally {
+                    setBusy(null);
+                  }
+                }}
+              />
+              <span className="text-xs text-gray-600">I&apos;ve claimed this</span>
+            </label>
           </div>
         ))}
       </div>

@@ -140,22 +140,68 @@ function authHeader(): string {
   return 'Basic ' + Buffer.from(`${login}:${password}`).toString('base64');
 }
 
-async function dfsPost(path: string, body: unknown): Promise<unknown> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method: 'POST',
-    headers: {
-      Authorization: authHeader(),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+/**
+ * DataForSEO rate-limits per endpoint, and signals it in TWO different places:
+ * HTTP 429, and — more awkwardly — a 200 response whose per-task status_code is
+ * 40102 with an empty result.
+ *
+ * The second form is the dangerous one. Measured directly: of 12 concurrent
+ * calls to my_business_info, ONE succeeded and eleven came back 200/40102. Read
+ * naively that is "no listing found", so a throttled scan would tell 11 of 12
+ * customers their Google Business Profile does not exist. Rate limiting must
+ * never be mistaken for absence, so it retries and then throws.
+ */
+const RATE_LIMIT_TASK_CODE = 40102;
+const MAX_ATTEMPTS = 4;
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`DataForSEO ${path} failed (${res.status}): ${text}`);
+function taskRateLimited(json: unknown): boolean {
+  const tasks = (json as { tasks?: Array<{ status_code?: number }> })?.tasks;
+  return Array.isArray(tasks) && tasks.length > 0
+    && tasks.every((t) => t?.status_code === RATE_LIMIT_TASK_CODE);
+}
+
+async function dfsPost(path: string, body: unknown): Promise<unknown> {
+  let lastError = '';
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (attempt > 1) {
+      // Exponential backoff with a little jitter so parallel callers do not
+      // retry in lockstep and re-create the burst that throttled them.
+      const delay = 500 * 2 ** (attempt - 2) * (1 + Math.random());
+      await new Promise((r) => setTimeout(r, delay));
+    }
+
+    const res = await fetch(`${BASE_URL}${path}`, {
+      method: 'POST',
+      headers: {
+        Authorization: authHeader(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (res.status === 429) {
+      lastError = 'HTTP 429 rate limited';
+      continue;
+    }
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`DataForSEO ${path} failed (${res.status}): ${text}`);
+    }
+
+    const json = await res.json();
+    if (taskRateLimited(json)) {
+      lastError = `task status ${RATE_LIMIT_TASK_CODE} (rate limited)`;
+      continue;
+    }
+
+    return json;
   }
 
-  return res.json();
+  // Deliberately throws rather than returning an empty result: callers turn an
+  // exception into `unverified`, but an empty result into `not_found`.
+  throw new Error(`DataForSEO ${path} rate limited after ${MAX_ATTEMPTS} attempts: ${lastError}`);
 }
 
 // ─── SERP rank lookup ─────────────────────────────────────────────────────────
@@ -698,4 +744,163 @@ export async function getLighthouseResult(taskId: string): Promise<LighthouseDat
     logger.warn('Lighthouse result fetch failed', { taskId, error: (e as Error).message });
     return null;
   }
+}
+
+// ── citation auditing primitives (issue #174) ───────────────────────────────
+
+export interface SerpResult {
+  url: string;
+  title: string;
+  description: string;
+}
+
+/**
+ * A plain organic SERP search, used by the citation scanner for `site:` queries.
+ *
+ * `depth: 5` is deliberate — a citation lookup only cares about the first result
+ * or two, and depth drives the price. Costs ~$0.01 per call.
+ */
+export async function serpSearch(keyword: string, depth = 5): Promise<SerpResult[]> {
+  if (!config.dataforseo.login || !config.dataforseo.password) {
+    throw new Error('DataForSEO credentials not configured');
+  }
+
+  const json = (await dfsPost('/serp/google/organic/live/advanced', [{
+    keyword,
+    location_code: 2840,
+    language_code: 'en',
+    depth,
+  }])) as {
+    tasks?: Array<{ result?: Array<{ items?: Array<Record<string, unknown>> }> }>;
+  };
+
+  const items = json.tasks?.[0]?.result?.[0]?.items ?? [];
+  return items
+    .filter((i) => i.type === 'organic')
+    .map((i) => ({
+      url: (i.url as string) ?? '',
+      title: (i.title as string) ?? '',
+      description: (i.description as string) ?? '',
+    }))
+    .filter((r) => r.url);
+}
+
+/**
+ * Fetches a listing page and returns its readable text.
+ *
+ * Best-effort by design: several directories block automated fetching — Yelp
+ * returns 403 — so callers must treat null as "could not read", never as
+ * "not listed". Costs ~$0.00015 per call, far cheaper than the SERP query.
+ */
+export async function fetchPageText(url: string): Promise<string | null> {
+  // Correct path is on_page/content_parsing/live — plain "content_parsing" is the
+  // task-based variant and returns "Task Not Found" when called directly.
+  //
+  // Deliberately WITHOUT javascript. Measured on a real BBB listing: JS-enabled
+  // costs 10x ($0.0015 vs $0.00015) and returned no items at all, while the
+  // non-JS fetch returns the page but not the NAP — these directories render
+  // contact details client-side. So fetching is a cheap opportunistic extra, and
+  // the SERP snippet remains the primary source.
+  const json = (await dfsPost('/on_page/content_parsing/live', [{
+    url,
+    enable_javascript: false,
+  }])) as {
+    tasks?: Array<{ result?: Array<{ items?: Array<Record<string, unknown>> }> }>;
+  };
+
+  const item = json.tasks?.[0]?.result?.[0]?.items?.[0];
+  if (!item) return null;
+
+  const status = item.status_code as number | undefined;
+  if (status !== undefined && (status < 200 || status >= 300)) return null;
+
+  // The parsed page is a nested structure; flattening it to a string is enough
+  // for regex extraction and avoids depending on their exact shape.
+  const blob = JSON.stringify(item.page_content ?? item);
+  return blob.length > 2 ? blob : null;
+}
+
+export interface GoogleListing {
+  title: string | null;
+  address: string | null;
+  phone: string | null;
+  url: string | null;
+}
+
+/**
+ * Google Business Profile listing, from Google My Business Info.
+ *
+ * Google is scanned through this rather than a `site:` search, because Google
+ * Maps listings are not indexed as ordinary web pages — a `site:google.com/maps`
+ * query finds nothing, which is why validation showed Google as a miss while
+ * BrightLocal had it listed. This returns the fields structured, so no snippet
+ * scraping is involved at all.
+ *
+ * Costs ~$0.0054 — pricier than a SERP query, and worth it for the single most
+ * important directory.
+ */
+export async function getGoogleListing(
+  businessName: string,
+  street: string | null,
+  city: string | null,
+  state: string | null,
+): Promise<GoogleListing | null> {
+  // Two attempts, because this lookup is markedly keyword-sensitive: for a
+  // Greenwich Village pizzeria, "Joe's Pizza New York NY" returns nothing at
+  // all while "Joe's Pizza 7 Carmine St New York NY" returns the listing. The
+  // street address is tried first because it disambiguates common names, and
+  // the broader query is the fallback for a business that has since moved (in
+  // which case the stored street would defeat the lookup).
+  //
+  // Including our address does not bias the result: Google returns its OWN
+  // record — it answered "Ste Ab" to a query carrying our stored "Suite Ab",
+  // which is exactly the mismatch we exist to detect.
+  const where = [city, state].filter(Boolean).join(' ');
+  const queries = [
+    [businessName, street, where].filter(Boolean).join(' ').trim(),
+    [businessName, where].filter(Boolean).join(' ').trim(),
+  ].filter((q, i, a) => q && a.indexOf(q) === i);
+
+  let item: Record<string, unknown> | undefined;
+  for (const keyword of queries) {
+    const json = (await dfsPost('/business_data/google/my_business_info/live', [{
+      keyword,
+      location_code: 2840,
+      language_code: 'en',
+    }])) as { tasks?: Array<{ result?: Array<{ items?: Array<Record<string, unknown>> }> }> };
+    item = json.tasks?.[0]?.result?.[0]?.items?.[0];
+    if (item) break;
+  }
+  if (!item) return null;
+
+  return {
+    title: (item.title as string) ?? null,
+    address: (item.address as string) ?? null,
+    phone: (item.phone as string) ?? null,
+    url: (item.url as string) ?? null,
+  };
+}
+
+export interface MapsBusiness {
+  title: string | null;
+  address: string | null;
+  phone: string | null;
+}
+
+/**
+ * Businesses from the Google Maps pack for a query.
+ *
+ * Used to assemble a corpus of REAL businesses with authoritative NAP for
+ * measuring directory coverage, rather than inventing test data. Costs $0.002.
+ */
+export async function mapsSearch(keyword: string, depth = 10): Promise<MapsBusiness[]> {
+  const json = (await dfsPost('/serp/google/maps/live/advanced', [{
+    keyword, location_code: 2840, language_code: 'en', depth,
+  }])) as { tasks?: Array<{ result?: Array<{ items?: Array<Record<string, unknown>> }> }> };
+
+  return (json.tasks?.[0]?.result?.[0]?.items ?? []).map((i) => ({
+    title: (i.title as string) ?? null,
+    address: (i.address as string) ?? null,
+    phone: (i.phone as string) ?? null,
+  }));
 }
