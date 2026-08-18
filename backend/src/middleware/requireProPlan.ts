@@ -63,3 +63,42 @@ export async function enforcePlanGate(req: Request, res: Response, next: NextFun
 
   requireProPlan(req, res, next);
 }
+
+/**
+ * Gates a route by the plan rules of the DATA it returns, not its own path.
+ *
+ * An export is a second read path for data that already has a gate, and the two
+ * silently disagreed: `/citations` returned 403 PRO_REQUIRED for a Lite account
+ * while `/reports/export/citations` returned 200 with the same rows — location,
+ * directory, listing URL and full NAP mismatch detail. Verified against a real
+ * Lite account, not inferred.
+ *
+ * The cause is structural rather than a missed entry. `PLAN_ROUTE_GATES` is
+ * matched on the REQUEST path, and `reports` is not listed there, so an export
+ * living under `/reports` inherits nothing from the resource it reads. Adding
+ * `reports/export/citations` to the map would close this one hole and leave the
+ * shape of the bug intact for the next export anyone adds.
+ *
+ * So the gate is declared against the source prefix instead: whatever
+ * `/citations` requires, its export requires too, automatically and for ever.
+ *
+ * NOTE ON SCOPE: this is applied only where the underlying READ is already
+ * Pro-gated, which today means citations alone. Whether CSV export as such is a
+ * Pro feature — which would also cover rankings, keywords and reviews — is a
+ * pricing decision open in #157, and is deliberately not made here.
+ */
+export function requireSourceAccess(sourcePrefix: string) {
+  return function sourceGate(req: Request, res: Response, next: NextFunction): void {
+    if (req.userRole === 'admin') { next(); return; }
+
+    // Default to 'pro' to match requireProPlan: an unpopulated client must not
+    // become an accidental denial for legitimate Pro traffic.
+    const productLine = ((req.client?.product_line as string | null) ?? 'pro') as Plan;
+    if (isPlanAllowed(sourcePrefix, productLine)) { next(); return; }
+
+    res.status(403).json({
+      success: false,
+      error: { code: 'PRO_REQUIRED', message: 'This feature requires the Pro plan.' },
+    });
+  };
+}
