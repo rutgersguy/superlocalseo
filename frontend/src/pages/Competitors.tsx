@@ -654,13 +654,173 @@ function DiscoverKeywords({ competitors }: { competitors: Competitor[] }) {
 
 interface ScanStatusResponse { success: boolean; data: { available: boolean; retryAfterSeconds: number } }
 
+interface OutrankingEntry {
+  key: string;
+  domain: string | null;
+  businessName: string | null;
+  keywordsOutranking: number;
+  avgPosition: number;
+  bestPosition: number;
+  rankTypes: string[];
+  previousAvgPosition: number | null;
+  change: number | null;
+  isDirectory: boolean;
+  sampleKeywords: string[];
+}
+
+interface OutrankingResponse {
+  success: boolean;
+  data: {
+    competitors: OutrankingEntry[];
+    directories: OutrankingEntry[];
+    keywordsTracked: number;
+    keywordsWhereClientUnranked: number;
+    lastPulledAt: string | null;
+    windowDays: number;
+  };
+}
+
+/**
+ * "Who is beating me?" — discovered from the SERP, not from a list the client
+ * had to build first (#81).
+ *
+ * Distinct from the other tabs, which report on competitors someone explicitly
+ * added. The value is in the ones they had NOT thought of, so nothing here
+ * requires setup.
+ */
+function Outranking() {
+  const { data: locData } = useSWR<{ success: boolean; data: LocationOption[] }>('/locations', fetcher);
+  const locations = locData?.data ?? [];
+  const [locationId, setLocationId] = useState<string>('');
+  const activeLocation = locationId || locations[0]?.id || '';
+
+  const { data, isLoading } = useSWR<OutrankingResponse>(
+    activeLocation ? `/competitors/outranking?locationId=${activeLocation}` : null,
+    fetcher,
+  );
+
+  if (isLoading) {
+    return <div className="bg-white rounded-xl border border-slate-100 p-8 text-center text-sm text-slate-400">Loading…</div>;
+  }
+
+  const r = data?.data;
+  // No SERP history yet — a brand new location, or one whose first scan has not
+  // run. Say which, rather than showing an empty table that reads as "nobody is
+  // beating you", which would be a flattering lie.
+  if (!r || !r.lastPulledAt) {
+    return (
+      <div className="bg-white rounded-xl border border-slate-100 p-8 text-center">
+        <p className="text-sm font-medium text-slate-700">No ranking scan yet for this location</p>
+        <p className="text-xs text-slate-500 mt-1">
+          This builds from your daily keyword scan. Once it has run, the businesses ranking above you appear here automatically — no setup needed.
+        </p>
+      </div>
+    );
+  }
+
+  const rows = (list: OutrankingEntry[]) => list.map((c) => (
+    <tr key={c.key} className="border-t border-slate-100">
+      <td className="py-2.5 pr-3">
+        {/* Domain first when there is one. For ORGANIC results the stored name
+            is the page <title> ("HVAC Repair in Bixby, OK"), not a business —
+            leading with it made competitors unrecognisable. Map-pack entries
+            usually have no website, and there the name IS the business, so it
+            is the fallback rather than the default. */}
+        <div className="text-sm font-medium text-slate-900">{c.domain || c.businessName}</div>
+        {c.domain && c.businessName && (
+          <div className="text-xs text-slate-400 truncate max-w-[22rem]">{c.businessName}</div>
+        )}
+        <div className="text-xs text-slate-400 mt-0.5">{c.sampleKeywords.slice(0, 2).join(' · ')}</div>
+      </td>
+      <td className="py-2.5 px-3 text-sm text-slate-700 text-center">{c.keywordsOutranking}</td>
+      <td className="py-2.5 px-3 text-sm text-slate-700 text-center">{c.avgPosition}</td>
+      <td className="py-2.5 px-3 text-center">
+        {c.change == null ? (
+          // Never say "no change" for something we have not measured twice.
+          <span className="text-xs text-slate-400">new</span>
+        ) : c.change === 0 ? (
+          <span className="text-xs text-slate-400">—</span>
+        ) : (
+          // A NEGATIVE change means their position number fell, i.e. they moved
+          // UP the page. That is bad for the client, so it is the red one.
+          <span className={`text-xs font-medium ${c.change < 0 ? 'text-red-600' : 'text-green-600'}`}>
+            {c.change < 0 ? '▲' : '▼'} {Math.abs(c.change)}
+          </span>
+        )}
+      </td>
+      <td className="py-2.5 pl-3 text-xs text-slate-500">
+        {c.rankTypes.map((t) => (t === 'local_pack' ? 'Map pack' : 'Organic')).join(', ')}
+      </td>
+    </tr>
+  ));
+
+  const header = (
+    <thead>
+      <tr className="text-xs text-slate-400">
+        <th className="text-left font-medium pb-2 pr-3">Business</th>
+        <th className="font-medium pb-2 px-3">Keywords</th>
+        <th className="font-medium pb-2 px-3">Avg pos</th>
+        <th className="font-medium pb-2 px-3">Change</th>
+        <th className="text-left font-medium pb-2 pl-3">Where</th>
+      </tr>
+    </thead>
+  );
+
+  return (
+    <div className="space-y-4">
+      {locations.length > 1 && (
+        <select
+          value={activeLocation}
+          onChange={(e) => setLocationId(e.target.value)}
+          className="text-sm border border-slate-200 rounded-lg px-3 py-2"
+        >
+          {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+        </select>
+      )}
+
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+        <h2 className="text-base font-semibold text-slate-900">Businesses ranking above you</h2>
+        <p className="text-xs text-slate-500 mt-0.5">
+          Found automatically across your {r.keywordsTracked} tracked keyword{r.keywordsTracked === 1 ? '' : 's'}
+          {r.keywordsWhereClientUnranked > 0 && (
+            <> · you don&apos;t appear at all on {r.keywordsWhereClientUnranked} of them</>
+          )}
+        </p>
+
+        {r.competitors.length === 0 ? (
+          <p className="text-sm text-slate-500 mt-4">Nobody is ranking above you on your tracked keywords.</p>
+        ) : (
+          <div className="overflow-x-auto mt-4">
+            <table className="w-full min-w-[560px]">{header}<tbody>{rows(r.competitors)}</tbody></table>
+          </div>
+        )}
+      </div>
+
+      {r.directories.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+          <h2 className="text-base font-semibold text-slate-900">Directories ranking above you</h2>
+          {/* Deliberately separated. Telling a plumber to "beat Yelp" is bad
+              advice; telling them these pages own the results, and that being
+              listed on them is the way in, is good advice. */}
+          <p className="text-xs text-slate-500 mt-0.5">
+            You can&apos;t outrank these — but you can be listed on them. Check your Citations page.
+          </p>
+          <div className="overflow-x-auto mt-4">
+            <table className="w-full min-w-[560px]">{header}<tbody>{rows(r.directories)}</tbody></table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function formatNextScanTime(retryAfterSeconds: number): string {
   const t = new Date(Date.now() + retryAfterSeconds * 1000);
   const time = t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' });
   return `${time} EST`;
 }
 
-type Tab = 'overview' | 'rankings' | 'discover';
+type Tab = 'overview' | 'outranking' | 'rankings' | 'discover';
 
 /**
  * Lite teaser — a blurred preview of the competitor intelligence behind a frosted
@@ -762,6 +922,7 @@ export default function Competitors() {
 
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'overview',  label: 'Overview',          icon: Star },
+    { id: 'outranking', label: 'Outranking you',   icon: TrendingUp },
     { id: 'rankings',  label: 'Keyword Rankings',   icon: BarChart2 },
     { id: 'discover',  label: 'Discover Keywords',  icon: Lightbulb },
   ];
@@ -894,6 +1055,8 @@ export default function Competitors() {
       )}
 
       {/* Rankings tab */}
+      {tab === 'outranking' && <Outranking />}
+
       {tab === 'rankings' && <HeadToHead />}
 
       {/* Discover tab */}
