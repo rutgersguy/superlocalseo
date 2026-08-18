@@ -773,3 +773,64 @@ export async function fetchPageText(url: string): Promise<string | null> {
   const blob = JSON.stringify(item.page_content ?? item);
   return blob.length > 2 ? blob : null;
 }
+
+export interface GoogleListing {
+  title: string | null;
+  address: string | null;
+  phone: string | null;
+  url: string | null;
+}
+
+/**
+ * Google Business Profile listing, from Google My Business Info.
+ *
+ * Google is scanned through this rather than a `site:` search, because Google
+ * Maps listings are not indexed as ordinary web pages — a `site:google.com/maps`
+ * query finds nothing, which is why validation showed Google as a miss while
+ * BrightLocal had it listed. This returns the fields structured, so no snippet
+ * scraping is involved at all.
+ *
+ * Costs ~$0.0054 — pricier than a SERP query, and worth it for the single most
+ * important directory.
+ */
+export async function getGoogleListing(
+  businessName: string,
+  street: string | null,
+  city: string | null,
+  state: string | null,
+): Promise<GoogleListing | null> {
+  // Two attempts, because this lookup is markedly keyword-sensitive: for a
+  // Greenwich Village pizzeria, "Joe's Pizza New York NY" returns nothing at
+  // all while "Joe's Pizza 7 Carmine St New York NY" returns the listing. The
+  // street address is tried first because it disambiguates common names, and
+  // the broader query is the fallback for a business that has since moved (in
+  // which case the stored street would defeat the lookup).
+  //
+  // Including our address does not bias the result: Google returns its OWN
+  // record — it answered "Ste Ab" to a query carrying our stored "Suite Ab",
+  // which is exactly the mismatch we exist to detect.
+  const where = [city, state].filter(Boolean).join(' ');
+  const queries = [
+    [businessName, street, where].filter(Boolean).join(' ').trim(),
+    [businessName, where].filter(Boolean).join(' ').trim(),
+  ].filter((q, i, a) => q && a.indexOf(q) === i);
+
+  let item: Record<string, unknown> | undefined;
+  for (const keyword of queries) {
+    const json = (await dfsPost('/business_data/google/my_business_info/live', [{
+      keyword,
+      location_code: 2840,
+      language_code: 'en',
+    }])) as { tasks?: Array<{ result?: Array<{ items?: Array<Record<string, unknown>> }> }> };
+    item = json.tasks?.[0]?.result?.[0]?.items?.[0];
+    if (item) break;
+  }
+  if (!item) return null;
+
+  return {
+    title: (item.title as string) ?? null,
+    address: (item.address as string) ?? null,
+    phone: (item.phone as string) ?? null,
+    url: (item.url as string) ?? null,
+  };
+}

@@ -24,7 +24,7 @@
  */
 import { DirectoryDef } from '../config/directories.config';
 import { logger } from '../utils/logger';
-import { serpSearch, fetchPageText } from './dataforseo.service';
+import { serpSearch, fetchPageText, getGoogleListing } from './dataforseo.service';
 
 export type VerificationStatus = 'listed' | 'not_found' | 'unverified';
 
@@ -188,10 +188,45 @@ function unverified(directory: string, reason: string, url?: string | null): Cit
   return { directory, status: 'unverified', unverifiedReason: reason, listingUrl: url ?? null };
 }
 
+async function scanGoogle(loc: LocationNap): Promise<CitationScanResult> {
+  let listing;
+  try {
+    listing = await getGoogleListing(loc.name, loc.address, loc.city, loc.state);
+  } catch (e) {
+    return unverified('google', `gmb error: ${(e as Error).message.slice(0, 80)}`);
+  }
+  if (!listing) return { directory: 'google', status: 'not_found', listingUrl: null };
+
+  // Same identity rule as everywhere else — a returned listing is not
+  // automatically ours.
+  const blob = `${listing.title ?? ''} ${listing.address ?? ''} ${listing.phone ?? ''}`;
+  if (!isSameBusiness(loc, blob, listing.url ?? '')) {
+    return unverified('google', 'returned listing did not match this business', listing.url);
+  }
+
+  return {
+    directory: 'google',
+    status: 'listed',
+    listingUrl: listing.url,
+    foundName: listing.title,
+    foundAddress: listing.address,
+    foundPhone: listing.phone,
+    nameMatch: strictEqual(loc.name, listing.title),
+    addressMatch: strictEqual(expectedAddress(loc), listing.address),
+    phoneMatch: phoneEqual(loc.phone, listing.phone),
+  };
+}
+
 export async function scanDirectory(loc: LocationNap, dir: DirectoryDef): Promise<CitationScanResult> {
   if (dir.unauditable) {
     return unverified(dir.key, 'directory does not publish indexable listings');
   }
+
+  // Google is not searched — Maps listings are not indexed as web pages, so a
+  // `site:google.com/maps` query finds nothing. Validation showed Google as a
+  // miss while BrightLocal had it listed. My Business Info returns the fields
+  // structured instead, with no snippet scraping at all.
+  if (dir.key === 'google') return scanGoogle(loc);
 
   const where = [loc.city, loc.state].filter(Boolean).join(' ');
   const query = `site:${dir.domain} ${loc.name} ${where}`.trim();
