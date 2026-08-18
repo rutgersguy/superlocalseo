@@ -281,3 +281,70 @@ export async function syncGBPReviews(
 
   logger.info('GBP reviews synced', { clientId, totalReviews });
 }
+
+export interface GBPConnectionCheck {
+  /** Did Google actually answer? The only signal that cannot lie. */
+  reachable: boolean;
+  accounts: number;
+  locations: Array<{ name: string; title: string | null }>;
+  error: string | null;
+}
+
+/**
+ * Proves a GBP connection by USING it.
+ *
+ * A stored `status: 'connected'` only records that a token exchange once
+ * succeeded. It cannot tell you the scope was granted, the token still
+ * refreshes, or that Google will answer today — and this project has already
+ * been bitten by trusting exactly that kind of flag (see the EMR notes in
+ * integration.controller). So this calls the real API and reports what came
+ * back.
+ *
+ * Refreshes the token first when it is near expiry, because "expired an hour
+ * ago" is the most common reason for a connection that looks fine and is not.
+ */
+export async function checkGBPConnection(clientId: string): Promise<GBPConnectionCheck> {
+  const row = await db('integrations').where({ client_id: clientId, provider: 'google' }).first();
+  if (!row?.oauth_access_token) {
+    return { reachable: false, accounts: 0, locations: [], error: 'Not connected' };
+  }
+
+  let token = row.oauth_access_token as string;
+  const expiresAt = row.oauth_expires_at ? new Date(row.oauth_expires_at as string) : null;
+  const refreshToken = (row.oauth_refresh_token as string | null) ?? null;
+
+  try {
+    if (expiresAt && expiresAt.getTime() - Date.now() < 60_000) {
+      if (!refreshToken) {
+        return {
+          reachable: false, accounts: 0, locations: [],
+          error: 'Access token expired and no refresh token is stored — reconnect required.',
+        };
+      }
+      const refreshed = await refreshAccessToken(refreshToken);
+      token = refreshed.accessToken;
+      await db('integrations').where({ id: row.id }).update({
+        oauth_access_token: token,
+        oauth_expires_at: refreshed.expiresAt,
+      });
+    }
+
+    const accounts = await getAccounts(token);
+    const locations: Array<{ name: string; title: string | null }> = [];
+    for (const a of accounts) {
+      for (const l of await getLocations(a.name, token)) {
+        locations.push({ name: l.name, title: (l as { title?: string }).title ?? null });
+      }
+    }
+
+    await db('integrations').where({ id: row.id })
+      .update({ status: 'connected', error_message: null, updated_at: new Date() });
+
+    return { reachable: true, accounts: accounts.length, locations, error: null };
+  } catch (e) {
+    const message = (e as Error).message;
+    await db('integrations').where({ id: row.id })
+      .update({ status: 'disconnected', error_message: message.slice(0, 500), updated_at: new Date() });
+    return { reachable: false, accounts: 0, locations: [], error: message };
+  }
+}

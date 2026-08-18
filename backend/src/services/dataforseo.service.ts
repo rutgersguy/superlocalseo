@@ -151,13 +151,31 @@ function authHeader(): string {
  * customers their Google Business Profile does not exist. Rate limiting must
  * never be mistaken for absence, so it retries and then throws.
  */
-const RATE_LIMIT_TASK_CODE = 40102;
+/**
+ * Task-level codes that are worth retrying, all of which arrive as HTTP 200.
+ *
+ *   40102  rate limited — 12 concurrent my_business_info calls returned 1 success
+ *          and 11 of these.
+ *   40101  "Internal SE Server Error" — transient upstream failure. Confirmed by
+ *          repeating one identical SERP query: it returned 0 items, then 33, 34
+ *          and 13 items on the next three attempts.
+ *
+ * 40101 matters more than it looks. An empty SERP result means no client match,
+ * which the ranking job writes as `rank: null` — telling a customer they dropped
+ * out of the results because DataForSEO hiccupped. Retrying, then THROWING, is
+ * the difference between a missing data point and a fabricated one.
+ */
+const RETRYABLE_TASK_CODES = new Set([40101, 40102]);
 const MAX_ATTEMPTS = 4;
 
-function taskRateLimited(json: unknown): boolean {
+function taskRetryable(json: unknown): number | null {
   const tasks = (json as { tasks?: Array<{ status_code?: number }> })?.tasks;
-  return Array.isArray(tasks) && tasks.length > 0
-    && tasks.every((t) => t?.status_code === RATE_LIMIT_TASK_CODE);
+  if (!Array.isArray(tasks) || tasks.length === 0) return null;
+  // Every task must have failed — a partial success is a real result to use.
+  const codes = tasks.map((t) => t?.status_code);
+  const first = codes[0];
+  if (first != null && RETRYABLE_TASK_CODES.has(first) && codes.every((c) => c === first)) return first;
+  return null;
 }
 
 async function dfsPost(path: string, body: unknown): Promise<unknown> {
@@ -191,8 +209,9 @@ async function dfsPost(path: string, body: unknown): Promise<unknown> {
     }
 
     const json = await res.json();
-    if (taskRateLimited(json)) {
-      lastError = `task status ${RATE_LIMIT_TASK_CODE} (rate limited)`;
+    const retryCode = taskRetryable(json);
+    if (retryCode !== null) {
+      lastError = `task status ${retryCode}`;
       continue;
     }
 
@@ -201,7 +220,7 @@ async function dfsPost(path: string, body: unknown): Promise<unknown> {
 
   // Deliberately throws rather than returning an empty result: callers turn an
   // exception into `unverified`, but an empty result into `not_found`.
-  throw new Error(`DataForSEO ${path} rate limited after ${MAX_ATTEMPTS} attempts: ${lastError}`);
+  throw new Error(`DataForSEO ${path} failed after ${MAX_ATTEMPTS} attempts: ${lastError}`);
 }
 
 // ─── SERP rank lookup ─────────────────────────────────────────────────────────
@@ -417,6 +436,23 @@ export interface CompetitorSerpRank {
 export interface SerpRanksResult {
   client: SerpRankResult;
   competitors: CompetitorSerpRank[];
+  /**
+   * EVERY result on the page, not just the ones we went looking for (#81).
+   *
+   * The SERP call already requests depth 30 and we were discarding all of it
+   * except the client and any competitor someone had manually named. That threw
+   * away the answer to the question clients actually ask — "who is beating me?"
+   * — while having already paid for it. Capturing it costs no extra request.
+   */
+  allResults: SerpEntry[];
+}
+
+export interface SerpEntry {
+  position: number;
+  rankType: 'organic' | 'local_pack';
+  domain: string | null;
+  url: string | null;
+  title: string | null;
 }
 
 type RawItem = {
@@ -504,7 +540,53 @@ export async function getSerpRanks(params: {
     ...matchInItems(items, c.name, c.website, null),
   }));
 
-  return { client, competitors };
+  return { client, competitors, allResults: collectResults(items) };
+}
+
+/** Host without www, or null when the URL is unusable. Local-pack items often have none. */
+function domainOf(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Flattens a SERP response into the entries worth storing.
+ *
+ * Local pack is handled the same way as matchInItems: DataForSEO returns those
+ * as FLAT items, one per business, not as a container with nested `.items`.
+ * Guarding on `item.items` is what made the local-pack branch dead code until
+ * it was fixed — see the note in matchInItems.
+ */
+function collectResults(items: RawItem[]): SerpEntry[] {
+  const out: SerpEntry[] = [];
+  for (const item of items) {
+    if (item.type === 'local_pack') {
+      for (const sub of item.items ?? [item]) {
+        out.push({
+          position: sub.rank_group ?? 0,
+          rankType: 'local_pack',
+          domain: domainOf(sub.url),
+          url: sub.url ?? null,
+          // For local pack the business NAME is the identity — most have no
+          // website in the pack, so a domain alone would lose them entirely.
+          title: sub.title ?? null,
+        });
+      }
+    } else if (item.type === 'organic') {
+      out.push({
+        position: item.rank_group ?? 0,
+        rankType: 'organic',
+        domain: domainOf(item.url),
+        url: item.url ?? null,
+        title: item.title ?? null,
+      });
+    }
+  }
+  return out.filter((r) => r.position > 0 && (r.domain || r.title));
 }
 
 // ─── getCompetitorRankedKeywords: DataForSEO Labs keyword discovery ───────────

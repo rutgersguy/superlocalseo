@@ -85,7 +85,7 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
       for (const kw of keywords) {
         try {
           result.requestsFired++;
-          const { client: rankResult, competitors: compRanks } = await getSerpRanks({
+          const { client: rankResult, competitors: compRanks, allResults } = await getSerpRanks({
             keyword: kw.keyword as string,
             locationName,
             businessName,
@@ -110,6 +110,25 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
             pulled_at: new Date(),
           });
           result.snapshotsSaved++;
+
+          // Every other business on the page (#81). Already fetched — the job
+          // requested depth 30 and threw all of this away, which is why the app
+          // could not answer "who is beating me?" despite paying for the answer.
+          if (allResults.length > 0) {
+            await db('serp_competitors').insert(
+              allResults.map((r) => ({
+                keyword_id: kw.id,
+                location_id: location.id,
+                position: r.position,
+                rank_type: r.rankType,
+                domain: r.domain,
+                business_name: r.title,
+                url: r.url,
+                geo_location: geoLabel,
+                pulled_at: new Date(),
+              })),
+            );
+          }
 
           if (compRanks.length > 0) {
             await db('competitor_rankings').insert(

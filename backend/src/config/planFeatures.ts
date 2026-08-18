@@ -38,6 +38,8 @@ export const PLAN_ROUTE_GATES: RouteGate[] = [
     plans: ['lite', 'pro'], // GET /competitors allowed for Lite (teaser data)
     subPaths: [
       { path: 'competitors/gap',               plans: ['pro'] },
+      // Competitor discovery is the flagship Pro differentiator (#81).
+      { path: 'competitors/outranking',        plans: ['pro'] },
       // Competitor review deltas = competitor intelligence -> Pro. NOTE: the `competitors`
       // prefix is lite+pro (teaser list), so any NEW competitor route defaults to Lite-visible
       // unless it is listed here. Add new ones deliberately.

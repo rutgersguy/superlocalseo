@@ -7,6 +7,7 @@ import { ok, err } from '../utils/response';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import { getCompetitorRankedKeywords } from '../services/dataforseo.service';
+import { getOutrankingCompetitors } from '../services/competitor_discovery.service';
 
 const createSchema = z.object({
   name: z.string().min(1).max(255),
@@ -580,4 +581,38 @@ function formatCompetitor(c: Record<string, unknown>) {
     googleReviewCount: c.google_review_count,
     lastSyncedAt: c.last_synced_at,
   };
+}
+
+// ─── Automatic competitor discovery (#81) ────────────────────────────────────
+
+const outrankingSchema = z.object({
+  locationId: z.string().uuid(),
+  windowDays: z.coerce.number().int().min(1).max(90).optional(),
+});
+
+/**
+ * Who is beating this location in the SERP, discovered rather than declared.
+ *
+ * Distinct from the rest of this controller, which reports on competitors the
+ * client has explicitly added. This answers the question they ask BEFORE they
+ * know who to add — and it is computed from SERP results the ranking job
+ * already stores, so it costs nothing per request.
+ */
+export async function outranking(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const parsed = outrankingSchema.safeParse(req.query);
+    if (!parsed.success) {
+      err(res, parsed.error.errors[0]?.message ?? 'Validation error', 400, 'VALIDATION_ERROR');
+      return;
+    }
+    const { locationId, windowDays } = parsed.data;
+
+    // Never trust a client-supplied id: confirm the location belongs to them.
+    const owned = await db('locations').where({ id: locationId, client_id: req.clientId }).first('id');
+    if (!owned) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
+
+    ok(res, await getOutrankingCompetitors(locationId, windowDays ?? 7));
+  } catch (e) {
+    next(e);
+  }
 }

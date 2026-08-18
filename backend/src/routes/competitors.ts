@@ -17,4 +17,9 @@ router.delete('/:id', requireClient, requireTeamAdmin, competitor.remove);
 router.post('/:id/sync', requireClient, requireTeamAdmin, competitor.sync);
 router.get('/:id/discover-keywords', requireClient, competitor.discoverKeywords);
 
+// Discovered, not declared (#81) — Pro, and listed in PLAN_ROUTE_GATES because
+// the `competitors` prefix is lite+pro for the teaser list, so a new route here
+// defaults to Lite-visible unless named.
+router.get('/outranking', requireClient, competitor.outranking);
+
 export default router;
