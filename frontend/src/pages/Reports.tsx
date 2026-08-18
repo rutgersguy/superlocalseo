@@ -2,6 +2,8 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import { Eye, X, Download, FileText, Star, MapPin, TrendingUp } from 'lucide-react';
 import { fetcher, apiFetch } from '../services/api';
+import { useClient } from '../hooks/useClient';
+import { canUseFeature } from '../config/planFeatures';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -365,6 +367,13 @@ const EXPORTS = [
 
 function DataExports() {
   const [loading, setLoading] = useState<string | null>(null);
+  const { productLine } = useClient();
+
+  // CSV exports are Pro (PRICING.md and the landing page both say so). The
+  // backend gates /reports/export/* — this stops Lite being offered four
+  // buttons that 403. Hiding the card rather than disabling it: an upsell for a
+  // feature they did not know existed reads as a nag.
+  if (!canUseFeature(productLine, 'csvExport')) return null;
 
   const handleDownload = async (key: string, filename: string) => {
     setLoading(key);

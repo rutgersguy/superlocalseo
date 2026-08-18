@@ -106,6 +106,51 @@ test.describe('Suite 08 — Lite plan gating', () => {
     await expect(page.getByRole('link', { name: 'Run SEO Audit' })).toHaveCount(0);
   });
 
+  /**
+   * TEST-LITE-08..10 lock the #157 decisions of 2026-08-18.
+   *
+   * All three surfaces below rendered for Lite. Two of them WORKED rather than
+   * merely 403'ing, so this was a revenue leak and not a cosmetic one: Lite
+   * could download rankings, keywords, reviews and citations despite both
+   * PRICING.md and the landing page selling "CSV exports" as Pro.
+   *
+   * The decision was to enforce what we already sell, and to hide the controls
+   * rather than let them fail — a button that 403s teaches a customer the
+   * product is broken, not that they should upgrade.
+   */
+  test('TEST-LITE-08 — Reports hides the CSV export card for Lite', async ({ page }) => {
+    await loginViaUI(page, email, password);
+    await page.getByRole('link', { name: /reports/i }).first().click();
+    await expect(page.getByRole('heading', { name: /Reports/i }).first()).toBeVisible({ timeout: 15_000 });
+
+    // The page itself stays — PRICING.md sells Reports as part of Lite.
+    // Only the four export tiles go.
+    await expect(page.getByText('Data Exports')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /rankings\.csv|export/i })).toHaveCount(0);
+  });
+
+  test('TEST-LITE-09 — Reviews hides the Export CSV button for Lite', async ({ page }) => {
+    await loginViaUI(page, email, password);
+    await page.getByRole('link', { name: /reviews/i }).first().click();
+    await expect(page.getByRole('heading', { name: /Reviews/i }).first()).toBeVisible({ timeout: 15_000 });
+
+    await expect(page.getByRole('button', { name: 'Export CSV' })).toHaveCount(0);
+  });
+
+  test('TEST-LITE-10 — Settings keeps Widgets for Lite but hides ROI', async ({ page }) => {
+    await loginViaUI(page, email, password);
+    await page.getByRole('link', { name: /settings/i }).first().click();
+    await expect(page.getByRole('heading', { name: /Settings/i }).first()).toBeVisible({ timeout: 15_000 });
+
+    // Widgets is deliberately Lite-INCLUSIVE (decision 2026-08-18). It was never
+    // marketed as Pro, and a review widget on the customer's own site carries
+    // our branding. Asserted so a future "tidy-up" cannot quietly remove it.
+    await expect(page.getByRole('button', { name: 'Widgets' })).toBeVisible();
+
+    // ROI is Pro — /analytics/roi 403s, so the form used to render and fail.
+    await expect(page.getByText('ROI Settings')).toHaveCount(0);
+  });
+
   test('TEST-LITE-07 — direct nav to a Pro route shows the upgrade gate (ProGate)', async ({ page }) => {
     await loginViaUI(page, email, password);
     await page.waitForURL('/dashboard', { timeout: 15_000 });
