@@ -17,7 +17,7 @@
  * directions are harmful, which is why these gates are tested rather than
  * trusted.
  */
-import { hostMatches, urlMentionsBusiness } from '../../services/citation_scan.service';
+import { hostMatches, urlMentionsBusiness, extractPhone } from '../../services/citation_scan.service';
 
 describe('hostMatches', () => {
   it('rejects a domain that merely contains the target as a substring', () => {
@@ -64,5 +64,37 @@ describe('urlMentionsBusiness', () => {
     // Without stopword removal, "LLC" alone could push a category page over the
     // threshold on a two-word name.
     expect(urlMentionsBusiness('https://www.angi.com/companylist/us/co/denver/plumbing.htm', 'Denver Plumbing LLC')).toBe(false);
+  });
+});
+
+describe('extractPhone', () => {
+  const OURS = '(918) 518-1492';
+
+  it('picks the business phone out of a snippet containing several', () => {
+    // Real BBB snippet shape: the business number appears alongside a state
+    // agency number in the page furniture.
+    const text = 'Aire Serv of South Tulsa, Bixby OK. File a complaint: (405) 521-6550. Phone: (918) 518-1492';
+    expect(extractPhone(text, OURS)).toBe('(918) 518-1492');
+  });
+
+  it('returns null rather than guessing when several candidates and none match', () => {
+    // The regression: this returned the FIRST match, which was then reported to
+    // the customer as a NAP mismatch on a phone number that was correct.
+    const text = 'Complaints (405) 521-6550 or call (918) 528-6892 for details';
+    expect(extractPhone(text, OURS)).toBeNull();
+  });
+
+  it('still reports a single unambiguous mismatch', () => {
+    // A listing genuinely showing the wrong number must not be silenced.
+    expect(extractPhone('Call us on (918) 994-3434 today', OURS)).toBe('(918) 994-3434');
+  });
+
+  it('ignores a bare digit run that is not a formatted phone', () => {
+    // Nextdoor yielded "1918518149" — an id, reported as the listing's phone.
+    expect(extractPhone('listing id 1918518149 here', OURS)).toBeNull();
+  });
+
+  it('returns null when there is no phone at all', () => {
+    expect(extractPhone('No contact details in this snippet', OURS)).toBeNull();
   });
 });

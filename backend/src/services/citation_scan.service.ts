@@ -257,9 +257,43 @@ function extractAddress(text: string): string | null {
   return best;
 }
 
-function extractPhone(text: string): string | null {
-  const m = stripUrls(text).match(PHONE_RE);
-  return m ? m[0].trim() : null;
+/**
+ * Pull the LISTING's phone number out of free text.
+ *
+ * Taking the first phone-shaped match is wrong, and measurably so. A real scan
+ * of Aire Serv produced:
+ *
+ *   bbb       (405) 521-6550   a state agency number in the page furniture
+ *   facebook  918-994-3434     an unrelated number in the snippet
+ *   nextdoor  1918518149       a digit run, not a formatted phone at all
+ *
+ * Each was then compared against the business's real number and reported as a
+ * NAP MISMATCH, sending the customer to correct a phone that was already
+ * correct. This is the same false-positive class the address extractor already
+ * guards against by requiring corroboration.
+ *
+ * So: gather every candidate. If one matches what we expect, that is the
+ * listing's number and the rest is page furniture. If none match and there are
+ * several candidates, we cannot tell which belongs to the listing — return null
+ * ("not checked"). A SINGLE unambiguous candidate that does not match is still
+ * reported, because that is a genuine mismatch worth surfacing.
+ */
+export function extractPhone(text: string, expected?: string | null): string | null {
+  const candidates = [...stripUrls(text).matchAll(new RegExp(PHONE_RE, 'g'))]
+    .map((m) => m[0].trim())
+    // A bare digit run is not a formatted phone number; far more often it is an
+    // id. Require at least one separator or parenthesis.
+    .filter((c) => /[\s().-]/.test(c));
+
+  if (candidates.length === 0) return null;
+
+  if (expected) {
+    const want = expected.replace(/\D/g, '').slice(-10);
+    const hit = candidates.find((c) => c.replace(/\D/g, '').slice(-10) === want);
+    if (hit) return hit;
+  }
+
+  return candidates.length === 1 ? candidates[0] : null;
 }
 
 // ── the scan ───────────────────────────────────────────────────────────────
@@ -313,16 +347,24 @@ export async function scanDirectory(loc: LocationNap, dir: DirectoryDef): Promis
 
   let results: Array<{ url: string; title: string; description: string }>;
   try {
-    results = await serpSearch(query);
+    // Depth 20, not the default 5: a listing that ranks 6th for its own
+    // `site:` query is still a listing, and the extra depth is fractions of
+    // a cent.
+    results = await serpSearch(query, 20);
   } catch (e) {
     // An upstream failure is OUR problem, never reported as "not listed".
     return unverified(dir.key, `serp error: ${(e as Error).message.slice(0, 80)}`);
   }
 
   if (results.length === 0) {
-    // Genuinely nothing indexed for this query. We cannot distinguish "no listing"
-    // from "not indexed", so this is not_found only when the query itself worked.
-    return { directory: dir.key, status: 'not_found', listingUrl: null };
+    // NOT not_found. An empty `site:` result is the WEAKEST evidence of absence
+    // there is, because the operator is documented as returning incomplete
+    // results and is observably unstable: a scan of Aire Serv recorded Yelp as
+    // not_found, and the identical query moments later returned
+    // yelp.com/biz/aire-serv-bixby with the correct address AND phone in the
+    // snippet. Reporting that as "not listed" tells a customer to create a
+    // listing they already have, and duplicates damage local ranking.
+    return unverified(dir.key, 'search returned nothing — cannot distinguish absence from an incomplete index');
   }
 
   const onDomain = results.filter((r) => hostMatches(r.url, dir.domain));
@@ -332,9 +374,15 @@ export async function scanDirectory(loc: LocationNap, dir: DirectoryDef): Promis
   const evidence = onDomain.filter((r) => isListingEvidence(loc, r));
   const match = evidence.find((r) => urlMentionsBusiness(r.url, loc.name)) ?? evidence[0];
   if (!match) {
-    // Results came back but none are this business — commonly a category or
-    // sitemap page. Claiming "not listed" here would be a guess.
-    return unverified(dir.key, 'no result matched this business');
+    // The directory IS indexed for this query space — results came back — and
+    // none of them is this business. That is the strongest evidence of absence
+    // a search-based method can produce, so it is the case that earns
+    // `not_found`.
+    //
+    // These two branches were the wrong way round: an empty result set (weak
+    // evidence, often truncation) was reported as not_found, while this case
+    // (strong evidence) was reported as unverified.
+    return { directory: dir.key, status: 'not_found', listingUrl: null };
   }
 
   return verifyListing(loc, dir, match);
@@ -352,7 +400,7 @@ async function verifyListing(loc: LocationNap, dir: DirectoryDef, match: SerpLik
   let text = `${match.title} ${match.description}`;
   let usedFetch = false;
 
-  const snippetThin = !extractAddress(text) || !extractPhone(text);
+  const snippetThin = !extractAddress(text) || !extractPhone(text, loc.phone);
   if (dir.strategy === 'fetch' || (dir.strategy === 'auto' && snippetThin)) {
     try {
       const page = await fetchPageText(match.url);
@@ -364,7 +412,7 @@ async function verifyListing(loc: LocationNap, dir: DirectoryDef, match: SerpLik
   }
 
   let foundAddress = extractAddress(text);
-  const foundPhone = extractPhone(text);
+  const foundPhone = extractPhone(text, loc.phone);
 
   // The extractor takes the first address-shaped string in the text, which is not
   // necessarily THIS business's address. Validation caught Manta yielding
