@@ -42,3 +42,17 @@ jobs:
         run: npx tsc --noEmit
       - name: Build
         run: npm run build
+
+  deploy-guards:
+    # Catches the two host traps that took n8n down for ~6 minutes on
+    # 2026-08-16 (#165). Both are silent by construction — the wrong config
+    # loads and the container starts clean — so the only reliable defence is a
+    # check on every change, not a note someone reads.
+    #
+    # This repo is currently safe from both. The job exists so a one-line
+    # cleanup cannot quietly reintroduce them.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy preflight (static checks)
+        run: ./scripts/deploy-preflight.sh
