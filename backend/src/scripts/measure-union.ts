@@ -42,13 +42,14 @@ async function main() {
     return { loc, res };
   });
 
-  const tally = new Map<string, { listed: number; not_found: number; unverified: number; mismatch: number; samples: string[] }>();
+  const tally = new Map<string, { listed: number; not_found: number; unverified: number; mismatch: number; napless: number; samples: string[] }>();
   for (const b of all) {
     if (!b || !b.res) continue;
     for (const r of b.res as CitationScanResult[]) {
-      const t = tally.get(r.directory) ?? { listed: 0, not_found: 0, unverified: 0, mismatch: 0, samples: [] };
+      const t = tally.get(r.directory) ?? { listed: 0, not_found: 0, unverified: 0, mismatch: 0, napless: 0, samples: [] };
       t[r.status]++;
       if (r.status === 'listed') {
+        if (r.napUnreadable) t.napless++;
         if (r.addressMatch === false || r.phoneMatch === false) t.mismatch++;
         if (t.samples.length < 2 && r.listingUrl) t.samples.push(r.listingUrl);
       }
@@ -57,13 +58,13 @@ async function main() {
   }
 
   console.log('\n=== UNION method, per directory ===');
-  console.log('directory         n  listed  not_found  unverified   listed%   NAP-mismatch');
+  console.log('directory         n  listed  not_found  unverified   listed%   NAP-read  NAP-mismatch');
   const rows = [...tally.entries()].map(([key, t]) => {
     const n = t.listed + t.not_found + t.unverified;
     return { key, t, n, pct: (t.listed / n) * 100 };
   }).sort((a, b) => b.pct - a.pct);
   for (const r of rows) {
-    console.log(`${r.key.padEnd(16)}${String(r.n).padStart(3)}${String(r.t.listed).padStart(8)}${String(r.t.not_found).padStart(11)}${String(r.t.unverified).padStart(12)}   ${r.pct.toFixed(0).padStart(5)}%   ${String(r.t.mismatch).padStart(5)}`);
+    console.log(`${r.key.padEnd(16)}${String(r.n).padStart(3)}${String(r.t.listed).padStart(8)}${String(r.t.not_found).padStart(11)}${String(r.t.unverified).padStart(12)}   ${r.pct.toFixed(0).padStart(5)}%   ${String(r.t.listed - r.t.napless).padStart(7)}   ${String(r.t.mismatch).padStart(9)}`);
   }
 
   console.log('\n=== sample listing URLs ===');
@@ -71,7 +72,7 @@ async function main() {
     console.log(`  ${r.key.padEnd(15)} ${(r.t.samples[0] ?? '').slice(0, 95)}`);
   }
 
-  console.log('\nJSON ' + JSON.stringify(rows.map((r) => ({ key: r.key, n: r.n, listed: r.t.listed, not_found: r.t.not_found, unverified: r.t.unverified, pct: Math.round(r.pct) }))));
+  console.log('\nJSON ' + JSON.stringify(rows.map((r) => ({ key: r.key, n: r.n, listed: r.t.listed, napRead: r.t.listed - r.t.napless, not_found: r.t.not_found, unverified: r.t.unverified, mismatch: r.t.mismatch, pct: Math.round(r.pct) }))));
 }
 
 main().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });

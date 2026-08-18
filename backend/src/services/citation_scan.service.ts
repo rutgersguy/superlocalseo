@@ -46,6 +46,11 @@ export interface CitationScanResult {
   foundName?: string | null;
   foundAddress?: string | null;
   foundPhone?: string | null;
+  /**
+   * True when the listing exists but its NAP could not be read, so the match
+   * fields are all null. The listing is real; the comparison is unavailable.
+   */
+  napUnreadable?: boolean;
   /** Strict comparisons. null = we could not read that field, so cannot judge it. */
   nameMatch?: boolean | null;
   addressMatch?: boolean | null;
@@ -376,12 +381,32 @@ async function verifyListing(loc: LocationNap, dir: DirectoryDef, match: SerpLik
     if (!inSamePlace) foundAddress = null;
   }
 
+  // A listing we found but cannot read the NAP from is still a listing.
+  //
+  // This was previously reported as `unverified`, which conflated two different
+  // facts: "we could not find a listing" and "we found the listing, but could
+  // not read its address to compare". Facebook made the cost obvious — 25 of 34
+  // businesses landed here, because a Facebook page's snippet carries no
+  // address, so a directory we identified correctly almost every time was
+  // reported as 21% listed.
+  //
+  // Identity was already established by isListingEvidence(), which needs the
+  // business named in the URL path or its own phone in the snippet. That is
+  // enough to assert the listing exists. What we cannot do is judge its NAP, so
+  // every match field stays null — "not checked", never "matches".
   if (!foundAddress && !foundPhone) {
-    return unverified(
-      dir.key,
-      usedFetch ? 'listing found but no NAP could be read from page' : 'listing found but snippet had no NAP',
-      match.url,
-    );
+    return {
+      directory: dir.key,
+      status: 'listed',
+      listingUrl: match.url,
+      foundName: match.title || null,
+      foundAddress: null,
+      foundPhone: null,
+      napUnreadable: true,
+      nameMatch: null,
+      addressMatch: null,
+      phoneMatch: null,
+    };
   }
 
   return {

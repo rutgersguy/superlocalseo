@@ -134,3 +134,27 @@ export function directoriesForVertical(vertical: Vertical | null): DirectoryDef[
 export const UNAUDITABLE_KEYS = Object.values(DIRECTORIES)
   .filter((d) => d.unauditable)
   .map((d) => d.key);
+
+
+/**
+ * Maps an industry GROUP (from industry.config) onto a citation vertical.
+ *
+ * The two lists are maintained separately, so this is the seam between them.
+ * NOTE: `Real Estate` has no industries assigned to it in INDUSTRY_MAP, so
+ * Zillow/Realtor/Trulia are currently unreachable in production regardless of
+ * what this returns — tracked separately rather than papered over here.
+ */
+const GROUP_TO_VERTICAL: Record<string, Vertical> = {
+  'Home Services': 'home',
+  'Health & Fitness': 'health',
+  'Legal': 'legal',
+  'Food & Beverage': 'food',
+  'Beauty & Personal Care': 'beauty',
+  'Automotive': 'auto',
+  'Professional Services': 'professional',
+  'Real Estate': 'realestate',
+};
+
+export function verticalForGroup(group: string | null | undefined): Vertical | null {
+  return (group && GROUP_TO_VERTICAL[group]) || null;
+}
