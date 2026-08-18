@@ -29,6 +29,10 @@
 
 export type ScanStrategy = 'snippet' | 'fetch' | 'auto';
 
+export type Vertical =
+  | 'home' | 'health' | 'legal' | 'food'
+  | 'beauty' | 'auto' | 'professional' | 'realestate';
+
 export interface DirectoryDef {
   /** Internal key — matches citation_snapshots.directory and the UI's DIRECTORY_NAMES. */
   key: string;
@@ -41,6 +45,13 @@ export interface DirectoryDef {
    * surfaced to the customer as "claim this yourself" instead.
    */
   unauditable?: boolean;
+  /**
+   * Industry this directory serves. Absent means core — relevant to every
+   * business. A vertical directory is only ever scanned for, and only ever
+   * scored against, a matching business: Avvo legitimately does not list a
+   * pizzeria, so counting that as a miss would measure nothing.
+   */
+  vertical?: Vertical;
 }
 
 export const DIRECTORIES: Record<string, DirectoryDef> = {
@@ -60,49 +71,49 @@ export const DIRECTORIES: Record<string, DirectoryDef> = {
   linkedin:       { key: 'linkedin',       label: 'LinkedIn',                domain: 'linkedin.com',      strategy: 'snippet' },
 
   // ── Home Services ───────────────────────────────────────────────────────
-  angi:           { key: 'angi',           label: 'Angi',                    domain: 'angi.com',          strategy: 'auto' },
-  houzz:          { key: 'houzz',          label: 'Houzz',                   domain: 'houzz.com',         strategy: 'auto' },
-  thumbtack:      { key: 'thumbtack',      label: 'Thumbtack',               domain: 'thumbtack.com',     strategy: 'auto' },
-  porch:          { key: 'porch',          label: 'Porch',                   domain: 'porch.com',         strategy: 'auto' },
-  homeadvisor:    { key: 'homeadvisor',    label: 'HomeAdvisor',             domain: 'homeadvisor.com',   strategy: 'auto' },
-  bark:           { key: 'bark',           label: 'Bark',                    domain: 'bark.com',          strategy: 'auto' },
+  angi:           { key: 'angi',           label: 'Angi',                    domain: 'angi.com',          strategy: 'auto', vertical: 'home' },
+  houzz:          { key: 'houzz',          label: 'Houzz',                   domain: 'houzz.com',         strategy: 'auto', vertical: 'home' },
+  thumbtack:      { key: 'thumbtack',      label: 'Thumbtack',               domain: 'thumbtack.com',     strategy: 'auto', vertical: 'home' },
+  porch:          { key: 'porch',          label: 'Porch',                   domain: 'porch.com',         strategy: 'auto', vertical: 'home' },
+  homeadvisor:    { key: 'homeadvisor',    label: 'HomeAdvisor',             domain: 'homeadvisor.com',   strategy: 'auto', vertical: 'home' },
+  bark:           { key: 'bark',           label: 'Bark',                    domain: 'bark.com',          strategy: 'auto', vertical: 'home' },
 
   // ── Health & Fitness ────────────────────────────────────────────────────
-  healthgrades:   { key: 'healthgrades',   label: 'Healthgrades',            domain: 'healthgrades.com',  strategy: 'auto' },
-  zocdoc:         { key: 'zocdoc',         label: 'ZocDoc',                  domain: 'zocdoc.com',        strategy: 'auto' },
-  webmd:          { key: 'webmd',          label: 'WebMD',                   domain: 'doctor.webmd.com',  strategy: 'auto' },
-  vitals:         { key: 'vitals',         label: 'Vitals',                  domain: 'vitals.com',        strategy: 'auto' },
-  ratemds:        { key: 'ratemds',        label: 'RateMDs',                 domain: 'ratemds.com',       strategy: 'auto' },
+  healthgrades:   { key: 'healthgrades',   label: 'Healthgrades',            domain: 'healthgrades.com',  strategy: 'auto', vertical: 'health' },
+  zocdoc:         { key: 'zocdoc',         label: 'ZocDoc',                  domain: 'zocdoc.com',        strategy: 'auto', vertical: 'health' },
+  webmd:          { key: 'webmd',          label: 'WebMD',                   domain: 'doctor.webmd.com',  strategy: 'auto', vertical: 'health' },
+  vitals:         { key: 'vitals',         label: 'Vitals',                  domain: 'vitals.com',        strategy: 'auto', vertical: 'health' },
+  ratemds:        { key: 'ratemds',        label: 'RateMDs',                 domain: 'ratemds.com',       strategy: 'auto', vertical: 'health' },
 
   // ── Legal ───────────────────────────────────────────────────────────────
-  avvo:           { key: 'avvo',           label: 'Avvo',                    domain: 'avvo.com',          strategy: 'auto' },
-  justia:         { key: 'justia',         label: 'Justia',                  domain: 'lawyers.justia.com',strategy: 'auto' },
-  findlaw:        { key: 'findlaw',        label: 'FindLaw',                 domain: 'lawyers.findlaw.com',strategy: 'auto' },
-  lawyers:        { key: 'lawyers',        label: 'Lawyers.com',             domain: 'lawyers.com',       strategy: 'auto' },
+  avvo:           { key: 'avvo',           label: 'Avvo',                    domain: 'avvo.com',          strategy: 'auto', vertical: 'legal' },
+  justia:         { key: 'justia',         label: 'Justia',                  domain: 'lawyers.justia.com',strategy: 'auto', vertical: 'legal' },
+  findlaw:        { key: 'findlaw',        label: 'FindLaw',                 domain: 'lawyers.findlaw.com',strategy: 'auto', vertical: 'legal' },
+  lawyers:        { key: 'lawyers',        label: 'Lawyers.com',             domain: 'lawyers.com',       strategy: 'auto', vertical: 'legal' },
 
   // ── Food & Beverage ─────────────────────────────────────────────────────
-  tripadvisor:    { key: 'tripadvisor',    label: 'TripAdvisor',             domain: 'tripadvisor.com',   strategy: 'auto' },
-  opentable:      { key: 'opentable',      label: 'OpenTable',               domain: 'opentable.com',     strategy: 'auto' },
-  zomato:         { key: 'zomato',         label: 'Zomato',                  domain: 'zomato.com',        strategy: 'auto' },
-  happycow:       { key: 'happycow',       label: 'HappyCow',                domain: 'happycow.net',      strategy: 'auto' },
+  tripadvisor:    { key: 'tripadvisor',    label: 'TripAdvisor',             domain: 'tripadvisor.com',   strategy: 'auto', vertical: 'food' },
+  opentable:      { key: 'opentable',      label: 'OpenTable',               domain: 'opentable.com',     strategy: 'auto', vertical: 'food' },
+  zomato:         { key: 'zomato',         label: 'Zomato',                  domain: 'zomato.com',        strategy: 'auto', vertical: 'food' },
+  happycow:       { key: 'happycow',       label: 'HappyCow',                domain: 'happycow.net',      strategy: 'auto', vertical: 'food' },
 
   // ── Beauty & Personal Care ──────────────────────────────────────────────
-  vagaro:         { key: 'vagaro',         label: 'Vagaro',                  domain: 'vagaro.com',        strategy: 'auto' },
-  mindbody:       { key: 'mindbody',       label: 'Mindbody',                domain: 'mindbodyonline.com',strategy: 'auto' },
-  styleseat:      { key: 'styleseat',      label: 'StyleSeat',               domain: 'styleseat.com',     strategy: 'auto' },
+  vagaro:         { key: 'vagaro',         label: 'Vagaro',                  domain: 'vagaro.com',        strategy: 'auto', vertical: 'beauty' },
+  mindbody:       { key: 'mindbody',       label: 'Mindbody',                domain: 'mindbodyonline.com',strategy: 'auto', vertical: 'beauty' },
+  styleseat:      { key: 'styleseat',      label: 'StyleSeat',               domain: 'styleseat.com',     strategy: 'auto', vertical: 'beauty' },
 
   // ── Automotive ──────────────────────────────────────────────────────────
-  repairpal:      { key: 'repairpal',      label: 'RepairPal',               domain: 'repairpal.com',     strategy: 'auto' },
-  carwise:        { key: 'carwise',        label: 'CarWise',                 domain: 'carwise.com',       strategy: 'auto' },
+  repairpal:      { key: 'repairpal',      label: 'RepairPal',               domain: 'repairpal.com',     strategy: 'auto', vertical: 'auto' },
+  carwise:        { key: 'carwise',        label: 'CarWise',                 domain: 'carwise.com',       strategy: 'auto', vertical: 'auto' },
 
   // ── Professional Services ───────────────────────────────────────────────
-  expertise:      { key: 'expertise',      label: 'Expertise.com',           domain: 'expertise.com',     strategy: 'auto' },
-  zoominfo:       { key: 'zoominfo',       label: 'ZoomInfo',                domain: 'zoominfo.com',      strategy: 'auto' },
+  expertise:      { key: 'expertise',      label: 'Expertise.com',           domain: 'expertise.com',     strategy: 'auto', vertical: 'professional' },
+  zoominfo:       { key: 'zoominfo',       label: 'ZoomInfo',                domain: 'zoominfo.com',      strategy: 'auto', vertical: 'professional' },
 
   // ── Real Estate ─────────────────────────────────────────────────────────
-  zillow:         { key: 'zillow',         label: 'Zillow',                  domain: 'zillow.com',        strategy: 'auto' },
-  realtor:        { key: 'realtor',        label: 'Realtor.com',             domain: 'realtor.com',       strategy: 'auto' },
-  trulia:         { key: 'trulia',         label: 'Trulia',                  domain: 'trulia.com',        strategy: 'auto' },
+  zillow:         { key: 'zillow',         label: 'Zillow',                  domain: 'zillow.com',        strategy: 'auto', vertical: 'realestate' },
+  realtor:        { key: 'realtor',        label: 'Realtor.com',             domain: 'realtor.com',       strategy: 'auto', vertical: 'realestate' },
+  trulia:         { key: 'trulia',         label: 'Trulia',                  domain: 'trulia.com',        strategy: 'auto', vertical: 'realestate' },
 };
 
 /** Directories we can actually scan — everything except Apple Maps and Bing Places. */
@@ -110,6 +121,13 @@ export function auditableDirectories(keys: string[]): DirectoryDef[] {
   return keys
     .map((k) => DIRECTORIES[k])
     .filter((d): d is DirectoryDef => !!d && !d.unauditable);
+}
+
+/** Core directories plus the ones serving this business's industry. */
+export function directoriesForVertical(vertical: Vertical | null): DirectoryDef[] {
+  return Object.values(DIRECTORIES).filter(
+    (d) => !d.unauditable && (!d.vertical || d.vertical === vertical),
+  );
 }
 
 /** The ones the customer must claim themselves (#173). */

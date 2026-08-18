@@ -834,3 +834,27 @@ export async function getGoogleListing(
     url: (item.url as string) ?? null,
   };
 }
+
+export interface MapsBusiness {
+  title: string | null;
+  address: string | null;
+  phone: string | null;
+}
+
+/**
+ * Businesses from the Google Maps pack for a query.
+ *
+ * Used to assemble a corpus of REAL businesses with authoritative NAP for
+ * measuring directory coverage, rather than inventing test data. Costs $0.002.
+ */
+export async function mapsSearch(keyword: string, depth = 10): Promise<MapsBusiness[]> {
+  const json = (await dfsPost('/serp/google/maps/live/advanced', [{
+    keyword, location_code: 2840, language_code: 'en', depth,
+  }])) as { tasks?: Array<{ result?: Array<{ items?: Array<Record<string, unknown>> }> }> };
+
+  return (json.tasks?.[0]?.result?.[0]?.items ?? []).map((i) => ({
+    title: (i.title as string) ?? null,
+    address: (i.address as string) ?? null,
+    phone: (i.phone as string) ?? null,
+  }));
+}

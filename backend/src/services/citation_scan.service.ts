@@ -103,6 +103,81 @@ export function isSameBusiness(loc: LocationNap, text: string, url: string): boo
   return false;
 }
 
+
+/**
+ * Does this URL actually belong to the directory's domain?
+ *
+ * Substring matching is not good enough: `profiles.superlawyers.com` contains
+ * the string "lawyers.com", and measurement showed it being counted as a
+ * Lawyers.com listing for three separate law firms. Host-aware matching is the
+ * only correct test.
+ */
+export function hostMatches(url: string, domain: string): boolean {
+  let u: URL;
+  try { u = new URL(url); } catch { return false; }
+  const host = u.hostname.replace(/^www\./, '');
+  const [dHost, ...dPath] = domain.split('/');
+  if (host !== dHost && !host.endsWith(`.${dHost}`)) return false;
+  return dPath.length === 0 || u.pathname.startsWith(`/${dPath.join('/')}`);
+}
+
+const NAME_STOPWORDS = new Set([
+  'the', 'and', 'inc', 'llc', 'llp', 'ltd', 'pa', 'pc', 'co', 'corp', 'company',
+  'of', 'for', 'at', 'in', 'on', 'a', 'an', '&',
+]);
+
+/**
+ * Does the URL path name this business?
+ *
+ * Directory CATEGORY pages rank for brand queries and are not listings:
+ * `yellowpages.com/phoenix-az/plomeros` and
+ * `angi.com/companylist/us/co/denver/roofing.htm` were both counted as listings
+ * during measurement, and `linkedin.com/in/david-metz` was counted for a
+ * company. Each would tell a customer they have a listing they do not have.
+ *
+ * A listing page almost always carries the business name in its slug, so this
+ * requires most of the distinctive name tokens to appear. The threshold is a
+ * majority rather than all, because directories abbreviate ("Parker & Sons" →
+ * `parker-sons-electrical`).
+ */
+export function urlMentionsBusiness(url: string, name: string): boolean {
+  const tokens = name
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 3 && !NAME_STOPWORDS.has(t));
+  if (tokens.length === 0) return true; // nothing distinctive to test with
+
+  // The name must appear within ONE path segment, because a listing slug is a
+  // single segment. Matching across segments accepts category pages whenever
+  // the business is named after its city and trade: for "Denver Plumbing LLC",
+  // `/us/co/denver/plumbing.htm` matches "denver" in the city directory and
+  // "plumbing" in the category file, and looks like a perfect hit while being
+  // a category page listing every plumber in Denver.
+  let path: string;
+  try { path = new URL(url).pathname; } catch { return false; }
+
+  return path.split('/').filter(Boolean).some((segment) => {
+    const slug = segment.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const hits = tokens.filter((t) => slug.includes(t)).length;
+    return hits / tokens.length >= 0.6;
+  });
+}
+
+/**
+ * Is this result usable as evidence of a listing?
+ *
+ * Identity on the snippet is necessary but NOT sufficient — a category page
+ * lists the city and the trade, which is enough to satisfy it. So a result must
+ * additionally either name the business in its URL, or carry the business's own
+ * phone number, which no category page for a different business would.
+ */
+function isListingEvidence(loc: LocationNap, r: { url: string; title: string; description: string }): boolean {
+  if (!isSameBusiness(loc, `${r.title} ${r.description}`, r.url)) return false;
+  if (urlMentionsBusiness(r.url, loc.name)) return true;
+  const key = loc.phone ? phoneKey(loc.phone) : '';
+  return key.length === 7 && `${r.title} ${r.description}`.replace(/\D/g, '').includes(key);
+}
+
 // ── step 2: verdict (strict) ───────────────────────────────────────────────
 
 /**
@@ -245,13 +320,30 @@ export async function scanDirectory(loc: LocationNap, dir: DirectoryDef): Promis
     return { directory: dir.key, status: 'not_found', listingUrl: null };
   }
 
-  const match = results.find((r) => isSameBusiness(loc, `${r.title} ${r.description}`, r.url));
+  const onDomain = results.filter((r) => hostMatches(r.url, dir.domain));
+  // Prefer a result whose URL names the business over one that only satisfies
+  // the phone test — the former is far more likely to be the listing page
+  // itself rather than a directory index that happens to include it.
+  const evidence = onDomain.filter((r) => isListingEvidence(loc, r));
+  const match = evidence.find((r) => urlMentionsBusiness(r.url, loc.name)) ?? evidence[0];
   if (!match) {
     // Results came back but none are this business — commonly a category or
     // sitemap page. Claiming "not listed" here would be a guess.
     return unverified(dir.key, 'no result matched this business');
   }
 
+  return verifyListing(loc, dir, match);
+}
+
+export interface SerpLike { url: string; title: string; description: string }
+
+/**
+ * Reads the NAP off a result already established to be this business's listing,
+ * and produces the verdict. Shared by both discovery paths so a listing found
+ * by the broad query is judged by exactly the same rules as one found by a
+ * `site:` query.
+ */
+async function verifyListing(loc: LocationNap, dir: DirectoryDef, match: SerpLike): Promise<CitationScanResult> {
   let text = `${match.title} ${match.description}`;
   let usedFetch = false;
 
@@ -310,15 +402,63 @@ export async function scanDirectory(loc: LocationNap, dir: DirectoryDef): Promis
 }
 
 /**
- * Scans a location across directories, sequentially.
+ * One quoted brand query, read for every directory at once.
+ *
+ * `site:` search is provably lossy — `site:manta.com Anytime Plumber
+ * Beattyville` returns nothing for a page `site:manta.com plumber` returns.
+ * A brand query at depth 100 is a completely independent route to the same
+ * listings, and measurement over 34 real businesses showed the two disagree in
+ * BOTH directions: broad found Facebook for 65% against site:'s 38%, while
+ * site: found Yellow Pages for 47% against broad's 24%.
+ *
+ * Neither is redundant, so both run and the results are unioned.
+ */
+export async function discoverBroad(
+  loc: LocationNap,
+  dirs: DirectoryDef[],
+): Promise<Map<string, SerpLike>> {
+  const where = [loc.city, loc.state].filter(Boolean).join(' ');
+  const results = await serpSearch(`"${loc.name}" ${where}`.trim(), 100);
+
+  const found = new Map<string, SerpLike>();
+  for (const r of results) {
+    for (const dir of dirs) {
+      if (found.has(dir.key) || dir.unauditable || dir.key === 'google') continue;
+      if (!hostMatches(r.url, dir.domain)) continue;
+      if (!isListingEvidence(loc, r)) continue;
+      found.set(dir.key, r);
+    }
+  }
+  return found;
+}
+
+/**
+ * Scans a location across directories.
  *
  * Sequential on purpose: this runs weekly in a background job, so wall-clock is
  * irrelevant, and hammering a metered API in parallel buys nothing.
+ *
+ * A directory the brand query already found is NOT searched again — that is
+ * where the extra query pays for itself.
  */
 export async function scanLocation(loc: LocationNap, dirs: DirectoryDef[]): Promise<CitationScanResult[]> {
+  let broad = new Map<string, SerpLike>();
+  try {
+    broad = await discoverBroad(loc, dirs);
+  } catch (e) {
+    // Losing the brand query costs recall, not correctness — the per-directory
+    // pass still runs. Never let it fail the whole scan.
+    logger.warn('Broad citation discovery failed; falling back to site: only', {
+      error: (e as Error).message,
+    });
+  }
+
   const out: CitationScanResult[] = [];
   for (const dir of dirs) {
-    const res = await scanDirectory(loc, dir);
+    const hit = broad.get(dir.key);
+    const res = hit
+      ? await verifyListing(loc, dir, hit)
+      : await scanDirectory(loc, dir);
     out.push(res);
     if (res.status === 'unverified') {
       logger.debug('Citation scan unverified', { directory: dir.key, reason: res.unverifiedReason });
