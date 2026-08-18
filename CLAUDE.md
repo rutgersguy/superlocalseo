@@ -15,13 +15,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Start all services
 docker compose up -d
 
-# Deploy the API — REBUILD, never `restart`. backend/src is no longer bind-mounted
-# (issue #131), so `restart` re-runs the OLD image and silently ships nothing.
-# A file that doesn't compile fails here and never reaches the container.
-docker compose build api && docker compose up -d --no-deps api
+# DEPLOY — use the script. It runs the preflight guards, backs up the database
+# and verifies the site afterwards, none of which is optional and all of which
+# is easy to skip by hand. See "Deploying" below.
+scripts/deploy.sh
+scripts/deploy.sh --migrate      # only when there are pending migrations
+
+# Deploy by hand (equivalent, if you need the pieces). REBUILD, never `restart`:
+# backend/src is no longer bind-mounted (#131), so `restart` re-runs the OLD
+# image and silently ships nothing. A file that doesn't compile fails here and
+# never reaches the container.
+docker compose build api && docker compose up -d --force-recreate --no-deps api
 
 # Deploy the frontend — also a rebuild (production static build since #119)
-docker compose build web && docker compose up -d --no-deps web
+docker compose build web && docker compose up -d --force-recreate --no-deps web
 
 # Restart a single service after config-only changes (use up --force-recreate for volume changes)
 docker compose restart api
@@ -45,6 +52,49 @@ docker exec superlocalseo-api node dist/db/migrate.js rollback # undo last batch
 # Access DB directly
 psql postgresql://slseo:slseo@localhost:5433/superlocalseo
 ```
+
+## Deploying
+
+Run **`scripts/deploy.sh`**. It preflights, backs up, builds, recreates and verifies.
+`scripts/deploy-preflight.sh` runs the checks alone and also runs in CI, so a
+regression is caught in the PR rather than at deploy time.
+
+Three rules, all of which fail *silently* when broken:
+
+1. **Never `docker compose down`.** ~20 long-lived containers share this host and
+   several serve unrelated production stacks. Down-ing to get a clean state takes
+   them with it.
+2. **Always `--no-deps`.** Without it, recreating `api` also restarts postgres and
+   redis — unnecessary downtime, and how trap 3 below reaches a database container
+   that was otherwise fine.
+3. **Always `--force-recreate`, never a reload.** A container started from an old
+   image keeps serving old code, and single-file mounts are inode-pinned, so a
+   reload re-reads the *original* file and reports success.
+
+### The two host traps (#165)
+
+Both are documented in `/root/CLAUDE.md` as standing traps 3 and 4. Both fired on
+2026-08-16 and took n8n down for ~6 minutes. Documentation alone did not prevent
+them, which is why `deploy-preflight.sh` asserts them:
+
+- **Shell variables override `.env` during compose interpolation.** Compose resolves
+  `${VAR}` from the shell *first*. The root shell here exports a stale
+  `POSTGRES_PASSWORD`. **This repo is currently immune** — neither compose file uses
+  `${}` interpolation at all, and config arrives via `env_file`, which is not
+  subject to shell override. Verified empirically: `docker compose config` is
+  byte-identical with and without the variable set. The preflight fails if anyone
+  introduces interpolation.
+
+- **Single-file bind mounts are pinned to the inode.** Mounting a *file* binds its
+  inode; editors that write-and-rename change it, so the container keeps serving
+  the original. This is how `/root/n8n/nginx/nginx.conf` — the proxy in front of
+  `superlocalseo.com` — drifted for two and a half months. **This repo is currently
+  immune**: it has no bind mounts at all, only named volumes. The preflight fails if
+  anyone adds a file mount, and its `--runtime` mode compares host and container
+  inodes for any that exist.
+
+Both guards are tested by injecting each trap into a copy of the compose file and
+confirming the script fails — a guard that has only ever passed is unproven.
 
 ## Architecture
 
