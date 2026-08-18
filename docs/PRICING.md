@@ -4,7 +4,7 @@
 
 | Plan | Monthly | Setup | Locations | Scope |
 |---|---|---|---|---|
-| **Lite** | $149/mo | none | 1 only | Dashboard, Rankings (read-only), Reviews, Campaigns, Reports, Settings + a blurred Competitors upgrade teaser |
+| **Lite** | $149/mo | none | 1 only | Dashboard, Rankings (read-only), Reviews, Campaigns, Reports, **review widgets**, Settings + a blurred Competitors upgrade teaser |
 | **Pro** | $349/mo | ~~$499~~ **waived** | 1 (+$125/mo each) | Full suite: geo-grid heatmaps, citation auditing, competitor intelligence, SEO audits, team members, QR codes, analytics/CSV exports |
 
 - All existing clients default to **Pro** (zero disruption). New signups choose at registration; **trials run as Pro** and the plan applies at checkout (`product_line` flips to `lite` only on a paid Lite invoice).
@@ -12,6 +12,26 @@
 - **Lite→Pro upgrade** is self-serve and prorated, with no setup fee (already the case in code — upgrade never added a setup item).
 - Stripe prices (sandbox): Lite `STRIPE_LITE_BASE_PRICE_ID` ($149/mo) · Pro base $349/mo · setup $499 (anchor only, not charged) · additional location $125/mo. The flip is driven by the `invoice.payment_succeeded` webhook.
 - Enforcement architecture: `config/planFeatures.ts` capability map + `requireProPlan`/`enforcePlanGate`. See [LITE_PRO_PROGRESS.md](LITE_PRO_PROGRESS.md).
+
+### Decisions of 2026-08-18 (#157)
+
+Four Pro-marketed surfaces were rendering for Lite, and two of them **worked**
+rather than merely 403'ing. Resolved as follows:
+
+- **CSV exports stay Pro.** `/reports/export/*` was absent from the backend gate
+  map — which is default-allow — so Lite could download rankings, keywords,
+  reviews and citations despite both this file and the landing page selling
+  exports as Pro. The gate now matches the copy, and the export buttons are
+  hidden for Lite rather than left to fail. *This is a takeaway for any existing
+  Lite client who had used it.*
+- **Review widgets are Lite-inclusive**, and are now stated as such above. They
+  were never actually marketed as Pro anywhere — not in this file and not on the
+  landing page — so the code was right and the internal notes were wrong. A
+  review widget on a customer's own site also carries our branding, which is
+  worth more than the upgrade it would force.
+- **Citation exports were a security fix, not a pricing one** (#188): `/citations`
+  returned 403 for Lite while `/reports/export/citations` returned 200 with the
+  same data. Exports now inherit the gate of the data they return.
 
 ### ⚠️ Where pricing is displayed — keep these in sync
 

@@ -7,6 +7,8 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { apiFetch, fetcher } from '../services/api';
+import { useClient } from '../hooks/useClient';
+import { canUseFeature } from '../config/planFeatures';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -459,6 +461,8 @@ const STATUSES = ['All', 'New', 'Responded'];
 type ActiveTab = 'reviews' | 'feedback';
 
 export default function Reviews() {
+  // CSV export is Pro (#157). The button used to render for Lite and 403.
+  const { productLine } = useClient();
   const [activeTab, setActiveTab] = useState<ActiveTab>('reviews');
   const [platform, setPlatform] = useState('All');
   const [rating, setRating] = useState('All');
@@ -507,6 +511,7 @@ export default function Reviews() {
             {/* A plain navigation sends no Authorization header, and auth is a
                 Bearer token held in memory — so this always 401'd. Rankings was
                 fixed for this in 99c1ca6; Reviews was missed (issue #151). */}
+            {canUseFeature(productLine, 'csvExport') && (
             <button
               onClick={async () => {
                 const res = await apiFetch<never>('/analytics/export?type=reviews', {}, true);
@@ -521,6 +526,7 @@ export default function Reviews() {
               className="whitespace-nowrap px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
               Export CSV
             </button>
+            )}
 
           </div>
         </div>

@@ -51,6 +51,24 @@ export const PLAN_ROUTE_GATES: RouteGate[] = [
     ],
   },
 
+  // ── Reports: the page is Lite-inclusive, CSV exports are not ──────────────
+  //
+  // PRICING.md and the landing page both sell "CSV exports" as Pro, and Lite
+  // could download rankings, keywords, reviews and citations regardless —
+  // `reports` was simply absent from this map, which is default-allow.
+  // Decision 2026-08-18 (#157): enforce what we already sell.
+  //
+  // `reports` itself stays Lite-inclusive because PRICING.md sells Lite as
+  // including Reports; only the export sub-path is Pro. Matching is
+  // startsWith, so 'reports/export' covers all four export endpoints.
+  {
+    prefix: 'reports',
+    plans: ['lite', 'pro'],
+    subPaths: [
+      { path: 'reports/export', plans: ['pro'] },
+    ],
+  },
+
   // ── Analytics: trend endpoints open, exports and rankings data Pro-only ────
   {
     prefix: 'analytics',

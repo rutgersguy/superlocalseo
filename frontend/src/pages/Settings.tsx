@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useClient } from '../hooks/useClient';
 import UnauditedDirectories from '../components/UnauditedDirectories';
 import { INDUSTRY_GROUPS } from '../config/industries';
+import { canUseFeature } from '../config/planFeatures';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1078,13 +1079,25 @@ interface RoiConfig {
 }
 
 function RoiSettingsSection() {
-  const { data, mutate } = useSWR<{ success: boolean; data: { roiConfig: RoiConfig } }>('/analytics/roi', fetcher);
+  // ROI is Pro — /analytics/roi is gated, so for Lite this section rendered a
+  // form whose save 403'd, and its SWR fetch 403'd on mount too (#157).
+  const { productLine } = useClient();
+  const gated = !canUseFeature(productLine, 'roiSettings');
+  const { data, mutate } = useSWR<{ success: boolean; data: { roiConfig: RoiConfig } }>(
+    gated ? null : '/analytics/roi',
+    fetcher,
+  );
   const roiConfig = data?.data?.roiConfig;
-
   const [acv, setAcv] = useState('');
   const [conv, setConv] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  // AFTER every hook, never before. An early return above these useState calls
+  // makes React render fewer hooks than on the previous pass and throws, taking
+  // the surrounding tree down with it — which is exactly what happened when
+  // this guard was first written one line higher.
+  if (gated) return null;
 
   const resolvedAcv = acv !== '' ? acv : String(roiConfig?.avgCustomerValue ?? '');
   const resolvedConv = conv !== '' ? conv : String(roiConfig?.conversionRate ?? '');
