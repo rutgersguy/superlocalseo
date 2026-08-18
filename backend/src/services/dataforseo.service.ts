@@ -140,22 +140,68 @@ function authHeader(): string {
   return 'Basic ' + Buffer.from(`${login}:${password}`).toString('base64');
 }
 
-async function dfsPost(path: string, body: unknown): Promise<unknown> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method: 'POST',
-    headers: {
-      Authorization: authHeader(),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+/**
+ * DataForSEO rate-limits per endpoint, and signals it in TWO different places:
+ * HTTP 429, and — more awkwardly — a 200 response whose per-task status_code is
+ * 40102 with an empty result.
+ *
+ * The second form is the dangerous one. Measured directly: of 12 concurrent
+ * calls to my_business_info, ONE succeeded and eleven came back 200/40102. Read
+ * naively that is "no listing found", so a throttled scan would tell 11 of 12
+ * customers their Google Business Profile does not exist. Rate limiting must
+ * never be mistaken for absence, so it retries and then throws.
+ */
+const RATE_LIMIT_TASK_CODE = 40102;
+const MAX_ATTEMPTS = 4;
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`DataForSEO ${path} failed (${res.status}): ${text}`);
+function taskRateLimited(json: unknown): boolean {
+  const tasks = (json as { tasks?: Array<{ status_code?: number }> })?.tasks;
+  return Array.isArray(tasks) && tasks.length > 0
+    && tasks.every((t) => t?.status_code === RATE_LIMIT_TASK_CODE);
+}
+
+async function dfsPost(path: string, body: unknown): Promise<unknown> {
+  let lastError = '';
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (attempt > 1) {
+      // Exponential backoff with a little jitter so parallel callers do not
+      // retry in lockstep and re-create the burst that throttled them.
+      const delay = 500 * 2 ** (attempt - 2) * (1 + Math.random());
+      await new Promise((r) => setTimeout(r, delay));
+    }
+
+    const res = await fetch(`${BASE_URL}${path}`, {
+      method: 'POST',
+      headers: {
+        Authorization: authHeader(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (res.status === 429) {
+      lastError = 'HTTP 429 rate limited';
+      continue;
+    }
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`DataForSEO ${path} failed (${res.status}): ${text}`);
+    }
+
+    const json = await res.json();
+    if (taskRateLimited(json)) {
+      lastError = `task status ${RATE_LIMIT_TASK_CODE} (rate limited)`;
+      continue;
+    }
+
+    return json;
   }
 
-  return res.json();
+  // Deliberately throws rather than returning an empty result: callers turn an
+  // exception into `unverified`, but an empty result into `not_found`.
+  throw new Error(`DataForSEO ${path} rate limited after ${MAX_ATTEMPTS} attempts: ${lastError}`);
 }
 
 // ─── SERP rank lookup ─────────────────────────────────────────────────────────
