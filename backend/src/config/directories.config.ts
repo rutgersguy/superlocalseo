@@ -55,6 +55,13 @@ export interface DirectoryDef {
   /**
    * Set when MEASUREMENT showed we cannot reliably find listings here.
    *
+   * The bar is 25% found on a sample of at least 8 — core directories judged on
+   * 34 businesses, vertical ones on 8 of their own industry. Anything
+   * disqualified is RE-CHECKED whenever the scanner changes: fixing the phone
+   * and empty-result defects moved ZocDoc from 13% to 38% and Thumbtack,
+   * RateMDs and HappyCow from 13% to 25%, all of which were restored. A
+   * directory dropped on a buggy measurement is still dropped on no evidence.
+   *
    * The bar is deliberately about evidence, not accuracy: if we never once
    * found a listing across the sample, we have no grounds to tell a customer
    * "you are not listed" — we only know that we could not find it. Publishing
@@ -75,44 +82,60 @@ export const DIRECTORIES: Record<string, DirectoryDef> = {
   facebook:       { key: 'facebook',       label: 'Facebook',                domain: 'facebook.com',      strategy: 'snippet' },
   bbb:            { key: 'bbb',            label: 'Better Business Bureau',  domain: 'bbb.org',           strategy: 'auto' },
   yellowpages:    { key: 'yellowpages',    label: 'Yellow Pages',            domain: 'yellowpages.com',   strategy: 'auto' },
-  foursquare:     { key: 'foursquare',     label: 'Foursquare',              domain: 'foursquare.com',    strategy: 'auto', unsupported: 'measured 0% found across 34 businesses — never once located a listing' },
+  foursquare:     { key: 'foursquare',     label: 'Foursquare',              domain: 'foursquare.com',    strategy: 'auto', unsupported: 'measured 0% found across 34 businesses, on two runs including a re-check under the corrected scanner — never once located a listing' },
   nextdoor:       { key: 'nextdoor',       label: 'Nextdoor',                domain: 'nextdoor.com',      strategy: 'auto' },
-  manta:          { key: 'manta',          label: 'Manta',                   domain: 'manta.com',         strategy: 'auto' },
-  merchantcircle: { key: 'merchantcircle', label: 'Merchant Circle',         domain: 'merchantcircle.com',strategy: 'auto', unsupported: 'measured 6% found across 34 businesses' },
-  trustpilot:     { key: 'trustpilot',     label: 'Trustpilot',              domain: 'trustpilot.com',    strategy: 'auto', unsupported: 'measured 3% found across 34 businesses' },
+  manta:          { key: 'manta',          label: 'Manta',                   domain: 'manta.com',         strategy: 'auto', unsupported: 'measured 21% found across 34 businesses — below the 25% bar on two separate runs (24%, 21%)' },
+  merchantcircle: { key: 'merchantcircle', label: 'Merchant Circle',         domain: 'merchantcircle.com',strategy: 'auto', unsupported: 'measured 3% found across 34 businesses, re-checked under the corrected scanner' },
+  trustpilot:     { key: 'trustpilot',     label: 'Trustpilot',              domain: 'trustpilot.com',    strategy: 'auto', unsupported: 'measured 3% found across 34 businesses, re-checked under the corrected scanner' },
   linkedin:       { key: 'linkedin',       label: 'LinkedIn',                domain: 'linkedin.com',      strategy: 'snippet' },
+
+  // ── Found by mining brand queries, not by assumption ────────────────────
+  // The original registry was assembled from what we expected to matter. These
+  // came out of the SERP data itself: domains appearing for many unrelated
+  // businesses across different industries and states. MapQuest appeared for 27
+  // of 34 — a higher hit rate than most of the original core set, and it was
+  // simply missing.
+  mapquest:       { key: 'mapquest',       label: 'MapQuest',                domain: 'mapquest.com',      strategy: 'auto' },
+  birdeye:        { key: 'birdeye',        label: 'BirdEye',                 domain: 'birdeye.com',       strategy: 'auto' },
+  yahoolocal:     { key: 'yahoolocal',     label: 'Yahoo Local',             domain: 'local.yahoo.com',   strategy: 'auto' },
+  alignable:      { key: 'alignable',      label: 'Alignable',               domain: 'alignable.com',     strategy: 'auto', unsupported: 'measured 6% found across 34 businesses (20 of 34 unverified)' },
 
   // ── Home Services ───────────────────────────────────────────────────────
   angi:           { key: 'angi',           label: 'Angi',                    domain: 'angi.com',          strategy: 'auto', vertical: 'home' },
   houzz:          { key: 'houzz',          label: 'Houzz',                   domain: 'houzz.com',         strategy: 'auto', vertical: 'home' },
-  thumbtack:      { key: 'thumbtack',      label: 'Thumbtack',               domain: 'thumbtack.com',     strategy: 'auto', vertical: 'home', unsupported: 'measured 13% found across 8 home-services businesses' },
-  porch:          { key: 'porch',          label: 'Porch',                   domain: 'porch.com',         strategy: 'auto', vertical: 'home' },
+  thumbtack:      { key: 'thumbtack',      label: 'Thumbtack',               domain: 'thumbtack.com',     strategy: 'auto', vertical: 'home' },
+  porch:          { key: 'porch',          label: 'Porch',                   domain: 'porch.com',         strategy: 'auto', vertical: 'home', unsupported: 'measured 13% found across 8 home-services businesses under the corrected scanner' },
   homeadvisor:    { key: 'homeadvisor',    label: 'HomeAdvisor',             domain: 'homeadvisor.com',   strategy: 'auto', vertical: 'home' },
-  bark:           { key: 'bark',           label: 'Bark',                    domain: 'bark.com',          strategy: 'auto', vertical: 'home', unsupported: 'measured 0% found across 8 businesses' },
+  bark:           { key: 'bark',           label: 'Bark',                    domain: 'bark.com',          strategy: 'auto', vertical: 'home', unsupported: 'measured 0% found across 8 home-services businesses' },
 
   // ── Health & Fitness ────────────────────────────────────────────────────
   healthgrades:   { key: 'healthgrades',   label: 'Healthgrades',            domain: 'healthgrades.com',  strategy: 'auto', vertical: 'health' },
-  zocdoc:         { key: 'zocdoc',         label: 'ZocDoc',                  domain: 'zocdoc.com',        strategy: 'auto', vertical: 'health', unsupported: 'measured 13% found across 8 health businesses' },
+  zocdoc:         { key: 'zocdoc',         label: 'ZocDoc',                  domain: 'zocdoc.com',        strategy: 'auto', vertical: 'health' },
   webmd:          { key: 'webmd',          label: 'WebMD',                   domain: 'doctor.webmd.com',  strategy: 'auto', vertical: 'health' },
   vitals:         { key: 'vitals',         label: 'Vitals',                  domain: 'vitals.com',        strategy: 'auto', vertical: 'health' },
-  ratemds:        { key: 'ratemds',        label: 'RateMDs',                 domain: 'ratemds.com',       strategy: 'auto', vertical: 'health', unsupported: 'measured 13% found across 8 health businesses' },
+  ratemds:        { key: 'ratemds',        label: 'RateMDs',                 domain: 'ratemds.com',       strategy: 'auto', vertical: 'health' },
 
   // ── Legal ───────────────────────────────────────────────────────────────
-  avvo:           { key: 'avvo',           label: 'Avvo',                    domain: 'avvo.com',          strategy: 'auto', vertical: 'legal', unsupported: 'measured 0% found across 8 law firms (7 of 8 unverified — a discovery failure, not absence)' },
+  avvo:           { key: 'avvo',           label: 'Avvo',                    domain: 'avvo.com',          strategy: 'auto', vertical: 'legal', unsupported: 'measured 13% found across 8 law firms' },
   justia:         { key: 'justia',         label: 'Justia',                  domain: 'lawyers.justia.com',strategy: 'auto', vertical: 'legal' },
   findlaw:        { key: 'findlaw',        label: 'FindLaw',                 domain: 'lawyers.findlaw.com',strategy: 'auto', vertical: 'legal' },
   lawyers:        { key: 'lawyers',        label: 'Lawyers.com',             domain: 'lawyers.com',       strategy: 'auto', vertical: 'legal' },
+  superlawyers:   { key: 'superlawyers',   label: 'Super Lawyers',           domain: 'superlawyers.com',  strategy: 'auto', vertical: 'legal' },
 
   // ── Food & Beverage ─────────────────────────────────────────────────────
   tripadvisor:    { key: 'tripadvisor',    label: 'TripAdvisor',             domain: 'tripadvisor.com',   strategy: 'auto', vertical: 'food' },
   opentable:      { key: 'opentable',      label: 'OpenTable',               domain: 'opentable.com',     strategy: 'auto', vertical: 'food' },
   zomato:         { key: 'zomato',         label: 'Zomato',                  domain: 'zomato.com',        strategy: 'auto', vertical: 'food', unsupported: 'measured 0% found across 8 food businesses' },
-  happycow:       { key: 'happycow',       label: 'HappyCow',                domain: 'happycow.net',      strategy: 'auto', vertical: 'food', unsupported: 'measured 13% found across 8 food businesses' },
+  happycow:       { key: 'happycow',       label: 'HappyCow',                domain: 'happycow.net',      strategy: 'auto', vertical: 'food' },
 
   // ── Beauty & Personal Care ──────────────────────────────────────────────
   vagaro:         { key: 'vagaro',         label: 'Vagaro',                  domain: 'vagaro.com',        strategy: 'auto', vertical: 'beauty', unsupported: 'measured 0% found across 8 beauty businesses' },
   mindbody:       { key: 'mindbody',       label: 'Mindbody',                domain: 'mindbodyonline.com',strategy: 'auto', vertical: 'beauty', unsupported: 'measured 0% found across 8 beauty businesses' },
   styleseat:      { key: 'styleseat',      label: 'StyleSeat',               domain: 'styleseat.com',     strategy: 'auto', vertical: 'beauty', unsupported: 'measured 0% found across 8 beauty businesses' },
+  // Beauty lost all three of its original directories to measurement, leaving
+  // those businesses with the core set only. Fresha surfaced in the brand-query
+  // mining and is a real booking platform for salons and spas.
+  fresha:         { key: 'fresha',         label: 'Fresha',                  domain: 'fresha.com',        strategy: 'auto', vertical: 'beauty' },
 
   // ── Automotive ──────────────────────────────────────────────────────────
   repairpal:      { key: 'repairpal',      label: 'RepairPal',               domain: 'repairpal.com',     strategy: 'auto', vertical: 'auto', unsupported: 'measured 0% found across 8 automotive businesses' },
@@ -121,11 +144,12 @@ export const DIRECTORIES: Record<string, DirectoryDef> = {
   // ── Professional Services ───────────────────────────────────────────────
   expertise:      { key: 'expertise',      label: 'Expertise.com',           domain: 'expertise.com',     strategy: 'auto', vertical: 'professional', unsupported: 'measured 13% found across 8 professional-services businesses' },
   zoominfo:       { key: 'zoominfo',       label: 'ZoomInfo',                domain: 'zoominfo.com',      strategy: 'auto', vertical: 'professional' },
+  clutch:         { key: 'clutch',         label: 'Clutch',                  domain: 'clutch.co',         strategy: 'auto', vertical: 'professional' },
 
   // ── Real Estate ─────────────────────────────────────────────────────────
   zillow:         { key: 'zillow',         label: 'Zillow',                  domain: 'zillow.com',        strategy: 'auto', vertical: 'realestate' },
   realtor:        { key: 'realtor',        label: 'Realtor.com',             domain: 'realtor.com',       strategy: 'auto', vertical: 'realestate' },
-  trulia:         { key: 'trulia',         label: 'Trulia',                  domain: 'trulia.com',        strategy: 'auto', vertical: 'realestate', unsupported: 'measured 0% found across 8 real-estate businesses (8 of 8 unverified)' },
+  trulia:         { key: 'trulia',         label: 'Trulia',                  domain: 'trulia.com',        strategy: 'auto', vertical: 'realestate', unsupported: 'measured 0% found across 8 real-estate businesses' },
 };
 
 /** Directories we can actually scan — excludes unauditable AND unsupported. */

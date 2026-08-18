@@ -812,22 +812,43 @@ would have sent every one of those customers chasing a fault that does not exist
 
 ### Which directories are actually audited
 
-**24 directories**, chosen by measurement rather than by ambition: 8 core plus up
-to 4 relevant to the industry. A directory ships only where we demonstrated we can
-find listings on it. The bar is about evidence, not accuracy — if we never once
-found a listing across the sample, we have no grounds to tell anyone they are not
-listed there.
+**32 directories**, chosen by measurement rather than ambition: 10 core plus 1–5
+relevant to the industry, so any one business sees 11–15. A directory ships only
+where we demonstrated we can find listings on it — the bar is **25% found**, on
+34 businesses for core directories and 8 same-industry businesses for vertical
+ones.
 
-| scope | directories |
+The bar is about **evidence, not accuracy**. A 25% find rate does not mean 75% of
+businesses are absent; many genuinely are not on Houzz. But where we never once
+found a listing, we have no grounds to tell anyone they are missing one.
+
+Four of these were found by mining brand-query SERPs for domains the registry
+never contained — MapQuest appeared for 27 of 34 businesses, a higher hit rate
+than most of the original core set, and was simply missing.
+
+| scope | directories (measured find rate) |
 |---|---|
-| Core (every business) | Google, Yelp, Facebook, BBB, Yellow Pages, Nextdoor, Manta, LinkedIn |
-| Home services | Angi, Houzz, Porch, HomeAdvisor |
-| Health | Healthgrades, WebMD, Vitals |
-| Legal | Justia, FindLaw, Lawyers.com |
-| Food | TripAdvisor, OpenTable |
-| Automotive | CarWise |
-| Professional services | ZoomInfo |
-| Real estate | Zillow, Realtor.com |
+| Core | Google 97%, Yelp 94%, Facebook 85%, **MapQuest 82%**, **Yahoo Local 62%**, LinkedIn 59%, **BirdEye 59%**, BBB 53%, Nextdoor 41%, Yellow Pages 32% |
+| Home services | Angi 50%, HomeAdvisor 38%, Houzz 25%, Thumbtack 25% |
+| Health | Healthgrades 100%, WebMD 63%, Vitals 50%, ZocDoc 38%, RateMDs 25% |
+| Legal | Lawyers.com 63%, **Super Lawyers 63%**, FindLaw 50%, Justia 38% |
+| Food | TripAdvisor 100%, OpenTable 50%, HappyCow 25% |
+| Beauty | **Fresha 50%** |
+| Automotive | CarWise 25% |
+| Professional | ZoomInfo 50%, **Clutch 25%** |
+| Real estate | Realtor.com 50%, Zillow 25% |
+
+### Re-measure whenever the scanner changes
+
+A directory disqualified under buggy code is still disqualified on no evidence.
+Fixing the phone-extraction and empty-result defects moved **ZocDoc 13% → 38%**
+and **Thumbtack, RateMDs and HappyCow 13% → 25%** — all four were restored — while
+**Porch fell 25% → 13%** and **Manta 24% → 21%**, and both were dropped.
+
+`backend/src/scripts/measure-keys.ts` re-checks an explicit list of keys and
+deliberately bypasses the `unsupported` filter, because that flag is what is
+under test. Run it against the dropped set after any change to matching or
+extraction.
 
 ### The gaps — stated explicitly
 
@@ -835,19 +856,22 @@ listed there.
 method.** Neither publishes indexable listings: `site:maps.apple.com <business>`
 returns one junk result and `site:bing.com/maps <business>` returns nothing.
 Reading them needs a direct data partnership with Apple and Microsoft, which is
-what BrightLocal, Yext and Uberall sell. They are surfaced in the UI as
-"claim this yourself" with links to the free self-serve portals, and the customer
-can tick a self-attested "I've claimed this" box. That attestation is their word,
-not a verification, and deliberately feeds **no** score.
+what BrightLocal, Yext and Uberall sell. They are surfaced as "claim this
+yourself" with links to the free portals and a self-attested checkbox. That
+attestation is the customer's word, not a verification, and feeds **no** score.
 
-**16 directories were dropped on evidence** and are neither scanned nor shown:
-Foursquare (0% found across 34), Trustpilot (3%), MerchantCircle (6%), Avvo (0%
-across 8 law firms), Bark, Zomato, Vagaro, Mindbody, StyleSeat, RepairPal, Trulia
-(all 0%), and Thumbtack, ZocDoc, RateMDs, HappyCow, Expertise.com (13% each). The
-measured rate for each is recorded in `backend/src/config/directories.config.ts`.
+**15 directories were dropped on evidence** and are neither scanned nor shown:
+Foursquare (0% across 34, twice), Trustpilot 3%, MerchantCircle 3%, Alignable 6%
+(20 of 34 unverified), Manta 21%, Porch 13%, Avvo 13%, Expertise.com 13%, and
+Bark, Zomato, Vagaro, Mindbody, StyleSeat, RepairPal and Trulia at 0%. The
+measured rate for each is recorded in `directories.config.ts`.
 
-**Beauty & Personal Care has no vertical directories at all** — Vagaro, Mindbody
-and StyleSeat all measured 0%. Those businesses get the 8 core directories only.
+**Manta is a near-miss worth revisiting** — 24% and 21% on two runs against a 25%
+bar. It is dropped for consistency with a pre-stated threshold, not because the
+evidence is clear-cut.
+
+**Beauty & Personal Care has only one directory.** Vagaro, Mindbody and StyleSeat
+all measured 0%; Fresha at 50% is the sole replacement, found by SERP mining.
 
 **Real Estate has no industries mapped to it** in `INDUSTRY_MAP`, so Zillow and
 Realtor.com are unreachable in production regardless of this config.
