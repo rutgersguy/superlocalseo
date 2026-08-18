@@ -14,13 +14,46 @@
  * a directory invisible to the brand query is one we could not audit anyway.
  */
 import { readFileSync } from 'fs';
-import { serpSearch } from '../services/dataforseo.service';
+import { serpSearch, mapsSearch } from '../services/dataforseo.service';
 import { DIRECTORIES, Vertical } from '../config/directories.config';
 import { LocationNap } from '../services/citation_scan.service';
 
 interface Row extends LocationNap { vertical: Vertical }
-const CORPUS: Row[] = JSON.parse(readFileSync(process.env.CORPUS ?? '/corpus/corpus.json', 'utf8'));
 const CONCURRENCY = Number(process.env.CONCURRENCY ?? 5);
+
+/**
+ * SEEDS builds a fresh corpus from Google Maps instead of reading the frozen
+ * one — needed to mine a single industry, e.g. finding beauty directories after
+ * Vagaro, Mindbody and StyleSeat all measured 0% (#185). Comma-separated
+ * queries, e.g. SEEDS="hair salon Nashville TN,day spa Scottsdale AZ".
+ */
+const SEEDS = (process.env.SEEDS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+const PER_SEED = Number(process.env.PER_SEED ?? 2);
+
+function splitAddress(full: string) {
+  const m = full.match(/^(.*),\s*([^,]+),\s*([A-Z]{2})\s*(\d{5})/);
+  return m ? { address: m[1].trim(), city: m[2].trim(), state: m[3], zip: m[4] } : null;
+}
+
+async function buildCorpus(): Promise<Row[]> {
+  const out: Row[] = [];
+  for (const q of SEEDS) {
+    const items = await mapsSearch(q);
+    let taken = 0;
+    for (const i of items) {
+      if (taken >= PER_SEED) break;
+      if (!i.title || !i.address || !i.phone) continue;
+      const parts = splitAddress(i.address);
+      if (!parts) continue;
+      out.push({ name: i.title, ...parts, phone: i.phone, vertical: (process.env.VERTICAL ?? 'home') as Vertical });
+      taken++;
+    }
+  }
+  return out;
+}
+
+/** 3+ unrelated businesses by default; lower it for a small single-industry corpus. */
+const MIN_HITS = Number(process.env.MIN_HITS ?? 3);
 
 const KNOWN = new Set(Object.values(DIRECTORIES).map((d) => d.domain.split('/')[0].replace(/^www\./, '')));
 
@@ -70,6 +103,9 @@ async function pool<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Prom
 }
 
 async function main() {
+  const CORPUS: Row[] = SEEDS.length
+    ? await buildCorpus()
+    : JSON.parse(readFileSync(process.env.CORPUS ?? '/corpus/corpus.json', 'utf8'));
   console.log(`mining ${CORPUS.length} brand queries for untracked directories\n`);
   let done = 0;
 
@@ -104,7 +140,7 @@ async function main() {
 
   const rows = [...businesses.entries()]
     .map(([h, n]) => ({ h, n, v: verticals.get(h)!.size }))
-    .filter((r) => r.n >= 3)     // 3+ unrelated businesses — below that it is noise
+    .filter((r) => r.n >= MIN_HITS)
     .sort((a, b) => b.n - a.n);
 
   console.log(`\n=== untracked domains appearing for 3+ businesses (of ${CORPUS.length}) ===`);

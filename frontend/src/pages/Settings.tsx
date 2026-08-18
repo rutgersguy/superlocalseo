@@ -6,6 +6,7 @@ import { apiFetch, fetcher } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { useClient } from '../hooks/useClient';
 import UnauditedDirectories from '../components/UnauditedDirectories';
+import { INDUSTRY_GROUPS } from '../config/industries';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,16 +29,6 @@ interface ClientResponse {
   data: ClientData;
 }
 
-const INDUSTRY_GROUPS: Array<{ group: string; options: string[] }> = [
-  { group: 'Home Services', options: ['Plumbing', 'HVAC', 'Electrical', 'Roofing', 'Landscaping', 'Cleaning', 'Pest Control', 'Painting', 'Flooring', 'Moving', 'General Contractor'] },
-  { group: 'Health & Fitness', options: ['Personal Training', 'Gym / Fitness Studio', 'Physical Therapy', 'Chiropractic', 'Massage Therapy', 'Dental'] },
-  { group: 'Legal', options: ['Law Firm', 'Family Law', 'Personal Injury'] },
-  { group: 'Food & Beverage', options: ['Restaurant', 'Coffee Shop', 'Food Truck', 'Bakery'] },
-  { group: 'Beauty & Personal Care', options: ['Hair Salon', 'Barbershop', 'Nail Salon', 'Med Spa'] },
-  { group: 'Automotive', options: ['Auto Repair', 'Auto Detailing'] },
-  { group: 'Professional Services', options: ['Accounting / CPA', 'Real Estate', 'Insurance', 'Veterinary', 'Photography', 'Tutoring'] },
-  { group: 'Other', options: ['Other'] },
-];
 type Tab = 'account' | 'locations' | 'keywords' | 'integrations' | 'billing' | 'team' | 'widgets' | 'qrcodes';
 
 // ─── Team types ───────────────────────────────────────────────────────────────

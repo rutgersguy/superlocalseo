@@ -11,11 +11,43 @@
  * Bypasses the `unsupported` filter deliberately: that is the flag under test.
  */
 import { readFileSync } from 'fs';
+import { mapsSearch } from '../services/dataforseo.service';
 import { scanLocation, LocationNap } from '../services/citation_scan.service';
 import { DIRECTORIES, Vertical } from '../config/directories.config';
 
 interface Row extends LocationNap { vertical: Vertical }
-const CORPUS: Row[] = JSON.parse(readFileSync(process.env.CORPUS ?? '/corpus/corpus.json', 'utf8'));
+
+/**
+ * SEEDS builds a FRESH corpus rather than reusing the frozen one, so a
+ * borderline result can be settled on independent businesses instead of
+ * re-running the same 34. Manta sat at 24% then 21% against a 25% bar — a
+ * difference of one business — which is exactly the case where sample size,
+ * not the directory, is what is being measured.
+ */
+const SEEDS = (process.env.SEEDS ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+const PER_SEED = Number(process.env.PER_SEED ?? 2);
+
+function splitAddress(full: string) {
+  const m = full.match(/^(.*),\s*([^,]+),\s*([A-Z]{2})\s*(\d{5})/);
+  return m ? { address: m[1].trim(), city: m[2].trim(), state: m[3], zip: m[4] } : null;
+}
+
+async function buildCorpus(): Promise<Row[]> {
+  const out: Row[] = [];
+  for (const q of SEEDS) {
+    const items = await mapsSearch(q);
+    let taken = 0;
+    for (const i of items) {
+      if (taken >= PER_SEED) break;
+      if (!i.title || !i.address || !i.phone) continue;
+      const parts = splitAddress(i.address);
+      if (!parts) continue;
+      out.push({ name: i.title, ...parts, phone: i.phone, vertical: 'home' as Vertical });
+      taken++;
+    }
+  }
+  return out;
+}
 const KEYS = (process.env.DIRS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 const CONCURRENCY = Number(process.env.CONCURRENCY ?? 6);
 
@@ -33,6 +65,9 @@ async function pool<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Prom
 }
 
 async function main() {
+  const CORPUS: Row[] = SEEDS.length
+    ? await buildCorpus()
+    : JSON.parse(readFileSync(process.env.CORPUS ?? '/corpus/corpus.json', 'utf8'));
   const dirs = KEYS.map((k) => DIRECTORIES[k]).filter(Boolean);
   console.log(`re-measuring ${dirs.map((d) => d.key).join(', ')} over ${CORPUS.length} businesses\n`);
 

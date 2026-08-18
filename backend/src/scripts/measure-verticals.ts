@@ -47,7 +47,10 @@ async function pool<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Prom
 }
 
 async function main() {
-  const verticals = Object.keys(SEEDS) as Vertical[];
+  // VERTICALS=beauty,legal limits the run — the full sweep is 8 verticals and
+  // there is no reason to re-measure all of them to answer one question.
+  const only = (process.env.VERTICALS ?? '').split(',').map((v) => v.trim()).filter(Boolean);
+  const verticals = (Object.keys(SEEDS) as Vertical[]).filter((v) => !only.length || only.includes(v));
   const tally = new Map<string, { listed: number; not_found: number; unverified: number; napless: number }>();
 
   for (const vertical of verticals) {
