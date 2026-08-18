@@ -699,3 +699,77 @@ export async function getLighthouseResult(taskId: string): Promise<LighthouseDat
     return null;
   }
 }
+
+// ── citation auditing primitives (issue #174) ───────────────────────────────
+
+export interface SerpResult {
+  url: string;
+  title: string;
+  description: string;
+}
+
+/**
+ * A plain organic SERP search, used by the citation scanner for `site:` queries.
+ *
+ * `depth: 5` is deliberate — a citation lookup only cares about the first result
+ * or two, and depth drives the price. Costs ~$0.01 per call.
+ */
+export async function serpSearch(keyword: string, depth = 5): Promise<SerpResult[]> {
+  if (!config.dataforseo.login || !config.dataforseo.password) {
+    throw new Error('DataForSEO credentials not configured');
+  }
+
+  const json = (await dfsPost('/serp/google/organic/live/advanced', [{
+    keyword,
+    location_code: 2840,
+    language_code: 'en',
+    depth,
+  }])) as {
+    tasks?: Array<{ result?: Array<{ items?: Array<Record<string, unknown>> }> }>;
+  };
+
+  const items = json.tasks?.[0]?.result?.[0]?.items ?? [];
+  return items
+    .filter((i) => i.type === 'organic')
+    .map((i) => ({
+      url: (i.url as string) ?? '',
+      title: (i.title as string) ?? '',
+      description: (i.description as string) ?? '',
+    }))
+    .filter((r) => r.url);
+}
+
+/**
+ * Fetches a listing page and returns its readable text.
+ *
+ * Best-effort by design: several directories block automated fetching — Yelp
+ * returns 403 — so callers must treat null as "could not read", never as
+ * "not listed". Costs ~$0.00015 per call, far cheaper than the SERP query.
+ */
+export async function fetchPageText(url: string): Promise<string | null> {
+  // Correct path is on_page/content_parsing/live — plain "content_parsing" is the
+  // task-based variant and returns "Task Not Found" when called directly.
+  //
+  // Deliberately WITHOUT javascript. Measured on a real BBB listing: JS-enabled
+  // costs 10x ($0.0015 vs $0.00015) and returned no items at all, while the
+  // non-JS fetch returns the page but not the NAP — these directories render
+  // contact details client-side. So fetching is a cheap opportunistic extra, and
+  // the SERP snippet remains the primary source.
+  const json = (await dfsPost('/on_page/content_parsing/live', [{
+    url,
+    enable_javascript: false,
+  }])) as {
+    tasks?: Array<{ result?: Array<{ items?: Array<Record<string, unknown>> }> }>;
+  };
+
+  const item = json.tasks?.[0]?.result?.[0]?.items?.[0];
+  if (!item) return null;
+
+  const status = item.status_code as number | undefined;
+  if (status !== undefined && (status < 200 || status >= 300)) return null;
+
+  // The parsed page is a nested structure; flattening it to a string is enough
+  // for regex extraction and avoids depending on their exact shape.
+  const blob = JSON.stringify(item.page_content ?? item);
+  return blob.length > 2 ? blob : null;
+}
