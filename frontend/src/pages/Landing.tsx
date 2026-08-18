@@ -94,8 +94,12 @@ const featureCards = [
     Icon: Star,
   },
   {
-    title: 'Citation Building',
-    desc: 'A guided workflow to get your business listed consistently across the directories that matter for local search.',
+    title: 'Citation Audits & Building',
+    // Deliberately does not quote a directory count. We audit 24, but any one
+    // business only ever sees the 8 core plus the handful relevant to its
+    // industry — so a headline number would be true of the system and
+    // misleading about the customer's own report.
+    desc: 'We re-check your listings every week — Google, Yelp, Facebook, BBB and the directories specific to your industry — and flag any address or phone that has drifted out of sync.',
     Icon: MapPin,
   },
   {
@@ -323,6 +327,7 @@ export default function Landing() {
               <ul className="space-y-3 mb-8 flex-1">
                 {[
                   { label: 'Everything in Lite', pro: true },
+                  { label: 'Weekly citation audits with exact-match NAP checking', pro: true },
                   { label: 'Guided citation building across 40+ directories', pro: true },
                   { label: 'Geo-grid visibility heatmaps', pro: true },
                   { label: 'Competitor benchmarking & intelligence', pro: true },

@@ -27,7 +27,7 @@ interface CitationRow {
   listed: boolean;
   verification_status: 'listed' | 'not_found' | 'unverified';
   unverified_reason: string | null;
-  nap_match: boolean;
+  nap_match: boolean | null;
   listing_url: string | null;
   nap_name_match: boolean | null;
   nap_address_match: boolean | null;
@@ -111,8 +111,17 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
     // limitation, so it is excluded from the denominator rather than counted
     // against the customer.
     const unverifiedCount = directories.filter((d) => d.verificationStatus === 'unverified').length;
-    const napAccurateCount = directories.filter((d) => d.verificationStatus === 'listed' && d.napMatch).length;
-    const napAccuratePercent = listedCount > 0 ? Math.round((napAccurateCount / listedCount) * 100) : 0;
+    // Divides by listings whose NAP we could READ. Dividing by every listed
+    // directory drags the figure down for listings we never compared — the
+    // customer would see "50% NAP accurate" and go hunting for a fault that
+    // does not exist.
+    const napCheckedCount = directories.filter(
+      (d) => d.verificationStatus === 'listed' && d.napMatch !== null,
+    ).length;
+    const napAccurateCount = directories.filter(
+      (d) => d.verificationStatus === 'listed' && d.napMatch === true,
+    ).length;
+    const napAccuratePercent = napCheckedCount > 0 ? Math.round((napAccurateCount / napCheckedCount) * 100) : 0;
 
     // When this data was last actually refreshed. The Citations page presented
     // whatever was in the table as current, so when the BrightLocal Data API
@@ -133,6 +142,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
       unverifiedCount,
       /** Directories that produced a definite answer — the honest denominator. */
       checkedCount: listedCount + notFoundCount,
+      napCheckedCount,
       napAccuratePercent,
       lastPulledAt,
     });

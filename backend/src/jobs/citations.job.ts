@@ -132,15 +132,13 @@ async function syncCitationsForLocation(loc: LocationRow): Promise<void> {
     listed: r.status === 'listed',
     verification_status: r.status,
     unverified_reason: r.unverifiedReason ?? null,
-    // Only true when every field we COULD read matched. A listing whose NAP we
-    // could not read is not "accurate" — it is unchecked, and must not inflate
-    // the accuracy figure.
+    // null = not checked, false = genuinely wrong. Collapsing the two made the
+    // UI print "NAP mismatch" and the monthly PDF count a penalty for a listing
+    // we never read — see migration 20260818010000.
     nap_match:
-      r.status === 'listed' &&
-      !r.napUnreadable &&
-      r.nameMatch !== false &&
-      r.addressMatch !== false &&
-      r.phoneMatch !== false,
+      r.status !== 'listed' ? false
+        : r.napUnreadable ? null
+        : r.nameMatch !== false && r.addressMatch !== false && r.phoneMatch !== false,
     listing_url: r.listingUrl ?? null,
     pulled_at: now,
     nap_name_match: r.nameMatch ?? null,
