@@ -91,6 +91,33 @@ surfaces where price is displayed. Summary as of 2026-08-20:
 
 ---
 
+### 1b. AI Assistant Visibility
+
+**What it does:** Every Monday, asks ChatGPT, Gemini and Perplexity the questions a customer
+actually asks — "who are the best plumbers in Tulsa, OK?" — with web search enabled, and records
+whether the business was named, where it ranked among the businesses the assistant listed, which
+competitors it named instead, and which sources it cited.
+
+**Key capabilities:**
+- Three assistants × four prompt intents (open recommendation, emergency, most trusted,
+  affordable) per location, weekly, stored permanently
+- Position among the businesses named, so movement is visible over time
+- The competitor set each assistant volunteers — often different from the SERP competitor set
+- The sources each assistant cited, as hostnames. Directly actionable: these are the pages that
+  decide local recommendations, and several (Yelp, HomeAdvisor, MapQuest, BBB) are places a
+  business can get itself listed
+- Three-state verdicts: `mentioned` / `absent` / `unverified`. An upstream failure, a refusal, or
+  a business name made entirely of generic trade words is never recorded as "not recommended"
+
+**Runs on:** DataForSEO `ai_optimization/llm_responses` — no additional vendor. ~$0.13 per
+location per prompt-set across the three engines, ~$2/location/month at weekly cadence.
+
+**Not yet surfaced.** The measurement and its history exist; there is no API endpoint, dashboard
+page or report section yet. See docs/POSITIONING.md — the landing page must not lead on this
+claim until a customer can see it.
+
+---
+
 ### 2. Review Management & Aggregation
 
 **What it does:** Pulls in reviews from Google, Yelp, Facebook, Trustpilot, and 100+ platforms via EmbedMyReviews — every 6 hours, plus real-time via webhook. All reviews in one inbox.

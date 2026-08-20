@@ -986,3 +986,108 @@ export async function mapsSearch(keyword: string, depth = 10): Promise<MapsBusin
     phone: (i.phone as string) ?? null,
   }));
 }
+
+// ─── AI assistant responses (ai_optimization/llm_responses) ──────────────────
+
+export interface LlmResponseResult {
+  modelName: string;
+  text: string;
+  /**
+   * Source URLs the assistant reported, from each section's `annotations`.
+   *
+   * Only ChatGPT writes citations inline in the prose; Gemini and Perplexity
+   * return none in the text at all — Perplexity uses bare "[2][4]" markers.
+   * Verified across all three engines 2026-08-20. Scraping URLs out of the text
+   * therefore captures sources for one engine of three, so the structured field
+   * is the real source and the text is only a fallback.
+   */
+  sourceUrls: string[];
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+}
+
+/**
+ * Ask one assistant one question, with web search on.
+ *
+ * RESPONSE SHAPE — verified live 2026-08-20, not from documentation.
+ * The answer is NOT at `result[].items[].text`, which exists but is always
+ * empty. It is nested one level further at `result[].items[].sections[].text`,
+ * and an `items` entry of type "reasoning" carries `sections: null`. Reading the
+ * wrong field yields empty strings that look exactly like a model declining to
+ * answer, which would be recorded as "you are not mentioned".
+ *
+ * Empty text therefore THROWS rather than returning ''. The caller turns an
+ * exception into `unverified`; it turns an empty answer into `absent`. Those are
+ * very different claims to put in front of a customer.
+ *
+ * `web_search` is always true — see ai_engines.config.ts.
+ */
+export async function runLlmPrompt(params: {
+  engine: string;
+  modelName: string;
+  prompt: string;
+}): Promise<LlmResponseResult> {
+  const json = (await dfsPost(
+    `/ai_optimization/${params.engine}/llm_responses/live`,
+    [{ user_prompt: params.prompt, model_name: params.modelName, web_search: true }],
+  )) as {
+    cost?: number;
+    tasks?: Array<{
+      status_code?: number;
+      status_message?: string;
+      result?: Array<{
+        model_name?: string;
+        input_tokens?: number;
+        output_tokens?: number;
+        money_spent?: number;
+        items?: Array<{
+          type?: string;
+          sections?: Array<{
+            type?: string;
+            text?: string;
+            annotations?: Array<{ url?: string; title?: string }> | null;
+          }> | null;
+        }>;
+      }>;
+    }>;
+  };
+
+  const task = json.tasks?.[0];
+  if (!task || task.status_code !== 20000) {
+    throw new Error(
+      `llm_responses task failed for ${params.engine}/${params.modelName}: ${task?.status_message ?? 'no task returned'}`,
+    );
+  }
+
+  const result = task.result?.[0];
+  if (!result) throw new Error(`llm_responses returned no result for ${params.engine}`);
+
+  let text = '';
+  const sourceUrls: string[] = [];
+  for (const item of result.items ?? []) {
+    for (const section of item.sections ?? []) {
+      if (section?.text) text += section.text;
+      for (const a of section?.annotations ?? []) {
+        if (a?.url) sourceUrls.push(a.url);
+      }
+    }
+  }
+  text = text.trim();
+
+  if (!text) {
+    throw new Error(`llm_responses returned an empty answer for ${params.engine}/${params.modelName}`);
+  }
+
+  return {
+    modelName: result.model_name ?? params.modelName,
+    text,
+    sourceUrls,
+    inputTokens: result.input_tokens ?? 0,
+    outputTokens: result.output_tokens ?? 0,
+    // money_spent is the token+search cost for this call; json.cost is the
+    // billed total for the request. They differ slightly; money_spent is the
+    // per-result figure and is what we attribute to the snapshot.
+    costUsd: result.money_spent ?? json.cost ?? 0,
+  };
+}

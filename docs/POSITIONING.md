@@ -113,6 +113,19 @@ absorb the damage.
 **Rule: the hero claim and the dashboard must match. If tracking regresses or is removed, the
 hero changes the same day.**
 
+Status:
+
+| Piece | State |
+|---|---|
+| Weekly measurement across ChatGPT, Gemini and Perplexity | **Shipped** — `ai_visibility.job.ts`, Mondays 08:00 UTC |
+| Storage with history | **Shipped** — `ai_visibility_snapshots` |
+| API endpoint + dashboard surface | **Not built** — data is collected but no customer can see it |
+| Monthly PDF section | **Not built** |
+
+**The rule above is not yet satisfied.** Until a customer can open the dashboard and see which
+assistants recommend them, the landing page must not lead on AI visibility — the data exists
+but the product does not yet show it.
+
 ---
 
 ## How we earn trust without social proof

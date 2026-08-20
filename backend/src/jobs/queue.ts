@@ -9,6 +9,7 @@ import { processAudits } from './audits.job';
 import { processGeoGrid } from './geogrid.job';
 import { processCitationBuilder } from './citations_builder.job';
 import { processTrialReminder } from './trial_reminder.job';
+import { processAiVisibility } from './ai_visibility.job';
 import { sendJobFailureAlert } from '../services/email.service';
 
 // BullMQ v5 needs plain connection options — it creates its own ioredis instances internally.
@@ -30,6 +31,7 @@ export const auditsQueue = new Queue('audits', { connection });
 export const geoGridQueue = new Queue('geo-grid', { connection });
 export const citationBuilderQueue = new Queue('citation-builder', { connection });
 export const trialReminderQueue = new Queue('trial-reminder', { connection });
+export const aiVisibilityQueue = new Queue('ai-visibility', { connection });
 
 export async function startWorkers(): Promise<void> {
   const rankingsWorker = new Worker(
@@ -135,6 +137,15 @@ export async function startWorkers(): Promise<void> {
     { connection },
   );
 
+  const aiVisibilityWorker = new Worker(
+    'ai-visibility',
+    async (job: Job) => {
+      logger.info('Processing AI visibility job', { jobId: job.id, name: job.name });
+      await processAiVisibility(job);
+    },
+    { connection },
+  );
+
   function alertOnFail(name: string) {
     return (job: { id?: string } | undefined, err: Error) => {
       logger.error(`${name} job failed`, { jobId: job?.id, error: err.message });
@@ -150,6 +161,7 @@ export async function startWorkers(): Promise<void> {
   auditsWorker.on('failed', alertOnFail('audits'));
   geoGridWorker.on('failed', alertOnFail('geo-grid'));
   citationBuilderWorker.on('failed', alertOnFail('citation-builder'));
+  aiVisibilityWorker.on('failed', alertOnFail('ai-visibility'));
 
   const trialReminderWorker = new Worker('trial-reminder', processTrialReminder, { connection });
   trialReminderWorker.on('failed', alertOnFail('trial-reminder'));
@@ -216,6 +228,12 @@ export async function startWorkers(): Promise<void> {
 
   // Trial ending soon — daily at 10:00 UTC
   await trialReminderQueue.add('daily-check', {}, { repeat: { pattern: '0 10 * * *' } });
+
+  // AI assistant visibility: weekly, Monday 08:00 UTC. An hour after the
+  // citation scan so the two do not contend for the same DataForSEO rate limit,
+  // and weekly because assistant answers track search and review corpora that
+  // move on the order of weeks — see ai_visibility.job.ts.
+  await aiVisibilityQueue.add('weekly-scan', {}, { repeat: { pattern: '0 8 * * 1' } });
 
   logger.info('BullMQ workers started');
 }
