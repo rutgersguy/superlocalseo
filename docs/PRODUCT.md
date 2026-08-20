@@ -1,49 +1,72 @@
 # SuperLocalSEO — Product Reference
 
-**Audience:** Marketing, sales, copywriters, AI content tools  
-**Purpose:** Authoritative source of truth for all features, capabilities, pricing, and positioning. Use this document to generate website copy, ad creative, sales decks, feature announcements, and comparison pages.
+**Audience:** Marketing, sales, copywriters, AI content tools
+
+**Purpose:** Authoritative source of truth for **what the product does** — features,
+capabilities, integrations, API surface, limitations.
+
+> **Read [POSITIONING.md](POSITIONING.md) first if you are writing customer-facing copy.**
+> That file owns audience, market framing, voice, and the lead claim; this file owns
+> capabilities. [PRICING.md](PRICING.md) owns prices. Where an older agency/white-label framing
+> survives anywhere in this document, POSITIONING.md supersedes it.
 
 ---
 
 ## Elevator Pitch
 
-SuperLocalSEO is a white-label local SEO platform built for agencies and multi-location businesses. It automates rank tracking, review management, citation monitoring, and monthly reporting — powered by BrightLocal and EmbedMyReviews data — and wraps it all in a clean client-facing dashboard with AI-powered features that justify a recurring retainer.
+SuperLocalSEO tells a home-services business whether customers can find it — on Google, in the
+directories that matter for its trade, and now in the AI assistants people increasingly ask for
+a recommendation. It tracks rankings daily, monitors and answers reviews, re-checks listings
+weekly, and mails a plain-English report every month.
 
-**Core value proposition:** Replace 5 separate tools (rank tracker, review aggregator, citation monitor, report builder, review request tool) with one platform. Clients see results. Agencies stop doing manual work.
+**Core value proposition:** the visibility work an agency charges $1,500–5,000/mo to do,
+self-serve, from $149/mo.
+
+**What we are not:** not a white-label reseller platform, and not a $39 rank-tracking tool. See
+POSITIONING.md for why that distinction governs every customer-facing surface.
 
 ---
 
 ## Target Customer
 
-### Primary: Local SEO Agencies
-- Manage SEO for 5–200 local business clients
-- Currently stitching together BrightLocal, Whitespark, Grade.us, Raven Tools
-- Spend 4–8 hrs/month per client on manual reporting
-- Need a white-labelable client portal
+### Primary: Home-services businesses, direct
+- Plumbing, HVAC, electrical, roofing — the beachhead vertical
+- 1 to a few locations; owner or office manager, not a marketer
+- Already pays for field-service software (Jobber, Housecall Pro, ServiceTitan) and often for
+  leads (Angi, Nextdoor)
+- Buys self-serve through Stripe checkout; there is no sales motion
 
-### Secondary: Multi-Location Businesses (Direct)
-- 2–20 locations (plumbing, HVAC, dental, legal, home services)
-- Owner or marketing manager wants visibility without hiring an agency
-- Currently checking Google manually or not checking at all
+### Also supported (not led with)
+- Dental, legal, beauty, real estate, food, auto, professional services — each has its own
+  vertical directory set in `directories.config.ts` and can sign up normally. We simply do not
+  aim marketing at them.
+
+### Explicitly not the customer
+- **Agencies / resellers.** No white-label tier, no reseller pricing, no reseller sub-accounts.
+  The 2026-era agency framing in earlier revisions of this file is **retired**; copy that
+  implies a reseller offering creates support load and refund requests.
 
 ---
 
 ## Pricing
 
-| Tier | Monthly Price | Included Locations | Extra Locations |
+See [PRICING.md](PRICING.md) for the authoritative model, Stripe wiring, and the list of
+surfaces where price is displayed. Summary as of 2026-08-20:
+
+| Plan | Monthly | Setup | Locations |
 |---|---|---|---|
-| **Starter** (Tier 1) | **$350/mo** | 1 | +$150/mo each |
-| **Growth** (Tier 2) | **$700/mo** | 3 | +$100/mo each |
-| **Scale** (Tier 3) | **$1,200/mo** | 5 | +$75/mo each |
+| **Lite** | $149/mo | none | 1 |
+| **Pro** | $349/mo | none (waived) | 1, +$125/mo each additional |
 
-- 7-day free trial, no credit card required at signup
-- Trial converts to paid subscription when the client adds a payment method; no access cutoff during trial period
-- All tiers include every feature — no feature gating by tier
-- Per-location billing is prorated; add or remove locations mid-month
+- 7-day free trial, no credit card at signup; trials run with full Pro access
+- Plan is chosen at checkout; `product_line` flips to `lite` only on a paid Lite invoice
+- **Never hardcode a price in a UI surface — derive from `productLine`.** Hardcoded pricing has
+  shipped to production twice (#113, #125)
 
-### Unit Economics (for agency positioning)
-- 10 clients at Tier 1 → **$3,500/mo revenue, ~$354/mo data costs → 90% gross margin**
-- 50 mixed clients (avg 2 locations) → **$25,000/mo revenue, ~$2,244/mo data costs → 91% gross margin**
+### Unit Economics
+- Data cost is ~$1.82/mo per location (BrightLocal Data API) + $99/mo flat (EmbedMyReviews)
+  across all clients — gross margin is ~97% at Pro
+- Margin is not a constraint on feature decisions; see PRICING.md's vendor-cost analysis
 
 ---
 
@@ -159,7 +182,7 @@ SuperLocalSEO is a white-label local SEO platform built for agencies and multi-l
 - Download any historical report from the Reports page
 - Per-client report history with timestamps
 
-**Why it matters:** Monthly reports are the primary way agencies demonstrate value. Automating them turns a 4-hour task into a zero-hour task.
+**Why it matters:** The monthly report is the artifact the owner actually opens. It is the recurring proof that the subscription is doing something, which is what makes a retainer-priced product renewable.
 
 ---
 
@@ -256,7 +279,7 @@ SuperLocalSEO is a white-label local SEO platform built for agencies and multi-l
 
 ### 12. Team Members & Role-Based Access
 
-**What it does:** Invite team members to a client account with controlled permissions. Perfect for agencies managing accounts alongside clients, or businesses with marketing staff.
+**What it does:** Invite team members to a client account with controlled permissions. For businesses with office staff or a marketing hire who need dashboard access without billing control.
 
 **Key capabilities:**
 - Two team roles: **Client/Owner** (full control, including team management) and **Staff** (all features except inviting or removing other staff)

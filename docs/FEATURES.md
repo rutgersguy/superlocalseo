@@ -54,11 +54,10 @@ SuperLocalSEO is a multi-tenant SaaS platform for local SEO management. It is so
 
 | Tier | Monthly | Included Locations | Extra Locations |
 |---|---|---|---|
-| Starter (Tier 1) | $350/mo | 1 | +$150/mo each |
-| Growth (Tier 2) | $700/mo | 3 | +$100/mo each |
-| Pro (Tier 3) | $1,200/mo | 5 | +$75/mo each |
+| Lite | $149/mo | 1 | not available on Lite |
+| Pro | $349/mo | 1 | +$125/mo each |
 
-All new accounts start on a **7-day free trial** (Tier 1 by default). After trial expiry, access is gated. A **3-day grace period** is applied when a payment fails before access is revoked.
+All new accounts start on a **7-day free trial** (full Pro access; plan chosen at checkout). After trial expiry, access is gated. A **3-day grace period** is applied when a payment fails before access is revoked.
 
 ---
 

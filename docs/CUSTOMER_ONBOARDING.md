@@ -109,9 +109,8 @@ The following happen server-side when the customer clicks Finish:
 
 | Tier | Monthly Price | Included Locations | Extra Locations |
 |---|---|---|---|
-| **Starter** | $350/mo | 1 | +$150/mo each |
-| **Growth** | $700/mo | 3 | +$100/mo each |
-| **Scale** | $1,200/mo | 5 | +$75/mo each |
+| **Lite** | $149/mo | 1 | not available on Lite |
+| **Pro** | $349/mo | 1 | +$125/mo each |
 
 - All tiers include every feature — no feature gating by tier
 - Per-location billing is prorated; locations can be added or removed mid-month
