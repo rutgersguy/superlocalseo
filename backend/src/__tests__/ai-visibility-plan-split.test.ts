@@ -30,6 +30,13 @@ async function registerAndLogin(email: string): Promise<string> {
 async function seedFor(email: string, plan: 'lite' | 'pro'): Promise<string> {
   const user = await db('users').where({ email }).first();
   const client = await db('clients').where({ user_id: user.id }).first();
+
+  // The test DB persists across runs, so a second run would otherwise register
+  // over an existing user, add a SECOND location, and seed three more snapshots
+  // — leaving assertions reading whichever row happened to come back first.
+  // Four tests here failed in the full suite and passed in isolation for exactly
+  // this reason. Seeding is idempotent instead of assuming a fresh database.
+  await db('locations').where({ client_id: client.id }).del();
   await db('clients').where({ id: client.id }).update({
     product_line: plan,
     subscription_status: 'active',

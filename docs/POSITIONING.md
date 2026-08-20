@@ -117,7 +117,7 @@ Status:
 
 | Piece | State |
 |---|---|
-| Weekly measurement across ChatGPT, Gemini and Perplexity | **Shipped** — `ai_visibility.job.ts`, Mondays 08:00 UTC |
+| Weekly measurement across ChatGPT, Claude, Gemini and Perplexity | **Shipped** — `ai_visibility.job.ts`, Mondays 08:00 UTC |
 | Storage with history | **Shipped** — `ai_visibility_snapshots` |
 | API endpoint | **Shipped** — `GET /api/ai-visibility`, plan-aware payload |
 | Dashboard surface | **Shipped** — hero panel on `/dashboard` + full page at `/dashboard/ai-visibility` |
@@ -200,8 +200,13 @@ landscape."
 
 ## Landing page structure
 
-1. **Hero** — the AI question. Business-name input **inline**, not a button that punts to
-   another domain. A mocked assistant answer in which the business is *not* named.
+1. **Hero** — the AI question, and a mocked assistant answer in which the business is *not*
+   named. **The inline business-name input was specified and could not be built.** The free
+   report lives on `app.superlocalseo.com/intel-request`, which is the white-labeled
+   EmbedMyReviews app, not ours: the form is Laravel Livewire (stateful, checksummed) so it
+   cannot be posted to cross-origin, and it ignores query parameters, so forwarding what the
+   visitor typed would make them type it again. A button that does not double-type beats an
+   input that does. Revisit if that page ever comes under our control.
 2. **What the free report tells you** — real rendered output.
 3. **The full picture** — geo-grid heatmap as the signature visual.
 4. **How we know** — published method. This replaces the testimonial section.

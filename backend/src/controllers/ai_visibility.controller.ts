@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, notFound } from '../utils/response';
 import { AI_ENGINES, AI_PROMPTS, aiEngineLabel } from '../config/ai_engines.config';
+import { mergeBusinessCounts } from '../services/ai_visibility.service';
 import { Plan } from '../config/planFeatures';
 
 /**
@@ -264,19 +265,12 @@ async function buildHistory(locationIds: string[]): Promise<Array<{ scannedAt: s
 /** Businesses the assistants named most often, excluding none — the client's own
  *  name appears here too and the UI marks it, which is the point of a ranking. */
 function topCompetitors(rows: SnapshotRow[]): Array<{ name: string; timesNamed: number }> {
-  const counts = new Map<string, { name: string; n: number }>();
-  for (const r of rows) {
-    for (const name of r.businesses_named ?? []) {
-      const key = name.toLowerCase().trim();
-      const cur = counts.get(key);
-      if (cur) cur.n += 1;
-      else counts.set(key, { name, n: 1 });
-    }
-  }
-  return [...counts.values()]
-    .sort((a, b) => b.n - a.n)
-    .slice(0, 10)
-    .map((c) => ({ name: c.name, timesNamed: c.n }));
+  // Merged rather than tallied on the raw string. One company is named at
+  // different lengths in different answers — "Aire Serv" and "Aire Serv of
+  // South Tulsa" — and counting those separately shows the customer two
+  // competitors where there is one.
+  const all = rows.flatMap((r) => r.businesses_named ?? []);
+  return mergeBusinessCounts(all).slice(0, 10);
 }
 
 /** Hostnames the assistants cited most often — the pages that decide local

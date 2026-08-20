@@ -21,19 +21,26 @@
  * declines — both of which are measurement noise rather than a signal about the
  * customer.
  *
- * COST, measured 2026-08-20 against a live "best plumbers in Tulsa" prompt:
+ * COST, measured 2026-08-20 against live prompts:
  *
  *   chat_gpt   gpt-5.5             $0.0777   (10,730 input tokens — search results dominate)
+ *   claude     claude-sonnet-5     $0.0603
  *   gemini     gemini-3.5-flash    $0.0345
  *   perplexity sonar               $0.0058
  *
- * At four prompts per location that is ~$0.47 a scan, ~$2/location/month on the
- * weekly cadence. Existing data cost is ~$1.82/location/month, so this roughly
- * doubles it and remains under 1% of a Pro subscription.
+ * At four prompts per location that is ~$0.72 a scan, ~$3.10/location/month on
+ * the weekly cadence. Existing data cost is ~$1.82/location/month, so AI
+ * visibility is now the larger half of the data bill and still under 1% of a
+ * Lite subscription.
  *
- * Claude is supported by the upstream API and deliberately not enabled: the
- * marketing claim names ChatGPT, Gemini and Perplexity, and we do not scan — or
- * bill for — engines we do not report on. Flip `enabled` if that claim changes.
+ * ORDER MATTERS. The dashboard and the API roll-up both iterate this array, so
+ * this is the order the cards appear in. Claude sits second by request.
+ *
+ * All four are reported to the customer, so all four are scanned. We do not
+ * scan — or bill for — an engine we do not show, and we do not name an engine
+ * in marketing that we do not scan. Adding or removing one here means updating
+ * the landing page and docs/POSITIONING.md in the same change; the landing
+ * parity test fails if an enabled engine goes unnamed on the page.
  */
 export interface AiEngineDef {
   /** Stored in ai_visibility_snapshots.engine — also the DataForSEO path segment. */
@@ -44,10 +51,10 @@ export interface AiEngineDef {
 }
 
 export const AI_ENGINES: AiEngineDef[] = [
-  { key: 'chat_gpt',   label: 'ChatGPT',    modelName: 'gpt-5.5',          enabled: true  },
-  { key: 'gemini',     label: 'Gemini',     modelName: 'gemini-3.5-flash', enabled: true  },
-  { key: 'perplexity', label: 'Perplexity', modelName: 'sonar',            enabled: true  },
-  { key: 'claude',     label: 'Claude',     modelName: 'claude-sonnet-5',  enabled: false },
+  { key: 'chat_gpt',   label: 'ChatGPT',    modelName: 'gpt-5.5',          enabled: true },
+  { key: 'claude',     label: 'Claude',     modelName: 'claude-sonnet-5',  enabled: true },
+  { key: 'gemini',     label: 'Gemini',     modelName: 'gemini-3.5-flash', enabled: true },
+  { key: 'perplexity', label: 'Perplexity', modelName: 'sonar',            enabled: true },
 ];
 
 export const ENABLED_AI_ENGINES = AI_ENGINES.filter((e) => e.enabled);

@@ -93,13 +93,13 @@ surfaces where price is displayed. Summary as of 2026-08-20:
 
 ### 1b. AI Assistant Visibility
 
-**What it does:** Every Monday, asks ChatGPT, Gemini and Perplexity the questions a customer
+**What it does:** Every Monday, asks ChatGPT, Claude, Gemini and Perplexity the questions a customer
 actually asks — "who are the best plumbers in Tulsa, OK?" — with web search enabled, and records
 whether the business was named, where it ranked among the businesses the assistant listed, which
 competitors it named instead, and which sources it cited.
 
 **Key capabilities:**
-- Three assistants × four prompt intents (open recommendation, emergency, most trusted,
+- Four assistants × four prompt intents (open recommendation, emergency, most trusted,
   affordable) per location, weekly, stored permanently
 - Position among the businesses named, so movement is visible over time
 - The competitor set each assistant volunteers — often different from the SERP competitor set
@@ -109,8 +109,8 @@ competitors it named instead, and which sources it cited.
 - Three-state verdicts: `mentioned` / `absent` / `unverified`. An upstream failure, a refusal, or
   a business name made entirely of generic trade words is never recorded as "not recommended"
 
-**Runs on:** DataForSEO `ai_optimization/llm_responses` — no additional vendor. ~$0.13 per
-location per prompt-set across the three engines, ~$2/location/month at weekly cadence.
+**Runs on:** DataForSEO `ai_optimization/llm_responses` — no additional vendor. ~$0.18 per
+location per prompt-set across the four engines, ~$3.10/location/month at weekly cadence.
 
 **Where the customer sees it:** a hero panel at the top of `/dashboard` (above the ranking
 metrics — see docs/POSITIONING.md for why it leads) and a full page at

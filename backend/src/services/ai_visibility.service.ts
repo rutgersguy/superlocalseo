@@ -89,6 +89,25 @@ const BADGE_TOKENS = new Set([
   'hours', 'hour', 'service', 'services', 'free', 'estimates', 'estimate',
   'financing', 'discount', 'discounts', 'why', 'call', 'them', 'address',
   'phone', 'website', 'overview', 'pros', 'cons', 'note', 'notes',
+  // Added after the first four-engine run. Claude formats far more variably
+  // than the others and surfaced a fresh crop of bolded non-names:
+  // "BBB Accredited with an A+ rating", "4.9 stars with 1,880+ Google reviews",
+  // "100% Recommended", "My recommendation".
+  'better', 'bureau', 'google', 'recommended', 'recommendation', 'recommendations',
+  'choice', 'choices', 'option', 'options', 'pick', 'picks', 'tips', 'tip',
+  'immediate', 'wait', 'tech', 'summary', 'verdict', 'takeaway',
+  // Ordinary function words, so a phrase built only from these plus a badge
+  // cannot survive on the strength of an unlisted connective.
+  'with', 'from', 'you', 'your', 'my', 'our', 'their', 'while', 'when', 'what',
+  'who', 'how', 'is', 'are', 'was', 'were', 'be', 'has', 'have', 'that', 'this',
+  'these', 'those', 'it', 'its', 'they', 'we', 'us', 'all', 'any', 'more', 'most',
+  // Bare comparison criteria an assistant uses as section headings. A candidate
+  // made only of these is a heading, not a company.
+  'affordability', 'reputation', 'pricing', 'availability', 'experience',
+  'licensing', 'licence', 'license', 'warranties', 'quotes', 'quote', 'value',
+  'cost', 'costs', 'price', 'prices', 'quality', 'reliability', 'speed',
+  'good', 'bad', 'great', 'ideal', 'important', 'location', 'locations',
+  'suited', 'range', 'hours', 'contact', 'details', 'specialties', 'specialty',
 ]);
 
 /** Lowercase, fold `&` to `and`, drop punctuation, collapse whitespace. */
@@ -96,7 +115,10 @@ export function normalizeForMatch(s: string): string {
   return s
     .toLowerCase()
     .replace(/&/g, ' and ')
-    .replace(/[‘’“”]/g, '')
+    // Apostrophes are DELETED, not spaced: "Campbell's" and "Campbells" are the
+    // same business and appeared as two competitors until they folded together.
+    .replace(/['’‘`]/g, '')
+    .replace(/[“”]/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -153,7 +175,7 @@ export function extractBusinessNames(
   candidates.sort((a, b) => a.offset - b.offset);
 
   for (const c of candidates) {
-    const name = c.raw.trim().replace(/[:\-–—,\s]+$/, '').trim();
+    const name = cleanCandidate(c.raw);
     if (!looksLikeBusinessName(name, ctx)) continue;
     const key = normalizeForMatch(name);
     if (!key || seen.has(key)) continue;
@@ -161,7 +183,170 @@ export function extractBusinessNames(
     found.push({ name, offset: c.offset });
   }
 
-  return found;
+  return collapseVariants(found);
+}
+
+/**
+ * Fold the short form of a business into its fuller one.
+ *
+ * Assistants refer to the same company at several lengths inside one answer —
+ * "Torch", then "Torch Plumbing, Heating & Cooling"; "JayCo", then "JayCo HVACR
+ * LLC". Left alone each is counted as a separate competitor, which inflates the
+ * rival list a Pro customer reads and pushes their own position down.
+ *
+ * A candidate is absorbed when its normalised form is a WORD-BOUNDED prefix of
+ * another's. Prefix rather than containment, so "TemperaturePro Bixby" and
+ * "TemperaturePro Tulsa" — plausibly two real franchise locations — both
+ * survive while the bare "TemperaturePro" folds into the earlier of them.
+ * The longer name is kept, at the earliest offset either form appeared.
+ */
+function collapseVariants(
+  names: Array<{ name: string; offset: number }>,
+): Array<{ name: string; offset: number }> {
+  const kept: Array<{ name: string; offset: number; key: string }> = [];
+
+  for (const n of names) {
+    const key = normalizeForMatch(n.name);
+    const existing = kept.find(
+      (k) => k.key === key || k.key.startsWith(key + ' ') || key.startsWith(k.key + ' '),
+    );
+
+    if (!existing) {
+      kept.push({ ...n, key });
+      continue;
+    }
+
+    // Keep the longer, more specific name and the earliest position it was seen.
+    existing.offset = Math.min(existing.offset, n.offset);
+    if (key.length > existing.key.length) {
+      existing.name = n.name;
+      existing.key = key;
+    }
+  }
+
+  return kept
+    .sort((a, b) => a.offset - b.offset)
+    .map(({ name, offset }) => ({ name, offset }));
+}
+
+/**
+ * Tidy a raw candidate before judging it.
+ *
+ * Strips leftover markdown (a heading like `### **Top picks:**` captures with its
+ * asterisks intact) and drops a trailing parenthetical that is really a phone
+ * number — Claude writes "Service Wizards (918-400-4444)", which would otherwise
+ * be counted as a second, separate competitor alongside "Service Wizards" and
+ * push the customer's position down by one.
+ */
+function cleanCandidate(raw: string): string {
+  return raw
+    // Remove markdown emphasis wherever it sits, not just at the ends. The
+    // heading pattern captures a line like "### 1. **Air Dynamics of Tulsa**
+    // (Highly Rated)" INCLUDING the closing asterisks, and the parenthetical is
+    // stripped after them — which left "Air Dynamics of Tulsa**" as the name
+    // shown to the customer. An asterisk never belongs in a business name.
+    .replace(/[*#]/g, '')
+    .trim()
+    // A list marker written INSIDE the bold — "**1. Aire Serv of South Tulsa**".
+    // Left in place it defeats variant collapsing entirely, because "1. Aire
+    // Serv" is not a prefix of "Aire Serv of South Tulsa".
+    .replace(/^\d+\s*[.)]\s*/, '')
+    // "JayCo HVACR LLC / Jayco Heat & Air" — one company written two ways.
+    .replace(/\s+\/\s+.*$/, '')
+    // Trailing qualifier in brackets or after a dash. One answer produced SIX
+    // entries for one company — "Aire Serv", "Aire Serv (South Tulsa/Bixby)",
+    // "Aire Serv of South Tulsa (Bixby Location)", "Aire Serv of South Tulsa —
+    // Bixby" and two more — each counted as a separate competitor.
+    .replace(/\s*\([^)]*\)\s*$/, '')
+    // Em/en dash ONLY, and only when spaced. A plain hyphen belongs to the name
+    // itself — this rule turned "Okla-Home Heating & Cooling" into "Okla".
+    .replace(/\s+[—–]\s+[^—–]{1,30}$/, '')
+    .replace(/[:\-–—,\s]+$/, '')
+    .trim();
+}
+
+/** Phone numbers, street addresses and rating claims are never business names. */
+function isStructurallyNotAName(name: string): boolean {
+  if (name.includes(':')) return true;                                  // "Call/Text: (918) 479"
+  if (/\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}/.test(name)) return true;   // (918) 400-4444
+  if (/^\d+\s+\w/.test(name)) return true;                             // 505 N Armstrong St
+  if (/\d(\.\d)?\s*(star|stars|rating)/i.test(name)) return true;       // 4.9 stars
+  if (/\b[A-F][+-]?\s*rating\b/i.test(name)) return true;               // A+ rating
+  if (/\d+\s*%/.test(name)) return true;                                // 100% Recommended
+  if (/\d[\d,]{2,}\+?\s*(reviews?|customers?)/i.test(name)) return true; // 1,880+ reviews
+  return false;
+}
+
+/**
+ * Words allowed to stay lowercase inside a proper-noun phrase.
+ * "Aire Serv of South Tulsa", "Dale & Lee's", "Heating and Air".
+ */
+/**
+ * Assistants structure answers with Title Case advice headings — "Get Multiple
+ * Estimates", "Verify Licensing", "Ask About Warranties". They pass the
+ * proper-noun test because they ARE title case, so they need their own rule.
+ * Imperatives and gerunds are a bounded, stable pattern, unlike arbitrary
+ * sentence phrasing, so a leading-verb list is appropriate here.
+ */
+const ADVICE_VERBS = new Set([
+  'get', 'ask', 'verify', 'verifying', 'check', 'checking', 'compare', 'comparing',
+  'find', 'finding', 'read', 'reading', 'look', 'looking', 'choose', 'choosing',
+  'avoid', 'avoiding', 'consider', 'considering', 'contact', 'request', 'requesting',
+  'schedule', 'scheduling', 'confirm', 'confirming', 'ensure', 'make', 'know',
+  'understand', 'watch', 'beware', 'search', 'searching', 'tips', 'tip', 'how',
+  'what', 'when', 'where', 'why', 'immediate', 'before', 'after', 'during',
+  'call', 'about', 'known', 'note', 'bottom', 'overall', 'final', 'other',
+]);
+
+/** Abbreviation to full name, for recognising a place written either way. */
+const US_STATE_NAMES: Record<string, string> = {
+  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
+  CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida', GA: 'Georgia',
+  HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa',
+  KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
+  MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi',
+  MO: 'Missouri', MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire',
+  NJ: 'New Jersey', NM: 'New Mexico', NY: 'New York', NC: 'North Carolina',
+  ND: 'North Dakota', OH: 'Ohio', OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania',
+  RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota', TN: 'Tennessee',
+  TX: 'Texas', UT: 'Utah', VT: 'Vermont', VA: 'Virginia', WA: 'Washington',
+  WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming', DC: 'District of Columbia',
+};
+
+const TITLE_CASE_STOPWORDS = new Set([
+  'of', 'and', 'the', 'for', 'in', 'at', 'to', 'on', 'a', 'an', 'or', 'by', 'de', 'la',
+]);
+
+/**
+ * Does this read as a proper-noun phrase — i.e. a name?
+ *
+ * This is the primary filter, and it replaced a growing blocklist of individual
+ * words. That approach lost: every run of a non-deterministic model produced
+ * fresh phrasings the list had never seen ("BBB-accredited / formal reputation",
+ * "My practical recommendation", "Searching for recommendations"), so the list
+ * only ever caught last week's noise.
+ *
+ * The structural signal is stable instead: businesses are Title Case
+ * ("Air Comfort Solutions", "LEE Heat & Air"), and section headings and rating
+ * claims are sentence case with lowercase content words.
+ *
+ * KNOWN LIMIT: a deliberately lowercase brand ("ecobee") is rejected here. That
+ * costs it a place in the competitor list only — the mention decision searches
+ * the full answer text and is unaffected — and stylised lowercase names are
+ * vanishingly rare in the trades we serve.
+ */
+function readsAsProperNoun(name: string): boolean {
+  const words = name
+    .split(/[\s/]+/)
+    .map((w) => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ''))
+    .filter((w) => w.length > 0 && /\p{L}/u.test(w));
+
+  if (words.length === 0) return false;
+
+  return words.every((w) => {
+    if (TITLE_CASE_STOPWORDS.has(w.toLowerCase())) return true;
+    return /^\p{Lu}/u.test(w);
+  });
 }
 
 /** Rejects the bold spans that are labels, prose, places or credentials. */
@@ -176,6 +361,16 @@ function looksLikeBusinessName(
   // "Overview:", "Pros:", "Why they stand out:" — label, not a name.
   if (/[:?]$/.test(name)) return false;
 
+  if (isStructurallyNotAName(name)) return false;
+
+  const firstWord = normalizeForMatch(name).split(' ')[0];
+  if (ADVICE_VERBS.has(firstWord)) return false;
+
+  // Primary filter — see readsAsProperNoun. Everything below is a narrower
+  // backstop for phrases that ARE title case but still are not businesses
+  // ("A+ Rating", "Top Choices").
+  if (!readsAsProperNoun(name)) return false;
+
   // Leading superlatives mark a description: "best-known plumbers in Tulsa".
   if (/^(the\s+)?(best|top|most|why|how|what|overview|pros|cons|summary|note|tip|bottom|key|other)\b/i.test(name)) {
     return false;
@@ -189,7 +384,12 @@ function looksLikeBusinessName(
   // after its town — "Bixby Heating & Air" — is still counted as a competitor.
   const city = normalizeForMatch(ctx.city ?? '');
   const state = normalizeForMatch(ctx.state ?? '');
-  const places = new Set([city, state, `${city} ${state}`.trim()].filter(Boolean));
+  // Assistants write the state both ways — "Bixby, OK" and "Bixby, Oklahoma" —
+  // so the abbreviation alone missed half of them.
+  const stateFull = normalizeForMatch(US_STATE_NAMES[(ctx.state ?? '').trim().toUpperCase()] ?? '');
+  const places = new Set(
+    [city, state, stateFull, `${city} ${state}`.trim(), `${city} ${stateFull}`.trim()].filter(Boolean),
+  );
   if (places.has(norm)) return false;
 
   // Must carry at least one token that is neither generic trade vocabulary nor
@@ -199,8 +399,7 @@ function looksLikeBusinessName(
     .filter((t) => t.length > 1 && !GENERIC_TOKENS.has(t) && !BADGE_TOKENS.has(t));
   if (identifying.length === 0) return false;
 
-  // A real name carries at least one capitalised word that is not a stopword.
-  return words.some((w) => /^[A-Z]/.test(w) && !GENERIC_TOKENS.has(w.toLowerCase()));
+  return true;
 }
 
 /** Hostnames cited inline in the answer text, in order, deduped. */
@@ -426,4 +625,45 @@ export async function checkVisibility(params: {
       costUsd: 0,
     };
   }
+}
+
+
+/**
+ * Count how often each business was named across many answers, folding the
+ * variants of one company together.
+ *
+ * `collapseVariants` works within a single answer. This is the same idea across
+ * a whole scan, and it is needed for the same reason: assistants name a company
+ * at different lengths in different answers — "Aire Serv" in one, "Aire Serv of
+ * South Tulsa" in another, "TemperaturePro" and "TemperaturePro Tulsa" — and a
+ * naive tally presents them to the customer as separate competitors.
+ *
+ * The fullest form seen wins the display name, and its count is the total.
+ */
+export function mergeBusinessCounts(names: string[]): Array<{ name: string; timesNamed: number }> {
+  const merged: Array<{ name: string; key: string; n: number }> = [];
+
+  for (const raw of names) {
+    const key = normalizeForMatch(raw);
+    if (!key) continue;
+
+    const hit = merged.find(
+      (m) => m.key === key || m.key.startsWith(key + ' ') || key.startsWith(m.key + ' '),
+    );
+
+    if (!hit) {
+      merged.push({ name: raw, key, n: 1 });
+      continue;
+    }
+
+    hit.n += 1;
+    if (key.length > hit.key.length) {
+      hit.name = raw;
+      hit.key = key;
+    }
+  }
+
+  return merged
+    .sort((a, b) => b.n - a.n)
+    .map((m) => ({ name: m.name, timesNamed: m.n }));
 }

@@ -23,6 +23,7 @@ import {
   extractBusinessNames,
   extractCitations,
   hostnames,
+  mergeBusinessCounts,
   normalizeForMatch,
 } from '../../services/ai_visibility.service';
 import { buildPrompt, industryNoun, INDUSTRY_PROMPT_NOUNS, AI_PROMPTS } from '../../config/ai_engines.config';
@@ -246,5 +247,266 @@ describe('hostnames', () => {
         'https://angi.com/other',
       ]),
     ).toEqual(['angi.com', 'prothermalhvac.com']);
+  });
+});
+
+/**
+ * Regressions from the first FOUR-engine run (Claude enabled), 2026-08-20.
+ *
+ * Claude formats far more variably than the other three and surfaced a second
+ * crop of bolded non-names that the earlier filter let through: section
+ * headings, rating claims, a street address, and — worst — the same business
+ * twice, once bare and once with its phone number appended, which counts as two
+ * competitors and pushes the customer's position down by one.
+ *
+ * Every string below was taken verbatim from stored `businesses_named` rows.
+ */
+describe('extractBusinessNames — four-engine regressions', () => {
+  const BIXBY = { industry: 'HVAC', city: 'Bixby', state: 'OK' };
+
+  const junk = [
+    'My recommendation',
+    '4.9 stars with 1,880+ Google reviews',
+    'BBB Accredited with an A+ rating',
+    'A+ rating with the Better Business Bureau (BBB)',
+    'A rating with the BBB',
+    '100% Recommended',
+    '505 N Armstrong St STE AB',
+  ];
+
+  for (const j of junk) {
+    it(`rejects "${j}"`, () => {
+      const text = `Some options: **${j}** and **Torch Plumbing**.`;
+      expect(extractBusinessNames(text, BIXBY).map((n) => n.name)).not.toContain(j);
+    });
+  }
+
+  it('collapses a business repeated with its phone number appended', () => {
+    // Claude writes both forms in one answer. Two entries for one company
+    // inflates the rival count and every position below it.
+    const text = 'Call **Service Wizards** today. Best: **Service Wizards (918-400-4444)** and **LEE Heat & Air (918-300-0404)**.';
+    const names = extractBusinessNames(text, BIXBY).map((n) => n.name);
+    expect(names).toEqual(['Service Wizards', 'LEE Heat & Air']);
+  });
+
+  it('still keeps the real businesses from the same answer', () => {
+    const text = '**My recommendation:** go with **Torch Plumbing, Heating, & Cooling** or **Air Comfort Solutions**.';
+    expect(extractBusinessNames(text, BIXBY).map((n) => n.name)).toEqual([
+      'Torch Plumbing, Heating, & Cooling',
+      'Air Comfort Solutions',
+    ]);
+  });
+
+  it('does not count junk toward the customer position', () => {
+    const text = '**4.9 stars with 1,880+ Google reviews** — **Aire Serv of South Tulsa** leads locally.';
+    const r = analyzeMention('Aire Serv of South Tulsa', text, BIXBY);
+    expect(r.status).toBe('mentioned');
+    expect(r.position).toBe(1);
+  });
+});
+
+/**
+ * The blocklist-of-words approach could not keep up with a non-deterministic
+ * model: each run produced phrasings it had never seen. These came from the
+ * SECOND four-engine run, after the first round of word-list fixes, and drove
+ * the switch to a structural title-case rule.
+ */
+describe('extractBusinessNames — proper-noun rule', () => {
+  const BIXBY = { industry: 'HVAC', city: 'Bixby', state: 'OK' };
+
+  const sentenceCase = [
+    'BBB-accredited / formal reputation',
+    'My practical recommendation',
+    'Searching for recommendations',
+    'What to ask before you book',
+    'Best value for most homeowners',
+  ];
+
+  for (const j of sentenceCase) {
+    it(`rejects sentence-case phrase "${j}"`, () => {
+      const text = `**${j}**: try **Air Comfort Solutions**.`;
+      expect(extractBusinessNames(text, BIXBY).map((n) => n.name)).not.toContain(j);
+    });
+  }
+
+  const realNames = [
+    'Air Comfort Solutions',
+    'LEE Heat & Air',
+    'Torch Plumbing, Heating, & Cooling',
+    'Aire Serv of South Tulsa',
+    "Dale & Lee's",
+    'JayCo HVACR LLC',
+    'TemperaturePro Tulsa',
+  ];
+
+  for (const n of realNames) {
+    it(`keeps real business name "${n}"`, () => {
+      const text = `Options include **${n}** locally.`;
+      expect(extractBusinessNames(text, BIXBY).map((x) => x.name)).toContain(n);
+    });
+  }
+});
+
+/**
+ * From the third four-engine run. Two problems the earlier filters left behind,
+ * both of which corrupt the competitor list a Pro customer reads:
+ *
+ *   Title Case advice headings — "Get Multiple Estimates", "Verify Licensing" —
+ *   pass the proper-noun rule because they genuinely are title case.
+ *
+ *   One company named at several lengths in one answer. "Aire Serv" appeared
+ *   SIX ways in a single response and counted as six competitors.
+ */
+describe('extractBusinessNames — headings and variants', () => {
+  const BIXBY = { industry: 'HVAC', city: 'Bixby', state: 'OK' };
+
+  const headings = [
+    'Get Multiple Estimates',
+    'Get Multiple Quotes on Replacements',
+    'Ask About Warranties',
+    'Verify Licensing',
+    'Verifying HVAC Licenses',
+    'Tips for Finding the Best Deal',
+    'Immediate Action Tips While You Wait',
+    'Affordability',
+    'Reputation',
+    'Contact',
+  ];
+
+  for (const h of headings) {
+    it(`rejects advice heading "${h}"`, () => {
+      const text = `**${h}** — also consider **Air Comfort Solutions**.`;
+      expect(extractBusinessNames(text, BIXBY).map((n) => n.name)).not.toContain(h);
+    });
+  }
+
+  it('collapses the six ways one answer named a single company', () => {
+    const text = [
+      'Try **Aire Serv**.',
+      'Specifically **Aire Serv (South Tulsa/Bixby)**.',
+      'Full name: **Aire Serv of South Tulsa**.',
+      'Also **Aire Serv of South Tulsa (Bixby Location)**.',
+      'Or **Aire Serv of South Tulsa (Located in Bixby)**.',
+      'Listed as **Aire Serv of South Tulsa — Bixby**.',
+    ].join('\n');
+
+    const names = extractBusinessNames(text, BIXBY).map((n) => n.name);
+    expect(names).toEqual(['Aire Serv of South Tulsa']);
+  });
+
+  it("folds Campbell's and Campbells together", () => {
+    const text = "**Campbell’s Heating & Air Conditioning**, also written **Campbells Heating & Air Conditioning**.";
+    expect(extractBusinessNames(text, BIXBY)).toHaveLength(1);
+  });
+
+  it('keeps two genuinely different franchise locations apart', () => {
+    // Prefix, not containment — these are plausibly separate businesses.
+    const text = '**TemperaturePro Bixby** and **TemperaturePro Tulsa** both serve the area.';
+    expect(extractBusinessNames(text, BIXBY).map((n) => n.name)).toEqual([
+      'TemperaturePro Bixby',
+      'TemperaturePro Tulsa',
+    ]);
+  });
+
+  it('does not let duplicate variants inflate the customer position', () => {
+    // Ours is named second; the rival's three forms must count once.
+    const text = '**Torch** is popular. **Torch Plumbing, Heating & Cooling** is the full name. Then **Aire Serv of South Tulsa**.';
+    const r = analyzeMention('Aire Serv of South Tulsa', text, BIXBY);
+    expect(r.status).toBe('mentioned');
+    expect(r.position).toBe(2);
+  });
+});
+
+/**
+ * Fourth run. Every string here was captured from live output; each is a
+ * different markdown shape the previous passes had not seen. Recorded as tests
+ * because the extractor is chasing a non-deterministic writer, and a fix that
+ * is not pinned gets undone by the next tuning pass.
+ */
+describe('extractBusinessNames — markdown shapes from live runs', () => {
+  const BIXBY = { industry: 'HVAC', city: 'Bixby', state: 'OK' };
+
+  it('strips a list number written inside the bold', () => {
+    // "**1. Aire Serv of South Tulsa**". Left in, the prefix defeats variant
+    // collapsing — "1. Aire Serv" is not a prefix of "Aire Serv of South Tulsa"
+    // — so one company was still counted twice.
+    const text = '**1. Aire Serv of South Tulsa** is local. Later: **7. Aire Serv** again.';
+    expect(extractBusinessNames(text, BIXBY).map((n) => n.name)).toEqual(['Aire Serv of South Tulsa']);
+  });
+
+  it('keeps a hyphenated name intact', () => {
+    // The trailing-qualifier rule treated a plain hyphen as a separator and
+    // turned "Okla-Home Heating & Cooling" into "Okla".
+    const text = 'Try **Okla-Home Heating & Cooling**.';
+    expect(extractBusinessNames(text, BIXBY).map((n) => n.name)).toEqual(['Okla-Home Heating & Cooling']);
+  });
+
+  it('rejects a contact fragment', () => {
+    const text = '**Call/Text: (918) 479-0000** or **Air Assurance**.';
+    expect(extractBusinessNames(text, BIXBY).map((n) => n.name)).toEqual(['Air Assurance']);
+  });
+
+  it('recognises the place when the state is spelled out', () => {
+    // "Bixby, OK" was caught; "Bixby, Oklahoma" was not, and became a competitor.
+    const text = 'Companies in **Bixby, Oklahoma** include **Evans Mechanical**.';
+    expect(extractBusinessNames(text, BIXBY).map((n) => n.name)).toEqual(['Evans Mechanical']);
+  });
+
+  it('takes the first form when one company is written two ways with a slash', () => {
+    const text = '**JayCo HVACR LLC / Jayco Heat & Air** serves Bixby.';
+    expect(extractBusinessNames(text, BIXBY).map((n) => n.name)).toEqual(['JayCo HVACR LLC']);
+  });
+});
+
+describe('extractBusinessNames — heading markdown leakage', () => {
+  const BIXBY = { industry: 'HVAC', city: 'Bixby', state: 'OK' };
+
+  it('does not leave markdown asterisks in the displayed name', () => {
+    // "### 1. **Air Dynamics of Tulsa** (Highly Rated for Transparency)".
+    // The heading pattern captures the closing asterisks and the parenthetical
+    // strip runs after them, so "Air Dynamics of Tulsa**" reached the customer.
+    const text = '### 1. **Air Dynamics of Tulsa** (Highly Rated for Transparency)\nGood company.';
+    expect(extractBusinessNames(text, BIXBY).map((n) => n.name)).toEqual(['Air Dynamics of Tulsa']);
+  });
+
+  for (const h of ['Good for', 'Important', 'Location', 'Contact Details']) {
+    it(`rejects the section label "${h}"`, () => {
+      const text = `**${h}** — see **Patton Air**.`;
+      expect(extractBusinessNames(text, BIXBY).map((n) => n.name)).not.toContain(h);
+    });
+  }
+});
+
+describe('mergeBusinessCounts', () => {
+  it('folds variants of one company across answers into a single total', () => {
+    // Observed live: four answers named the same company three ways. The Pro
+    // "who the assistants name" list showed them as three competitors.
+    const counts = mergeBusinessCounts([
+      'Aire Serv',
+      'Aire Serv of South Tulsa',
+      'Aire Serv of South Tulsa',
+      'Patton Air',
+    ]);
+
+    expect(counts).toEqual([
+      { name: 'Aire Serv of South Tulsa', timesNamed: 3 },
+      { name: 'Patton Air', timesNamed: 1 },
+    ]);
+  });
+
+  it('folds punctuation and ampersand spellings together', () => {
+    const counts = mergeBusinessCounts([
+      'ProThermal Heating & Cooling',
+      'ProThermal Heating and Cooling',
+      'Miller Heat and Air LLC',
+      'Miller Heat and Air, LLC',
+    ]);
+    expect(counts).toHaveLength(2);
+    expect(counts.every((c) => c.timesNamed === 2)).toBe(true);
+  });
+
+  it('keeps genuinely different companies apart', () => {
+    const counts = mergeBusinessCounts(['TemperaturePro Bixby', 'TemperaturePro Tulsa']);
+    expect(counts).toHaveLength(2);
   });
 });

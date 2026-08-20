@@ -173,7 +173,7 @@ export default function AiVisibility() {
         <header>
           <h1 className="text-xl font-bold text-slate-900">AI Visibility</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Whether ChatGPT, Gemini and Perplexity recommend you when someone asks.
+            Whether ChatGPT, Claude, Gemini and Perplexity recommend you when someone asks.
           </p>
         </header>
         <div className="bg-white rounded-2xl shadow-card p-8 text-center">
@@ -195,7 +195,7 @@ export default function AiVisibility() {
         <div>
           <h1 className="text-xl font-bold text-slate-900">AI Visibility</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Whether ChatGPT, Gemini and Perplexity recommend you when someone asks.
+            Whether ChatGPT, Claude, Gemini and Perplexity recommend you when someone asks.
             {' '}Checked {fmtDate(d.scannedAt)} · next {fmtDate(d.nextScanAt)}.
           </p>
         </div>

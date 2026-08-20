@@ -145,8 +145,8 @@ function HeroSkeleton() {
   return (
     <div className="bg-white rounded-2xl shadow-card p-6 space-y-4">
       <div className="h-5 w-64 bg-slate-100 rounded animate-pulse" />
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {[0, 1, 2].map((i) => <div key={i} className="h-28 bg-slate-100 rounded-xl animate-pulse" />)}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[0, 1, 2, 3].map((i) => <div key={i} className="h-28 bg-slate-100 rounded-xl animate-pulse" />)}
       </div>
     </div>
   );
@@ -180,7 +180,7 @@ export function AiVisibilityHero() {
               Do AI assistants recommend your business?
             </h2>
             <p className="text-sm text-slate-500 mt-1">
-              We ask ChatGPT, Gemini and Perplexity the questions your customers ask — every Monday.
+              We ask ChatGPT, Claude, Gemini and Perplexity the questions your customers ask — every Monday.
               {d.nextScanAt && <> Your first check runs {fmtDate(d.nextScanAt)}.</>}
             </p>
           </div>
@@ -218,7 +218,8 @@ export function AiVisibilityHero() {
         </Link>
       </div>
 
-      <div className="px-6 pb-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {/* 2-up on phones, 4-up from md. Four engines do not fit three columns. */}
+      <div className="px-6 pb-6 grid grid-cols-2 md:grid-cols-4 gap-3">
         {d.engines.map((e) => <EngineCard key={e.engine} e={e} />)}
       </div>
     </div>
