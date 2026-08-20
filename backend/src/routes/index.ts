@@ -23,6 +23,7 @@ import reputationRouter from './reputation';
 import geoGridRouter from './geogrid';
 import adminRouter from './admin';
 import placesRouter from './places';
+import aiVisibilityRouter from './ai_visibility';
 import { enforcePlanGate } from '../middleware/requireProPlan';
 
 const router = Router();
@@ -68,6 +69,7 @@ const subscriptionRoutes = [
   ['/audits/bl', auditsBlRouter],
   ['/reputation', reputationRouter],
   ['/geo-grid', geoGridRouter],
+  ['/ai-visibility', aiVisibilityRouter],
 ] as const;
 
 for (const [path, routerModule] of subscriptionRoutes) {

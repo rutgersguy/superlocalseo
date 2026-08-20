@@ -5,6 +5,7 @@ import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { TrendingUp, Star, ClipboardList, FileText } from 'lucide-react';
 import { fetcher, apiFetch } from '../services/api';
 import { useClient } from '../hooks/useClient';
+import { AiVisibilityHero } from '../components/AiVisibility';
 import { useAuth } from '../hooks/useAuth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -415,6 +416,14 @@ export default function Dashboard() {
           Failed to load metrics. Please refresh.
         </div>
       )}
+
+      {/*
+        AI visibility leads the dashboard deliberately. The marketing site
+        converts on "do AI assistants recommend your business?", and this page
+        used to open with Avg Rank and Keywords in Top 10 — landing that visitor
+        on a keyword table. See docs/POSITIONING.md.
+      */}
+      <AiVisibilityHero />
 
       {/* Primary metric row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

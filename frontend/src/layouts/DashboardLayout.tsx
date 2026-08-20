@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { NavLink, Link, Outlet, useNavigate } from 'react-router-dom';
-import { Home, BarChart2, Star, Link2, Settings, LogOut, Menu, X, FileText, Megaphone, Users2, ClipboardList, ShieldAlert } from 'lucide-react';
+import { Home, BarChart2, Star, Link2, Settings, LogOut, Menu, X, FileText, Megaphone, Users2, ClipboardList, ShieldAlert, Sparkles } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useClient } from '../hooks/useClient';
 import { fetcher, apiFetch } from '../services/api';
@@ -71,6 +71,7 @@ interface NavItem { to: string; label: string; icon: React.ReactNode; }
 
 const navItems: NavItem[] = [
   { to: '/dashboard',              label: 'Dashboard',   icon: <Home size={17} aria-hidden="true" /> },
+  { to: '/dashboard/ai-visibility', label: 'AI Visibility', icon: <Sparkles size={17} aria-hidden="true" /> },
   { to: '/dashboard/rankings',     label: 'Rankings',    icon: <BarChart2 size={17} aria-hidden="true" /> },
   { to: '/dashboard/reviews',      label: 'Reviews',     icon: <Star size={17} aria-hidden="true" /> },
   { to: '/dashboard/campaigns',    label: 'Campaigns',   icon: <Megaphone size={17} aria-hidden="true" /> },

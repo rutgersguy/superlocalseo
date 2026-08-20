@@ -112,9 +112,16 @@ competitors it named instead, and which sources it cited.
 **Runs on:** DataForSEO `ai_optimization/llm_responses` — no additional vendor. ~$0.13 per
 location per prompt-set across the three engines, ~$2/location/month at weekly cadence.
 
-**Not yet surfaced.** The measurement and its history exist; there is no API endpoint, dashboard
-page or report section yet. See docs/POSITIONING.md — the landing page must not lead on this
-claim until a customer can see it.
+**Where the customer sees it:** a hero panel at the top of `/dashboard` (above the ranking
+metrics — see docs/POSITIONING.md for why it leads) and a full page at
+`/dashboard/ai-visibility`. Served by `GET /api/ai-visibility`.
+
+**Plan split:** Lite sees the verdict — which assistants recommend them and at what position.
+Pro adds the competitors named, the sources cited, week-over-week history, and the stored answer
+behind each verdict (`GET /api/ai-visibility/answer/:id`). The Pro fields are absent from the
+Lite payload, not merely hidden in the UI.
+
+**Still to build:** a section in the monthly PDF report.
 
 ---
 

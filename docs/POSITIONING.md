@@ -119,12 +119,18 @@ Status:
 |---|---|
 | Weekly measurement across ChatGPT, Gemini and Perplexity | **Shipped** — `ai_visibility.job.ts`, Mondays 08:00 UTC |
 | Storage with history | **Shipped** — `ai_visibility_snapshots` |
-| API endpoint + dashboard surface | **Not built** — data is collected but no customer can see it |
+| API endpoint | **Shipped** — `GET /api/ai-visibility`, plan-aware payload |
+| Dashboard surface | **Shipped** — hero panel on `/dashboard` + full page at `/dashboard/ai-visibility` |
 | Monthly PDF section | **Not built** |
 
-**The rule above is not yet satisfied.** Until a customer can open the dashboard and see which
-assistants recommend them, the landing page must not lead on AI visibility — the data exists
-but the product does not yet show it.
+**The rule is satisfied for the web product.** A customer logging in now sees the answer to the
+same question the site asks, above the ranking metrics. The landing page rebuild is unblocked.
+
+The plan split, decided 2026-08-20: **Lite gets the verdict** — which assistants name them and
+where they rank — because that is what the hero converts on and paywalling it would sell Lite a
+promise it cannot open. **Pro gets the depth**: competitors named, sources cited, week-over-week
+history, and the stored answer behind each verdict. The Pro fields are omitted from the payload
+server-side rather than hidden by the UI (#157).
 
 ---
 

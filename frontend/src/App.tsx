@@ -14,6 +14,7 @@ import Onboarding from './pages/Onboarding';
 import DashboardLayout from './layouts/DashboardLayout';
 import Dashboard from './pages/Dashboard';
 import Rankings from './pages/Rankings';
+import AiVisibility from './pages/AiVisibility';
 import Reviews from './pages/Reviews';
 import Citations from './pages/Citations';
 import Settings from './pages/Settings';
@@ -68,6 +69,7 @@ function App() {
             </Route>
             <Route path="/dashboard" element={<DashboardLayout />}>
               <Route index element={<Dashboard />} />
+              <Route path="ai-visibility" element={<AiVisibility />} />
               <Route path="rankings" element={<Rankings />} />
               <Route path="reviews" element={<Reviews />} />
               <Route path="citations" element={<ProRoute feature="Citations" description="Weekly citation audits across the directories that matter for your industry, plus guided citation building."><Citations /></ProRoute>} />

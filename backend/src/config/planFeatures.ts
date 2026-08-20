@@ -32,6 +32,21 @@ export const PLAN_ROUTE_GATES: RouteGate[] = [
   { prefix: 'team',       plans: ['pro'] },
   { prefix: 'qr',         plans: ['pro'] },
 
+  // ── AI visibility: the verdict is Lite-inclusive, the evidence is not ─────
+  //
+  // The landing page leads on "do AI assistants recommend you?" (see
+  // docs/POSITIONING.md), so paywalling the answer would sell Lite a promise it
+  // cannot open. What Lite does NOT get is the depth — the stored answer behind
+  // each verdict — and the controller additionally omits competitors, cited
+  // sources and history from the summary payload for Lite.
+  {
+    prefix: 'ai-visibility',
+    plans: ['lite', 'pro'],
+    subPaths: [
+      { path: 'ai-visibility/answer', plans: ['pro'] },
+    ],
+  },
+
   // ── Competitors: base list open for Lite (teaser), sub-routes Pro-only ─────
   {
     prefix: 'competitors',

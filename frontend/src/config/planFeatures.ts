@@ -19,6 +19,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { to: '/dashboard',             label: 'Dashboard',   icon: 'Home',          plans: ['lite', 'pro'] },
+  { to: '/dashboard/ai-visibility', label: 'AI Visibility', icon: 'Sparkles',    plans: ['lite', 'pro'] },
   { to: '/dashboard/rankings',    label: 'Rankings',    icon: 'BarChart2',     plans: ['lite', 'pro'] },
   { to: '/dashboard/reviews',     label: 'Reviews',     icon: 'Star',          plans: ['lite', 'pro'] },
   { to: '/dashboard/campaigns',   label: 'Campaigns',   icon: 'Megaphone',     plans: ['lite', 'pro'] },
@@ -43,6 +44,11 @@ export const NAV_ITEMS: NavItem[] = [
  * still shown is a dead button. Both have shipped.
  */
 export const PRO_FEATURES = [
+  // The AI-visibility VERDICT is Lite-inclusive; this key covers the depth —
+  // the competitors each assistant named, the sources it cited, the history,
+  // and the stored answer. The backend omits those fields from the payload for
+  // Lite, so this only decides whether to render the upgrade prompt.
+  'aiVisibilityDepth',
   'csvExport',    // /reports/export/* and /analytics/export — sold as Pro (#157)
   'roiSettings',  // /analytics/roi
   'geoGrid',
