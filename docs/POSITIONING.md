@@ -121,7 +121,7 @@ Status:
 | Storage with history | **Shipped** — `ai_visibility_snapshots` |
 | API endpoint | **Shipped** — `GET /api/ai-visibility`, plan-aware payload |
 | Dashboard surface | **Shipped** — hero panel on `/dashboard` + full page at `/dashboard/ai-visibility` |
-| Monthly PDF section | **Not built** |
+| Monthly PDF section | **Shipped** — under the executive summary, with month-over-month movement |
 
 **The rule is satisfied for the web product.** A customer logging in now sees the answer to the
 same question the site asks, above the ranking metrics. The landing page rebuild is unblocked.

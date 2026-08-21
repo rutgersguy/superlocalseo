@@ -489,8 +489,8 @@ describe('mergeBusinessCounts', () => {
     ]);
 
     expect(counts).toEqual([
-      { name: 'Aire Serv of South Tulsa', timesNamed: 3 },
-      { name: 'Patton Air', timesNamed: 1 },
+      { name: 'Aire Serv of South Tulsa', timesNamed: 3, isYou: false },
+      { name: 'Patton Air', timesNamed: 1, isYou: false },
     ]);
   });
 
@@ -508,5 +508,54 @@ describe('mergeBusinessCounts', () => {
   it('keeps genuinely different companies apart', () => {
     const counts = mergeBusinessCounts(['TemperaturePro Bixby', 'TemperaturePro Tulsa']);
     expect(counts).toHaveLength(2);
+  });
+});
+
+describe('mergeBusinessCounts — marking the customer', () => {
+  it("marks the customer's own business, however it was written", () => {
+    // It is named more often than anyone else — it is the business we asked
+    // about — so unmarked it tops a list headed "who the assistants named" and
+    // reads as though they compete with themselves. Caught in the August PDF.
+    const counts = mergeBusinessCounts(
+      ['Aire Serv of South Tulsa', 'Aire Serv', 'Wagnon Heating & Air', 'Patton Air'],
+      ['Aire Serv of South Tulsa'],
+    );
+
+    const you = counts.find((c) => c.isYou);
+    expect(you).toEqual({ name: 'Aire Serv of South Tulsa', timesNamed: 2, isYou: true });
+    expect(counts.filter((c) => c.isYou)).toHaveLength(1);
+  });
+
+  it('marks nobody when no self name is supplied', () => {
+    const counts = mergeBusinessCounts(['Patton Air', 'Aire Serv']);
+    expect(counts.every((c) => !c.isYou)).toBe(true);
+  });
+
+  it('does not mark a different business with a similar start', () => {
+    const counts = mergeBusinessCounts(['Air Comfort Solutions'], ['Air Assurance Company']);
+    expect(counts[0].isYou).toBe(false);
+  });
+});
+
+describe('mergeBusinessCounts — account name vs location name', () => {
+  it('matches on the LOCATION name when the account name differs', () => {
+    // Real case from the first August report: the account is registered as
+    // "AirServe of Tulsa" while the location — the name the AI scan actually
+    // asks about, and the one that comes back in the answers — is "Aire Serv of
+    // South Tulsa". Neither is a prefix of the other, so matching on the
+    // account name alone marked nothing and the customer topped their own
+    // competitor list.
+    const counts = mergeBusinessCounts(
+      ['Aire Serv of South Tulsa', 'Wagnon Heating & Air'],
+      ['AirServe of Tulsa', 'Aire Serv of South Tulsa'],
+    );
+
+    expect(counts.find((c) => c.name === 'Aire Serv of South Tulsa')?.isYou).toBe(true);
+    expect(counts.find((c) => c.name === 'Wagnon Heating & Air')?.isYou).toBe(false);
+  });
+
+  it('ignores empty and null names in the self list', () => {
+    const counts = mergeBusinessCounts(['Patton Air'], [null, '', undefined]);
+    expect(counts[0].isYou).toBe(false);
   });
 });

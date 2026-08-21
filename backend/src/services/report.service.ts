@@ -5,6 +5,8 @@ import { db } from '../db/connection';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import { sendReportEmail } from './email.service';
+import { ENABLED_AI_ENGINES } from '../config/ai_engines.config';
+import { mergeBusinessCounts } from './ai_visibility.service';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -16,6 +18,8 @@ export interface WhiteLabel {
 
 export interface ReportData {
   client: { businessName: string; email: string; whiteLabel?: WhiteLabel };
+  /** Drives the Lite/Pro split inside the report — see the AI visibility section. */
+  plan: 'lite' | 'pro';
   period: { month: number; year: number; label: string };
   locations: Array<{ id: string; name: string }>;
   rankings: {
@@ -63,6 +67,30 @@ export interface ReportData {
   };
   sentiment: { positive: number; neutral: number; negative: number };
   visibility: { current: number | null; delta: number | null };
+  /**
+   * AI assistant visibility for the month (#192). Null when no scan landed
+   * inside the period — a client in their first days, or a month the job never
+   * ran. The section is omitted entirely rather than rendered empty, because a
+   * blank panel in a PDF reads as a broken report.
+   */
+  aiVisibility: {
+    scannedAt: Date;
+    /** Over DETERMINATE checks only — see the unverified note below. */
+    mentionRate: number | null;
+    /** Same measure for the prior month, or null if there was no scan then. */
+    priorMentionRate: number | null;
+    engines: Array<{
+      engine: string;
+      label: string;
+      mentioned: number;
+      absent: number;
+      unverified: number;
+      determinate: number;
+      bestPosition: number | null;
+    }>;
+    /** Pro only. Empty on Lite, which gets the verdict but not the depth. */
+    topCompetitors: Array<{ name: string; timesNamed: number; isYou: boolean }>;
+  } | null;
   auditScore: number | null;
   roi: { configured: boolean; estClicks: number; estLeads: number; estRevenue: number } | null;
 }
@@ -103,12 +131,14 @@ export async function gatherReportData(
       'clients.white_label_company_name',
       'clients.white_label_logo_url',
       'clients.white_label_color',
+      'clients.product_line',
       'users.email',
     )
     .first() as {
       business_name: string;
       email: string;
       subscription_tier: number;
+      product_line: 'lite' | 'pro' | null;
       white_label_company_name: string | null;
       white_label_logo_url: string | null;
       white_label_color: string | null;
@@ -267,6 +297,78 @@ export async function gatherReportData(
   const citationScore =
     citationTotal > 0 ? Math.round((citationListed / citationTotal) * 100) : 0;
 
+  // ── AI assistant visibility (#192) ────────────────────────────────────────
+  //
+  // Scoped to the month the report covers, not "latest overall": the report is
+  // a record of where the business stood in August, and the month-over-month
+  // delta is the number the owner actually reacts to.
+  //
+  // A run writes every row with the same scanned_at, so the latest timestamp
+  // inside the period IS that run. The comparison stays in SQL rather than
+  // round-tripping a Date through JS — Postgres keeps microseconds where a JS
+  // Date keeps milliseconds, and a re-sent value silently matches nothing.
+  const plan: 'lite' | 'pro' = client.product_line ?? 'pro';
+
+  async function aiRowsForPeriod(from: Date, to: Date) {
+    if (locationIds.length === 0) return [];
+    return (await db('ai_visibility_snapshots')
+      .whereIn('location_id', locationIds)
+      .where('scanned_at', '=', db('ai_visibility_snapshots')
+        .whereIn('location_id', locationIds)
+        .where('scanned_at', '>=', from)
+        .where('scanned_at', '<=', to)
+        .max('scanned_at'))
+      .select('engine', 'status', 'position', 'businesses_named', 'scanned_at')) as Array<{
+        engine: string;
+        status: 'mentioned' | 'absent' | 'unverified';
+        position: number | null;
+        businesses_named: string[];
+        scanned_at: Date;
+      }>;
+  }
+
+  const aiRows = await aiRowsForPeriod(periodStart, periodEnd);
+  const aiPriorRows = await aiRowsForPeriod(priorStart, priorEnd);
+
+  /** Share of DETERMINATE checks that named the business. */
+  function rateOf(rows: Array<{ status: string }>): number | null {
+    const determinate = rows.filter((r) => r.status !== 'unverified').length;
+    if (determinate === 0) return null;
+    return Math.round((rows.filter((r) => r.status === 'mentioned').length / determinate) * 100);
+  }
+
+  const aiVisibility = aiRows.length === 0 ? null : {
+    scannedAt: aiRows[0].scanned_at,
+    // Unverified checks are excluded from the denominator, not counted as
+    // misses. A week an assistant was unreachable must not print as a decline
+    // in the customer's visibility — same rule as citation nap_match nulls.
+    mentionRate: rateOf(aiRows),
+    priorMentionRate: aiPriorRows.length === 0 ? null : rateOf(aiPriorRows),
+    engines: ENABLED_AI_ENGINES.map((e) => {
+      const mine = aiRows.filter((r) => r.engine === e.key);
+      const mentioned = mine.filter((r) => r.status === 'mentioned');
+      const positions = mentioned.map((r) => r.position).filter((p): p is number => p != null);
+      return {
+        engine: e.key,
+        label: e.label,
+        mentioned: mentioned.length,
+        absent: mine.filter((r) => r.status === 'absent').length,
+        unverified: mine.filter((r) => r.status === 'unverified').length,
+        determinate: mine.filter((r) => r.status !== 'unverified').length,
+        bestPosition: positions.length ? Math.min(...positions) : null,
+      };
+    }),
+    // Pro only. Lite gets the verdict — which assistants recommend them — but
+    // not who was recommended instead. Withheld here rather than hidden in the
+    // template, so a future template edit cannot leak it.
+    topCompetitors: plan === 'pro'
+      ? mergeBusinessCounts(
+          aiRows.flatMap((r) => r.businesses_named ?? []),
+          [client.business_name, ...locationRows.map((l) => l.name)],
+        ).slice(0, 8)
+      : [],
+  };
+
   const competitorRows = await db('competitors')
     .where({ client_id: clientId })
     .select('name', 'website', 'google_rating', 'google_review_count')
@@ -401,6 +503,7 @@ export async function gatherReportData(
       year,
       label: `${MONTH_NAMES[month - 1]} ${year}`,
     },
+    plan,
     locations: locationRows,
     rankings: {
       avgRank,
@@ -443,6 +546,7 @@ export async function gatherReportData(
       negative: sentimentMap['negative'] ?? 0,
     },
     visibility: { current: visibilityCurrent, delta: visibilityDelta },
+    aiVisibility,
     auditScore,
     roi: roiData,
   };
@@ -451,7 +555,7 @@ export async function gatherReportData(
 // ─── renderReportHtml ───────────────────────────────────────────────────────────
 
 export function renderReportHtml(data: ReportData): string {
-  const { client, period, rankings, reviews, citations, competitors, clientStats, gap, sentiment, visibility, auditScore, roi } = data;
+  const { client, period, rankings, reviews, citations, competitors, clientStats, gap, sentiment, visibility, aiVisibility, auditScore, roi } = data;
   const brandColor = client.whiteLabel?.color ?? '#1360FA';
   const brandName = client.whiteLabel?.companyName ?? 'SuperLocalSEO';
   const brandLogoUrl = client.whiteLabel?.logoUrl ?? 'https://superlocalseo.com/sls_logo_wide_white.png';
@@ -472,6 +576,31 @@ export function renderReportHtml(data: ReportData): string {
     recommendations.push(
       `${droppedKeywords} keyword${droppedKeywords > 1 ? 's' : ''} dropped in rankings this month — consider refreshing content and improving internal linking for those terms.`,
     );
+  }
+
+  // AI visibility recommendations (#192). Placed FIRST because a business that
+  // no assistant names has a bigger problem than a citation gap, and the report
+  // should say so in the order the owner should act.
+  if (aiVisibility) {
+    const silent = aiVisibility.engines.filter((e) => e.determinate > 0 && e.mentioned === 0);
+    const rate = aiVisibility.mentionRate;
+
+    if (silent.length === aiVisibility.engines.filter((e) => e.determinate > 0).length && silent.length > 0) {
+      recommendations.push(
+        `No AI assistant recommended you this month. These tools draw on review sites and directories rather than your website, so the fastest route back is more recent reviews and complete listings on the directories in this report.`,
+      );
+    } else if (silent.length > 0) {
+      recommendations.push(
+        `${silent.map((e) => e.label).join(' and ')} did not name your business this month${rate != null ? `, holding you at ${rate}%` : ''} — each assistant draws on a different mix of sources, so being recommended by one does not carry to the others.`,
+      );
+    }
+
+    const prior = aiVisibility.priorMentionRate;
+    if (rate != null && prior != null && rate < prior) {
+      recommendations.push(
+        `Your AI recommendation rate fell from ${prior}% to ${rate}% this month — worth checking whether a competitor has gained reviews or new directory listings.`,
+      );
+    }
   }
 
   if (citations.score < 80) {
@@ -635,6 +764,81 @@ export function renderReportHtml(data: ReportData): string {
     </div>` : ''}
   </div>` : '';
 
+  /**
+   * AI assistant visibility (#192).
+   *
+   * Placed directly under the Executive Summary because it is the lead claim on
+   * the marketing site and the first thing the dashboard shows — the report
+   * should not bury it below citation health (docs/POSITIONING.md).
+   *
+   * Omitted entirely when there was no scan in the month. An empty panel reads
+   * as a broken report, and "no data" is not a finding worth a page.
+   */
+  const aiSection = !aiVisibility ? '' : (() => {
+    const rate = aiVisibility.mentionRate;
+    const prior = aiVisibility.priorMentionRate;
+    const delta = rate != null && prior != null ? rate - prior : null;
+
+    const deltaLabel = delta == null
+      ? '<span style="font-size:11px;color:#9ca3af">no comparison for last month</span>'
+      : delta === 0
+      ? '<span style="font-size:11px;color:#6b7280">no change from last month</span>'
+      : `<span style="font-size:11px;font-weight:600;color:${delta > 0 ? '#16a34a' : '#dc2626'}">${delta > 0 ? '▲' : '▼'} ${Math.abs(delta)} points vs last month</span>`;
+
+    const engineRows = aiVisibility.engines.map((e) => {
+      // Three states, kept three. `unverified` is grey and excluded from the
+      // rate; printing it as "not recommended" would be a claim the data does
+      // not support.
+      const verdict = e.determinate === 0
+        ? '<span style="color:#9ca3af;font-weight:600">Couldn\'t check</span>'
+        : e.mentioned > 0
+        ? `<span style="color:#16a34a;font-weight:700">Yes${e.bestPosition != null ? ` — best #${e.bestPosition}` : ''}</span>`
+        : '<span style="color:#dc2626;font-weight:700">Not mentioned</span>';
+
+      const detail = e.determinate === 0
+        ? 'no answer this month'
+        : `named you in ${e.mentioned} of ${e.determinate} question${e.determinate === 1 ? '' : 's'}${e.unverified > 0 ? ` · ${e.unverified} couldn't be checked` : ''}`;
+
+      return `<tr>
+        <td style="padding:7px 0;font-size:12px;font-weight:600;color:#111827;width:110px">${escHtml(e.label)}</td>
+        <td style="padding:7px 0;font-size:12px">${verdict}</td>
+        <td style="padding:7px 0;font-size:11px;color:#6b7280;text-align:right">${escHtml(detail)}</td>
+      </tr>`;
+    }).join('');
+
+    const competitorBlock = aiVisibility.topCompetitors.length === 0 ? '' : `
+      <div style="margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb">
+        <p style="font-size:11px;font-weight:600;color:#374151;margin-bottom:6px">Who the assistants named this month</p>
+        <p style="font-size:11px;color:#6b7280;line-height:1.7">
+          ${aiVisibility.topCompetitors.map((c) => c.isYou
+            ? `<strong style="color:${brandColor}">${escHtml(c.name)} (you)</strong> <span style="color:#9ca3af">${c.timesNamed}&times;</span>`
+            : `${escHtml(c.name)} <span style="color:#9ca3af">${c.timesNamed}&times;</span>`).join(' &nbsp;·&nbsp; ')}
+        </p>
+      </div>`;
+
+    return `
+  <!-- AI Visibility -->
+  <div style="padding:0 40px 14px">
+    <h2 style="font-size:14px;font-weight:700;color:${brandColor};margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em">AI Assistant Visibility</h2>
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
+        <div>
+          <span style="font-size:13px;font-weight:600;color:#111827">Recommended in </span>
+          <span style="font-size:18px;font-weight:700;color:${brandColor}">${rate != null ? `${rate}%` : 'N/A'}</span>
+          <span style="font-size:13px;color:#6b7280"> of the questions we asked</span>
+        </div>
+        ${deltaLabel}
+      </div>
+      <table style="width:100%;border-collapse:collapse">${engineRows}</table>
+      ${competitorBlock}
+    </div>
+    <p style="margin-top:6px;font-size:10px;color:#9ca3af">
+      We ask ${aiVisibility.engines.length} AI assistants the questions your customers ask, every Monday.
+      Checks we could not complete are excluded from the percentage rather than counted against you.
+    </p>
+  </div>`;
+  })();
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -692,6 +896,8 @@ export function renderReportHtml(data: ReportData): string {
         : statBox('Total Reviews', String(reviews.total), brandColor)}
     </div>
   </div>
+
+  ${aiSection}
 
   ${gapSection}
 

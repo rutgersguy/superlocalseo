@@ -49,7 +49,7 @@ export interface AiVisibilityData {
   engines: EngineRollup[];
   prompts: Array<{ promptKey: string; promptText: string; intent: string; results: PromptResult[] }>;
   history?: Array<{ scannedAt: string; mentionRate: number | null }>;
-  topCompetitors?: Array<{ name: string; timesNamed: number }>;
+  topCompetitors?: Array<{ name: string; timesNamed: number; isYou: boolean }>;
   topSources?: Array<{ host: string; timesCited: number }>;
 }
 

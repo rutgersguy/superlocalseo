@@ -283,7 +283,13 @@ export default function AiVisibility() {
                 <ul className="space-y-1.5">
                   {(d.topCompetitors ?? []).map((c) => (
                     <li key={c.name} className="flex items-center justify-between text-sm">
-                      <span className="text-slate-700 truncate">{c.name}</span>
+                      {/* Your own business is named here too, usually most often
+                          — it is the one we asked about. Marked, so the list
+                          reads as a ranking rather than as self-competition. */}
+                      <span className={`truncate ${c.isYou ? 'font-semibold text-brand-600' : 'text-slate-700'}`}>
+                        {c.name}
+                        {c.isYou && <span className="ml-1.5 text-xs font-normal text-brand-500">(you)</span>}
+                      </span>
                       <span className="text-xs text-slate-400 shrink-0 ml-3">{c.timesNamed}×</span>
                     </li>
                   ))}

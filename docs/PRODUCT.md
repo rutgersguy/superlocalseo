@@ -121,7 +121,11 @@ Pro adds the competitors named, the sources cited, week-over-week history, and t
 behind each verdict (`GET /api/ai-visibility/answer/:id`). The Pro fields are absent from the
 Lite payload, not merely hidden in the UI.
 
-**Still to build:** a section in the monthly PDF report.
+**In the monthly PDF:** an AI Assistant Visibility panel directly under the executive summary,
+with the per-assistant verdict, the month-over-month change in recommendation rate, and (Pro) the
+businesses assistants named — the customer's own marked "(you)". Assistants that could not be
+reached are excluded from the percentage and shown as "Couldn't check". Recommendations lead with
+any assistant that did not name the business, because that outranks a citation gap.
 
 ---
 

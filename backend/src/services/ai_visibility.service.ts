@@ -640,7 +640,28 @@ export async function checkVisibility(params: {
  *
  * The fullest form seen wins the display name, and its count is the total.
  */
-export function mergeBusinessCounts(names: string[]): Array<{ name: string; timesNamed: number }> {
+export function mergeBusinessCounts(
+  names: string[],
+  selfNames: Array<string | null | undefined> = [],
+): Array<{ name: string; timesNamed: number; isYou: boolean }> {
+  // The customer's own business is named in these answers too — usually more
+  // often than anyone else, since it is the one we are asking about. Left
+  // unmarked it sits at the top of a list headed "who the assistants named"
+  // and reads as though they are their own competitor. Marked, the same list
+  // becomes the ranking it was meant to be.
+  //
+  // Takes a LIST of names, because the account name and the location name are
+  // routinely different and it is the LOCATION name the scan actually asks
+  // about. The first real report had a client registered as "AirServe of
+  // Tulsa" whose location is "Aire Serv of South Tulsa" — neither string is a
+  // prefix of the other, so matching on the account name alone marked nothing.
+  const selfKeys = selfNames
+    .map((n) => (n ? normalizeForMatch(n) : ''))
+    .filter((k) => k.length > 0);
+
+  const isSelf = (key: string) =>
+    selfKeys.some((sk) => key === sk || key.startsWith(sk + ' ') || sk.startsWith(key + ' '));
+
   const merged: Array<{ name: string; key: string; n: number }> = [];
 
   for (const raw of names) {
@@ -665,5 +686,5 @@ export function mergeBusinessCounts(names: string[]): Array<{ name: string; time
 
   return merged
     .sort((a, b) => b.n - a.n)
-    .map((m) => ({ name: m.name, timesNamed: m.n }));
+    .map((m) => ({ name: m.name, timesNamed: m.n, isYou: isSelf(m.key) }));
 }
