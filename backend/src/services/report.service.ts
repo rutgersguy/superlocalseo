@@ -40,6 +40,13 @@ export interface ReportData {
     avgRating: number | null;
     byPlatform: Array<{ platform: string; count: number; avgRating: number }>;
   };
+  /**
+   * Null on Lite (#193). Citation auditing is a Pro feature — the scan runs for
+   * every client regardless of plan, so the data exists, and the report used to
+   * mail it to Lite customers who are blocked from `/citations` in the app.
+   * Withheld here rather than hidden in the template, so a later template edit
+   * cannot put it back by accident. Same rule as the AI competitor list.
+   */
   citations: {
     score: number;
     listed: number;
@@ -47,7 +54,7 @@ export interface ReportData {
     napAccurate: number;
     /** Listings whose NAP we could actually read — the denominator for napAccurate. */
     napChecked: number;
-  };
+  } | null;
   competitors: Array<{
     name: string;
     website: string | null;
@@ -492,7 +499,7 @@ export async function gatherReportData(
         }
       : undefined;
 
-  return {
+  const report: ReportData = {
     client: {
       businessName: client.business_name,
       email: client.email,
@@ -550,6 +557,31 @@ export async function gatherReportData(
     auditScore,
     roi: roiData,
   };
+
+  // ── Plan gate (#193, decision: gate rather than reprice) ──────────────────
+  //
+  // Lite's report is rankings, reviews, the AI visibility verdict and
+  // recommendations. Citation health, ROI attribution, competitor benchmarking
+  // and the SEO audit score are Pro, are gated everywhere else in the product,
+  // and were being emailed to Lite anyway because this file had no notion of a
+  // plan.
+  //
+  // Stripped from the DATA, not the markup. #157 was four Pro surfaces that
+  // rendered for Lite because only the UI knew about the gate; a report section
+  // added later reads an already-empty field rather than needing to remember.
+  //
+  // Deliberately NOT gated: the visibility score (a single composite the
+  // dashboard shows both plans) and the keyword position breakdown, which is
+  // computed from the client's own ranks and is not competitor data despite
+  // the name.
+  if (plan === 'lite') {
+    report.citations = null;
+    report.auditScore = null;
+    report.competitors = [];
+    report.roi = null;
+  }
+
+  return report;
 }
 
 // ─── renderReportHtml ───────────────────────────────────────────────────────────
@@ -603,14 +635,16 @@ export function renderReportHtml(data: ReportData): string {
     }
   }
 
-  if (citations.score < 80) {
+  // Guarded on the data, not on the plan. A Lite report must never recommend
+  // acting on a section it did not show — that is a support ticket, not advice.
+  if (citations && citations.score < 80) {
     const missing = citations.total - citations.listed;
     recommendations.push(
       `Citation score is ${citations.score}% — ${missing} director${missing === 1 ? 'y' : 'ies'} missing. Submit your business to unclaimed directories to improve local visibility.`,
     );
   }
 
-  if (citations.napAccurate < citations.listed) {
+  if (citations && citations.napAccurate < citations.listed) {
     const napIssues = citations.listed - citations.napAccurate;
     recommendations.push(
       `${napIssues} citation${napIssues > 1 ? 's' : ''} have incorrect NAP (name, address, phone) data — update these listings to improve trust signals.`,
@@ -717,9 +751,10 @@ export function renderReportHtml(data: ReportData): string {
     .map((r) => `<li style="margin-bottom:8px;font-size:13px;color:#374151;line-height:1.6">${escHtml(r)}</li>`)
     .join('');
 
-  const citationBarWidth = Math.min(100, Math.max(0, citations.score));
-  const citationBarColor =
-    citations.score >= 80 ? '#16a34a' : citations.score >= 60 ? '#f59e0b' : '#dc2626';
+  const citationBarWidth = citations ? Math.min(100, Math.max(0, citations.score)) : 0;
+  const citationBarColor = !citations
+    ? '#6b7280'
+    : citations.score >= 80 ? '#16a34a' : citations.score >= 60 ? '#f59e0b' : '#dc2626';
 
   const gapSection = (gap.winning + gap.competing + gap.vulnerable + gap.absent) > 0 ? `
   <div style="padding:12px 40px 14px">
@@ -763,6 +798,40 @@ export function renderReportHtml(data: ReportData): string {
       </table>
     </div>` : ''}
   </div>` : '';
+
+  /**
+   * Second row of the executive summary.
+   *
+   * Assembled as a list rather than written out, because the Pro-only boxes
+   * (citation score, SEO audit score) are absent on Lite and a fixed
+   * three-column grid would otherwise render with a visible hole. Padded from
+   * the Lite-inclusive stats so both plans get a full row.
+   */
+  const summaryBoxes: string[] = [statBox('New Reviews', String(reviews.newThisMonth), brandColor)];
+
+  if (citations) {
+    summaryBoxes.push(statBox('Citation Score', `${citations.score}%`, citationScoreColor(citations.score)));
+  }
+  if (visibility.current != null) {
+    summaryBoxes.push(statBox(
+      'Visibility Score',
+      `${visibility.current}/100${visibility.delta != null ? (visibility.delta >= 0 ? ` ▲${visibility.delta}` : ` ▼${Math.abs(visibility.delta)}`) : ''}`,
+      visibility.delta != null && visibility.delta >= 0 ? '#16a34a' : brandColor,
+    ));
+  }
+  if (auditScore != null) {
+    summaryBoxes.push(statBox(
+      'SEO Audit Score',
+      `${auditScore.toFixed(0)}/100`,
+      auditScore >= 70 ? '#16a34a' : auditScore >= 50 ? '#f59e0b' : '#dc2626',
+    ));
+  }
+  if (aiVisibility?.mentionRate != null) {
+    summaryBoxes.push(statBox('AI Recommendation Rate', `${aiVisibility.mentionRate}%`, brandColor));
+  }
+  summaryBoxes.push(statBox('Total Reviews', String(reviews.total), brandColor));
+
+  const summaryRowTwo = summaryBoxes.slice(0, 3).join('\n      ');
 
   /**
    * AI assistant visibility (#192).
@@ -887,13 +956,7 @@ export function renderReportHtml(data: ReportData): string {
       ${statBox('Keywords in Top 3', String(rankings.keywordsInTop3), brandColor)}
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
-      ${statBox('New Reviews', String(reviews.newThisMonth), brandColor)}
-      ${statBox('Citation Score', `${citations.score}%`, citationScoreColor(citations.score))}
-      ${visibility.current != null
-        ? statBox('Visibility Score', `${visibility.current}/100${visibility.delta != null ? (visibility.delta >= 0 ? ` ▲${visibility.delta}` : ` ▼${Math.abs(visibility.delta)}`) : ''}`, visibility.delta != null && visibility.delta >= 0 ? '#16a34a' : brandColor)
-        : auditScore != null
-        ? statBox('SEO Audit Score', `${auditScore.toFixed(0)}/100`, auditScore >= 70 ? '#16a34a' : auditScore >= 50 ? '#f59e0b' : '#dc2626')
-        : statBox('Total Reviews', String(reviews.total), brandColor)}
+      ${summaryRowTwo}
     </div>
   </div>
 
@@ -901,7 +964,8 @@ export function renderReportHtml(data: ReportData): string {
 
   ${gapSection}
 
-  <!-- Citations -->
+  <!-- Citations (Pro only — null on Lite, see gatherReportData) -->
+  ${!citations ? '' : `
   <div style="padding:0 40px 14px">
     <h2 style="font-size:14px;font-weight:700;color:${brandColor};margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em">Citation Health</h2>
     <div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px">
@@ -919,7 +983,7 @@ export function renderReportHtml(data: ReportData): string {
         ${citationStatPill('Total Directories', citations.total, '#6b7280')}
       </div>
     </div>
-  </div>
+  </div>`}
 
   <!-- ROI Estimates -->
   ${roi ? `

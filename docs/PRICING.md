@@ -33,6 +33,31 @@ rather than merely 403'ing. Resolved as follows:
   returned 403 for Lite while `/reports/export/citations` returned 200 with the
   same data. Exports now inherit the gate of the data they return.
 
+### Decision of 2026-08-21 (#193) — the monthly report is plan-gated
+
+`report.service.ts` had no notion of a plan, so a **Lite** customer's emailed PDF
+carried Citation Health, ROI & Revenue Attribution, Competitor Benchmarking and the
+SEO Audit Score — every one of which Lite is blocked from in the app. The citation
+scan runs for all clients regardless of plan, so the data was there to render.
+
+Settled by **gating, not repricing**: what the landing page sells as Pro should not
+arrive in a Lite inbox. A Lite report is now rankings, reviews, the AI visibility
+verdict, and recommendations.
+
+- Stripped in `gatherReportData`, not in the template — a section added later reads
+  an already-empty field. (#157 is the counter-example: four Pro surfaces rendered
+  for Lite because only the UI knew about the gate.)
+- Citation and audit **recommendations are guarded on the data**, so a Lite report
+  can never advise acting on a section it did not show.
+- **Not** gated: the visibility score (one composite the dashboard shows both plans)
+  and the keyword position breakdown, which is computed from the client's own ranks
+  and is not competitor data despite sitting beside the competitor sections.
+- The executive summary's second row is assembled from a list and padded, so
+  dropping two Pro boxes does not leave a hole in a fixed three-column grid. Lite's
+  row is New Reviews · AI Recommendation Rate · Total Reviews.
+
+---
+
 ### ⚠️ Where pricing is displayed — keep these in sync
 
 Hardcoded pricing has shipped to production **twice** (PR #113: `BillingPage` checkout summary
