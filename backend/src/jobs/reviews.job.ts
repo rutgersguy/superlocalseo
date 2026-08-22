@@ -33,6 +33,27 @@ export async function processReviews(_job: Job): Promise<void> {
       'clients.emr_organization_id',
     );
 
+  /**
+   * Clients with their own live Google connection.
+   *
+   * ONE SOURCE PER PLATFORM PER CLIENT. EMR and our direct GBP connection can
+   * both supply Google reviews, and they identify them differently — EMR uses
+   * its own sequential ids ("11", "12"), Google uses long opaque reviewIds. The
+   * unique index is (client_id, platform, external_review_id), so the SAME
+   * review arriving from both sources does not collide: it is stored twice and
+   * shown twice.
+   *
+   * So where a client has a direct connection, that is the source of truth for
+   * Google and EMR's Google reviews are skipped. EMR still supplies every other
+   * platform, which is most of its value here anyway.
+   */
+  const gbpConnectedClientIds = new Set(
+    (await db('integrations')
+      .where({ provider: 'google', status: 'connected' })
+      .whereNotNull('oauth_access_token')
+      .select('client_id')).map((r) => r.client_id as string),
+  );
+
   for (const integration of integrations) {
     try {
       const apiKey = decrypt(integration.api_key_encrypted as string);
@@ -54,6 +75,16 @@ export async function processReviews(_job: Job): Promise<void> {
       const now = new Date();
 
       for (const review of reviews) {
+        // See gbpConnectedClientIds: a client with a direct Google connection
+        // takes Google reviews from there, or the same review lands twice under
+        // two different external ids.
+        if (
+          gbpConnectedClientIds.has(integration.client_id as string)
+          && (review.platform ?? '').toLowerCase() === 'google'
+        ) {
+          continue;
+        }
+
         await db('reviews')
           .insert({
             client_id: integration.client_id,
@@ -174,19 +205,29 @@ export async function processReviews(_job: Job): Promise<void> {
     }
   }
 
-  // --- GBP sync (our own Google OAuth) — OFF by default ---
+  // --- GBP sync (our own Google OAuth) — ON by default since 2026-08 ---
   //
-  // Our Google Cloud project's GBP API quota request is still pending (quota_limit_value: 0),
-  // so syncGBPReviews returns nothing for every client. Worse, on auth errors it flips the
-  // integration to 'disconnected' — churn for a path that cannot produce data. Reviews come
-  // from EMR now (they hold their own approved GBP access), and nothing in the UI points at
-  // our OAuth any more.
+  // This was off because our Google Cloud project's GBP API quota was pending
+  // (quota_limit_value: 0), which made syncGBPReviews return nothing for every
+  // client while flipping integrations to 'disconnected' on auth errors — churn
+  // for a path that could not produce data.
   //
-  // Kept, not deleted: if Google ever grants our quota, direct access is still worth having
-  // for business-info and metrics. Set GBP_SYNC_ENABLED=true to switch it back on.
-  const gbpSyncEnabled = process.env.GBP_SYNC_ENABLED === 'true';
+  // Google granted the quota, the direct OAuth flow is live in Settings →
+  // Integrations, and a client has connected through it with a stored refresh
+  // token. So the condition the flag existed for no longer holds, and leaving it
+  // off means a working Google connection sits unused.
+  //
+  // Now opt-OUT rather than opt-in: set GBP_SYNC_ENABLED=false to kill it if the
+  // direct path starts misbehaving. Note the disconnect-on-auth-error behaviour
+  // below is now CORRECT rather than harmful — a dead token genuinely does need
+  // a reconnect, and the UI reports live status rather than a stored flag.
+  //
+  // EMR remains the other source and is unaffected; the two are additive, and
+  // reviews are keyed on external_review_id so a business connected through both
+  // does not get duplicates.
+  const gbpSyncEnabled = process.env.GBP_SYNC_ENABLED !== 'false';
   if (!gbpSyncEnabled) {
-    logger.info('GBP sync skipped — disabled (our Google quota request is still pending; reviews come from EMR)');
+    logger.info('GBP sync skipped — explicitly disabled via GBP_SYNC_ENABLED=false');
   }
 
   const gbpIntegrations = gbpSyncEnabled

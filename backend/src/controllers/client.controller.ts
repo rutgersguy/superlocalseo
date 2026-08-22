@@ -4,7 +4,7 @@ import { db } from '../db/connection';
 import { ok } from '../utils/response';
 import { provisionClient } from '../services/emr_provisioning';
 import { decrypt } from '../utils/crypto';
-import { citationsQueue, rankingsQueue } from '../jobs/queue';
+import { aiVisibilityQueue, citationsQueue, rankingsQueue } from '../jobs/queue';
 import { logger } from '../utils/logger';
 
 export const patchSchema = z.object({
@@ -160,6 +160,26 @@ export async function completeOnboarding(req: Request, res: Response, next: Next
       await rankingsQueue.add('onboarding-pull', { clientId: req.clientId });
     } catch (e) {
       logger.warn('Failed to enqueue rankings job on onboarding', {
+        clientId: req.clientId,
+        error: (e as Error).message,
+      });
+    }
+
+    // AI visibility, for the same reason — and it matters MORE here than the
+    // other two, because it is what the landing page leads on.
+    //
+    // The scan otherwise only runs the Monday 08:00 cron, so someone signing up
+    // on a Tuesday would first see the feature they were sold on day six of a
+    // seven-day trial. Rankings and citations were already kicked off on
+    // onboarding for exactly this reason; the headline feature was the one left
+    // waiting.
+    //
+    // Sequential inside the job and ~12 calls per location, so this costs about
+    // a minute of background work and a few cents.
+    try {
+      await aiVisibilityQueue.add('onboarding-scan', { clientId: req.clientId });
+    } catch (e) {
+      logger.warn('Failed to enqueue AI visibility job on onboarding', {
         clientId: req.clientId,
         error: (e as Error).message,
       });

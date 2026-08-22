@@ -245,7 +245,13 @@ export async function syncGBPReviews(
             client_id: clientId,
             location_id: null,
             source: 'gbp',
-            platform: 'google',
+            // 'Google', not 'google'. EMR writes the capitalised form, the
+            // unique index (client_id, platform, external_review_id) is
+            // case-sensitive, and the Reviews page filters on the exact strings
+            // ['All','Google','Yelp','Facebook'] — so a lowercase row would
+            // both dodge de-duplication and vanish from the platform filter
+            // while still showing under "All".
+            platform: 'Google',
             external_review_id: review.reviewId,
             author_name: review.reviewer.displayName,
             rating,
@@ -276,6 +282,33 @@ export async function syncGBPReviews(
 
         totalReviews++;
       }
+    }
+  }
+
+  // Retire EMR's copies of this client's Google reviews, now that we hold the
+  // authoritative ones.
+  //
+  // The reviews job stops EMR ingesting Google for a client with a direct
+  // connection, but that only prevents NEW rows. Anything EMR wrote BEFORE the
+  // connection stays, and the same review cannot be recognised across the two:
+  // EMR identifies them with its own sequential ids ("11", "12") and Google with
+  // long opaque reviewIds, so the unique index cannot collapse them. Left alone,
+  // a client who connects Google after using EMR sees each of their older
+  // reviews twice.
+  //
+  // Guarded on totalReviews > 0 deliberately. Deleting on an empty sync would
+  // throw away real reviews whenever Google returned nothing — an outage, a
+  // revoked scope, a location with no listing attached — and we would be
+  // destroying the only copy we had.
+  if (totalReviews > 0) {
+    const removed = await db('reviews')
+      .where({ client_id: clientId, source: 'emr' })
+      .whereRaw('lower(platform) = ?', ['google'])
+      .del();
+    if (removed > 0) {
+      logger.info('Removed EMR Google reviews superseded by the direct connection', {
+        clientId, removed,
+      });
     }
   }
 
