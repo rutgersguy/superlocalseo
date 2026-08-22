@@ -266,11 +266,17 @@ export async function processReviews(_job: Job): Promise<void> {
           })
           .catch(() => undefined);
       } else {
-        // Transient (network/5xx) — keep the integration connected and retry next cycle.
+        // Not an auth failure — keep the integration connected and retry next
+        // cycle. This covers transient network/5xx AND the 403 you get when the
+        // legacy My Business API is not enabled on the Cloud project, which is
+        // emphatically not something the customer can fix by reconnecting.
+        //
+        // Truncated: Google returns multi-kilobyte HTML error pages, and the
+        // whole thing was being written into a varchar column.
         logger.error('GBP review sync failed', { clientId: intg.client_id, error: (e as Error).message });
         await db('integrations')
           .where({ client_id: intg.client_id as string, provider: 'google' })
-          .update({ error_message: (e as Error).message })
+          .update({ error_message: (e as Error).message.replace(/\s+/g, ' ').slice(0, 300) })
           .catch(() => undefined);
       }
     }
