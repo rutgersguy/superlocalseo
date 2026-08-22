@@ -169,12 +169,36 @@ async function getLocations(accountName: string, accessToken: string): Promise<G
   return locations;
 }
 
-async function getReviews(locationName: string, accessToken: string): Promise<GBPReview[]> {
+/**
+ * Reviews for one location.
+ *
+ * The path needs BOTH the account and the location, which is easy to get wrong
+ * because the two APIs disagree about what a location is called. Business
+ * Information (v1) returns `locations/{id}`, but the legacy v4 Reviews API — the
+ * only place reviews exist — requires `accounts/{accountId}/locations/{id}`.
+ *
+ * Passing the v1 name straight through produced
+ *   GET /v4/locations/3186380989330052523/reviews  →  404
+ * against a live, correctly authorised connection: the token refreshed, the
+ * accounts and locations calls both succeeded, and only this one failed. So the
+ * account is now threaded through rather than assumed to be part of the name.
+ */
+async function getReviews(
+  accountName: string,
+  locationName: string,
+  accessToken: string,
+): Promise<GBPReview[]> {
   const reviews: GBPReview[] = [];
   let pageToken: string | undefined;
 
+  // Tolerate either shape from the caller: v1 gives "locations/123", but a
+  // fully-qualified "accounts/1/locations/123" must not be prefixed twice.
+  const path = locationName.startsWith('accounts/')
+    ? locationName
+    : `${accountName}/${locationName}`;
+
   do {
-    const url = new URL(`${GBP_REVIEWS_BASE}/${locationName}/reviews`);
+    const url = new URL(`${GBP_REVIEWS_BASE}/${path}/reviews`);
     if (pageToken) url.searchParams.set('pageToken', pageToken);
 
     const res = await fetch(url.toString(), {
@@ -235,7 +259,7 @@ export async function syncGBPReviews(
     const locations = await getLocations(account.name, token);
 
     for (const location of locations) {
-      const reviews = await getReviews(location.name, token);
+      const reviews = await getReviews(account.name, location.name, token);
 
       for (const review of reviews) {
         const rating = STAR_RATING_MAP[review.starRating] ?? 0;
