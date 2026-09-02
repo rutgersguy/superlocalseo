@@ -24,7 +24,7 @@ services:
       POSTGRES_USER: slseo
       POSTGRES_PASSWORD: slseo
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
@@ -39,7 +39,7 @@ services:
     restart: unless-stopped
     logging: *default-logging
     ports:
-      - "6399:6379"
+      - "127.0.0.1:6399:6379"
     volumes:
       - redis_data:/data
     healthcheck:
