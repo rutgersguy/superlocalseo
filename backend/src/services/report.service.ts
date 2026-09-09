@@ -919,7 +919,10 @@ export function renderReportHtml(data: ReportData): string {
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #f8f6f0; color: #20362f; }
-  .page { max-width: 900px; margin: 0 auto; background: #fffefa; border: 1px solid #d8ded5; box-shadow: 0 8px 24px rgba(23,62,54,0.08); }
+  /* Keep the masthead as the only full-width color block. A background on
+     this wrapper is repeated by Chromium across every printed page and reads
+     as an unintended cream panel beneath the green header. */
+  .page { max-width: 900px; margin: 0 auto; background: transparent; border: 0; box-shadow: none; }
   h2, h3 { font-family: Georgia, 'Times New Roman', serif; }
   p { line-height: 1.5; }
   table { width: 100%; border-collapse: collapse; }
