@@ -1,5 +1,10 @@
 const API_BASE = '/api';
 
+type ApiFailure = { code?: string; error?: string | { code?: string; message?: string } };
+function failureMessage(body: ApiFailure, fallback: string): string {
+  return (typeof body.error === 'string' ? body.error : body.error?.message) || fallback;
+}
+
 let _accessToken: string | null = null;
 let _refreshPromise: Promise<string | null> | null = null;
 
@@ -32,31 +37,29 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}, rawRespo
   };
   if (_accessToken) headers['Authorization'] = `Bearer ${_accessToken}`;
 
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
-
-  // Subscription gate: trial expired, payment failed, or canceled
-  if (res.status === 402) {
-    const body = await res.json() as { success: boolean; error?: { code: string; message: string } };
-    const code = body.error?.code;
-    if (code === 'TRIAL_EXPIRED' || code === 'PAYMENT_FAILED' || code === 'SUBSCRIPTION_CANCELLED') {
-      window.location.href = '/billing';
-    }
-    return body as T;
-  }
+  let res = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
 
   // Silent token refresh on 401 — deduplicated so concurrent 401s share one refresh call
   if (res.status === 401 && path !== '/auth/refresh' && path !== '/auth/login' && path !== '/auth/register') {
     const newToken = await refreshToken();
     if (newToken) {
       headers['Authorization'] = `Bearer ${newToken}`;
-      const retry = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
-      if (rawResponse) return retry;
-      const retryCt = retry.headers.get('content-type') ?? '';
-      if (!retryCt.includes('application/json')) throw new Error(`Server error (${retry.status}) — please try again.`);
-      return retry.json();
+      res = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
     } else {
       window.location.href = '/login';
     }
+  }
+
+  // Both initial responses and refreshed retries use the same subscription handling.
+  // Middleware emits both flat and nested error envelopes; neither is valid data.
+  if (res.status === 402) {
+    const body = await res.json() as ApiFailure;
+    const code = typeof body.error === 'object' ? body.error?.code : body.code;
+    if (code && ['TRIAL_EXPIRED', 'PAYMENT_FAILED', 'PAYMENT_OVERDUE',
+      'SUBSCRIPTION_CANCELED', 'SUBSCRIPTION_CANCELLED'].includes(code)) {
+      window.location.href = '/billing';
+    }
+    throw new Error(failureMessage(body, 'Subscription access is restricted.'));
   }
 
   if (rawResponse) return res;
@@ -71,4 +74,10 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}, rawRespo
 
 // SWR fetcher — typed as returning Promise<T> so useSWR<T> inference works
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const fetcher = <T = any>(path: string): Promise<T> => apiFetch<T>(path);
+export const fetcher = async <T = any>(path: string): Promise<T> => {
+  const body = await apiFetch<T>(path);
+  if (body && typeof body === 'object' && 'success' in body && body.success === false) {
+    throw new Error(failureMessage(body as ApiFailure, 'Unable to load data. Please try again.'));
+  }
+  return body;
+};
