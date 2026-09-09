@@ -1,3 +1,4 @@
+import CampaignSetupQueue from '../components/CampaignSetupQueue';
 import React, { useState, useEffect, useRef } from 'react';
 import useSWR, { mutate } from 'swr';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
@@ -107,12 +108,13 @@ function HealthDot({ ok, label, detail }: { ok: boolean; label: string; detail?:
 
 // ─── Tab bar ──────────────────────────────────────────────────────────────────
 
-type Tab = 'overview' | 'clients' | 'queues' | 'analytics' | 'citations' | 'customers' | 'promos';
+type Tab = 'overview' | 'clients' | 'queues' | 'analytics' | 'citations' | 'customers' | 'promos' | 'campaign-setup';
 
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'overview', label: 'Overview' },
     { key: 'clients', label: 'Clients' },
+    { key: 'campaign-setup', label: 'Campaign setup' },
     { key: 'customers', label: 'Customers' },
     { key: 'promos', label: 'Promo Codes' },
     { key: 'queues', label: 'Job Queues' },
@@ -1520,6 +1522,7 @@ export default function Admin() {
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
         <TabBar active={tab} onChange={setTab} />
+        {tab === 'campaign-setup' && <CampaignSetupQueue />}
         {tab === 'overview' && <OverviewTab />}
         {tab === 'clients' && <ClientsTab />}
         {tab === 'customers' && <CustomersTab />}

@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
-import { sendInvite, fetchUnsubscribes, fetchCampaignTemplates } from '../services/embedmyreviews.service';
+import { sendInvite } from '../services/embedmyreviews.service';
 import { getClientEMRKey } from '../services/emr_provisioning';
 import { logger } from '../utils/logger';
 
@@ -57,7 +57,7 @@ export async function invite(req: Request, res: Response, next: NextFunction): P
 
     const apiKey = await getApiKey(req.clientId);
     if (!apiKey) {
-      err(res, 'EmbedMyReviews integration not connected', 400, 'NOT_CONNECTED');
+      err(res, 'Review connection is not configured', 400, 'NOT_CONNECTED');
       return;
     }
 
@@ -71,7 +71,7 @@ export async function invite(req: Request, res: Response, next: NextFunction): P
 
     await sendInvite(apiKey, campaignId, parsed.data);
 
-    ok(res, { sent: 1 });
+    ok(res, { accepted: 1, sent: 1, deliveryConfirmed: false });
   } catch (e) {
     next(e);
   }
@@ -100,7 +100,7 @@ export async function bulkInvite(req: Request, res: Response, next: NextFunction
 
     const apiKey = await getApiKey(req.clientId);
     if (!apiKey) {
-      err(res, 'EmbedMyReviews integration not connected', 400, 'NOT_CONNECTED');
+      err(res, 'Review connection is not configured', 400, 'NOT_CONNECTED');
       return;
     }
 
@@ -117,21 +117,9 @@ export async function bulkInvite(req: Request, res: Response, next: NextFunction
     let skipped = 0;
     const failures: Array<{ index: number; error: string }> = [];
 
-    let unsubscribedContacts = new Set<string>();
-    try {
-      const unsub = await fetchUnsubscribes(apiKey, {});
-      unsubscribedContacts = new Set(unsub.unsubscribes.map((u) => u.contact.toLowerCase()));
-    } catch {
-      // non-fatal
-    }
-
+    // EMR enforces opt-outs and its configured deduplication window. It has no REST
+    // unsubscribe-list endpoint; acceptance does not prove delivery to this contact.
     for (let i = 0; i < contacts.length; i++) {
-      const contactKey = (contacts[i].email ?? contacts[i].phone ?? '').toLowerCase();
-      if (unsubscribedContacts.has(contactKey)) {
-        failures.push({ index: i, error: 'Contact has unsubscribed' });
-        skipped++;
-        continue;
-      }
       try {
         await sendInvite(apiKey, campaignId, contacts[i]);
         sent++;
@@ -141,45 +129,15 @@ export async function bulkInvite(req: Request, res: Response, next: NextFunction
       }
     }
 
-    ok(res, { sent, failed: failures.length - skipped, skipped, failures });
+    ok(res, { accepted: sent, sent, deliveryConfirmed: false, failed: failures.length - skipped, skipped, failures });
   } catch (e) {
     next(e);
   }
 }
 
-export async function listUnsubscribes(req: Request, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const apiKey = await getApiKey(req.clientId);
-    if (!apiKey) {
-      ok(res, { unsubscribes: [], total: 0, hasMore: false });
-      return;
-    }
-    const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10));
-    try {
-      const result = await fetchUnsubscribes(apiKey, { page });
-      ok(res, {
-        unsubscribes: result.unsubscribes.map((u) => ({
-          ...u,
-          contact: maskContact(u.contact, u.type),
-        })),
-        total: result.total,
-        hasMore: result.hasMore,
-      });
-    } catch {
-      ok(res, { unsubscribes: [], total: 0, hasMore: false });
-    }
-  } catch (e) {
-    next(e);
-  }
-}
-
-function maskContact(contact: string, type: 'email' | 'sms'): string {
-  if (type === 'email') {
-    const [local, domain] = contact.split('@');
-    if (!local || !domain) return '***';
-    return `${local[0]}***@${domain}`;
-  }
-  return contact.slice(0, 3) + '***' + contact.slice(-2);
+export async function listUnsubscribes(_req: Request, res: Response): Promise<void> {
+  ok(res, { unsubscribes: [], total: null, hasMore: false, available: false,
+    message: 'The provider enforces opt-outs when processing invitations. Its REST API does not expose an unsubscribe list.' });
 }
 
 const getApiKey = getClientEMRKey;
@@ -201,22 +159,12 @@ const getApiKey = getClientEMRKey;
 export async function getCredits(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const apiKey = await getApiKey(req.clientId);
-    ok(res, { email: 0, sms: 0, total: 0, connected: !!apiKey, available: false });
+    ok(res, { email: null, sms: null, total: null, connected: !!apiKey, available: false });
   } catch (e) {
     next(e);
   }
 }
 
-export async function listTemplates(req: Request, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const apiKey = await getApiKey(req.clientId);
-    if (!apiKey) {
-      ok(res, { templates: [] });
-      return;
-    }
-    const templates = await fetchCampaignTemplates(apiKey);
-    ok(res, { templates });
-  } catch (e) {
-    ok(res, { templates: [] });
-  }
+export async function listTemplates(_req: Request, res: Response): Promise<void> {
+  ok(res, { templates: [], available: false });
 }

@@ -3,7 +3,11 @@ import { requireAuth } from '../middleware/auth';
 import { requireClient, requireTeamAdmin } from '../middleware/requireClient';
 import * as campaign from '../controllers/campaign.controller';
 
+import * as setup from '../controllers/campaign_setup.controller';
+
 const router = Router();
+router.get('/setup', requireAuth, requireClient, setup.setupStatus);
+router.post('/setup', requireAuth, requireClient, requireTeamAdmin, setup.requestSetup);
 
 router.get('/', requireClient, campaign.list);
 router.post('/', requireClient, requireTeamAdmin, campaign.create);

@@ -5,7 +5,10 @@ import { registerWebhook } from '../services/embedmyreviews.service';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
+import { setupQueue } from '../controllers/campaign_setup.controller';
+
 const router = Router();
+router.get('/campaign-setup', requireAdmin, setupQueue);
 
 router.get('/overview', requireAdmin, ctrl.overview);
 router.get('/clients', requireAdmin, ctrl.clients);
