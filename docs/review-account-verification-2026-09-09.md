@@ -25,9 +25,11 @@ Unresolved upstream defects, observed in generated report:
 - All 9 map points are in the lowest visibility bucket, yet that bucket displays 0% of area, rather than 100% of the 9 equally weighted sampled points.
 - At a perfect 5.0 rating, advice says every extra 0.1 counts; improvement above the maximum is impossible.
 - Competitor response rates/monthly volumes are labeled estimated in some sections but presented as precise facts elsewhere (e.g. 75.41% in summary).
-- Public-form Show AI Visibility to the lead was OFF, but generated summary and full report expose AI results.
-- Full report promises instant AI replies to every customer, while our app provides drafting and explicit publishing. This misrepresents our product.
-- The trust-score formula, competitor selection geography, and percentage badges were not independently substantiated by the exposed report. Do not certify them as accurate.
+- Signed-out prospect verification in a separate browser confirmed Show AI Visibility to the lead OFF works: AI is hidden and /full returns 404. However, the prospect gets no pin-by-pin map despite the lead page promising one. The detailed findings below were visible to the authenticated agency.
+- Agency-visible full report promises instant AI replies to every customer, while our app provides drafting and explicit publishing. This would misrepresent our product if that report were shared.
+- The trust-score formula, competitor selection geography, and percentage badges were not independently substantiated by the exposed report. Its methodology panel provides only generic proprietary-algorithm/benchmark disclosures. Do not certify them as accurate.
+- The same report displayed 2:46 PM, then 2:50 PM, then 2:51 PM as it was reopened, suggesting the visible date is render time rather than a stable analysis timestamp.
+- Black Production Films is described as top of Maps every time, but the first inspected grid point places Origin Films first and Black Production Films second.
 
 ## Vendor copy changed and limits
 
@@ -38,7 +40,7 @@ C: Snapshot — score 70–79/100
 D: Snapshot — score 60–69/100
 F: Snapshot — score below 60/100
 
-These replace Winning More Business / Missing Easy Wins / Costing You Customers / Bleeding Revenue Daily / Killing Your Growth. Vendor says overrides apply to existing reports on next view.
+These replace Winning More Business / Missing Easy Wins / Costing You Customers / Bleeding Revenue Daily / Killing Your Growth. All five saved values were reload-verified; the existing report visibly changed to Your Reputation Snapshot — score below 60/100.
 
 Inspected Public Form Page copy, Form & alerts, White-label Configuration (including Advanced), Translations and Report Branding. No semantic editor for report calculations, fixed report body or fixed lead-page timing/live-data claims is exposed in those controls. Advanced offers global script injection; no brittle page-rewriting script was installed. Vendor-owned issues require an upstream fix or a replacement report implementation. No vendor support message was sent.
 
