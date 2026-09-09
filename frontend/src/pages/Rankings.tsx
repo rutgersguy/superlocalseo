@@ -1,3 +1,4 @@
+import { PageHeader, TableToolbar, EmptyState } from '../components/ui/Workspace';
 import { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
@@ -429,7 +430,7 @@ function GeoGridPanel() {
   const effectiveLng = latestReport?.centerLng ?? -74.006;
 
   return (
-    <div className="space-y-4">
+    <div className="workspace-surface space-y-4">
       <div className="flex flex-wrap gap-3 items-end">
         <div>
           <label className="block text-xs text-slate-500 mb-1">Location</label>
@@ -504,21 +505,21 @@ function GeoGridPanel() {
       )}
 
       {(!selectedLocationId || !selectedKeywordId) && (
-        <div className="py-12 text-center text-slate-400 text-sm">Select a location and keyword above, then click "Run Scan" to generate a visibility map.</div>
+        <EmptyState title="Set up your visibility map" description="Run Scan becomes available after you select a location and a keyword. The map shows observed rankings around that location." />
       )}
 
       {!latestReport && selectedLocationId && selectedKeywordId && (
         <div className="py-12 text-center text-slate-400 text-sm">No scan yet. Click "Run Scan" to generate a visibility map.</div>
       )}
 
-      <div className="flex gap-4 text-xs text-slate-500 flex-wrap">
+      {latestReport?.status === 'complete' && latestReport.gridData && <div className="flex gap-4 text-xs text-slate-500 flex-wrap">
         {[{ color: '#16a34a', label: '#1–3' }, { color: '#ca8a04', label: '#4–10' }, { color: '#ea580c', label: '#11–20' }, { color: '#dc2626', label: '#21+' }, { color: '#6b7280', label: 'Not ranked' }].map((l) => (
           <span key={l.label} className="flex items-center gap-1">
             <span className="inline-block w-3 h-3 rounded-full" style={{ background: l.color }} />
             {l.label}
           </span>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -543,6 +544,8 @@ export default function Rankings() {
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [search, setSearch] = useState('');
+  const [engine, setEngine] = useState('all');
+  const [area, setArea] = useState('all');
 
   const rankingsUrl = rankType !== 'all' ? `/rankings?rankType=${rankType}` : '/rankings';
   const { data: rankingsData, isLoading, error, mutate: mutateRankings } = useSWR<{ success: boolean; data: RankingRow[] }>(rankingsUrl, fetcher);
@@ -563,7 +566,7 @@ export default function Rankings() {
 
   const locationMap = Object.fromEntries((locData?.data ?? []).map((l) => [l.id, l]));
   const rankedKeywordIds = new Set(rows.map((r) => r.keywordId));
-  const pendingKeywords = (allKwData?.data ?? []).filter((k) => !rankedKeywordIds.has(k.id));
+  const pendingKeywords = (allKwData?.data ?? []).filter((k) => !rankedKeywordIds.has(k.id) && k.keyword.toLowerCase().includes(search.toLowerCase()) && area === 'all' && engine === 'all');
 
   const sorted = [...rows].sort((a, b) => {
     const av = a[sortKey];
@@ -578,11 +581,13 @@ export default function Rankings() {
     return sortDir === 'asc' ? cmp : -cmp;
   });
 
-  const filtered = search
-    ? sorted.filter((r) => r.keyword.toLowerCase().includes(search.toLowerCase()))
-    : sorted;
+  const filtered = sorted.filter(r =>
+    r.keyword.toLowerCase().includes(search.toLowerCase()) &&
+    (engine === 'all' || r.searchEngine === engine) &&
+    (area === 'all' || (r.geoLocation ?? r.location) === area));
+  const areaOptions = [...new Set(rows.map(r => r.geoLocation ?? r.location).filter(Boolean))];
 
-  const rankedRows = rows.filter((r) => r.rank != null);
+  const rankedRows = filtered.filter((r) => r.rank != null);
   const avgRank = rankedRows.length > 0
     ? rankedRows.reduce((sum, r) => sum + (r.rank as number), 0) / rankedRows.length
     : null;
@@ -646,7 +651,7 @@ export default function Rankings() {
         </div>
       )}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight">Rankings</h1>
+        <PageHeader title="Google rankings" description="Compare keyword positions by search engine and service area. Each row is one observed result." />
         <div className="flex gap-1 sm:gap-2">
           {(!isLite || liteScanAvailable) && (
             <button
@@ -727,13 +732,18 @@ export default function Rankings() {
         </div>
       )}
 
+      <TableToolbar label="Ranking scope">
+        <label>Search engine<select value={engine} onChange={e => setEngine(e.target.value)}><option value="all">All engines</option>{[...new Set(rows.map(r => r.searchEngine))].map(e => <option key={e} value={e}>{ENGINE_LABELS[e] ?? e}</option>)}</select></label>
+        <label>Service area<select value={area} onChange={e => setArea(e.target.value)}><option value="all">All areas</option>{areaOptions.map(a => <option key={a} value={a}>{a}</option>)}</select></label>
+        <p className="text-xs text-slate-500">Summary and table use the same filters. A keyword can have several observations.</p>
+      </TableToolbar>
       {rows.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            { label: 'AVG RANK', value: avgRank != null ? avgRank.toFixed(1) : '—' },
-            { label: 'KEYWORDS TRACKED', value: String(new Set(rows.map((r) => r.keywordId)).size + pendingKeywords.length) },
-            { label: 'IN TOP 3', value: String(rows.filter((r) => r.rank != null && r.rank <= 3).length) },
-            { label: 'GAINS THIS SCAN', value: String(rows.filter((r) => r.delta != null && r.delta > 0).length) },
+            { label: 'AVG OBSERVED POSITION', value: avgRank != null ? avgRank.toFixed(1) : '—' },
+            { label: 'OBSERVATIONS', value: String(new Set(rows.map((r) => r.keywordId)).size + pendingKeywords.length) },
+            { label: 'OBSERVATIONS IN TOP 3', value: String(filtered.filter((r) => r.rank != null && r.rank <= 3).length) },
+            { label: 'IMPROVED OBSERVATIONS', value: String(filtered.filter((r) => r.delta != null && r.delta > 0).length) },
           ].map((c) => (
             <div key={c.label} className="bg-white rounded-xl shadow-card p-5">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">{c.label}</p>
@@ -809,8 +819,8 @@ export default function Rankings() {
                 )}
                 <th className="hidden sm:table-cell px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest text-right">
                   <span className="flex items-center justify-end gap-1">
-                    Est. Revenue / mo
-                    <span title="Based on your ROI settings" className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold cursor-help leading-none">i</span>
+                    Est. Revenue / mo (per keyword)
+                    <span title="Modeled per-keyword estimate. Repeated across areas and engines; do not sum these rows." className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold cursor-help leading-none">i</span>
                   </span>
                 </th>
               </tr>
@@ -819,7 +829,7 @@ export default function Rankings() {
               {filtered.length === 0 && pendingKeywords.length === 0 ? (
                 <tr>
                   <td colSpan={showRoi ? 8 : 7} className="px-6 py-10 text-center text-slate-400">
-                    No keywords yet. Click <strong>Keywords</strong> above to add some.
+                    {rows.length ? 'No observations match these filters.' : <>No keywords yet. Click <strong>Keywords</strong> above to add some.</>}
                   </td>
                 </tr>
               ) : (
@@ -834,18 +844,18 @@ export default function Rankings() {
                       className={`cursor-pointer transition-colors ${effectiveSelected?.keywordId === row.keywordId && effectiveSelected?.searchEngine === row.searchEngine && effectiveSelected?.geoLocation === row.geoLocation ? 'bg-brand-50' : 'hover:bg-slate-50/80'}`}
                     >
                       <td className="px-6 py-3 font-medium text-slate-900">
-                        {row.keyword}
-                        {row.geoLocation && (
-                          <span className="ml-2 text-xs font-normal text-slate-400">{row.geoLocation.split(',')[0]}</span>
+                        {row.keyword}<span className="block text-xs font-normal text-slate-500 mt-1">{ENGINE_LABELS[row.searchEngine] ?? row.searchEngine} · {row.geoLocation ?? row.location ?? 'Area unavailable'}</span>
+                        {false && row.geoLocation && (
+                          <span className="ml-2 text-xs font-normal text-slate-400">{row.geoLocation?.split(',')[0]}</span>
                         )}
                       </td>
                       <td className="hidden sm:table-cell px-6 py-3 text-slate-500">{row.location ?? '—'}</td>
-                      <td className="px-6 py-3 text-right font-semibold text-slate-900">{row.rank}</td>
+                      <td className="px-6 py-3 text-right font-semibold text-slate-900">{row.rank ?? <span className="text-xs font-normal text-slate-500">Not ranked</span>}</td>
                       <td className="px-6 py-3 text-right">
                         {row.delta != null ? <DeltaBadge delta={row.delta} /> : <span className="text-slate-400 text-sm">—</span>}
                       </td>
                       <td className="hidden sm:table-cell px-6 py-3 text-slate-500">
-                        {row.pulledAt ? timeAgo(row.pulledAt) : '—'}
+                        {row.pulledAt ? timeAgo(row.pulledAt) : 'Not available'}{row.pulledAt && Date.now() - new Date(row.pulledAt).getTime() > 172800000 && <span className="block text-xs text-amber-700">Older than 2 days</span>}
                       </td>
                       <td className="hidden sm:table-cell px-6 py-3 text-slate-500">
                         {ENGINE_LABELS[row.searchEngine] ?? row.searchEngine}

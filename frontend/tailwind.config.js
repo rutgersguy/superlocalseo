@@ -4,17 +4,13 @@ export default {
   theme: {
     extend: {
       colors: {
+        canvas: 'var(--workspace-canvas)', surface: 'var(--workspace-surface)',
+        forest: 'var(--workspace-forest)', action: 'var(--workspace-action)',
+        sage: 'var(--workspace-sage)', ink: 'var(--workspace-text)',
         brand: {
-          50:  '#eef3ff',
-          100: '#dce8ff',
-          200: '#bdd1ff',
-          300: '#86aeff',
-          400: '#4d87fb',
-          500: '#1360fa',
-          600: '#0a4de0',
-          700: '#083db3',
-          800: '#082e87',
-          900: '#0a2266',
+          50: '#f0f5ef', 100: '#eaf0e9', 200: '#d1dfd0', 300: '#adc5b2',
+          400: '#729a81', 500: '#28624e', 600: '#1e503f', 700: '#173e36',
+          800: '#14372f', 900: '#102d27',
         },
       },
       fontFamily: {

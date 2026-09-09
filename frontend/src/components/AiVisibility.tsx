@@ -86,7 +86,7 @@ export function StatusPill({ status, position }: { status: PromptResult['status'
   return (
     <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
       <HelpCircle size={12} strokeWidth={3} />
-      Couldn't check
+      Unable to verify
     </span>
   );
 }
@@ -115,10 +115,10 @@ function EngineCard({ e }: { e: EngineRollup }) {
       ) : strong ? (
         <>
           <p className="text-2xl font-bold text-emerald-700">
-            {e.bestPosition != null ? `#${e.bestPosition}` : 'Yes'}
+            {'Mentioned'}
           </p>
           <p className="text-xs text-emerald-700/80">
-            Recommends you in {e.mentioned} of {e.determinate} question{e.determinate === 1 ? '' : 's'}
+            Mentioned in {e.mentioned} of {e.determinate} question{e.determinate === 1 ? '' : 's'}
           </p>
         </>
       ) : (
@@ -164,7 +164,7 @@ export function AiVisibilityHero() {
   const { data, error, isLoading } = useAiVisibility();
 
   if (isLoading) return <HeroSkeleton />;
-  if (error) return null; // the dashboard has plenty else to show; don't block it
+  if (error) return <div className="workspace-surface" role="status"><h2>AI visibility unavailable</h2><p className="mt-2 text-sm text-slate-500">We could not load the latest checks. This does not mean your business was absent from an answer.</p></div>;
 
   const d = data?.data;
   if (!d) return null;
@@ -177,7 +177,7 @@ export function AiVisibilityHero() {
           <Sparkles size={20} className="text-brand-500 shrink-0 mt-0.5" />
           <div>
             <h2 className="text-base font-semibold text-slate-900">
-              Do AI assistants recommend your business?
+              Where customers can find you
             </h2>
             <p className="text-sm text-slate-500 mt-1">
               We ask ChatGPT, Claude, Gemini and Perplexity the questions your customers ask — every Monday.
@@ -190,19 +190,19 @@ export function AiVisibilityHero() {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-card overflow-hidden">
+    <div className="workspace-ai-lead bg-white rounded-2xl shadow-card overflow-hidden">
       <div className="px-6 pt-6 pb-4 flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <Sparkles size={20} className="text-brand-500 shrink-0 mt-0.5" />
           <div>
             <h2 className="text-base font-semibold text-slate-900">
-              Do AI assistants recommend your business?
+              Where customers can find you
             </h2>
             <p className="text-sm text-slate-500 mt-0.5">
               {d.mentionRate != null ? (
                 <>
-                  You're recommended in <span className="font-semibold text-slate-700">{d.mentionRate}%</span> of
-                  the questions we asked · checked {fmtDate(d.scannedAt)}
+                  You were mentioned in <span className="font-semibold text-slate-700">{d.mentionRate}%</span> of
+                  verified sampled answers ({d.engines.reduce((sum, e) => sum + e.mentioned, 0)} of {d.engines.reduce((sum, e) => sum + e.determinate, 0)}) · checked {fmtDate(d.scannedAt)}
                 </>
               ) : (
                 <>Checked {fmtDate(d.scannedAt)}</>
@@ -214,7 +214,7 @@ export function AiVisibilityHero() {
           to="/dashboard/ai-visibility"
           className="shrink-0 text-xs font-medium text-brand-600 hover:text-brand-700 transition-colors"
         >
-          See the details →
+          View AI results →
         </Link>
       </div>
 

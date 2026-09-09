@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import useSWR, { mutate } from 'swr';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Star, ClipboardList, FileText } from 'lucide-react';
+import { PageHeader, Surface } from '../components/ui/Workspace';
 import { fetcher, apiFetch } from '../services/api';
 import { useClient } from '../hooks/useClient';
 import { AiVisibilityHero } from '../components/AiVisibility';
@@ -32,7 +32,10 @@ interface RankingRow {
   keywordId: string;
   keyword: string;
   location: string;
-  rank: number;
+  rank: number | null;
+  searchEngine?: string;
+  geoLocation?: string | null;
+  pulledAt?: string;
   delta: number | null;
 }
 
@@ -96,7 +99,7 @@ function VisibilityCard({ vis, loading }: { vis?: { current: number | null; delt
             <div className="h-10 -mx-1">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={vis.series}>
-                  <Line type="monotone" dataKey="score" stroke="#2563eb" dot={false} strokeWidth={2} />
+                  <Line type="monotone" dataKey="score" stroke="#28624e" dot={false} strokeWidth={2} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -113,7 +116,7 @@ function VisibilityCard({ vis, loading }: { vis?: { current: number | null; delt
 
 function DeltaBadge({ delta }: { delta: number }) {
   if (delta === 0) return <span className="text-slate-300 text-sm">—</span>;
-  const improved = delta < 0; // lower rank = better
+  const improved = delta > 0; // API delta is previous rank minus current rank
   return (
     <span className={`inline-flex items-center gap-0.5 text-xs font-semibold ${improved ? 'text-emerald-600' : 'text-red-500'}`}>
       {improved ? '▲' : '▼'} {Math.abs(delta)}
@@ -188,7 +191,7 @@ function SubscribeCTA({ billing }: { billing: BillingStatusResponse['data'] | un
   return (
     <div
       className="relative overflow-hidden rounded-2xl text-white p-6 sm:p-8"
-      style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0f172a 100%)' }}
+      style={{ background: 'linear-gradient(135deg, #102d27 0%, #173e36 60%, #102d27 100%)' }}
     >
       {/* Glow accents */}
       <div className="absolute -top-10 -right-10 w-56 h-56 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.25) 0%, transparent 70%)' }} />
@@ -253,7 +256,7 @@ function SubscribeCTA({ billing }: { billing: BillingStatusResponse['data'] | un
           <a
             href="/billing"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm transition-all"
-            style={{ background: '#6366f1', color: '#fff', boxShadow: '0 4px 20px rgba(99,102,241,0.45)' }}
+            style={{ background: '#b9431f', color: '#fff', boxShadow: '0 4px 20px rgba(99,102,241,0.45)' }}
           >
             {expired ? 'Reactivate now →' : 'Choose your plan →'}
           </a>
@@ -343,12 +346,12 @@ function GBPNudgeBanner() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <span>
-          <strong>Optional:</strong> Connect your Google Business Profile to unlock review sync and ranking data.
+          <strong>Optional:</strong> Connect your review source to synchronize customer reviews.
         </span>
       </div>
       <div className="flex items-center gap-3 ml-4 shrink-0">
         <Link to="/dashboard/settings?tab=integrations" className="font-medium underline hover:no-underline whitespace-nowrap">
-          Connect Google →
+          Review connections →
         </Link>
         <button onClick={() => setDismissed(true)} className="text-blue-500 hover:text-blue-700 font-bold">
           ×
@@ -388,6 +391,8 @@ export default function Dashboard() {
   const { data: auditData } = useSWR<{ success: boolean; data: { audits: Array<{ locationId: string; status: string; compositeScore: number | null }> } }>(planLoading || isLite ? null : '/audits/bl', fetcher);
   const latestAuditScore = (auditData?.data?.audits ?? []).find((a) => a.status === 'complete')?.compositeScore ?? null;
 
+  const { data: reportData } = useSWR<{ success: boolean; data: Array<{ id: string; periodMonth: number; periodYear: number; status: string }> }>('/reports', fetcher);
+  const latestReport = [...(reportData?.data ?? [])].filter(r => ['generated', 'sent'].includes(r.status)).sort((a,b) => b.periodYear - a.periodYear || b.periodMonth - a.periodMonth)[0];
   const metrics = metricsData?.data;
   const rankings = rankingsData?.data ?? [];
   const roi = roiData?.data;
@@ -395,10 +400,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight">Dashboard</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Overview of your local SEO performance</p>
-      </div>
+      <PageHeader title="Your visibility overview" description="Your Google rankings, customer reviews and AI visibility — together in one clear picture." />
 
       {showLinkedBanner && (
         <div className="flex items-center justify-between p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-800">
@@ -425,71 +427,40 @@ export default function Dashboard() {
       */}
       <AiVisibilityHero />
 
-      {/* Primary metric row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MetricCard label="Avg Rank" value={metrics?.avgRank != null ? metrics.avgRank.toFixed(1) : '—'} loading={metricsLoading} sub="across all keywords" />
-        <MetricCard label="Keywords in Top 10" value={metrics?.keywordsInTop10 ?? '—'} loading={metricsLoading} sub={metrics ? `of ${metrics.totalKeywords ?? '—'} tracked` : undefined} />
-        <MetricCard label="Total Reviews" value={metrics?.totalReviews ?? '—'} loading={metricsLoading} sub={metrics?.newReviewsThisMonth ? `+${metrics.newReviewsThisMonth} this month` : undefined} />
-        <MetricCard label="Avg Rating" value={metrics?.avgRating != null ? metrics.avgRating.toFixed(1) : '—'} loading={metricsLoading} accent={metrics?.avgRating != null && metrics.avgRating >= 4 ? 'text-emerald-600' : undefined} />
+      <div className="workspace-summary-grid">
+        <Surface className="workspace-summary"><h2>Google rankings</h2><div className="summary-value">{metricsLoading ? '…' : metrics?.avgRank != null ? metrics.avgRank.toFixed(1) : 'Not available'}</div><p>{metrics?.avgRank != null ? 'Average position across recorded ranking observations. See each keyword, area and engine in the detail view.' : 'Add keywords and allow the first scan to complete to see your positions.'}</p><Link to="/dashboard/rankings">View Google rankings →</Link></Surface>
+        <Surface className="workspace-summary"><h2>Reviews</h2><div className="summary-value">{metricsLoading ? '…' : metrics?.totalReviews ? metrics.totalReviews.toLocaleString() : 'No review data'}</div><p>{metrics?.totalReviews ? `${metrics.avgRating != null ? metrics.avgRating.toFixed(1) + ' average rating · ' : ''}${metrics.newReviewsThisMonth} new this month` : 'Reviews will appear after your connected review source synchronizes.'}</p><Link to="/dashboard/reviews">Open review inbox →</Link></Surface>
+        <Surface className="workspace-summary"><h2>{isLite ? 'Monthly reports' : 'Business listings'}</h2><div className="summary-value">{isLite ? (latestReport ? 'Ready to read' : 'Not yet available') : metrics?.citationScore != null ? `${metrics.citationScore}/100` : 'Not yet checked'}</div><p>{isLite ? 'A readable record of your rankings, reviews and AI visibility.' : 'Review the accuracy of your business name, address and phone across directories.'}</p><Link to={isLite ? '/dashboard/reports' : '/dashboard/citations'}>{isLite ? 'View reports' : 'Review business listings'} →</Link></Surface>
       </div>
 
-      {/* Secondary metric row — SEO Audit & Citations are Pro-only */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-        {!isLite && <MetricCard label="Local SEO Score" value={latestAuditScore != null ? `${latestAuditScore.toFixed(0)}/100` : '—'} loading={!auditData} />}
-        {!isLite && <MetricCard label="Citation Score" value={metrics?.citationScore != null ? `${metrics.citationScore}/100` : '—'} loading={metricsLoading} />}
-        <VisibilityCard vis={vis} loading={!visData} />
-      </div>
+      {(!planLoading && !isLite && metrics?.citationScore != null && metrics.citationScore < 100) && <Surface><h2>Needs attention</h2><ul className="workspace-attention"><li><span>Your business listing score is {metrics.citationScore}/100. Review the latest checks for missing or mismatched details.</span><Link to="/dashboard/citations">Review listings →</Link></li></ul></Surface>}
 
-      {/* ROI section — Pro only */}
-      {!isLite && (roiConfigured && roi ? (
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: 'Est. Monthly Clicks', value: roi.totals.estClicks.toLocaleString(), accent: undefined },
-            { label: 'Est. Monthly Leads',  value: roi.totals.estLeads.toLocaleString(),  accent: undefined },
-            { label: 'Est. Monthly Revenue', value: fmt$(roi.totals.estRevenue), accent: 'text-emerald-600' as const },
-          ].map((card) => (
-            <div key={card.label} className="bg-white rounded-xl shadow-card p-5">
-              <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3">{card.label}</p>
-              <p className={`text-3xl font-bold tracking-tight ${card.accent ?? 'text-slate-900'}`}>{card.value}</p>
-            </div>
-          ))}
+      <section className="workspace-report-feature" aria-label="Latest monthly brief">
+        <div><p>YOUR MONTHLY BRIEF</p><h2>{latestReport ? new Date(latestReport.periodYear, latestReport.periodMonth - 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) : 'Your next clear picture'}</h2><p>{latestReport ? 'Your latest report is ready. Review your visibility and the recommended next steps.' : 'Monthly reports bring your available business data together. Visit Reports to check availability.'}</p></div>
+        <Link className="workspace-button workspace-button-secondary" to="/dashboard/reports">View reports →</Link>
+      </section>
+
+      <details className="workspace-secondary workspace-surface">
+        <summary>More metrics and estimate methodology</summary>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {!isLite && <MetricCard label="Website audit score" value={latestAuditScore != null ? `${latestAuditScore.toFixed(0)}/100` : 'Not available'} loading={false} />}
+          <VisibilityCard vis={vis} loading={!visData} />
+          <MetricCard label="Tracked keywords" value={metrics?.totalKeywords ?? '—'} loading={metricsLoading} />
         </div>
-      ) : (
-        <div className="bg-white rounded-xl shadow-card px-5 py-4 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold text-slate-900">Unlock your ROI estimate</p>
-            <p className="text-xs text-slate-500 mt-0.5">Enter your average customer value to see the monthly $ impact of your rankings.</p>
-          </div>
-          <Link to="/dashboard/rankings?roi=1" className="shrink-0 ml-4 bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors">Set it up →</Link>
-        </div>
-      ))}
-
-      {/* Quick actions row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[
-          { label: 'Track Keywords',  to: '/dashboard/rankings',      Icon: TrendingUp  },
-          { label: 'View Reviews',    to: '/dashboard/reviews',       Icon: Star        },
-          // SEO Audit is Pro-only
-          ...(isLite ? [] : [{ label: 'Run SEO Audit', to: '/dashboard/audit', Icon: ClipboardList }]),
-          { label: 'Generate Report', to: '/dashboard/reports',       Icon: FileText    },
-        ].map(({ label, to, Icon }) => (
-          <Link
-            key={label}
-            to={to}
-            className="bg-white rounded-xl shadow-card p-5 flex items-center gap-3 hover:shadow-card-md transition-shadow group"
-          >
-            <Icon size={20} className="text-brand-500 shrink-0" />
-            <span className="text-sm font-medium text-slate-700 group-hover:text-brand-600 transition-colors">{label}</span>
-          </Link>
-        ))}
-      </div>
+        {!isLite && <div className="mt-5">
+          <h2 className="text-base font-semibold">Revenue estimates</h2>
+          <p className="text-sm text-slate-500 mt-2">These are modeled estimates, not measured sales. Keyword and area projections can overlap; do not add them together as unique customers.</p>
+          {roiConfigured && roi ? <><p className="text-sm mt-2">Assumptions: average customer value ${roi.roiConfig.avgCustomerValue.toLocaleString()}; conversion rate {roi.roiConfig.conversionRate}%.</p><p className="text-sm mt-2">Modeled monthly revenue: {fmt$(roi.totals.estRevenue)}.</p></> : <p className="text-sm mt-2">Add your business assumptions before using revenue estimates.</p>}
+          <Link to="/dashboard/rankings?roi=1" className="inline-block mt-3 text-sm text-brand-600">Review estimate assumptions →</Link>
+        </div>}
+      </details>
 
       {/* Top keywords table */}
       <div className="bg-white rounded-xl shadow-card overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-semibold text-slate-900">Top Keywords</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Top 10 by current rank</p>
+            <h2 className="text-sm font-semibold text-slate-900">Keyword observations</h2>
+            <p className="text-xs text-slate-400 mt-0.5">Up to 10 observations by current rank; areas and engines can repeat a keyword.</p>
           </div>
           <Link to="/dashboard/rankings" className="text-xs font-medium text-brand-600 hover:text-brand-700 transition-colors">
             View all →
@@ -526,15 +497,15 @@ export default function Dashboard() {
                 {rankings.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-6 py-10 text-center text-slate-400 text-sm">
-                      No ranking data yet. Add keywords in Settings to get started.
+                      No ranking data yet. Add keywords in Google rankings to get started.
                     </td>
                   </tr>
                 ) : (
                   rankings.map((row) => (
-                    <tr key={row.keywordId} className="hover:bg-slate-50/80 transition-colors">
+                    <tr key={`${row.keywordId}-${row.searchEngine}-${row.geoLocation}-${row.location}`} className="hover:bg-slate-50/80 transition-colors">
                       <td className="px-6 py-3 font-medium text-slate-800">{row.keyword}</td>
-                      <td className="px-6 py-3 text-slate-400 text-xs">{row.location ?? '—'}</td>
-                      <td className="px-6 py-3 text-right font-bold text-slate-900">{row.rank}</td>
+                      <td className="px-6 py-3 text-slate-400 text-xs">{row.geoLocation ?? row.location ?? '—'}<span className="block mt-1">{row.searchEngine ?? 'Engine unavailable'}</span></td>
+                      <td className="px-6 py-3 text-right font-bold text-slate-900">{row.rank ?? 'Not ranked'}</td>
                       <td className="px-6 py-3 text-right">
                         {row.delta != null ? <DeltaBadge delta={row.delta} /> : <span className="text-slate-300">—</span>}
                       </td>

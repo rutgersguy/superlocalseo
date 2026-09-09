@@ -588,7 +588,9 @@ export async function gatherReportData(
 
 export function renderReportHtml(data: ReportData): string {
   const { client, period, rankings, reviews, citations, competitors, clientStats, gap, sentiment, visibility, aiVisibility, auditScore, roi } = data;
-  const brandColor = client.whiteLabel?.color ?? '#1360FA';
+  // Default report branding matches the authenticated workspace and public
+  // homepage. A tenant white-label color still takes precedence.
+  const brandColor = client.whiteLabel?.color ?? '#173E36';
   const brandName = client.whiteLabel?.companyName ?? 'SuperLocalSEO';
   const brandLogoUrl = client.whiteLabel?.logoUrl ?? 'https://superlocalseo.com/sls_logo_wide_white.png';
 
@@ -765,7 +767,7 @@ export function renderReportHtml(data: ReportData): string {
         <div style="font-size:10px;font-weight:600;color:#15803d;margin-top:2px;text-transform:uppercase;letter-spacing:0.05em">Winning (1–3)</div>
       </div>
       <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px 8px;text-align:center">
-        <div style="font-size:20px;font-weight:700;color:#2563eb">${gap.competing}</div>
+        <div style="font-size:20px;font-weight:700;color:#28624e">${gap.competing}</div>
         <div style="font-size:10px;font-weight:600;color:#1d4ed8;margin-top:2px;text-transform:uppercase;letter-spacing:0.05em">Competing (4–10)</div>
       </div>
       <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:10px 8px;text-align:center">
@@ -919,7 +921,7 @@ export function renderReportHtml(data: ReportData): string {
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #ffffff; color: #111827; }
   .page { max-width: 900px; margin: 0 auto; background: #ffffff; }
   table { width: 100%; border-collapse: collapse; }
-  th { background: #f9fafb; padding: 10px 14px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; text-align: left; border-bottom: 2px solid #e5e7eb; }
+  th { background: #eaf0e9; padding: 10px 14px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #57665e; text-align: left; border-bottom: 2px solid #d8ded5; }
   th.center { text-align: center; }
   @media print {
     .page { max-width: 100%; }

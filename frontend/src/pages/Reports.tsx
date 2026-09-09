@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { PageHeader, Button } from '../components/ui/Workspace';
+import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import { Eye, X, Download, FileText, Star, MapPin, TrendingUp } from 'lucide-react';
 import { fetcher, apiFetch } from '../services/api';
@@ -217,7 +218,9 @@ function PreviewModal({ report, onClose }: PreviewModalProps) {
   const viewPath = `/reports/${report.id}/view`;
 
   // Fetch the PDF as a blob (auth-aware) then create an object URL
-  useState(() => {
+  useEffect(() => {
+    let canceled = false;
+    let objectUrl: string | null = null;
     if (mobile) {
       setLoading(false);
       return;
@@ -230,14 +233,16 @@ function PreviewModal({ report, onClose }: PreviewModalProps) {
           return;
         }
         const blob = await response.blob();
-        setBlobUrl(URL.createObjectURL(blob));
+        objectUrl = URL.createObjectURL(blob);
+        if (!canceled) setBlobUrl(objectUrl);
       } catch {
         setLoadError('Failed to fetch report PDF.');
       } finally {
         setLoading(false);
       }
     })();
-  });
+    return () => { canceled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [viewPath, mobile]);
 
   function handleClose() {
     if (blobUrl) URL.revokeObjectURL(blobUrl);
@@ -438,7 +443,8 @@ export default function Reports() {
     refreshInterval: 15_000,
   });
 
-  const reports = data?.data ?? [];
+  const reports = [...(data?.data ?? [])].sort((a, b) => b.periodYear - a.periodYear || b.periodMonth - a.periodMonth);
+  const latest = reports.find(r => r.status === 'generated' || r.status === 'sent');
 
   function openResend(report: Report) {
     setResendModal({ month: report.periodMonth, year: report.periodYear });
@@ -446,23 +452,9 @@ export default function Reports() {
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
-      <div>
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
-          <button
-            onClick={() => setModalOpen(true)}
-            className="whitespace-nowrap inline-flex items-center gap-2 px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors shadow-sm"
-          >
-            <span aria-hidden="true">+</span>
-            Generate Report
-          </button>
-        </div>
-        <p className="text-sm text-gray-500 mt-1">A full performance report is automatically generated and emailed to you at the start of each month — or generate one on demand anytime below.</p>
-      </div>
-
-      {/* Data exports */}
-      <DataExports />
+      <PageHeader title="Your monthly reports" description="A clear record of your visibility, with practical next steps. New reports are generated monthly using the data available for your plan." action={<Button onClick={() => setModalOpen(true)}>Generate report</Button>} />
+      {latest && <section className="workspace-report-feature" aria-label="Latest monthly report"><div><p>LATEST MONTHLY BRIEF</p><h2>{formatPeriod(latest.periodMonth, latest.periodYear)}</h2><p>Generated {formatDate(latest.generatedAt)} · Your saved business report</p></div><div className="workspace-page-actions"><button className="workspace-button workspace-button-secondary" onClick={() => setPreviewReport(latest)}><Eye size={16} /> Preview latest report</button><a className="workspace-button workspace-button-secondary" href={`/api/reports/${latest.id}/download`} target="_blank" rel="noopener noreferrer">Download PDF</a></div></section>}
+      <h2 className="text-lg font-semibold text-forest">Report archive</h2>
 
       {/* Error */}
       {error && (
@@ -565,6 +557,8 @@ export default function Reports() {
           </tbody>
         </table>
       </div>
+
+      <details className="workspace-secondary workspace-surface"><summary>Raw data exports</summary><DataExports /></details>
 
       {/* Generate modal */}
       {modalOpen && (

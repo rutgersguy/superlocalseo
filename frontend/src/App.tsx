@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthCtx, useAuthState } from './hooks/useAuth';
+import { AppTheme } from './components/ui/Workspace';
+import './workspace.css';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -42,7 +44,7 @@ function App() {
     <ErrorBoundary>
     <AuthCtx.Provider value={auth}>
       <BrowserRouter>
-        <Routes>
+        <AppTheme><Routes>
           {/* Public routes */}
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
@@ -83,7 +85,7 @@ function App() {
 
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        </Routes></AppTheme>
       </BrowserRouter>
     </AuthCtx.Provider>
     </ErrorBoundary>

@@ -1,7 +1,8 @@
+import { PageHeader } from '../components/ui/Workspace';
+import { ProGate } from '../components/ProGate';
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import useSWR, { mutate } from 'swr';
-import { Plus, RefreshCw, Trash2, Star, MessageSquare, ExternalLink, Search, AlertCircle, X, TrendingDown, TrendingUp, Target, BarChart2, Lightbulb, ChevronDown, Check, Loader2, Lock } from 'lucide-react';
+import { Plus, RefreshCw, Trash2, Star, MessageSquare, ExternalLink, Search, AlertCircle, X, TrendingDown, TrendingUp, Target, BarChart2, Lightbulb, ChevronDown, Check, Loader2 } from 'lucide-react';
 import { fetcher, apiFetch } from '../services/api';
 import { useClient } from '../hooks/useClient';
 
@@ -235,7 +236,7 @@ function CompetitorRow({ c, onDelete, onSync }: { c: Competitor; onDelete: () =>
   );
 }
 
-// ── Keyword Battleground ───────────────────────────────────────────────────────
+// ── Keyword comparisons ───────────────────────────────────────────────────────
 
 const BATTLE_STATUS = {
   losing:      { label: 'Losing',      color: 'text-red-700 bg-red-50',      dot: 'bg-red-400' },
@@ -828,57 +829,7 @@ type Tab = 'overview' | 'outranking' | 'rankings' | 'discover';
  * Pro-only sub-fetches (gap / head-to-head / discover) that would 403 for Lite.
  */
 function CompetitorsTeaser() {
-  const fauxRows = [
-    { name: 'Competitor A', rating: 4.8, reviews: 312, rank: 2 },
-    { name: 'Competitor B', rating: 4.6, reviews: 188, rank: 3 },
-    { name: 'Your business', rating: 4.5, reviews: 96, rank: 5 },
-    { name: 'Competitor C', rating: 4.3, reviews: 254, rank: 6 },
-  ];
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">Competitors</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Benchmark ratings, track keyword rankings head-to-head, and find new keyword opportunities.</p>
-      </div>
-
-      <div className="relative">
-        {/* Blurred backdrop */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 blur-sm pointer-events-none select-none" aria-hidden="true">
-          <div className="space-y-3">
-            {fauxRows.map((r) => (
-              <div key={r.name} className="flex items-center justify-between border-b border-slate-100 pb-3 last:border-0">
-                <div className="flex items-center gap-3">
-                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-100 text-xs font-semibold text-slate-600">#{r.rank}</span>
-                  <span className="text-sm font-medium text-slate-800">{r.name}</span>
-                </div>
-                <div className="flex items-center gap-6 text-sm text-slate-500">
-                  <span className="flex items-center gap-1"><Star size={13} className="text-amber-400 fill-amber-400" /> {r.rating}</span>
-                  <span>{r.reviews} reviews</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Overlay CTA */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="rounded-xl border border-slate-200 bg-white/95 shadow-card-md p-8 text-center max-w-sm mx-4">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 mb-4">
-              <Lock className="w-5 h-5 text-slate-400" />
-            </div>
-            <p className="font-semibold text-slate-900 mb-1 text-base">See who's outranking you</p>
-            <p className="text-sm text-slate-500 mb-5">Track competitors' rankings, find keyword gaps, and run head-to-head comparisons with Pro.</p>
-            <Link
-              to="/billing?upgrade=1"
-              className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-brand-500 text-white text-sm font-semibold rounded-lg hover:bg-brand-600 transition-colors"
-            >
-              Upgrade to Pro →
-            </Link>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <div><PageHeader title="Competitors" description="Compare your visibility with other businesses in your area." /><ProGate feature="Competitor insights" description="Pro adds keyword comparisons, competitor tracking and opportunities based on observed results. Upgrade to see this data for your business." /></div>;
 }
 
 export default function Competitors() {

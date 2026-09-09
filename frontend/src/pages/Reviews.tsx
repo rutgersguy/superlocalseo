@@ -1,3 +1,4 @@
+import { PageHeader, EmptyState } from '../components/ui/Workspace';
 import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import useSWR from 'swr';
@@ -498,14 +499,15 @@ export default function Reviews() {
   // into the review portal and link their profiles. This banner is that handoff — it used to
   // be gated to operator admins, so normal clients were never told the account existed and
   // their Reviews page stayed empty forever.
-  const showEMRBanner = !isLoading && totalReviews === 0 && feedbackTotal === 0;
+  const hasFilters = platform !== 'All' || rating !== 'All' || status !== 'All' || search.trim() !== '';
+  const showEMRBanner = !error && !hasFilters && !isLoading && totalReviews === 0 && feedbackTotal === 0;
 
   return (
     <div className="space-y-6">
       {showEMRBanner && <EMRSetupBanner context="reviews" />}
       <div>
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Reviews</h1>
+          <PageHeader title="Your review inbox" />
           <div className="flex gap-2">
             <SyncBLButton onSynced={() => void mutateReviews()} />
             {/* A plain navigation sends no Authorization header, and auth is a
@@ -533,8 +535,8 @@ export default function Reviews() {
         <p className="text-sm text-slate-500 mt-1">Manage and monitor customer reviews across platforms</p>
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Hide empty charts until observations exist. */}
+      {(volumeData.length > 0 || sentimentData.some(p => p.avgRating != null)) && <details className="workspace-secondary"><summary>Review trends</summary><div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white rounded-xl shadow-card p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-slate-900">Review Volume by Platform</h2>
@@ -584,6 +586,8 @@ export default function Reviews() {
         </div>
       </div>
 
+      </details>}
+
       {/* Tab bar */}
       <div className="flex gap-1 border-b border-slate-200">
         <button
@@ -609,19 +613,19 @@ export default function Reviews() {
         <>
           {/* Filter bar */}
           <div className="bg-white rounded-xl shadow-card p-4 flex flex-wrap gap-3 items-center">
-            <select value={platform} onChange={(e) => setPlatform(e.target.value)}
+            <select aria-label="Review platform" value={platform} onChange={(e) => setPlatform(e.target.value)}
               className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
               {PLATFORMS.map((p) => <option key={p}>{p}</option>)}
             </select>
-            <select value={rating} onChange={(e) => setRating(e.target.value)}
+            <select aria-label="Review rating" value={rating} onChange={(e) => setRating(e.target.value)}
               className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
               {RATINGS.map((r) => <option key={r} value={r}>{r === 'All' ? 'All ratings' : `${r}★`}</option>)}
             </select>
-            <select value={status} onChange={(e) => setStatus(e.target.value)}
+            <select aria-label="Review status" value={status} onChange={(e) => setStatus(e.target.value)}
               className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
               {STATUSES.map((s) => <option key={s}>{s}</option>)}
             </select>
-            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search reviews..."
+            <input aria-label="Search reviews" type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search reviews..."
               className="flex-1 min-w-[160px] border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
           </div>
 
@@ -639,9 +643,9 @@ export default function Reviews() {
                 </div>
               ))}
             </div>
-          ) : reviews.length === 0 ? (
+          ) : error ? null : reviews.length === 0 ? (
             <div className="bg-white rounded-xl shadow-card p-12 text-center">
-              <p className="text-slate-400 text-sm">No reviews found matching your filters.</p>
+              <EmptyState title={hasFilters ? 'No reviews match these filters' : 'No review data yet'} description={hasFilters ? 'Try another platform or rating, or clear your search.' : 'Reviews appear after your review source synchronizes. Check your connection if you already have reviews on Google.'} action={hasFilters ? <button className="workspace-button workspace-button-secondary" onClick={() => { setPlatform('All'); setRating('All'); setStatus('All'); setSearch(''); }}>Clear filters</button> : undefined} />
             </div>
           ) : (
             <div className="grid gap-4">

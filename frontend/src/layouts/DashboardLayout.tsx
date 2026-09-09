@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NavLink, Link, Outlet, useNavigate } from 'react-router-dom';
 import { Home, BarChart2, Star, Link2, Settings, LogOut, Menu, X, FileText, Megaphone, Users2, ClipboardList, ShieldAlert, Sparkles } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
@@ -70,14 +70,14 @@ function CrispWidget() {
 interface NavItem { to: string; label: string; icon: React.ReactNode; }
 
 const navItems: NavItem[] = [
-  { to: '/dashboard',              label: 'Dashboard',   icon: <Home size={17} aria-hidden="true" /> },
-  { to: '/dashboard/ai-visibility', label: 'AI Visibility', icon: <Sparkles size={17} aria-hidden="true" /> },
-  { to: '/dashboard/rankings',     label: 'Rankings',    icon: <BarChart2 size={17} aria-hidden="true" /> },
+  { to: '/dashboard',              label: 'Overview',   icon: <Home size={17} aria-hidden="true" /> },
+  { to: '/dashboard/ai-visibility', label: 'AI visibility', icon: <Sparkles size={17} aria-hidden="true" /> },
+  { to: '/dashboard/rankings',     label: 'Google rankings',    icon: <BarChart2 size={17} aria-hidden="true" /> },
   { to: '/dashboard/reviews',      label: 'Reviews',     icon: <Star size={17} aria-hidden="true" /> },
-  { to: '/dashboard/campaigns',    label: 'Campaigns',   icon: <Megaphone size={17} aria-hidden="true" /> },
+  { to: '/dashboard/campaigns',    label: 'Review requests',   icon: <Megaphone size={17} aria-hidden="true" /> },
   { to: '/dashboard/competitors',  label: 'Competitors', icon: <Users2 size={17} aria-hidden="true" /> },
-  { to: '/dashboard/citations',    label: 'Citations',   icon: <Link2 size={17} aria-hidden="true" /> },
-  { to: '/dashboard/audit',        label: 'SEO Audit',   icon: <ClipboardList size={17} aria-hidden="true" /> },
+  { to: '/dashboard/citations',    label: 'Business listings',   icon: <Link2 size={17} aria-hidden="true" /> },
+  { to: '/dashboard/audit',        label: 'Website audit',   icon: <ClipboardList size={17} aria-hidden="true" /> },
   { to: '/dashboard/reports',      label: 'Reports',     icon: <FileText size={17} aria-hidden="true" /> },
   { to: '/dashboard/settings',     label: 'Settings',    icon: <Settings size={17} aria-hidden="true" /> },
 ];
@@ -103,16 +103,16 @@ function SidebarNav({ onNav }: { onNav?: () => void }) {
             end={item.to === '/dashboard'}
             onClick={onNav}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+              `sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                 isActive
-                  ? 'bg-slate-800 text-white'
-                  : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
+                  ? 'text-white'
+                  : 'text-slate-200'
               }`
             }
           >
             {({ isActive }) => (
               <>
-                <span className={`shrink-0 ${isActive ? 'text-brand-400' : ''}`}>{item.icon}</span>
+                <span className={`shrink-0 ${isActive ? 'text-white' : ''}`}>{item.icon}</span>
                 {item.label}
               </>
             )}
@@ -137,10 +137,10 @@ function SidebarNav({ onNav }: { onNav?: () => void }) {
         </div>
       )}
 
-      <div className="px-2.5 py-3 border-t border-slate-800">
+      <div className="px-2.5 py-3 border-t border-white/15">
         <button
           onClick={() => void logout()}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800/60 hover:text-slate-200 transition-all duration-150"
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-slate-200 hover:bg-white/10 hover:text-white transition-all duration-150"
           aria-label="Sign out"
         >
           <LogOut size={17} aria-hidden="true" />
@@ -223,7 +223,7 @@ function VerifyEmailBanner() {
   };
 
   return (
-    <div className="px-4 py-2 text-sm flex items-center justify-between gap-4 bg-blue-600 text-white">
+    <div className="px-4 py-2 text-sm flex items-center justify-between gap-4 bg-forest text-white">
       <span>
         {sent
           ? 'Verification email sent — check your inbox.'
@@ -249,85 +249,57 @@ function VerifyEmailBanner() {
 
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const drawer = useRef<HTMLDialogElement>(null);
   const { isAuthenticated } = useAuth();
   const { data: clientData } = useSWR<{ success: boolean; data: { businessName: string; email: string } }>(
-    isAuthenticated ? '/clients' : null,
-    fetcher,
+    isAuthenticated ? '/clients' : null, fetcher,
   );
-  const businessName = clientData?.data?.businessName ?? '';
+  const businessName = clientData?.data?.businessName ?? 'Your business';
 
-  return (
-    <>
-      <OnboardingRedirect />
-      <CrispWidget />
-      <div className="flex h-screen bg-slate-100">
-        {/* Mobile overlay */}
-        {sidebarOpen && (
-          <div
-            className="fixed inset-0 z-20 bg-black/50 lg:hidden"
-            aria-hidden="true"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
+  useEffect(() => {
+    if (sidebarOpen) drawer.current?.showModal();
+    else if (drawer.current?.open) drawer.current.close();
+    if (Array.isArray(window.$crisp)) window.$crisp.push(['do', sidebarOpen ? 'chat:hide' : 'chat:show']);
+  }, [sidebarOpen]);
 
-        {/* Sidebar */}
-        <aside
-          className={`fixed inset-y-0 left-0 z-30 w-56 bg-slate-900 flex flex-col transform transition-transform duration-200 ease-in-out
-            lg:relative lg:translate-x-0 lg:flex-shrink-0
-            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
-          aria-label="Sidebar"
-        >
-          {/* Logo */}
-          <div className="px-4 pt-5 pb-3 flex items-center justify-between shrink-0">
-            <Link to="/dashboard" className="hover:opacity-80 transition-opacity">
-              <img src="/sls_logo_wide_color-white.png" alt="SuperLocalSEO" className="h-7 w-auto" />
-            </Link>
-            <button
-              className="lg:hidden p-1 rounded text-slate-500 hover:text-slate-300"
-              onClick={() => setSidebarOpen(false)}
-              aria-label="Close sidebar"
-            >
-              <X size={17} />
-            </button>
-          </div>
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const closeOnDesktop = () => { if (mq.matches) setSidebarOpen(false); };
+    mq.addEventListener('change', closeOnDesktop);
+    return () => mq.removeEventListener('change', closeOnDesktop);
+  }, []);
 
-          {/* Business context pill */}
-          {businessName && (
-            <div className="px-3 pb-3 shrink-0">
-              <Link to="/dashboard" className="block hover:opacity-80 transition-opacity">
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-medium">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                  <span className="truncate">{businessName}</span>
-                </div>
-              </Link>
-            </div>
-          )}
+  const sidebar = (mobile: boolean) => <div className="workspace-sidebar">
+    <div className="px-5 pt-6 pb-5 flex items-center justify-between gap-3">
+      <Link to="/dashboard" aria-label="SuperLocalSEO overview" onClick={() => setSidebarOpen(false)}>
+        <img src="/sls_logo_wide_color-white.png" alt="SuperLocalSEO" className="h-7 w-auto" />
+      </Link>
+      {mobile && <button autoFocus onClick={() => setSidebarOpen(false)} aria-label="Close sidebar" className="p-2 text-white"><X size={20} /></button>}
+    </div>
+    <div className="px-4 pb-4"><div className="workspace-business-pill">{businessName}</div></div>
+    <SidebarNav onNav={() => setSidebarOpen(false)} />
+  </div>;
 
-          <SidebarNav onNav={() => setSidebarOpen(false)} />
-        </aside>
-
-        {/* Main area */}
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          {/* Mobile-only top bar */}
-          <header className="lg:hidden bg-white border-b border-slate-200/80 px-4 h-10 flex items-center shrink-0">
-            <button
-              className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100"
-              onClick={() => setSidebarOpen(true)}
-              aria-label="Open sidebar"
-            >
-              <Menu size={18} aria-hidden="true" />
-            </button>
-          </header>
-
-          <VerifyEmailBanner />
-          <TrialBanner />
-
-          {/* Page content */}
-          <main className="flex-1 overflow-y-auto p-5 sm:p-6">
-            <Outlet />
-          </main>
-        </div>
+  return <>
+    <OnboardingRedirect />
+    <CrispWidget />
+    <a href="#workspace-main" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 z-50 bg-white px-4 py-2">Skip to content</a>
+    <div className="flex h-dvh min-h-0 bg-canvas">
+      <aside className="workspace-desktop-sidebar" aria-label="Sidebar">{sidebar(false)}</aside>
+      <dialog ref={drawer} className="workspace-mobile-dialog" aria-label="Navigation"
+        onClose={() => setSidebarOpen(false)} onCancel={() => setSidebarOpen(false)}>
+        {sidebar(true)}
+      </dialog>
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <header className="workspace-topbar">
+          <button className="lg:hidden p-2 rounded-lg text-forest" onClick={() => setSidebarOpen(true)} aria-label="Open sidebar" aria-expanded={sidebarOpen}><Menu size={21} /></button>
+          <div className="min-w-0"><p className="workspace-topbar-label">Your visibility workspace</p><p className="workspace-topbar-name">{businessName}</p></div>
+          <Link to="/dashboard/settings" className="workspace-topbar-account">Account <span aria-hidden="true">↗</span></Link>
+        </header>
+        <VerifyEmailBanner />
+        <TrialBanner />
+        <main id="workspace-main" className="workspace-content flex-1 overflow-y-auto min-w-0" tabIndex={-1}><Outlet /></main>
       </div>
-    </>
-  );
+    </div>
+  </>;
 }
