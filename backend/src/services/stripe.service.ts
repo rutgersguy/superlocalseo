@@ -378,16 +378,21 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
       const subId = (inv as any).subscription as string | undefined;
       if (!subId) break;
 
+      // Webhooks can arrive out of order. An old payment must not reactivate a
+      // canceled subscription or grant a pending upgrade using newer metadata.
+      // Retrieval failures propagate so Stripe retries instead of granting access.
+      const sub = await stripe.subscriptions.retrieve(subId);
+      const latestInvoiceId = typeof sub.latest_invoice === 'string'
+        ? sub.latest_invoice : sub.latest_invoice?.id;
+      if (sub.status !== 'active' || latestInvoiceId !== inv.id) break;
+
       let planUpdate: { product_line?: 'lite' | 'pro'; locations_limit?: number } = {};
-      try {
-        const sub = await stripe.subscriptions.retrieve(subId);
-        const plan = sub.metadata?.plan as 'lite' | 'pro' | undefined;
-        if (plan) {
-          const locationItem = sub.items.data.find((i) => i.price.id === config.stripe.prices.location);
-          const extra = locationItem?.quantity ?? 0;
-          planUpdate = { product_line: plan, locations_limit: plan === 'lite' ? 1 : 1 + extra };
-        }
-      } catch { /* if the retrieve fails, still mark the invoice paid below */ }
+      const plan = sub.metadata?.plan;
+      if (plan === 'lite' || plan === 'pro') {
+        const locationItem = sub.items.data.find((i) => i.price.id === config.stripe.prices.location);
+        const extra = locationItem?.quantity ?? 0;
+        planUpdate = { product_line: plan, locations_limit: plan === 'lite' ? 1 : 1 + extra };
+      }
 
       await db('clients').where({ stripe_subscription_id: subId }).update({
         subscription_status: 'active',
