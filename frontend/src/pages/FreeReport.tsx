@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { MapContainer, CircleMarker, TileLayer, Tooltip, ScaleControl, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import './free-report.css';
@@ -57,7 +57,7 @@ function SampleMap({ snapshot: s, selected, onSelect }: { snapshot: Snapshot; se
   </>;
 }
 export default function FreeReport() {
-  const { id } = useParams(); const navigate = useNavigate();
+  const { id } = useParams(); const navigate = useNavigate(); const [searchParams] = useSearchParams();
   const [business, setBusiness] = useState(''); const [city, setCity] = useState(''); const [keyword, setKeyword] = useState('');
   const [email, setEmail] = useState(''); const [consent, setConsent] = useState(false); const [honeypot, setHoneypot] = useState('');
   const [choices, setChoices] = useState<{ businesses: Business[]; areas: Area[] } | null>(null);
@@ -96,6 +96,7 @@ export default function FreeReport() {
   return <div className="free-report"><header><Link to="/" className="fr-brand">SuperLocalSEO</Link><span>Local visibility report</span></header><main>
     {error && <p role="alert" className="fr-error">{error}</p>}
     {!id ? <>
+      {searchParams.get('legacy') === '1' && <section className="fr-panel" aria-label="Report link update"><h2>Our reports have changed</h2><p>This link used our previous reporting system. Create a new report below using our current source checks and map sample. It will be a new snapshot, not a copy of the earlier report.</p></section>}
       <p className="fr-eyebrow">A clear starting point</p><h1>See how your business appears nearby.</h1>
       <p>Choose your Google listing, a city to sample, and one search phrase. Your report includes the available review rating and a nine-point Google Maps search sample. No traffic estimates or invented rankings.</p>
       <form onSubmit={search} className="fr-panel fr-form">

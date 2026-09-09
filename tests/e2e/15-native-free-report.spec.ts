@@ -5,6 +5,10 @@ const at='2026-09-09T12:00:00.000Z';
 const points=Array.from({length:9},(_,i)=>({lat:33.762909+(1-Math.floor(i/3))*0.018,lng:-84.422675+((i%3)-1)*0.0216,status:i===8?'unavailable':'checked',rank:i===0?2:null,resultCount:i===8?0:12,checkedAt:at,collectedAt:at,items:i===0?[{placeId:'fixture',name:'Fixture business',rank:2}]:[]}));
 const snapshot={business:{placeId:'fixture',name:'Fixture business',address:null,rating:5,reviewCount:8,collectedAt:at},generatedAt:at,profileCheckedAt:at,keyword:'video production company',center:{label:'Atlanta city, GA',lat:33.762909,lng:-84.422675},points,summary:{checked:8,unavailable:1,found:1,averageWhenFound:2,counts:{top3:1,fourToTen:0,elevenToTwenty:0,notFound:7},percentages:{top3:12.5,fourToTen:0,elevenToTwenty:0,notFound:87.5}},ratingAction:'Maintain the service customers value and keep inviting honest feedback.'};
 test.describe('Native report acquisition',()=>{
+ test('explains legacy links without generating a replacement automatically',async({page})=>{
+  const writes:string[]=[];page.on('request',r=>{if(r.url().includes('/api/free-reports')&&r.method()==='POST')writes.push(r.url());});
+  await page.goto('/audit?legacy=1');await expect(page.getByRole('heading',{name:'Our reports have changed'})).toBeVisible();await expect(page.getByText(/new snapshot, not a copy/)).toBeVisible();expect(writes).toEqual([]);
+ });
  test.skip(IS_PRODUCTION_TARGET,'Isolated browser fixtures only');
  test('selects a business and area, records report-only consent, and shows honest coverage',async({page})=>{
   await page.route('**/api/free-reports/search',r=>r.fulfill({json:{success:true,data:{businesses:[snapshot.business],areas:[{id:'1304000',name:'Atlanta city, GA',lat:33.762909,lng:-84.422675}]}}}));
