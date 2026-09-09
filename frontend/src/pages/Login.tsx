@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { BrandWordmark } from '../components/BrandWordmark';
 
 const GOOGLE_AUTH_URL = '/api/auth/google';
 
@@ -62,7 +63,7 @@ export default function Login() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link to="/"><img src="/sls_logo_wide_color.png" alt="SuperLocalSEO" className="h-10 w-auto mx-auto" /></Link>
+          <Link to="/" aria-label="SuperLocalSEO home"><BrandWordmark /></Link>
           <h1 className="mt-4 text-2xl font-bold text-gray-900">Sign in to your account</h1>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">

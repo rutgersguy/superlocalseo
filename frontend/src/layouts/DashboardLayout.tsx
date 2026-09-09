@@ -6,6 +6,7 @@ import { useClient } from '../hooks/useClient';
 import { fetcher, apiFetch } from '../services/api';
 import { NAV_ITEMS as PLAN_NAV } from '../config/planFeatures';
 import useSWR from 'swr';
+import { BrandWordmark } from '../components/BrandWordmark';
 
 declare global {
   interface Window {
@@ -272,7 +273,7 @@ export default function DashboardLayout() {
   const sidebar = (mobile: boolean) => <div className="workspace-sidebar">
     <div className="px-5 pt-6 pb-5 flex items-center justify-between gap-3">
       <Link to="/dashboard" aria-label="SuperLocalSEO overview" onClick={() => setSidebarOpen(false)}>
-        <img src="/sls_logo_wide_color-white.png" alt="SuperLocalSEO" className="h-7 w-auto" />
+        <BrandWordmark light />
       </Link>
       {mobile && <button autoFocus onClick={() => setSidebarOpen(false)} aria-label="Close sidebar" className="p-2 text-white"><X size={20} /></button>}
     </div>

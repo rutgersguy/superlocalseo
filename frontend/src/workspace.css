@@ -1,6 +1,11 @@
 @font-face { font-family: 'Editorial Serif'; src: url('/fonts/EditorialSerif-Regular.ttf') format('truetype'); font-weight: 400 500; font-style: normal; font-display: swap; }
 @font-face { font-family: 'Editorial Serif'; src: url('/fonts/EditorialSerif-Bold.ttf') format('truetype'); font-weight: 600 900; font-style: normal; font-display: swap; }
 :root { --workspace-forest: #173e36; --workspace-deep: #102d27; --workspace-canvas: #f8f6f0; --workspace-surface: #fff; --workspace-sage: #eaf0e9; --workspace-text: #20362f; --workspace-muted: #57665e; --workspace-border: #d8ded5; --workspace-action: #b9431f; }
+.brand-wordmark { display:inline-flex; align-items:center; gap:5px; color:#102f2d; font-size:25px; font-weight:700; letter-spacing:-1.2px; line-height:1; white-space:nowrap; }
+.brand-wordmark svg { width:31px; height:39px; color:#e85d30; stroke:#e85d30; flex:none; }
+.brand-wordmark svg circle { fill:#fffdf8; stroke:#fffdf8; }
+.brand-wordmark--light { color:#fffdf8; font-size:21px; }
+.brand-wordmark--light svg { width:27px; height:34px; }
 .app-theme { color: var(--workspace-text); background: var(--workspace-canvas); min-height: 100dvh; font-variant-numeric: tabular-nums; }
 .app-theme h1 { font-family: 'Editorial Serif', Georgia, serif; color: var(--workspace-forest); font-size: 34px; line-height: 1.15; font-weight: 600; letter-spacing: -.6px; }
 .app-theme :is(a, button, input, select, textarea, summary):focus-visible { outline: 2px solid var(--workspace-action); outline-offset: 3px; }
