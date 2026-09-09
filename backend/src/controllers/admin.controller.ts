@@ -15,8 +15,6 @@ import {
 } from '../services/brightlocal.service';
 import { z } from 'zod';
 
-const TIER_PRICES: Record<number, number> = { 1: 350, 2: 700, 3: 1200 };
-
 const ALL_QUEUES = [
   { queue: rankingsQueue, name: 'rankings' },
   { queue: citationsQueue, name: 'citations' },
@@ -41,13 +39,12 @@ export async function overview(req: Request, res: Response, next: NextFunction):
         count: string;
       }>;
 
-    let total = 0, active = 0, trialing = 0, pastDue = 0, canceled = 0, mrr = 0;
+    let total = 0, active = 0, trialing = 0, pastDue = 0, canceled = 0;
     for (const r of rows) {
       const n = parseInt(r.count, 10);
       total += n;
       if (r.subscription_status === 'active') {
         active += n;
-        mrr += n * (TIER_PRICES[r.subscription_tier] ?? 0);
       }
       if (r.subscription_status === 'trialing') trialing += n;
       if (r.subscription_status === 'past_due') pastDue += n;
@@ -100,7 +97,7 @@ export async function overview(req: Request, res: Response, next: NextFunction):
     );
 
     ok(res, {
-      clients: { total, active, trialing, pastDue, canceled, newThisWeek, mrr },
+      clients: { total, active, trialing, pastDue, canceled, newThisWeek, mrr: null },
       auditLeads: { total: auditLeads, thisWeek: auditLeadsThisWeek },
       health: {
         db: { ok: dbLatencyMs >= 0, latencyMs: dbLatencyMs },
@@ -213,32 +210,8 @@ export async function analytics(req: Request, res: Response, next: NextFunction)
     }
     const churn = Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month));
 
-    // MRR by month — active clients created in each month * tier price (approximation)
-    const mrrRows = await db('clients')
-      .select(
-        db.raw("DATE_TRUNC('month', created_at) as month"),
-        'subscription_tier',
-        db.raw('COUNT(*) as count'),
-      )
-      .where('subscription_status', 'active')
-      .where('created_at', '>=', db.raw("NOW() - INTERVAL '12 months'"))
-      .groupByRaw("DATE_TRUNC('month', created_at), subscription_tier")
-      .orderBy('month', 'asc') as Array<{ month: Date; subscription_tier: number; count: string }>;
-
-    const mrrMap = new Map<string, { month: string; mrr: number; activeClients: number }>();
-    for (const r of mrrRows) {
-      const key = new Date(r.month).toISOString().slice(0, 7);
-      const cnt = parseInt(r.count, 10);
-      const price = TIER_PRICES[r.subscription_tier] ?? 0;
-      const existing = mrrMap.get(key);
-      if (existing) {
-        existing.mrr += cnt * price;
-        existing.activeClients += cnt;
-      } else {
-        mrrMap.set(key, { month: key, mrr: cnt * price, activeClients: cnt });
-      }
-    }
-    const mrr = Array.from(mrrMap.values()).sort((a, b) => a.month.localeCompare(b.month));
+    // Current subscription flags and creation dates cannot reconstruct billed MRR.
+    const mrr: never[] = [];
 
     // Tier breakdown (current state)
     const tierRows = await db('clients')

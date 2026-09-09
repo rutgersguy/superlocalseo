@@ -19,7 +19,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { ENABLED_AI_ENGINES } from '../../config/ai_engines.config';
 
-const EXPECTED = { lite: 149, pro: 349, extraLocation: 125, setupFeeAnchor: 499 };
+const EXPECTED = { lite: 149, pro: 349, extraLocation: 125 };
 
 const root = join(__dirname, '../../../..');
 const landingSource = readFileSync(join(root, 'frontend/src/pages/Landing.tsx'), 'utf8');

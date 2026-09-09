@@ -115,6 +115,8 @@ async function computeAndSaveScores(
       nap_score: scores.napScore,
       citation_score: scores.citationScore,
       composite_score: scores.compositeScore,
+      raw_data: db.raw("COALESCE(raw_data, '{}'::jsonb) || ?::jsonb", [JSON.stringify({ scoreMethodology: 'verified_observations_v2' })]),
+      updated_at: new Date(),
       on_page_score: scores.onPageScore,
       on_page_details: scores.onPageDetails.length ? JSON.stringify(scores.onPageDetails) : null,
       dfs_on_page_task_id: scores.dfsLighthouseTaskId ?? null,
@@ -224,6 +226,8 @@ export async function pollPending(): Promise<void> {
         nap_score: scores.napScore,
         citation_score: scores.citationScore,
         composite_score: scores.compositeScore,
+      raw_data: db.raw("COALESCE(raw_data, '{}'::jsonb) || ?::jsonb", [JSON.stringify({ scoreMethodology: 'verified_observations_v2' })]),
+      updated_at: new Date(),
         on_page_score: scores.onPageScore,
         on_page_details: scores.onPageDetails.length ? JSON.stringify(scores.onPageDetails) : null,
         status: 'complete',
@@ -276,6 +280,7 @@ export async function pollPending(): Promise<void> {
   const nullScoreAudits = await db('location_audits')
     .where({ 'location_audits.status': 'complete' })
     .whereNull('location_audits.composite_score')
+    .whereRaw("(location_audits.raw_data->>'scoreMethodology') IS DISTINCT FROM ?", ['verified_observations_v2'])
     .whereNull('location_audits.bl_report_id')
     // Skip rows we have already tried recently. Without this, a computation that
     // legitimately returns null writes the row back unchanged, so it re-qualifies
@@ -298,6 +303,8 @@ export async function pollPending(): Promise<void> {
         nap_score: scores.napScore,
         citation_score: scores.citationScore,
         composite_score: scores.compositeScore,
+      raw_data: db.raw("COALESCE(raw_data, '{}'::jsonb) || ?::jsonb", [JSON.stringify({ scoreMethodology: 'verified_observations_v2' })]),
+      updated_at: new Date(),
         on_page_score: scores.onPageScore,
         on_page_details: scores.onPageDetails.length ? JSON.stringify(scores.onPageDetails) : null,
         dfs_on_page_task_id: scores.dfsLighthouseTaskId ?? null,
@@ -374,17 +381,21 @@ export async function reportDownload(req: Request, res: Response, next: NextFunc
   }
 }
 
-function formatAudit(row: Record<string, unknown>) {
+export function formatAudit(row: Record<string, unknown>) {
+  const raw = typeof row.raw_data === 'string' ? JSON.parse(row.raw_data) : row.raw_data;
+  const verifiedScores = Boolean(row.bl_report_id) || raw?.scoreMethodology === 'verified_observations_v2';
   return {
     id: row.id,
+    needsScoreRefresh: !verifiedScores,
+    scoreMethodology: verifiedScores ? (row.bl_report_id ? 'Provider audit' : 'Heuristic: verified listings 40%, fully compared NAP 30%, top-10 observation coverage 30%. All components required.') : 'Legacy calculated scores withheld; run a new audit.',
     locationId: row.location_id,
     blReportId: row.bl_report_id,
     status: row.status,
-    napScore: row.nap_score != null ? parseFloat(row.nap_score as string) : null,
-    citationScore: row.citation_score != null ? parseFloat(row.citation_score as string) : null,
+    napScore: verifiedScores && row.nap_score != null ? parseFloat(row.nap_score as string) : null,
+    citationScore: verifiedScores && row.citation_score != null ? parseFloat(row.citation_score as string) : null,
     reviewScore: row.review_score != null ? parseFloat(row.review_score as string) : null,
     googleScore: row.google_score != null ? parseFloat(row.google_score as string) : null,
-    compositeScore: row.composite_score != null ? parseFloat(row.composite_score as string) : null,
+    compositeScore: verifiedScores && row.composite_score != null ? parseFloat(row.composite_score as string) : null,
     onPageScore: row.on_page_score != null ? Number(row.on_page_score) : null,
     onPageDetails: (row.on_page_details as string[] | null) ?? [],
     dfsLighthouseTaskId: (row.dfs_on_page_task_id as string | null) ?? null,

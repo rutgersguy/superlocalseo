@@ -145,7 +145,7 @@ export async function scan(req: Request, res: Response, next: NextFunction): Pro
     const place = await findBusiness(businessName, city);
 
     // Run on-page check on the website returned by Places — in parallel with DB insert.
-    let onPage: { score: number; details: string[] } | null = null;
+    let onPage: { score: number | null; details: string[] } | null = null;
     if (place?.websiteUrl) {
       try {
         onPage = await checkOnPageSeo(place.websiteUrl);

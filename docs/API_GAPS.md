@@ -1252,7 +1252,7 @@ No visible change needed. If a newly-registered client opens the Reviews chart, 
 **Dependencies:** `#73` Review Request Campaigns (already built)
 
 ### What and why
-The review gating flow routes 1–3★ respondents to a private feedback form instead of Google. This was the whole point of the campaign gating feature. But we never pull or display that private feedback — it's collecting in EMR and our clients can't see it without logging into EMR directly. This is a quick win that makes the campaign feature feel complete.
+Historical note: selective routing was previously proposed. Current guidance is to request honest reviews with equal public review access for all ratings; private feedback remains an independent follow-up channel. But we never pull or display that private feedback — it's collecting in EMR and our clients can't see it without logging into EMR directly. This is a quick win that makes the campaign feature feel complete.
 
 ### Schema
 **Migration:** `20260502050000_private_feedback.ts`

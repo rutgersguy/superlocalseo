@@ -13,7 +13,7 @@ interface OverviewData {
     pastDue: number;
     canceled: number;
     newThisWeek: number;
-    mrr: number;
+    mrr: number | null;
   };
   auditLeads: { total: number; thisWeek: number };
   health: {
@@ -158,7 +158,7 @@ function OverviewTab() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatCard label="Total Clients" value={d.clients.total} />
         <StatCard label="Active" value={d.clients.active} />
-        <StatCard label="MRR" value={fmt$(d.clients.mrr)} sub="active subs only" />
+        <StatCard label="MRR" value={d.clients.mrr == null ? 'Unavailable' : fmt$(d.clients.mrr)} sub="Requires billing reconciliation" />
         <StatCard label="New This Week" value={d.clients.newThisWeek} />
         <StatCard label="Trialing" value={d.clients.trialing} />
         <StatCard label="Past Due" value={d.clients.pastDue} />

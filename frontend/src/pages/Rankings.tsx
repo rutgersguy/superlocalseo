@@ -27,7 +27,7 @@ interface RankingRow {
 
 interface TrendPoint {
   date: string;
-  rank: number;
+  rank: number | null;
 }
 
 interface RoiKeyword {
@@ -46,7 +46,7 @@ interface RoiKeyword {
 interface RoiData {
   roiConfig: { avgCustomerValue: number; conversionRate: number };
   keywords: RoiKeyword[];
-  totals: { estClicks: number; estLeads: number; estRevenue: number };
+  totals: { estClicks: number | null; estLeads: number | null; estRevenue: number | null };
 }
 
 const ENGINE_LABELS: Record<string, string> = {
@@ -548,7 +548,14 @@ export default function Rankings() {
   const [area, setArea] = useState('all');
 
   const rankingsUrl = rankType !== 'all' ? `/rankings?rankType=${rankType}` : '/rankings';
-  const { data: rankingsData, isLoading, error, mutate: mutateRankings } = useSWR<{ success: boolean; data: RankingRow[] }>(rankingsUrl, fetcher);
+  const { data: rankingsData, isLoading, error, mutate: mutateRankings } = useSWR<{ success: boolean; data: RankingRow[] }>(rankingsUrl, async (url: string) => {
+    const all: RankingRow[] = [];
+    for (let page = 1; ; page++) {
+      const result = await fetcher(`${url}${url.includes('?') ? '&' : '?'}limit=200&page=${page}`) as { success: boolean; data: RankingRow[] };
+      all.push(...result.data);
+      if (result.data.length < 200) return { success: true, data: all };
+    }
+  });
   // ROI is a Pro feature (backend gates /analytics/roi) — don't fetch it for Lite.
   // Wait for the plan to load so a Lite user doesn't fire a transient 403.
   const { data: roiData, mutate: roiMutate } = useSWR<{ success: boolean; data: RoiData }>(planLoading || isLite ? null : '/analytics/roi', fetcher);
@@ -556,7 +563,7 @@ export default function Rankings() {
   const { data: locData, isLoading: locLoading } = useSWR<LocationsResponse>('/locations', fetcher);
 
   const trendKey = selectedRow
-    ? `/rankings/trend?keywordId=${selectedRow.keywordId}&locationId=${selectedRow.locationId}${trendRange > 0 ? `&days=${trendRange}` : ''}${rankType !== 'all' ? `&rankType=${rankType}` : ''}`
+    ? `/rankings/trend?keywordId=${selectedRow.keywordId}&locationId=${selectedRow.locationId}${`&days=${trendRange}`}&searchEngine=${encodeURIComponent(selectedRow.searchEngine ?? 'google')}&geoLocation=${encodeURIComponent(selectedRow.geoLocation ?? '')}${rankType !== 'all' ? `&rankType=${rankType}` : ''}`
     : null;
   const { data: trendData, isLoading: trendLoading } = useSWR<{ success: boolean; data: TrendPoint[] }>(trendKey, fetcher);
 
@@ -621,7 +628,7 @@ export default function Rankings() {
   };
 
   const trendPoints = trendData?.data ?? [];
-  const ranks = trendPoints.map((p) => p.rank);
+  const ranks = trendPoints.map((p) => p.rank).filter((r): r is number => r != null);
   const yMin = ranks.length ? Math.min(...ranks) - 2 : 1;
   const yMax = ranks.length ? Math.max(...ranks) + 2 : 20;
 
@@ -720,9 +727,9 @@ export default function Rankings() {
       {showRoi && totals && roiConfig && roiConfig.avgCustomerValue > 0 && (
         <div className="grid grid-cols-3 gap-4">
           {[
-            { label: 'Est. Monthly Clicks', value: totals.estClicks.toLocaleString() },
-            { label: 'Est. Monthly Leads', value: totals.estLeads.toLocaleString() },
-            { label: 'Est. Monthly Revenue', value: fmt$(totals.estRevenue) },
+            { label: 'Est. Monthly Clicks', value: totals.estClicks?.toLocaleString() ?? 'Unavailable' },
+            { label: 'Est. Monthly Leads', value: totals.estLeads?.toLocaleString() ?? 'Unavailable' },
+            { label: 'Est. Monthly Revenue', value: totals.estRevenue == null ? 'Unavailable' : fmt$(totals.estRevenue) },
           ].map((card) => (
             <div key={card.label} className="bg-white rounded-xl shadow-card p-5">
               <p className="text-xs text-slate-500 mb-1">{card.label}</p>

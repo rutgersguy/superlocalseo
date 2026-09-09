@@ -67,24 +67,28 @@ function getOnPageTip(detail: string): Tip | null {
       what: 'The title tag is the blue clickable headline shown in Google search results. It\'s one of the strongest on-page signals — Google uses it to understand what your page is about and it directly affects click-through rate.',
       howToFix: pass
         ? 'Your title is the right length — make sure it includes your primary service and city (e.g. "HVAC Repair in Tulsa, OK | Your Business").'
+        : d.includes('no ') || d.includes('missing')
+          ? 'Add a concise, descriptive tag that accurately represents the page.'
         : d.includes('short')
           ? 'Expand the title to 50–60 characters. Include your primary keyword and city: "[Service] in [City, State] | [Brand]".'
-          : 'Trim the title to under 60 characters so it doesn\'t get cut off in search results.',
+          : 'Keep the title concise and descriptive; truncation depends on display width rather than a fixed character limit.',
     };
   }
   if (d.includes('meta description')) {
     return {
-      what: 'The meta description is the grey snippet of text shown beneath your title in search results. A compelling description increases click-through rate — which indirectly improves rankings.',
+      what: 'The meta description is the grey snippet of text shown beneath your title in search results. A compelling description increases click-through rate — without establishing a ranking improvement.',
       howToFix: pass
         ? 'Your description length is good. Make sure it includes your primary keyword, city, and a call to action.'
+        : d.includes('no ') || d.includes('missing')
+          ? 'Add a concise, descriptive tag that accurately represents the page.'
         : d.includes('short')
           ? 'Expand to 120–160 characters. Describe what you do, mention your city, and add a call to action like "Call us for same-day service."'
-          : 'Trim to 155 characters — anything longer gets cut off with "…" in search results.',
+          : 'Keep the description concise and accurate. Snippets vary by query and available display width; there is no fixed character cutoff.',
     };
   }
   if (d.includes('h1')) {
     return {
-      what: 'The H1 is the main visible heading on your webpage. Search engines treat it as the primary topic signal — it should clearly state what the page is about. Every page should have exactly one H1.',
+      what: 'The H1 is the main visible heading on your webpage. Search engines treat it as the primary topic signal — it should clearly state what the page is about. Use a clear main heading and a logical heading hierarchy; multiple H1 elements do not by themselves prove a ranking problem.',
       howToFix: pass
         ? 'Your page has exactly 1 H1 — good. Make sure it includes your primary service and city.'
         : d.includes('no ')
@@ -94,7 +98,7 @@ function getOnPageTip(detail: string): Tip | null {
   }
   if (d.includes('schema') || d.includes('json-ld') || d.includes('structured data')) {
     return {
-      what: 'Schema markup (LocalBusiness JSON-LD) tells Google exactly what type of business you are, your address, phone, hours, and service area. It can unlock rich results in search (star ratings, address, hours) and is a proven local SEO signal.',
+      what: 'Schema markup (LocalBusiness JSON-LD) tells Google exactly what type of business you are, your address, phone, hours, and service area. It can unlock rich results in search (star ratings, address, hours) and helps describe the business; eligibility and display of rich results are not guaranteed.',
       howToFix: pass
         ? 'LocalBusiness schema is detected — great. Make sure it includes your NAP, opening hours, and geographic area served.'
         : 'Add a LocalBusiness JSON-LD script to your site\'s <head>. In WordPress, the Rank Math or Yoast SEO plugin handles this automatically. For other platforms, use Google\'s Structured Data Markup Helper.',
@@ -129,7 +133,7 @@ function getOnPageTip(detail: string): Tip | null {
 
 const LH_CATEGORY_INFO: Record<string, { description: string; howToImprove: string }> = {
   'Overall Performance': {
-    description: 'How fast your page loads and feels to visitors. Google uses performance as a ranking signal — slow pages rank lower and lose more than half their visitors before the page even finishes loading.',
+    description: 'How fast your page loads and feels to visitors. Google uses performance as a ranking signal — these lab diagnostics can help identify usability problems, but are not a direct measure of search ranking.',
     howToImprove: 'Work with your web developer to compress images, reduce JavaScript, and enable browser caching. Focus on the highest-impact issues listed below.',
   },
   'Accessibility': {
@@ -206,8 +210,8 @@ function buildPriorityActions(
     ];
 
     for (const cat of lhCategories) {
-      for (const audit of cat.audits.slice(0, 3)) {
-        if (audit.score != null && audit.score >= 0.5) continue; // only failing
+      for (const audit of cat.audits.filter(a => a.score != null && a.score < 0.5).slice(0, 3)) {
+        if (audit.score == null || audit.score >= 0.5) continue; // only failing
         actions.push({
           priority: cat.score < 50 ? 'high' : 'medium',
           category: cat.name,
@@ -361,7 +365,7 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
     ${onPage != null ? `
     <div class="overall-badge" style="border-color:${scoreColor(onPage)};">
       <div class="num" style="color:${scoreColor(onPage)};">${onPage}</div>
-      <div class="lbl">On-Page Score</div>
+      <div class="lbl">Blended Audit Score</div>
       <div style="font-size:11px;font-weight:700;color:${scoreColor(onPage)};margin-top:2px;">${scoreLabel(onPage)}</div>
     </div>` : ''}
   </div>
@@ -371,7 +375,7 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
   ${actions.length > 0 ? `
   <div class="section">
     <h2>Priority Actions</h2>
-    <div class="section-subtitle">Fix these issues to improve your local search rankings — listed highest impact first</div>
+    <div class="section-subtitle">Suggested checks, ordered by our audit rules. Verify each finding before acting; search-ranking impact is not measured.</div>
     ${[...highActions, ...medActions].map((a) => `
     <div class="action-item ${a.priority}">
       <div class="action-badge-col">
@@ -413,7 +417,7 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
   <!-- Website Performance -->
   <div class="section" style="page-break-before:always;">
     <h2>Website Performance</h2>
-    <div class="section-subtitle">Measured by Google Lighthouse — these signals directly affect your search rankings and user experience</div>
+    <div class="section-subtitle">Lighthouse lab diagnostics for this page and test run. These scores are not Google ranking scores or field Core Web Vitals results.</div>
 
     ${(lh.lcp != null || lh.cls != null || lh.tbt != null) ? `
     <div class="cwv-grid" style="margin-bottom:24px;">
@@ -434,7 +438,7 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
       ${lh.tbt != null ? `
       <div class="cwv-card">
         <div class="metric-name">Interactivity</div>
-        <div class="metric-sub">How quickly the page responds to clicks</div>
+        <div class="metric-sub">Total blocking time in this lab run; not field interaction latency</div>
         <div class="metric-val" style="color:${cwvColor('tbt', lh.tbt)};">${Math.round(lh.tbt)}ms</div>
         <div class="metric-status" style="color:${cwvColor('tbt', lh.tbt)};">${cwvLabel('tbt', lh.tbt)}</div>
       </div>` : ''}
@@ -442,7 +446,7 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
 
     ${lhCategoryRows.map((cat) => {
       const info = LH_CATEGORY_INFO[cat.label];
-      const failingAudits = cat.audits.filter((a) => a.score == null || a.score < 0.9).slice(0, 4);
+      const failingAudits = cat.audits.filter((a) => a.score != null && a.score < 0.9).slice(0, 4);
       return `
     <div class="lh-row">
       <div class="lh-row-header">

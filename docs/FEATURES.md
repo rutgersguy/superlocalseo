@@ -643,7 +643,7 @@ AI drafts are subject to the `aiLimiter` middleware: 20 requests per 10-minute w
 
 ### Overview
 
-Built on the EmbedMyReviews campaign API. Clients send review request invitations to customers via email and/or SMS. The campaign uses a **gating** mechanism: customers who leave 4–5 stars are directed to a public review platform (Google, Facebook, etc.); those who leave 1–3 stars are captured as **private feedback** instead, protecting the public rating.
+Built on the EmbedMyReviews campaign API. Clients send review request invitations to customers via email and/or SMS. Campaigns must invite honest reviews and give all customers the same public review opportunity. Rating-based sorting and service-recovery queues are internal. EMR offers gating, but that capability must not be used to selectively solicit positive public reviews. The vendor configuration must be verified separately from this repository’s copy.
 
 ### Campaign Funnel Metrics
 
@@ -1486,7 +1486,7 @@ Operator-configured (not client self-service). The `api_key_encrypted` field sto
 EMR enables:
 - Review aggregation across 100+ platforms
 - Review request campaigns
-- Private feedback gating
+- Optional private feedback and internal sentiment triage
 - Review reply sync
 
 ### BrightLocal

@@ -23,6 +23,8 @@ type VerificationStatus = 'listed' | 'not_found' | 'unverified';
 interface Directory {
   id: string;
   name: string;
+  locationName?: string;
+  pulledAt?: string;
   /** Legacy boolean, kept for older payloads. verificationStatus is the truth. */
   listed: boolean;
   verificationStatus?: VerificationStatus;
@@ -42,7 +44,7 @@ interface CitationsResponse {
     unverifiedCount?: number;
     /** Directories that produced a definite answer — the honest denominator. */
     checkedCount?: number;
-    napAccuratePercent: number;
+    napAccuratePercent: number | null;
     /** ISO timestamp of the newest snapshot, or null if there is no data at all. */
     lastPulledAt: string | null;
   };
@@ -52,7 +54,7 @@ interface TrendPoint {
   date: string;
   listedCount: number;
   totalCount: number;
-  completeness: number;
+  completeness: number | null;
 }
 
 interface TrendResponse {
@@ -320,14 +322,14 @@ export default function Citations() {
                 showErrorsOnly ? 'bg-brand-500 text-white border-brand-500' : 'text-slate-600 border-slate-200 hover:bg-slate-50'
               }`}
             >
-              Show errors only
+              Show differences only
             </button>
           </div>
         </div>
         <p className="text-sm text-gray-500 mt-1">Business listing status across online directories</p>
         {napErrorCount > 0 && (
           <p className="text-sm text-red-600 font-medium mt-1">
-            {napErrorCount} citation{napErrorCount !== 1 ? 's' : ''} have NAP errors
+            {napErrorCount} citation{napErrorCount !== 1 ? 's' : ''} have NAP differences
           </p>
         )}
       </div>
@@ -415,14 +417,14 @@ export default function Citations() {
           </div>
           <div className="h-6 w-px bg-gray-200" />
           <div>
-            <span className="text-sm text-gray-600">NAP accurate: </span>
+            <span className="text-sm text-gray-600">Exact NAP match: </span>
             <span
               className={`text-sm font-semibold ${
-                summary.napAccuratePercent >= 80 ? 'text-green-600' :
-                summary.napAccuratePercent >= 50 ? 'text-yellow-600' : 'text-red-600'
+                (summary.napAccuratePercent ?? -1) >= 80 ? 'text-green-600' :
+                (summary.napAccuratePercent ?? -1) >= 50 ? 'text-yellow-600' : 'text-red-600'
               }`}
             >
-              {summary.napAccuratePercent}%
+              {summary.napAccuratePercent == null ? 'Not checked' : `${summary.napAccuratePercent}%`}
             </span>
           </div>
           <div className="h-6 w-px bg-gray-200" />
@@ -509,13 +511,13 @@ export default function Citations() {
       ) : filteredDirs.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-12 text-center">
           <p className="text-gray-400 text-sm">
-            {showErrorsOnly ? 'No NAP errors found.' : 'No directory data available yet.'}
+            {showErrorsOnly ? 'No NAP differences found.' : 'No directory data available yet.'}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredDirs.map((dir) => {
-            const isExpanded = expandedDir === dir.name;
+            const isExpanded = expandedDir === dir.id;
             const d = dir.napDetail;
             const status = statusOf(dir);
             const hasDetail = d && (d.nameMatch !== null || d.addressMatch !== null || d.phoneMatch !== null);
@@ -528,7 +530,7 @@ export default function Citations() {
                 <div
                   className={`p-5 ${hasDetail ? 'cursor-pointer hover:bg-gray-50' : ''}`}
                   onClick={() => {
-                    if (hasDetail) setExpandedDir(isExpanded ? null : dir.name);
+                    if (hasDetail) setExpandedDir(isExpanded ? null : dir.id);
                   }}
                 >
                   <div className="flex items-center justify-between">
@@ -537,6 +539,7 @@ export default function Citations() {
                       <span className="text-gray-400 text-xs">{isExpanded ? '▲' : '▼'}</span>
                     )}
                   </div>
+                  <p className="text-xs text-gray-500 mt-1">{dir.locationName}{dir.pulledAt ? ` · Checked ${new Date(dir.pulledAt).toLocaleDateString()}` : ''}</p>
                   <div className="flex gap-6 mt-3">
                     <div className="flex items-center gap-1.5">
                       {status === 'listed' ? <CheckIcon /> : status === 'not_found' ? <XIcon /> : <QuestionIcon />}

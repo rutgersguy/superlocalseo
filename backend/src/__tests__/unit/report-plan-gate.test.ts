@@ -56,8 +56,8 @@ describe('monthly report — Lite gating', () => {
 
   const proOnlySections = [
     ['Citation Health', 'citation auditing'],
-    ['ROI &amp; Revenue Attribution', 'revenue attribution'],
-    ['Competitor Benchmarking', 'competitor intelligence'],
+    ['Modeled Traffic Scenario', 'modeled traffic'],
+    ['Competitor Observations', 'competitor intelligence'],
   ] as const;
 
   for (const [heading, what] of proOnlySections) {
@@ -78,7 +78,7 @@ describe('monthly report — Lite gating', () => {
   it('leaves no hole in the Lite summary grid', () => {
     // The row is a fixed three-column grid. Dropping two Pro boxes without
     // padding would render a visible gap in a PDF nobody can reflow.
-    const row = lite.slice(lite.indexOf('New Reviews') - 400);
+    const row = lite.slice(lite.indexOf('Reviews dated this month') - 400);
     const boxes = (row.slice(0, row.indexOf('AI ASSISTANT VISIBILITY')).match(/font-size:11px;color:#6b7280/g) ?? []).length;
     expect(boxes).toBeGreaterThanOrEqual(3);
   });
@@ -90,17 +90,17 @@ describe('monthly report — Lite gating', () => {
     expect(lite).not.toMatch(/incorrect NAP/);
     expect(lite).not.toMatch(/Local SEO audit score is/);
     // ...and Pro still gets them.
-    expect(pro).toMatch(/Citation score is 55%/);
+    expect(pro).toContain('6 directories returned no matching listing');
   });
 
   it('keeps everything Lite pays for', () => {
     expect(lite).toContain('Executive Summary');
-    expect(lite).toContain('Keyword Rankings');
+    expect(lite).toContain('Ranking Observations');
     expect(lite).toContain('Reviews');
     expect(lite).toContain('Recommendations');
     // The keyword position breakdown is computed from the client's own ranks,
     // not competitor data, despite living next to the competitor sections.
-    expect(lite).toContain('Keyword Position Breakdown');
+    expect(lite).toContain('Ranking Observation Breakdown');
     // Visibility score is a single composite the dashboard shows both plans.
     expect(lite).toContain('Visibility Score');
   });

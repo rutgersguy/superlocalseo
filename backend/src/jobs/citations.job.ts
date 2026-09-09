@@ -138,7 +138,8 @@ async function syncCitationsForLocation(loc: LocationRow): Promise<void> {
     nap_match:
       r.status !== 'listed' ? false
         : r.napUnreadable ? null
-        : r.nameMatch !== false && r.addressMatch !== false && r.phoneMatch !== false,
+        : [r.nameMatch, r.addressMatch, r.phoneMatch].some(v => v === false) ? false
+          : [r.nameMatch, r.addressMatch, r.phoneMatch].every(v => v === true) ? true : null,
     listing_url: r.listingUrl ?? null,
     pulled_at: now,
     nap_name_match: r.nameMatch ?? null,

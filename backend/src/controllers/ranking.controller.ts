@@ -8,7 +8,7 @@ import { syncRankingsForClient } from '../jobs/rankings.job';
 export const listQuerySchema = z.object({
   locationId: z.string().uuid().optional(),
   keywordId: z.string().uuid().optional(),
-  searchEngine: z.enum(['google', 'bing']).optional(),
+  searchEngine: z.string().max(50).optional(),
   rankType: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   page: z.coerce.number().int().min(1).default(1),
@@ -17,7 +17,10 @@ export const listQuerySchema = z.object({
 export const trendQuerySchema = z.object({
   keywordId: z.string().uuid(),
   locationId: z.string().uuid().optional(),
-  days: z.coerce.number().int().min(1).max(365).default(30),
+  days: z.coerce.number().int().min(0).max(730).default(30),
+  searchEngine: z.string().max(50).optional(),
+  geoLocation: z.string().max(255).optional(),
+  rankType: z.string().optional(),
 });
 
 type ListQuery = z.infer<typeof listQuerySchema>;
@@ -33,22 +36,22 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
       .select(
         db.raw('DISTINCT ON (keyword_id, location_id, search_engine, geo_location) keyword_id, location_id, search_engine, geo_location, rank, url_ranked, pulled_at, id, rank_type'),
       )
-      .orderByRaw('keyword_id, location_id, search_engine, geo_location, pulled_at DESC')
+      .orderByRaw('keyword_id, location_id, search_engine, geo_location, pulled_at DESC, id DESC')
       .as('latest');
 
     // Get second-most-recent for delta calculation (per geo_location)
     const previousSubquery = db('ranking_snapshots')
       .select(
-        db.raw('DISTINCT ON (keyword_id, location_id, search_engine, geo_location) keyword_id, location_id, search_engine, geo_location, rank as prev_rank'),
+        db.raw('DISTINCT ON (keyword_id, location_id, search_engine, geo_location) keyword_id, location_id, search_engine, geo_location, rank_type, rank as prev_rank'),
       )
       .where(
         'id',
         'not in',
         db('ranking_snapshots')
           .select(db.raw('DISTINCT ON (keyword_id, location_id, search_engine, geo_location) id'))
-          .orderByRaw('keyword_id, location_id, search_engine, geo_location, pulled_at DESC'),
+          .orderByRaw('keyword_id, location_id, search_engine, geo_location, pulled_at DESC, id DESC'),
       )
-      .orderByRaw('keyword_id, location_id, search_engine, geo_location, pulled_at DESC')
+      .orderByRaw('keyword_id, location_id, search_engine, geo_location, pulled_at DESC, id DESC')
       .as('previous');
 
     let baseQuery = db
@@ -57,7 +60,8 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
         this.on('latest.keyword_id', '=', 'previous.keyword_id')
           .andOn('latest.location_id', '=', 'previous.location_id')
           .andOn('latest.search_engine', '=', 'previous.search_engine')
-          .andOn(db.raw('latest.geo_location IS NOT DISTINCT FROM previous.geo_location'));
+          .andOn(db.raw('latest.geo_location IS NOT DISTINCT FROM previous.geo_location'))
+          .andOn(db.raw('latest.rank_type IS NOT DISTINCT FROM previous.rank_type'));
       })
       .join('keywords', 'latest.keyword_id', 'keywords.id')
       .join('locations', 'latest.location_id', 'locations.id')
@@ -81,7 +85,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
     if (rankType && rankType !== 'all') baseQuery = baseQuery.where('latest.rank_type', rankType);
 
     const offset = (page - 1) * limit;
-    const rows = await baseQuery.limit(limit).offset(offset);
+    const rows = await baseQuery.orderBy('latest.keyword_id').orderBy('latest.location_id').orderBy('latest.search_engine').orderBy('latest.geo_location').limit(limit).offset(offset);
 
     const results = rows.map((r: Record<string, unknown>) => ({
       keywordId: r.keywordId,
@@ -112,21 +116,17 @@ export async function trend(req: Request, res: Response, next: NextFunction): Pr
     since.setDate(since.getDate() - (days ?? 30));
 
     let baseQuery = db('ranking_snapshots')
-      .join('keywords', 'ranking_snapshots.keyword_id', 'keywords.id')
       .join('locations', 'ranking_snapshots.location_id', 'locations.id')
       .where('locations.client_id', req.clientId)
       .where('ranking_snapshots.keyword_id', keywordId)
-      .where('ranking_snapshots.pulled_at', '>=', since)
-      .select(
-        db.raw(`DATE(ranking_snapshots.pulled_at) as date`),
-        db.raw(`ROUND(AVG(ranking_snapshots.rank)) as rank`),
-      )
-      .groupByRaw('DATE(ranking_snapshots.pulled_at)')
-      .orderBy('date', 'asc');
-
-    if (locationId) {
-      baseQuery = baseQuery.where('ranking_snapshots.location_id', locationId);
-    }
+      .where('ranking_snapshots.pulled_at', '<=', new Date())
+      .select(db.raw("DISTINCT ON ((ranking_snapshots.pulled_at AT TIME ZONE 'UTC')::date) (ranking_snapshots.pulled_at AT TIME ZONE 'UTC')::date::text as date"), 'ranking_snapshots.rank')
+      .orderByRaw("(ranking_snapshots.pulled_at AT TIME ZONE 'UTC')::date, ranking_snapshots.pulled_at DESC, ranking_snapshots.id DESC");
+    if (days !== 0) baseQuery = baseQuery.where('ranking_snapshots.pulled_at', '>=', since);
+    if (locationId) baseQuery = baseQuery.where('ranking_snapshots.location_id', locationId);
+    baseQuery = baseQuery.where('ranking_snapshots.search_engine', query.searchEngine ?? 'google');
+    baseQuery = query.geoLocation ? baseQuery.where('ranking_snapshots.geo_location', query.geoLocation) : baseQuery.whereNull('ranking_snapshots.geo_location');
+    if (query.rankType && query.rankType !== 'all') baseQuery = baseQuery.where('ranking_snapshots.rank_type', query.rankType);
 
     const rows = await baseQuery;
 

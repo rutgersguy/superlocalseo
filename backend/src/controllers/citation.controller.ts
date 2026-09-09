@@ -12,6 +12,7 @@ import {
   type CbPackageId,
   type CbPublisher,
 } from '../services/brightlocal.service';
+import { citationHistory, napVerdict } from '../services/measurement.service';
 import { logger } from '../utils/logger';
 
 export const listQuerySchema = z.object({
@@ -22,6 +23,7 @@ type ListQuery = z.infer<typeof listQuerySchema>;
 
 interface CitationRow {
   location_id: string;
+  location_name: string;
   directory: string;
   pulled_at: string | Date | null;
   listed: boolean;
@@ -49,10 +51,11 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
         db('citation_snapshots')
           .select(
             db.raw('DISTINCT ON (citation_snapshots.location_id, citation_snapshots.directory) citation_snapshots.*'),
+            'locations.name as location_name',
           )
           .join('locations', 'citation_snapshots.location_id', 'locations.id')
           .where('locations.client_id', req.clientId)
-          .orderByRaw('citation_snapshots.location_id, citation_snapshots.directory, citation_snapshots.pulled_at DESC')
+          .orderByRaw('citation_snapshots.location_id, citation_snapshots.directory, citation_snapshots.pulled_at DESC, citation_snapshots.id DESC')
           .as('latest'),
       )
       .select('latest.*');
@@ -63,37 +66,27 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
 
     const rows = (await baseQuery) as CitationRow[];
 
-    // Aggregate across locations, best-known state wins: a listing confirmed at
-    // one location is the most informative answer for the directory, and an
-    // `unverified` must never displace a definite one.
-    const RANK: Record<string, number> = { listed: 3, not_found: 2, unverified: 1 };
-    const byDirectory = new Map<string, CitationRow>();
-    for (const row of rows) {
-      const existing = byDirectory.get(row.directory);
-      const status = row.verification_status ?? (row.listed ? 'listed' : 'not_found');
-      const existingStatus = existing?.verification_status ?? (existing?.listed ? 'listed' : 'not_found');
-      if (!existing || (RANK[status] ?? 0) > (RANK[existingStatus] ?? 0)) {
-        byDirectory.set(row.directory, row);
-      }
-    }
-
+    // Preserve each location: a healthy listing must not hide another location’s issue.
     // Self-attested claims for the directories no audit can reach (#173).
     const claimRows = await db('location_directory_claims')
       .join('locations', 'location_directory_claims.location_id', 'locations.id')
       .where('locations.client_id', req.clientId)
       .modify((q) => { if (locationId) q.where('location_directory_claims.location_id', locationId); })
-      .select('location_directory_claims.directory', 'location_directory_claims.claimed_at');
-    const claims = new Map(claimRows.map((c: { directory: string; claimed_at: Date }) => [c.directory, c.claimed_at]));
+      .select('location_directory_claims.location_id', 'location_directory_claims.directory', 'location_directory_claims.claimed_at');
+    const claims = new Map(claimRows.map((c: { location_id: string; directory: string; claimed_at: Date }) => [JSON.stringify([c.location_id, c.directory]), c.claimed_at]));
 
-    const directories = Array.from(byDirectory.values()).map((c) => ({
-      id: c.directory,
+    const directories = rows.map((c) => ({
+      id: JSON.stringify([c.location_id, c.directory]),
+      locationId: c.location_id,
+      locationName: c.location_name,
+      pulledAt: c.pulled_at,
       name: c.directory,
       // `listed` is retained for older clients; verificationStatus is the truth.
       listed: c.listed,
       verificationStatus: c.verification_status ?? (c.listed ? 'listed' : 'not_found'),
       unverifiedReason: c.unverified_reason ?? null,
-      claimedAt: claims.get(c.directory) ?? null,
-      napMatch: c.nap_match,
+      claimedAt: claims.get(JSON.stringify([c.location_id, c.directory])) ?? null,
+      napMatch: napVerdict(c),
       listingUrl: c.listing_url,
       napDetail: {
         nameMatch: c.nap_name_match,
@@ -121,7 +114,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
     const napAccurateCount = directories.filter(
       (d) => d.verificationStatus === 'listed' && d.napMatch === true,
     ).length;
-    const napAccuratePercent = napCheckedCount > 0 ? Math.round((napAccurateCount / napCheckedCount) * 100) : 0;
+    const napAccuratePercent = napCheckedCount > 0 ? Math.round((napAccurateCount / napCheckedCount) * 100) : null;
 
     // When this data was last actually refreshed. The Citations page presented
     // whatever was in the table as current, so when the BrightLocal Data API
@@ -333,40 +326,7 @@ export async function history(req: Request, res: Response, next: NextFunction): 
     }
     const { locationId, days } = parsed.data as HistoryQuery;
 
-    // Get all location IDs for this client (or filter to specific location)
-    let locationQuery = db('locations').where({ client_id: req.clientId }).select('id');
-    if (locationId) {
-      locationQuery = locationQuery.where({ id: locationId });
-    }
-    const locationRows = await locationQuery as Array<{ id: string }>;
-    const locationIds = locationRows.map((r) => r.id);
-
-    if (locationIds.length === 0) {
-      ok(res, { history: [] });
-      return;
-    }
-
-    const rows = await db.raw<{ rows: Array<{ date: string; listed_count: string; total_count: string }> }>(`
-      SELECT DATE(pulled_at) AS date,
-             COUNT(CASE WHEN listed = true THEN 1 END) AS listed_count,
-             COUNT(*) AS total_count
-      FROM citation_snapshots
-      WHERE location_id = ANY(?)
-        AND pulled_at >= NOW() - INTERVAL '${days} days'
-      GROUP BY DATE(pulled_at)
-      ORDER BY date ASC
-    `, [locationIds]);
-
-    const historyData: HistoryPoint[] = rows.rows.map((r) => {
-      const listed = parseInt(r.listed_count, 10);
-      const total = parseInt(r.total_count, 10);
-      return {
-        date: typeof r.date === 'string' ? r.date : (r.date as Date).toISOString().split('T')[0]!,
-        listedCount: listed,
-        totalCount: total,
-        completeness: total > 0 ? Math.round((listed / total) * 100) : 0,
-      };
-    });
+    const historyData = await citationHistory(req.clientId, days, locationId);
 
     ok(res, { history: historyData });
   } catch (e) {

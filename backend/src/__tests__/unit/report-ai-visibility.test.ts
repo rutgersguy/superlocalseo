@@ -127,7 +127,7 @@ describe('report — AI visibility section', () => {
 describe('report — AI visibility recommendations', () => {
   it('leads with the assistants that did not name the business', () => {
     const html = renderReportHtml(baseData());
-    expect(html).toMatch(/Gemini did not name your business this month/);
+    expect(html).toMatch(/Gemini did not name your business in this report’s verified sample/);
   });
 
   it('escalates when no assistant recommended them at all', () => {
@@ -137,7 +137,7 @@ describe('report — AI visibility recommendations', () => {
     }));
     data.aiVisibility!.mentionRate = 0;
     const html = renderReportHtml(data);
-    expect(html).toMatch(/No AI assistant recommended you this month/);
+    expect(html).toMatch(/Your business was not named in the verified answers sampled for this report/);
   });
 
   it('flags a drop against last month', () => {
@@ -145,7 +145,7 @@ describe('report — AI visibility recommendations', () => {
     data.aiVisibility!.mentionRate = 40;
     data.aiVisibility!.priorMentionRate = 70;
     const html = renderReportHtml(data);
-    expect(html).toMatch(/fell from 70% to 40%/);
+    expect(html).toMatch(/changed from 70% to 40%/);
   });
 
   it('does not invent an AI recommendation when there was no scan', () => {
