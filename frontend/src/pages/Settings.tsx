@@ -1,3 +1,4 @@
+import GoogleConnectCard from '../components/GoogleReviewConnection';
 import { useState, useRef, useEffect, type ChangeEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useSWR, { mutate as swrMutate } from 'swr';
@@ -114,16 +115,6 @@ interface OAuthCardProps {
   onDisconnect: () => Promise<void>;
 }
 
-interface EmrConnectState {
-  connected: boolean;
-  connectedAt: string | null;
-  connectUrl: string | null;
-  expiresAt: string | null;
-  reviewCount?: number;
-  // Signed in with Google, but no reviews yet — see GoogleConnectCard.
-  awaitingReviews?: boolean;
-}
-
 /**
  * Google Business Profile connection, via EMR's connect-link.
  *
@@ -236,113 +227,6 @@ function GBPDirectCard() {
       <button onClick={() => void refresh()} className="mt-2 text-xs text-slate-500 hover:text-slate-700 underline">
         Re-check
       </button>
-    </div>
-  );
-}
-
-function GoogleConnectCard() {
-  const { data, mutate, isLoading } = useSWR<{ success: boolean; data: EmrConnectState }>(
-    '/integrations/emr/google/connect-link',
-    fetcher,
-  );
-  const state = data?.data;
-  const [working, setWorking] = useState(false);
-  const [waiting, setWaiting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Once they've been sent to Google, poll so the card flips to Connected on its own when
-  // they finish — they come back to a tab that already knows.
-  useEffect(() => {
-    if (!waiting || state?.connected) return;
-    const t = setInterval(() => void mutate(), 5000);
-    return () => clearInterval(t);
-  }, [waiting, state?.connected, mutate]);
-
-  useEffect(() => {
-    if (state?.connected) setWaiting(false);
-  }, [state?.connected]);
-
-  const connect = async () => {
-    setWorking(true);
-    setError(null);
-    try {
-      const res = await apiFetch<{ success: boolean; data: EmrConnectState; error?: { message: string } }>(
-        '/integrations/emr/google/connect-link',
-        { method: 'POST' },
-      );
-      if (!res.success || !res.data?.connectUrl) {
-        setError(res.error?.message ?? 'Could not start the Google connection');
-        return;
-      }
-      window.open(res.data.connectUrl, '_blank', 'noopener,noreferrer');
-      setWaiting(true);
-      await mutate();
-    } catch (e) {
-      setError((e as Error).message ?? 'Could not start the Google connection');
-    } finally {
-      setWorking(false);
-    }
-  };
-
-  return (
-    <div className="border border-slate-200 rounded-xl p-5">
-      <div className="flex items-start justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-slate-900">Google Business Profile</h3>
-          <p className="text-xs text-slate-500 mt-0.5">
-            {state?.connected
-              ? `Connected — ${state.reviewCount} review${state.reviewCount === 1 ? '' : 's'} syncing from Google`
-              : 'Connect to sync your Google reviews and reply to them from here'}
-          </p>
-        </div>
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-          isLoading ? 'bg-slate-100 text-slate-400'
-            : state?.connected ? 'bg-green-100 text-green-700'
-            : 'bg-slate-100 text-slate-500'
-        }`}>
-          {isLoading ? '…' : state?.connected ? 'Connected' : 'Not connected'}
-        </span>
-      </div>
-
-      {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
-
-      {/* Signed in, but nothing has arrived yet. This is genuinely ambiguous — a first sync
-          still running, a profile with no reviews, or a half-failed connect. The main cause of
-          the last one (confirmed by the review platform, 2026-07-16): the client unticked the
-          "manage your Business Profile" permission on Google's consent screen — sign-in still
-          succeeds, but profiles can't be read. So the retry guidance names that checkbox. */}
-      {state?.awaitingReviews && (
-        <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5">
-          <p className="text-xs font-medium text-amber-900">Signed in with Google — waiting for your reviews</p>
-          <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
-            Your first sync can take a few minutes. If nothing appears within an hour (and your
-            Google listing does have reviews), connect again below — and on Google&apos;s
-            permission screen, make sure <span className="font-medium">&ldquo;See, edit, create and
-            delete your Business Profile&rdquo;</span> stays ticked. Skipping that box is the most
-            common reason reviews never arrive.
-          </p>
-        </div>
-      )}
-
-      {!state?.connected && !isLoading && (
-        <>
-          <button
-            onClick={() => void connect()}
-            disabled={working}
-            className="mt-4 px-4 py-2 text-sm font-medium bg-brand-500 text-white rounded-lg hover:bg-brand-600 disabled:opacity-50 transition-colors"
-          >
-            {working ? 'Opening Google…' : waiting ? 'Waiting for Google…' : 'Connect Google'}
-          </button>
-          {waiting && (
-            <p className="text-xs text-slate-500 mt-2">
-              Finish signing in with Google in the new tab — and keep the{' '}
-              <span className="font-medium">&ldquo;See, edit, create and delete your Business
-              Profile&rdquo;</span> permission ticked, or your reviews can&apos;t sync. This page
-              updates automatically once you&apos;re done.
-            </p>
-          )}
-        </>
-      )}
     </div>
   );
 }

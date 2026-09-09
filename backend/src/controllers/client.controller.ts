@@ -141,7 +141,7 @@ export async function completeOnboarding(req: Request, res: Response, next: Next
         clientId: req.clientId,
         error: (e as Error).message,
       });
-      await db('clients').where({ id: req.clientId }).update({ emr_provisioning_status: 'failed' });
+      await db('clients').where({ id: req.clientId }).whereNot({ emr_provisioning_status: 'creating' }).update({ emr_provisioning_status: 'failed' });
     }
 
     // Kick off citation scan immediately so data appears within minutes, not the next day

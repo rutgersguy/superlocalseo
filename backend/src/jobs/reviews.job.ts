@@ -25,6 +25,7 @@ export async function processReviews(_job: Job): Promise<void> {
     .join('clients', 'clients.id', 'integrations.client_id')
     .where({ 'integrations.provider': 'embedmyreviews', 'integrations.status': 'connected' })
     .whereNotNull('integrations.api_key_encrypted')
+    .modify(q => { if (_job.data?.clientId) q.where('integrations.client_id', _job.data.clientId); })
     .select(
       'integrations.id',
       'integrations.client_id',
@@ -186,7 +187,7 @@ export async function processReviews(_job: Job): Promise<void> {
 
       // Private feedback is now received via EMR webhook (POST /webhooks/emr)
 
-      await db('integrations').where({ id: integration.id }).update({ last_pull_at: now });
+      await db('integrations').where({ id: integration.id }).update({ last_pull_at: now, error_message: null });
 
       logger.info('Reviews pulled successfully', {
         clientId: integration.client_id,
@@ -204,6 +205,8 @@ export async function processReviews(_job: Job): Promise<void> {
         .catch(() => undefined);
     }
   }
+
+  if (_job.data?.emrOnly) return;
 
   // --- GBP sync (our own Google OAuth) — ON by default since 2026-08 ---
   //
