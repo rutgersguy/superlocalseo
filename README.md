@@ -17,6 +17,8 @@ Enterprise-grade local SEO platform for service businesses (plumbers, HVAC, elec
 - **Google Sign-In** — One-click Google OAuth login/registration alongside email+password
 - **Review Request Campaigns** — Send email/SMS review invites via EmbedMyReviews campaigns; happy customers directed to Google, dissatisfied ones routed to private feedback
 
+The public homepage, authenticated workspace, login screen, and generated monthly PDFs share a visibility-brief design system: forest green, warm cream, sage data surfaces, editorial headings, and restrained orange actions. The shared red-pin wordmark is used in the login/app shell, and `frontend/public/sls-favicon.svg` provides the favicon. PDF downloads must go through the authenticated frontend API client because report endpoints require a bearer token.
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -31,6 +33,13 @@ Enterprise-grade local SEO platform for service businesses (plumbers, HVAC, elec
 | Auth | JWT (access + refresh tokens) + Google OAuth 2.0 |
 | External APIs | BrightLocal Data API (rankings, geo-grid, citation auditing) · EmbedMyReviews (reviews, campaigns, private feedback) |
 | DevOps | Docker, Docker Compose, Nginx |
+
+### Current UI/release notes
+
+- The authenticated workspace uses a responsive forest-green sidebar, editorial page headers, truthful Lite/Pro states, and consistent filters/empty states across rankings, reviews, AI visibility, competitors, citations, audits, and reports.
+- Monthly reports use the same visual language and preserve plan gating and white-label overrides. Their PDF page wrapper is transparent so the cream canvas does not repeat as a panel across page breaks.
+- Report preview and download flows are auth-aware; use `apiFetch` with `rawResponse: true` for protected PDF or CSV file responses rather than a direct anchor to `/api/*`.
+- Production deploys on September 9, 2026 were rebuilt with `scripts/deploy.sh`; each completed with site HTTP 200, API HTTP 422 validation response, and zero API errors since restart. See [Interior redesign](docs/INTERIOR_REDESIGN.md) and [Homepage redesign](docs/LANDING_REDESIGN.md) for implementation details.
 
 ## Local Development
 

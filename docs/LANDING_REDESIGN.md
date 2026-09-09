@@ -2,7 +2,7 @@
 
 The public homepage follows `sls_homepage.png`: cream canvas, forest-green editorial headings, orange actions, an illustrative monthly report, three monitoring steps, owner/office photo, compact Lite/Pro pricing, and landscape footer.
 
-Implementation is limited to the landing page, its stylesheet, public artwork, and homepage metadata. The authenticated app and generated customer PDFs are unchanged. The report preview is explicitly illustrative and is not an actual customer PDF. Sample service-area coverage is labeled Pro. Public prices remain Lite $149/month, Pro $349/month, and Pro additional locations $125/month.
+Implementation covers the landing page, its stylesheet, public artwork, and homepage metadata. The authenticated app and generated customer PDFs now share the same visibility-brief design language, but the report preview remains explicitly illustrative and is not an actual customer PDF. Sample service-area coverage is labeled Pro. Public prices remain Lite $149/month, Pro $349/month, and Pro additional locations $125/month.
 
 The free business check retains the existing intel-request destination. Sample-report buttons open a native modal dialog with Escape dismissal and focus restoration. Choose your plan opens a native details comparison with the existing plan-specific registration links. Footer privacy, terms, contact and sign-in links remain available.
 
