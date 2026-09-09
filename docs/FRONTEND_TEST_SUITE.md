@@ -38,7 +38,7 @@
 These were found during code review; a test that surfaces one should be marked **FAIL** with a note referencing the ID:
 - **DISC-1**: Register plan selector + Billing summary show **Lite = $149/mo**, but the Stripe Lite price is **$99/mo**. Confirm which is authoritative.
 - **DISC-2**: Lite onboarding uses `?lite=1` but `Onboarding.tsx` renders the **identical 4-step Pro flow** (no Lite-specific 2-step). Confirm intended.
-- **DISC-3**: `/audit` is an **external redirect** to `app.superlocalseo.com/intel-request`, not the in-app audit. The in-app audit lives at `/dashboard/audit`.
+- **DISC-3**: `/audit` is the **native free visibility report**, not the paid website audit. The in-app audit lives at `/dashboard/audit`.
 - **DISC-4**: `/admin` has **no front-end role guard** — a non-admin who types the URL loads the shell (API calls should 403). Verify the API blocks data.
 
 ---
@@ -195,7 +195,7 @@ These were found during code review; a test that surfaces one should be marked *
 | **AUD-01** | Lite | Navigate to `/dashboard/audit` | ProGate "SEO Audit is a Pro feature" |
 | **AUD-02** | Pro | Load page | "Local SEO Audit" header; location select (if >1); **Run Audit** (disabled if audit <1 day old); **Download Report** (only if a prior audit exists). Empty: "No audit data yet." |
 | **AUD-03** | Pro | ScoreCards (if data) | On-Page SEO, Reviews, Google Profile cards with deltas; Recommendations; Website Performance (LCP/CLS/TBT); Score History chart |
-| **AUD-04** | Any | Navigate to top-level `/audit` | **DISC-3**: external redirect to `app.superlocalseo.com/intel-request` — NOT the in-app audit |
+| **AUD-04** | Any | Navigate to top-level `/audit` | **DISC-3**: native free visibility report — NOT the paid website audit |
 
 ---
 

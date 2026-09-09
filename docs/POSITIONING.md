@@ -200,6 +200,8 @@ landscape."
 
 ## Landing page structure
 
+**2026-09-09 update:** the free report now runs natively at `/audit`, with explicit business and Census area selection. The vendor-form limitation described below is historical. See `native-free-reports-2026-09-09.md`.
+
 1. **Hero** — the AI question, and a mocked assistant answer in which the business is *not*
    named. **The inline business-name input was specified and could not be built.** The free
    report lives on `app.superlocalseo.com/intel-request`, which is the white-labeled
