@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import useSWR from 'swr';
 import { Mail, Upload, Send, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, UserX, Plus, X } from 'lucide-react';
 import { fetcher, apiFetch } from '../services/api';
+import CampaignSetupRequest from '../components/CampaignSetupRequest';
 import EMRSetupBanner from '../components/EMRSetupBanner';
 
 interface Campaign {
@@ -30,7 +31,7 @@ interface Unsubscribe {
 
 interface UnsubscribesResponse {
   success: boolean;
-  data: { unsubscribes: Unsubscribe[]; total: number; hasMore: boolean };
+  data: { unsubscribes: Unsubscribe[]; total: number | null; hasMore: boolean; available: boolean; message?: string };
 }
 
 interface CreditsResponse {
@@ -73,9 +74,7 @@ function NewCampaignModal({ onClose }: { onClose: () => void }) {
         <div className="px-5 py-5 space-y-4 text-sm text-slate-700">
           <p>Campaign setup is currently assisted. We will connect a feedback form and campaign to the correct business before you invite customers.</p>
           <p>Every customer must receive the same opportunity to leave an honest public review, regardless of rating. Ratings and private feedback can help organize your follow-up.</p>
-          <p>Contact us with your business name and location. Once configured and synced, your campaign will appear here.</p>
-          <a href="mailto:hello@superlocalseo.com?subject=Review%20campaign%20setup" className="inline-flex px-4 py-2 bg-brand-500 text-white font-medium rounded-lg">Email us about setup</a>
-          <p className="text-xs text-slate-500">This opens an email draft. No invitations are sent by opening this setup guide.</p>
+          <CampaignSetupRequest />
         </div>
       </div>
     </div>
@@ -114,7 +113,7 @@ function InviteForm({ campaignId, onSent }: { campaignId: string; onSent: () => 
     setLoading(true);
     setResult(null);
     try {
-      const res = await apiFetch<{ success: boolean; data: { sent: number } }>(
+      const res = await apiFetch<{ success: boolean; data: { sent: number }; error?: { message: string } }>(
         `/campaigns/${campaignId}/invite`,
         { method: 'POST', body: JSON.stringify({ ...form, lastName: form.lastName || undefined, email: form.email || undefined, phone: form.phone || undefined }) },
       );
@@ -123,10 +122,10 @@ function InviteForm({ campaignId, onSent }: { campaignId: string; onSent: () => 
         setForm({ firstName: '', lastName: '', email: '', phone: '' });
         onSent();
       } else {
-        setResult('error:Failed to send invite');
+        setResult(`error:${res.error?.message || 'Request was not accepted'}`);
       }
     } catch {
-      setResult('error:Network error');
+      setResult('error:Could not confirm acceptance. Check campaign activity before retrying.');
     } finally {
       setLoading(false);
     }
@@ -179,7 +178,7 @@ function InviteForm({ campaignId, onSent }: { campaignId: string; onSent: () => 
       </div>
       {result === 'ok' && (
         <div className="flex items-center gap-2 text-green-700 text-sm">
-          <CheckCircle2 size={14} /> Invite sent successfully
+          <CheckCircle2 size={14} /> Request accepted. Delivery is not yet confirmed.
         </div>
       )}
       {result?.startsWith('error:') && (
@@ -273,7 +272,7 @@ function BulkUpload({ campaignId, onSent }: { campaignId: string; onSent: () => 
     setLoading(true);
     setResult(null);
     try {
-      const res = await apiFetch<{ success: boolean; data: { sent: number; failed: number } }>(
+      const res = await apiFetch<{ success: boolean; data: { sent: number; failed: number }; error?: { message: string } }>(
         `/campaigns/${campaignId}/invite/bulk`,
         { method: 'POST', body: JSON.stringify({ contacts }) },
       );
@@ -282,9 +281,9 @@ function BulkUpload({ campaignId, onSent }: { campaignId: string; onSent: () => 
         setCsv('');
         setPreview([]);
         onSent();
-      }
+      } else { setParseError(res.error?.message || 'Request was not accepted'); }
     } catch {
-      setParseError('Network error');
+      setParseError('Could not confirm acceptance. Check campaign activity before retrying.');
     } finally {
       setLoading(false);
     }
@@ -335,7 +334,7 @@ function BulkUpload({ campaignId, onSent }: { campaignId: string; onSent: () => 
       {result && (
         <div className="flex items-center gap-2 text-sm">
           <CheckCircle2 size={14} className="text-green-600" />
-          <span className="text-green-700">Sent {result.sent}</span>
+          <span className="text-green-700">Accepted {result.sent}</span>
           {result.failed > 0 && <span className="text-red-600">· {result.failed} failed</span>}
         </div>
       )}
@@ -443,7 +442,7 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
 
 function UnsubscribedSection() {
   const [expanded, setExpanded] = useState(false);
-  const { data, isLoading } = useSWR<UnsubscribesResponse>('/campaigns/unsubscribes', fetcher);
+  const { data, error, isLoading } = useSWR<UnsubscribesResponse>('/campaigns/unsubscribes', fetcher);
 
   const unsubscribes = data?.data?.unsubscribes ?? [];
   const total = data?.data?.total ?? 0;
@@ -466,7 +465,7 @@ function UnsubscribedSection() {
       {expanded && (
         <div className="border-t border-slate-100">
           <div className="px-5 py-3 bg-blue-50 border-b border-blue-100 text-xs text-blue-800">
-            These contacts have opted out of review request emails and will be automatically skipped in bulk uploads.
+            The provider respects opt-outs when processing invitation requests. Acceptance does not confirm delivery; duplicate and opted-out contacts may be skipped.
           </div>
 
           {isLoading && (
@@ -477,12 +476,14 @@ function UnsubscribedSection() {
             </div>
           )}
 
-          {!isLoading && unsubscribes.length === 0 && (
+          {!isLoading && !error && data?.data.available && unsubscribes.length === 0 && (
             <div className="px-5 py-8 text-center text-sm text-slate-400">
-              No unsubscribes yet — great engagement!
+              No unsubscribes returned.
             </div>
           )}
 
+          {error && <p role="alert" className="p-5 text-sm text-red-600">Unable to check unsubscribe information.</p>}
+          {!isLoading && data?.data.available === false && <p className="p-5 text-sm text-slate-600">{data.data.message}</p>}
           {!isLoading && unsubscribes.length > 0 && (
             <table className="w-full text-sm">
               <thead>
@@ -527,8 +528,7 @@ export default function Campaigns() {
     );
   }
 
-  // EMR setup banner is only relevant for the operator admin account (platform-level)
-  // Ungated: clients need their own review-portal credentials to create campaigns at all.
+  // A connection prompt is useful when there is no campaign, without a second login.
   const showEMRBanner = !isLoading && campaigns.length === 0;
 
   return (
@@ -571,7 +571,7 @@ export default function Campaigns() {
           <h3 className="font-semibold text-slate-700 mb-1">No campaigns yet</h3>
           <p className="text-sm text-slate-400">
             {credits?.connected === false
-              ? 'Connect your EmbedMyReviews account in Settings → Integrations to get started.'
+              ? 'Connect your Google Business Profile in Settings → Integrations to get started.'
               : 'Choose "Campaign setup" above to arrange your first review request campaign.'}
           </p>
         </div>
