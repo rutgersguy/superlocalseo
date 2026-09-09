@@ -1,5 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { MapContainer, CircleMarker, TileLayer, Tooltip, ScaleControl, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 import './free-report.css';
 
 type Business = { placeId: string; name: string; address: string | null; rating: number | null; reviewCount: number | null; collectedAt?: string | null };
@@ -15,6 +17,45 @@ async function request<T>(path: string, body?: object): Promise<T> {
 }
 const time = (value?: string | null) => value ? new Date(value).toLocaleString(undefined, { timeZoneName: 'short' }) : 'Not supplied by source';
 const observation = (p: Point) => p.status === 'unavailable' ? 'Unavailable' : p.rank === null ? `Not found in ${p.resultCount} returned results` : `Rank ${p.rank} of ${p.resultCount} returned results`;
+// Re-fit after responsive/print layout changes so all observations remain visible.
+function FitSample({ points, center }: { points: Point[]; center: Snapshot['center'] }) {
+  const map = useMap();
+  useEffect(() => {
+    const fit = () => {
+      map.invalidateSize();
+      map.fitBounds([...points.map(p => [p.lat, p.lng] as [number, number]), [center.lat, center.lng]], { padding: [55, 65], maxZoom: 14, animate: false });
+    };
+    const observer = new ResizeObserver(fit); observer.observe(map.getContainer());
+    window.addEventListener('beforeprint', fit); window.addEventListener('afterprint', fit); fit();
+    return () => { observer.disconnect(); window.removeEventListener('beforeprint', fit); window.removeEventListener('afterprint', fit); };
+  }, [map, points, center]);
+  return null;
+}
+function SampleMap({ snapshot: s, selected, onSelect }: { snapshot: Snapshot; selected: number; onSelect: (index: number) => void }) {
+  const [opacity, setOpacity] = useState(0.45);
+  const [tileError, setTileError] = useState(false);
+  return <>
+    <div className="fr-map" role="region" aria-label="Map of the nine search points">
+      <MapContainer center={[s.center.lat, s.center.lng]} zoom={12} scrollWheelZoom={false}>
+        <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" referrerPolicy="strict-origin-when-cross-origin"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          eventHandlers={{ tileerror: () => setTileError(true), loading: () => setTileError(false) }} />
+        <FitSample points={s.points} center={s.center} />
+        <ScaleControl position="bottomleft" imperial={false} />
+        {s.points.map((p, i) => <CircleMarker key={i} center={[p.lat, p.lng]} radius={28}
+          pathOptions={{ color: selected === i ? '#182f56' : '#fff', weight: selected === i ? 4 : 2, fillColor: p.status === 'unavailable' ? '#64748b' : p.rank === null ? '#c27025' : '#2e8460', fillOpacity: opacity }}
+          eventHandlers={{ click: () => onSelect(i) }}>
+          <Tooltip permanent direction="center" className="fr-map-point"><span>{p.lat === s.center.lat && p.lng === s.center.lng ? `Center · ${i + 1}` : `Point ${i + 1}`}</span><strong>{p.status === 'unavailable' ? '?' : p.rank === null ? '—' : p.rank}</strong></Tooltip>
+        </CircleMarker>)}
+        <CircleMarker center={[s.center.lat, s.center.lng]} radius={34} pathOptions={{ color: '#182f56', weight: 2, dashArray: '4 4', fill: false }} interactive={false} />
+      </MapContainer>
+      <span className="fr-map-north" aria-label="North is up">↑ N</span>
+    </div>
+    {tileError && <p role="status">Some map tiles could not load. The point coordinates and observations are still available below.</p>}
+    <div className="fr-map-legend"><span><i className="found" />Rank number = found</span><span><i className="missing" />— = not found</span><span><i className="unknown" />? = unavailable</span><span>Dashed ring = sample center</span></div>
+    <label className="fr-map-opacity fr-no-print">Marker opacity <input type="range" min="20" max="80" value={Math.round(opacity * 100)} onChange={e => setOpacity(Number(e.target.value) / 100)} /> {Math.round(opacity * 100)}%</label>
+  </>;
+}
 export default function FreeReport() {
   const { id } = useParams(); const navigate = useNavigate();
   const [business, setBusiness] = useState(''); const [city, setCity] = useState(''); const [keyword, setKeyword] = useState('');
@@ -82,7 +123,8 @@ export default function FreeReport() {
         <p>Completed {time(s.generatedAt)}. Search: <strong>{s.keyword}</strong>. Area: <strong>{s.center.label}</strong>.</p>
         <section className="fr-stats" aria-label="Report measurements"><article><strong>{s.business.rating === null ? 'Unknown' : `${s.business.rating.toFixed(1)} / 5`}</strong><span>Google review rating</span></article><article><strong>{s.business.reviewCount ?? 'Unknown'}</strong><span>Google reviews</span></article><article><strong>{s.summary.found} / {s.summary.checked}</strong><span>Found / successfully checked points</span></article><article><strong>{s.summary.averageWhenFound ?? 'Unknown'}</strong><span>Average rank when found ({s.summary.found} {s.summary.found === 1 ? 'point' : 'points'})</span></article></section>
         <p className="fr-note">Business information retrieved {time(s.profileCheckedAt)}; source collected {time(s.business.collectedAt)}. Counts and ratings are source observations at that time.</p>
-        <section className="fr-panel fr-sample"><h2>Nine-point search sample</h2><p>North is at the top. Points are about 2 km apart around {s.center.label} ({s.center.lat}, {s.center.lng}). This is a sampling diagram, not a street map or a percentage of geographic area.</p>
+        <section className="fr-panel fr-sample"><h2>Nine-point search sample</h2><p>North is at the top. Points are about 2 km apart around {s.center.label} ({s.center.lat}, {s.center.lng}). The dashed ring marks the city’s Census representative point, not your business location. The translucent markers show individual observations, not continuous ranking coverage. Select a marker or a point below to inspect its results.</p>
+          <SampleMap snapshot={s} selected={selected} onSelect={setSelected} />
           <div className="fr-grid" aria-label="Sampled search points">{s.points.map((p, i) => <button key={i} className={p.status === 'unavailable' ? 'unknown' : p.rank === null ? 'missing' : 'found'} aria-pressed={selected === i} aria-label={`Point ${i + 1}: ${observation(p)}`} onClick={() => setSelected(i)}><small>Point {i + 1}</small><strong>{p.status === 'unavailable' ? '?' : p.rank ?? '—'}</strong><small>{p.status === 'unavailable' ? 'Unavailable' : p.rank === null ? 'Not found' : 'Rank'}</small></button>)}</div>
           <p>{s.summary.unavailable} unavailable checks are excluded from percentages and average rank. “Not found” means absent from the results returned for that point, not absent from Google.</p>
           <div className="fr-table-wrap"><table><caption>Observed results at each point</caption><thead><tr><th>Point</th><th>Coordinates</th><th>Observation</th><th>Retrieved</th><th>Source collected</th></tr></thead><tbody>{s.points.map((p, i) => <tr key={i}><th>{i + 1}</th><td>{p.lat}, {p.lng}</td><td>{observation(p)}</td><td>{time(p.checkedAt)}</td><td>{time(p.collectedAt)}</td></tr>)}</tbody></table></div>
