@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, BarChart3, Check, Fan, FileText, MapPin, Menu, MessageCircle, Plug, Search, Sparkles, Star, Wrench, X, Home } from 'lucide-react';
 import './Landing.css';
 
-const INTEL_URL = 'https://app.superlocalseo.com/intel-request';
+const INTEL_URL = '/audit';
 // Public prices mirror docs/PRICING.md. Subscription behavior is unchanged.
 const PRICING = { lite: 149, pro: 349, extraLocation: 125 } as const;
 const trades = [{ Icon: Fan, name: 'HVAC' }, { Icon: Wrench, name: 'Plumbing' }, { Icon: Plug, name: 'Electrical' }, { Icon: Home, name: 'Roofing' }];

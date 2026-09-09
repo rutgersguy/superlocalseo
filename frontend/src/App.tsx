@@ -3,6 +3,7 @@ import { AuthCtx, useAuthState } from './hooks/useAuth';
 import { AppTheme } from './components/ui/Workspace';
 import './workspace.css';
 import Landing from './pages/Landing';
+import FreeReport from './pages/FreeReport';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import RegisterSuccess from './pages/RegisterSuccess';
@@ -32,11 +33,6 @@ import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 
-function ExternalRedirect({ to }: { to: string }) {
-  window.location.replace(to);
-  return null;
-}
-
 function App() {
   const auth = useAuthState();
 
@@ -54,7 +50,8 @@ function App() {
           <Route path="/auth/forgot-password" element={<ForgotPassword />} />
           <Route path="/auth/reset-password" element={<ResetPassword />} />
           <Route path="/auth/google/success" element={<AuthGoogleSuccess />} />
-          <Route path="/audit" element={<ExternalRedirect to="https://app.superlocalseo.com/intel-request" />} />
+          <Route path="/audit" element={<FreeReport />} />
+          <Route path="/free-report/:id" element={<FreeReport />} />
           <Route path="/team/accept" element={<TeamAccept />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />

@@ -1,4 +1,5 @@
 import { Queue, Worker, Job } from 'bullmq';
+import { processProspectReport } from '../services/prospect_report.service';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import { processRankings } from './rankings.job';
@@ -22,6 +23,7 @@ const connection = {
   maxRetriesPerRequest: null as null,
 };
 
+export const prospectReportsQueue = new Queue('prospect-reports', { connection });
 export const rankingsQueue = new Queue('rankings', { connection });
 export const citationsQueue = new Queue('citations', { connection });
 export const reviewsQueue = new Queue('reviews', { connection });
@@ -34,6 +36,9 @@ export const trialReminderQueue = new Queue('trial-reminder', { connection });
 export const aiVisibilityQueue = new Queue('ai-visibility', { connection });
 
 export async function startWorkers(): Promise<void> {
+  const prospectWorker = new Worker('prospect-reports', async job => processProspectReport(job.data.id), { connection, concurrency: 1 });
+  prospectWorker.on('error', e => logger.error('Prospect worker error', { error: e.message }));
+
   const rankingsWorker = new Worker(
     'rankings',
     async (job: Job) => {
