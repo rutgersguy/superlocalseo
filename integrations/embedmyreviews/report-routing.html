@@ -1,0 +1,13 @@
+<!-- SuperLocalSEO native report routing v1. Install in White-Label > Configuration > Advanced > Header Scripts. -->
+<script>
+(function () {
+  'use strict';
+  if (location.hostname !== 'app.superlocalseo.com') return;
+  var path = location.pathname.replace(/\/+$/, '');
+  if (path === '/intel-request') {
+    location.replace('https://superlocalseo.com/audit');
+  } else if (/^\/business-report\/[A-Za-z0-9_-]{1,128}$/.test(path)) {
+    location.replace('https://superlocalseo.com/audit?legacy=1');
+  }
+})();
+</script>
