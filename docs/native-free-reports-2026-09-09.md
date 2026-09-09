@@ -55,3 +55,9 @@ The deployment script now checks the actual report source column after migration
 ## Geographic map overlay
 
 The public report plots saved coordinates over OpenStreetMap using the existing Leaflet dependency. Translucent, numbered markers identify each observation; a dashed ring explicitly identifies the selected Census city sample center (not the business address). Opacity is adjustable, with point selection and a textual results table retained. The markers are samples, not interpolated coverage. No report regeneration or paid source calls occur when viewing or adjusting the map. Map tiles use an origin-only cross-origin referrer, keeping the report ID private while satisfying the tile service policy; attribution stays visible in print. Failed tiles show a notice without hiding observations.
+
+## Admin report listing
+
+Open `/admin?tab=free-reports` (Admin → Free reports) using an admin account. The admin-only `GET /api/admin/free-reports` returns 25 native reports per page, newest first, with business/email/city/keyword/ID search, status filtering, request/completion timestamps, report-only consent, and links to existing public report pages. Legacy vendor leads remain excluded because they do not have native report URLs. Counts apply to the current filters.
+
+Needs attention includes failed generation, unconfirmed email acceptance, and queued/processing records without updates for over 15 minutes. Stalled is an operational flag, not proof the worker stopped. Email accepted means the provider accepted the request; delivery/opening is not inferred. The listing performs no provider calls, sends, or paid retries. For recovery, inspect the job/worker or provider receipt first; do not recreate completed reports to repair email. Public endpoints still exclude lead contact and consent data. Admin responses are uncached and omit full snapshots and private provider receipts.

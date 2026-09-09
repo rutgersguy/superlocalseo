@@ -1,3 +1,5 @@
+import AdminFreeReports from '../components/AdminFreeReports';
+import { useSearchParams } from 'react-router-dom';
 import CampaignSetupQueue from '../components/CampaignSetupQueue';
 import React, { useState, useEffect, useRef } from 'react';
 import useSWR, { mutate } from 'swr';
@@ -108,12 +110,13 @@ function HealthDot({ ok, label, detail }: { ok: boolean; label: string; detail?:
 
 // ─── Tab bar ──────────────────────────────────────────────────────────────────
 
-type Tab = 'overview' | 'clients' | 'queues' | 'analytics' | 'citations' | 'customers' | 'promos' | 'campaign-setup';
+type Tab = 'overview' | 'clients' | 'queues' | 'analytics' | 'citations' | 'customers' | 'promos' | 'campaign-setup' | 'free-reports';
 
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'overview', label: 'Overview' },
     { key: 'clients', label: 'Clients' },
+    { key: 'free-reports', label: 'Free reports' },
     { key: 'campaign-setup', label: 'Campaign setup' },
     { key: 'customers', label: 'Customers' },
     { key: 'promos', label: 'Promo Codes' },
@@ -122,7 +125,7 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
     { key: 'citations', label: 'Citations' },
   ];
   return (
-    <div className="flex gap-1 border-b border-gray-200 mb-6">
+    <div className="flex flex-wrap gap-1 border-b border-gray-200 mb-6">
       {tabs.map((t) => (
         <button
           key={t.key}
@@ -1508,7 +1511,10 @@ function PromoCodesTab() {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Admin() {
-  const [tab, setTab] = useState<Tab>('overview');
+  const [params, setParams] = useSearchParams();
+  const candidate = params.get('tab') ?? 'overview';
+  const tab: Tab = ['overview','clients','queues','analytics','citations','customers','promos','campaign-setup','free-reports'].includes(candidate) ? candidate as Tab : 'overview';
+  const setTab = (value: Tab) => setParams({ tab: value });
 
   return (
     <div className="space-y-6">
@@ -1522,6 +1528,7 @@ export default function Admin() {
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
         <TabBar active={tab} onChange={setTab} />
+        {tab === 'free-reports' && <AdminFreeReports />}
         {tab === 'campaign-setup' && <CampaignSetupQueue />}
         {tab === 'overview' && <OverviewTab />}
         {tab === 'clients' && <ClientsTab />}

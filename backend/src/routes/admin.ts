@@ -7,7 +7,10 @@ import { logger } from '../utils/logger';
 
 import { setupQueue } from '../controllers/campaign_setup.controller';
 
+import { listFreeReports } from '../controllers/admin_reports.controller';
+
 const router = Router();
+router.get('/free-reports', requireAdmin, listFreeReports);
 router.get('/campaign-setup', requireAdmin, setupQueue);
 
 router.get('/overview', requireAdmin, ctrl.overview);
