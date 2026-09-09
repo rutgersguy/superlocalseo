@@ -438,6 +438,7 @@ export default function Reports() {
   const [modalOpen, setModalOpen] = useState(false);
   const [resendModal, setResendModal] = useState<{ month: number; year: number } | null>(null);
   const [previewReport, setPreviewReport] = useState<Report | null>(null);
+  const [downloadingReportId, setDownloadingReportId] = useState<string | null>(null);
 
   const { data, isLoading, error, mutate } = useSWR<ReportsResponse>('/reports', fetcher, {
     refreshInterval: 15_000,
@@ -450,10 +451,31 @@ export default function Reports() {
     setResendModal({ month: report.periodMonth, year: report.periodYear });
   }
 
+  async function downloadReport(report: Report): Promise<void> {
+    setDownloadingReportId(report.id);
+    try {
+      // A normal anchor cannot carry the bearer token held by the SPA, so the
+      // browser would open the protected endpoint as an anonymous request.
+      const response = await apiFetch<never>(`/reports/${report.id}/download`, {}, true);
+      if (!response.ok) return;
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `SEO-Report-${report.periodYear}-${String(report.periodMonth).padStart(2, '0')}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } finally {
+      setDownloadingReportId(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title="Your monthly reports" description="A clear record of your visibility, with practical next steps. New reports are generated monthly using the data available for your plan." action={<Button onClick={() => setModalOpen(true)}>Generate report</Button>} />
-      {latest && <section className="workspace-report-feature" aria-label="Latest monthly report"><div><p>LATEST MONTHLY BRIEF</p><h2>{formatPeriod(latest.periodMonth, latest.periodYear)}</h2><p>Generated {formatDate(latest.generatedAt)} · Your saved business report</p></div><div className="workspace-page-actions"><button className="workspace-button workspace-button-secondary" onClick={() => setPreviewReport(latest)}><Eye size={16} /> Preview latest report</button><a className="workspace-button workspace-button-secondary" href={`/api/reports/${latest.id}/download`} target="_blank" rel="noopener noreferrer">Download PDF</a></div></section>}
+      {latest && <section className="workspace-report-feature" aria-label="Latest monthly report"><div><p>LATEST MONTHLY BRIEF</p><h2>{formatPeriod(latest.periodMonth, latest.periodYear)}</h2><p>Generated {formatDate(latest.generatedAt)} · Your saved business report</p></div><div className="workspace-page-actions"><button className="workspace-button workspace-button-secondary" onClick={() => setPreviewReport(latest)}><Eye size={16} /> Preview latest report</button><button className="workspace-button workspace-button-secondary" onClick={() => void downloadReport(latest)} disabled={downloadingReportId === latest.id}>{downloadingReportId === latest.id ? 'Downloading…' : 'Download PDF'}</button></div></section>}
       <h2 className="text-lg font-semibold text-forest">Report archive</h2>
 
       {/* Error */}
@@ -533,14 +555,13 @@ export default function Reports() {
                             <Eye className="w-3.5 h-3.5" />
                             Preview
                           </button>
-                          <a
-                            href={`/api/reports/${report.id}/download`}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
+                            onClick={() => void downloadReport(report)}
+                            disabled={downloadingReportId === report.id}
                             className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-brand-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
                           >
-                            Download
-                          </a>
+                            {downloadingReportId === report.id ? 'Downloading…' : 'Download'}
+                          </button>
                         </>
                       )}
                       <button
