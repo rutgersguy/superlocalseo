@@ -15,6 +15,8 @@ router.get('/', requireAuth, requireClient, ctrl.list);
 router.get('/emr/google/connect-link', requireAuth, requireClient, ctrl.getEmrGoogleConnectLink);
 router.post('/emr/google/connect-link', requireAuth, requireClient, requireTeamAdmin, ctrl.createEmrGoogleConnectLink);
 
+router.post('/emr/google/sync', requireAuth, requireClient, requireTeamAdmin, ctrl.syncEmrGoogleReviews);
+
 router.get('/google/auth-url', requireAuth, requireClient, requireTeamAdmin, ctrl.getGoogleAuthUrl);
 router.get('/google/callback', ctrl.googleCallback);
 // Live status — calls Google rather than reporting a stored flag.

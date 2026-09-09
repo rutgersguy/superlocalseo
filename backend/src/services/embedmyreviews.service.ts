@@ -43,13 +43,14 @@ async function emrFetch(path: string, apiKey: string, options: RequestInit = {},
   };
 
   let attempts = 0;
-  const maxAttempts = 3;
+  const maxAttempts = ['GET', 'HEAD'].includes((options.method ?? 'GET').toUpperCase()) ? 3 : 1;
 
   while (attempts < maxAttempts) {
-    const res = await fetch(url, { ...options, headers });
+    const res = await fetch(url, { ...options, signal: options.signal ?? AbortSignal.timeout(15000), headers });
 
-    if (res.status === 429) {
-      const retryAfter = parseInt(res.headers.get('retry-after') ?? '10', 10);
+    if (res.status === 429 && attempts + 1 < maxAttempts) {
+      const parsedDelay = Number(res.headers.get('retry-after') ?? '10');
+      const retryAfter = Number.isFinite(parsedDelay) ? Math.min(30, Math.max(1, parsedDelay)) : 10;
       logger.warn('EmbedMyReviews rate limited, backing off', { retryAfter });
       await new Promise((r) => setTimeout(r, retryAfter * 1000));
       attempts++;
@@ -221,6 +222,8 @@ export interface EMRConnectLink {
   connectUrl: string;
   status: 'active' | 'used' | 'expired' | 'revoked';
   completedOauthAt: string | null;
+  usedAt: string | null;
+  createdAt: string | null;
   expiresAt: string | null;
 }
 
@@ -232,6 +235,8 @@ function mapConnectLink(d: Record<string, unknown>): EMRConnectLink {
     connectUrl: String(d.connect_url),
     status: (d.status as EMRConnectLink['status']) ?? 'active',
     completedOauthAt: (d.completed_oauth_at as string | null) ?? null,
+    usedAt: (d.used_at as string | null) ?? null,
+    createdAt: (d.created_at as string | null) ?? null,
     expiresAt: (d.expires_at as string | null) ?? null,
   };
 }
@@ -279,7 +284,7 @@ export async function listConnectLinks(
   locationId: number,
   provider?: 'google' | 'facebook',
 ): Promise<EMRConnectLink[]> {
-  const params = new URLSearchParams({ location_id: String(locationId) });
+  const params = new URLSearchParams({ location_id: String(locationId), per_page: '100' });
   if (provider) params.set('provider', provider);
 
   const res = await emrFetch(`/connect-links?${params.toString()}`, apiKey, {}, AGENCY_BASE_URL());
@@ -289,7 +294,8 @@ export async function listConnectLinks(
   }
 
   const json = await res.json() as { data?: Array<Record<string, unknown>> };
-  return (json.data ?? []).map(mapConnectLink);
+  if (!Array.isArray(json.data)) throw new Error('Invalid connection status response');
+  return json.data.map(mapConnectLink).filter(l => l.locationId === locationId && (!provider || l.provider === provider));
 }
 
 export interface EMRReviewSource {
@@ -344,7 +350,7 @@ export async function createOrganization(
   });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`EMR createOrganization failed: ${res.status} ${body}`);
+    throw Object.assign(new Error(`EMR createOrganization failed: ${res.status} ${body}`), { providerStatus: res.status });
   }
   const json = await res.json() as {
     data?: { id?: number; default_location_id?: number | null; locations?: Array<{ id: number }> };

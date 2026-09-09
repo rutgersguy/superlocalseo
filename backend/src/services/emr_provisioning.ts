@@ -1,3 +1,4 @@
+import type { Knex } from 'knex';
 import { db } from '../db/connection';
 import { encrypt, decrypt } from '../utils/crypto';
 import { config } from '../config';
@@ -25,59 +26,58 @@ import {
  *
  * A location CANNOT be moved between organizations — PUT /locations/{id} accepts
  * organization_id, returns 200, and silently ignores it (verified 2026-07-14). So a client
- * stuck in the shared org must be re-provisioned into a fresh org + location, which means
- * reconnecting Google. `force` opts into that.
+ * stuck in a shared org requires an explicit operator mapping check. Normal customer
+ * requests never relocate it. `force` is reserved for intentional operator recovery.
  *
  * Idempotent: returns the stored location when the client already has a dedicated org.
  */
 export async function ensureEmrTenancy(clientId: string, force = false): Promise<number | null> {
-  const client = await db('clients').where({ id: clientId }).first();
-  if (!client) throw new Error(`Client ${clientId} not found`);
-
-  const operatorKey = config.embedmyreviews.apiKey;
-  if (!operatorKey) {
-    logger.warn('EMR not configured — cannot provision tenancy', { clientId });
-    return null;
+  // A checked-out session holds the advisory lock while each ID write commits.
+  // This avoids holding a transaction that would roll back external-create evidence.
+  const connection = await db.client.acquireConnection();
+  let reusable = true;
+  try {
+    await db.raw('SELECT pg_advisory_lock(hashtext(?))', [`emr-provision:${clientId}`]).connection(connection);
+    return await provisionTenancyLocked(clientId, force, table => db(table).connection(connection));
+  } finally {
+    try { await db.raw('SELECT pg_advisory_unlock(hashtext(?))', [`emr-provision:${clientId}`]).connection(connection); }
+    catch { reusable = false; await db.client.destroyConnection(connection); }
+    if (reusable) await db.client.releaseConnection(connection);
   }
+}
 
+async function provisionTenancyLocked(clientId: string, force: boolean, query: (table: string) => Knex.QueryBuilder): Promise<number | null> {
+  const client = await query('clients').where({ id: clientId }).first();
+  if (!client) throw new Error('Client not found');
+  const operatorKey = config.embedmyreviews.apiKey;
+  if (!operatorKey) return null;
   const orgId = client.emr_organization_id as number | null;
   const locationId = client.emr_location_id as number | null;
-
+  const needsCheck = () => Object.assign(new Error('Review setup needs an account mapping check. Contact support before retrying.'), { status: 409, code: 'CONNECTION_MAPPING_REQUIRED' });
   if (!force && orgId && locationId) {
-    // Only trust it if the org is genuinely this client's alone. Anything shared cannot
-    // isolate campaigns.
-    const others = await db('clients')
-      .where({ emr_organization_id: orgId })
-      .whereNot({ id: clientId })
-      .count('* as n')
-      .first();
-    if (Number(others?.n ?? 0) === 0) return locationId;
-
-    logger.warn('Client sits in a SHARED EMR organization — re-provisioning into its own', {
-      clientId, organizationId: orgId,
-    });
+    const shared = await query('clients').whereNot({ id: clientId }).where(q => q
+      .where({ emr_organization_id: orgId }).orWhere({ emr_location_id: locationId })).first();
+    if (shared) throw needsCheck();
+    return locationId;
   }
-
-  const label = `${(client.business_name as string) ?? 'Client'} [${clientId.slice(0, 8)}]`;
-
-  const org = await createOrganization(operatorKey, label);
-  let newLocationId = org.defaultLocationId;
-
-  if (newLocationId) {
-    await renameLocation(operatorKey, newLocationId, label);
-  } else {
-    // Shouldn't happen (EMR auto-creates one), but don't leave the client without a location.
-    const created = await createLocation(operatorKey, org.id, label);
-    newLocationId = created.id;
+  // An unacknowledged external create may already exist. Never blindly repeat it.
+  if (!force && (orgId || locationId || client.emr_provisioning_status === 'creating')) throw needsCheck();
+  const label = `${client.business_name ?? 'Client'} [${clientId.slice(0, 8)}]`;
+  await query('clients').where({ id: clientId }).update({ emr_provisioning_status: 'creating', updated_at: new Date() });
+  let org;
+  try { org = await createOrganization(operatorKey, label); }
+  catch (e) {
+    const status = (e as { providerStatus?: number }).providerStatus;
+    if (status && status >= 400 && status < 500 && status !== 408) {
+      await query('clients').where({ id: clientId }).update({ emr_provisioning_status: 'failed', updated_at: new Date() });
+    }
+    throw e;
   }
-
-  await db('clients').where({ id: clientId }).update({
-    emr_organization_id: org.id,
-    emr_location_id: newLocationId,
-    updated_at: new Date(),
-  });
-
-  logger.info('EMR tenancy provisioned', { clientId, organizationId: org.id, locationId: newLocationId });
+  await query('clients').where({ id: clientId }).update({ emr_organization_id: org.id, emr_location_id: org.defaultLocationId, updated_at: new Date() });
+  const newLocationId = org.defaultLocationId ?? (await createLocation(operatorKey, org.id, label)).id;
+  await query('clients').where({ id: clientId }).update({ emr_location_id: newLocationId, emr_provisioning_status: 'provisioned', updated_at: new Date() });
+  // Naming is cosmetic; an outage here must not create another organization on retry.
+  await renameLocation(operatorKey, newLocationId, label).catch(() => logger.warn('Review location naming needs a retry', { clientId }));
   return newLocationId;
 }
 
@@ -142,7 +142,7 @@ export async function provisionClient(clientId: string): Promise<void> {
     });
   } catch (e) {
     logger.error('EMR provisioning failed', { clientId, error: (e as Error).message });
-    await db('clients').where({ id: clientId }).update({
+    await db('clients').where({ id: clientId }).whereNot({ emr_provisioning_status: 'creating' }).update({
       emr_provisioning_status: 'failed',
       updated_at: now,
     }).catch(() => undefined);

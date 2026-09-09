@@ -51,6 +51,7 @@ async function seedFor(email: string, plan: 'lite' | 'pro'): Promise<string> {
     .returning('id');
   const locationId = typeof loc === 'string' ? loc : loc.id;
 
+  const scannedAt = new Date(); // All engines belong to the same scan batch.
   await db('ai_visibility_snapshots').insert([
     {
       location_id: locationId, prompt_key: 'best_open',
@@ -59,7 +60,7 @@ async function seedFor(email: string, plan: 'lite' | 'pro'): Promise<string> {
       businesses_named: JSON.stringify(['JayCo HVACR', 'Aivis Test Co']),
       citations: JSON.stringify(['bbb.org', 'yelp.com']),
       response_text: 'The full answer text that only Pro may read.',
-      scanned_at: new Date(),
+      scanned_at: scannedAt,
     },
     {
       location_id: locationId, prompt_key: 'best_open',
@@ -67,7 +68,7 @@ async function seedFor(email: string, plan: 'lite' | 'pro'): Promise<string> {
       engine: 'gemini', model_name: 'gemini-3.5-flash', status: 'unverified',
       unverified_reason: 'assistant unavailable: task status 40102',
       businesses_named: JSON.stringify([]), citations: JSON.stringify([]),
-      scanned_at: new Date(),
+      scanned_at: scannedAt,
     },
     {
       location_id: locationId, prompt_key: 'best_open',
@@ -76,7 +77,7 @@ async function seedFor(email: string, plan: 'lite' | 'pro'): Promise<string> {
       businesses_named: JSON.stringify(['York Plumbing']),
       citations: JSON.stringify(['angi.com']),
       response_text: 'Other businesses entirely.',
-      scanned_at: new Date(),
+      scanned_at: scannedAt,
     },
   ]);
 

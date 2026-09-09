@@ -3,122 +3,100 @@ import { db } from '../db/connection';
 import { ok, noContent, notFound, err } from '../utils/response';
 import { config } from '../config';
 import { logger } from '../utils/logger';
-import { createConnectLink, listConnectLinks, fetchAllReviews } from '../services/embedmyreviews.service';
-import { ensureEmrLocation } from '../services/emr_provisioning';
+import { createConnectLink, listConnectLinks } from '../services/embedmyreviews.service';
+import { ensureEmrLocation, provisionClient } from '../services/emr_provisioning';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { checkGBPConnection } from '../services/gbp.service';
+import { connectionState, safeConnectUrl } from '../services/emr_connection_state';
+import { redis } from '../db/redis';
 
-/**
- * GET  /integrations/emr/google/connect-link — status of the client's Google connection
- * POST /integrations/emr/google/connect-link — mint a fresh branded OAuth link
- *
- * This is how a client connects Google now. It replaces two dead ends:
- *   - our own Google OAuth, inert while our GBP API quota request is pending at Google;
- *   - "log into the review portal", which attaches the profile to the client's EMR
- *     sub-account org — data our agency key cannot read.
- *
- * EMR holds its own approved Google Business Profile API access, so the client consents to
- * EMR's Google project rather than ours, and the reviews land on OUR location (which we can
- * read). The link lives on app.superlocalseo.com, so no EMR branding is visible.
- */
-async function loadEmrConnectState(clientId: string) {
-  const operatorKey = config.embedmyreviews.apiKey;
-  if (!operatorKey) return null;
-
-  const locationId = await ensureEmrLocation(clientId);
-  if (!locationId) return null;
-
-  const links = await listConnectLinks(operatorKey, locationId, 'google');
-  const oauthCompleted = links.find((l) => l.completedOauthAt !== null);
-  const active = links.find((l) => l.status === 'active');
-
-  // EMR exposes NO endpoint that answers "is Google connected to this location?" (verified
-  // 2026-07-14): there is no /integrations route; /reviews/sources lists only custom/testimonial
-  // sources and returns [] even for a fully-connected profile; /gbp/metrics returns 200 for
-  // connected AND unconnected locations alike.
-  //
-  // And `completed_oauth_at` alone is NOT proof: we watched a client finish Google's consent
-  // screen (EMR stamped completed_oauth_at) while EMR then failed to reach Google to list the
-  // profiles — no profile attached, no review ever synced. So the flag was set on a connection
-  // that did not exist.
-  //
-  // ROOT CAUSE (confirmed by EMR support, 2026-07-16): the client completed Google SIGN-IN but
-  // the "See, edit, create and delete your Business Profile" scope checkbox was unticked on
-  // Google's consent screen. Sign-in succeeds without it (stamping completed_oauth_at); the
-  // profile-listing step then fails for lack of that one scope. OAuth success != scope granted.
-  // EMR now surfaces the missing permission at sign-in in their flow, but the stamp semantics
-  // are unchanged — reviews-arriving remains the only trustworthy signal.
-  //
-  // The only signal that cannot lie is reviews actually arriving. We therefore report three
-  // states rather than fake a binary we cannot determine:
-  //   - not started       : no completed OAuth
-  //   - reviews arriving  : reviews present  -> genuinely connected
-  //   - awaiting reviews  : OAuth done, nothing yet -> either still syncing, a profile with no
-  //                         reviews, or the half-failed state above. We say exactly that.
-  const reviewCount = oauthCompleted
-    ? (await fetchAllReviews(operatorKey, String(locationId))).length
-    : 0;
-  const connected = reviewCount > 0;
-
-  return { operatorKey, locationId, links, oauthCompleted, active, reviewCount, connected };
+/** Status is read-only: opening Settings must never provision or move a business. */
+async function ownedEmrLocation(clientId: string) {
+  const client = await db('clients').where({ id: clientId }).first();
+  if (!client?.emr_organization_id || !client.emr_location_id) return null;
+  const shared = await db('clients').whereNot({ id: clientId }).where(q => q
+    .where({ emr_organization_id: client.emr_organization_id }).orWhere({ emr_location_id: client.emr_location_id })).first();
+  if (shared) throw Object.assign(new Error('This review connection needs an account mapping check. Contact support.'), { status: 409, code: 'CONNECTION_MAPPING_REQUIRED' });
+  return Number(client.emr_location_id);
 }
 
 export async function getEmrGoogleConnectLink(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const state = await loadEmrConnectState(req.clientId as string);
-    if (!state) {
-      err(res, 'Review platform is not configured', 503, 'NOT_CONFIGURED');
-      return;
+    res.setHeader('Cache-Control', 'no-store');
+    if (!config.embedmyreviews.apiKey) { err(res, 'Review connection is temporarily unavailable', 503, 'NOT_CONFIGURED'); return; }
+    const clientId = req.clientId;
+    const locationId = await ownedEmrLocation(clientId);
+    if (!locationId) {
+      const pending = await db('clients').where({ id: clientId }).first();
+      if (pending?.emr_provisioning_status === 'creating' || pending?.emr_organization_id || pending?.emr_location_id) {
+        ok(res, { phase: 'needs_attention', profileSelected: false, reviewCount: null, lastSyncAt: null, connectUrl: null }); return;
+      }
+      ok(res, { phase: 'needs_setup', profileSelected: false, reviewCount: null, lastSyncAt: null, connectUrl: null }); return; }
+    // Short server cache avoids downloading all reviews every time the UI polls.
+    const cacheKey = `emr:connect-state:${clientId}:${locationId}`;
+    const cached = await redis.get(cacheKey).catch(() => null);
+    let links = cached ? JSON.parse(cached) : null;
+    if (!links) {
+      links = await listConnectLinks(config.embedmyreviews.apiKey, locationId, 'google');
+      await redis.setex(cacheKey, 30, JSON.stringify(links)).catch(() => undefined);
     }
-
-    ok(res, {
-      connected: state.connected,
-      connectedAt: state.oauthCompleted?.completedOauthAt ?? null,
-      connectUrl: state.active?.connectUrl ?? null,
-      expiresAt: state.active?.expiresAt ?? null,
-      reviewCount: state.reviewCount,
-      // Signed in with Google, but no reviews have arrived. Could be a still-running first
-      // sync, a profile with genuinely no reviews, or EMR's half-failed connect (observed
-      // 2026-07-14). We cannot tell these apart via their API — so say so rather than show a
-      // green "Connected" for a connection that may not exist.
-      awaitingReviews: !!state.oauthCompleted && !state.connected,
-    });
-  } catch (e) {
-    next(e);
-  }
+    const state = connectionState(links);
+    const integration = await db('integrations').where({ client_id: clientId, provider: 'embedmyreviews' }).first();
+    const row = await db('reviews').where({ client_id: clientId, source: 'emr' }).whereRaw('lower(platform) = ?', ['google']).count('* as n').first();
+    const lastSyncAt = integration?.last_pull_at ?? null;
+    ok(res, { ...state, connected: state.profileSelected, connectedAt: state.selectedAt,
+      connectUrl: state.connectUrl ? safeConnectUrl(state.connectUrl, config.embedmyreviews.baseUrl) : null,
+      reviewCount: lastSyncAt || Number(row?.n) > 0 ? Number(row?.n ?? 0) : null,
+      lastSyncAt, syncError: integration?.error_message ? 'The last review sync failed. Existing reviews are retained.' : null,
+      checkedAt: new Date().toISOString() });
+  } catch (e) { next(e); }
 }
 
 export async function createEmrGoogleConnectLink(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const state = await loadEmrConnectState(req.clientId as string);
-    if (!state) {
-      err(res, 'Review platform is not configured', 503, 'NOT_CONFIGURED');
-      return;
-    }
-
-    // Only short-circuit when a source is genuinely attached. If they completed OAuth but EMR
-    // never linked a profile, minting a fresh link is exactly what they need — and it's what
-    // EMR's own error tells them to ask us for ("ask your service provider to issue a new
-    // connect link").
-    if (state.connected) {
-      ok(res, { connected: true, connectedAt: state.oauthCompleted?.completedOauthAt ?? null, connectUrl: null });
-      return;
-    }
-
-    // EMR allows one active link per (location, provider) and auto-revokes the previous on
-    // re-issue, so minting again is safe and always hands back a usable URL.
-    const link = await createConnectLink(state.operatorKey, 'google', state.locationId);
-
-    logger.info('EMR Google connect link minted', {
-      clientId: req.clientId,
-      locationId: state.locationId,
-      expiresAt: link.expiresAt,
+    res.setHeader('Cache-Control', 'no-store');
+    const key = config.embedmyreviews.apiKey;
+    if (!key) { err(res, 'Review connection is temporarily unavailable', 503, 'NOT_CONFIGURED'); return; }
+    // Check an existing mapping before provisioning; never silently relocate a shared account.
+    const existing = await ownedEmrLocation(req.clientId);
+    const locationId = existing ?? await ensureEmrLocation(req.clientId);
+    if (!locationId) { err(res, 'Unable to prepare your review connection', 503); return; }
+    // Serializing link creation avoids invalidating the link returned to a concurrent caller.
+    const link = await db.transaction(async trx => {
+      await trx.raw('SELECT pg_advisory_xact_lock(hashtext(?))', [`emr-connect:${req.clientId}`]);
+      const links = await listConnectLinks(key, locationId, 'google');
+      const active = connectionState(links).connectUrl;
+      if (active) return links.find(l => l.connectUrl === active)!;
+      return createConnectLink(key, 'google', locationId);
     });
+    await redis.del(`emr:connect-state:${req.clientId}:${locationId}`).catch(() => undefined);
+    ok(res, { connectUrl: safeConnectUrl(link.connectUrl, config.embedmyreviews.baseUrl), expiresAt: link.expiresAt });
+  } catch (e) { next(e); }
+}
 
-    ok(res, { connected: false, connectUrl: link.connectUrl, expiresAt: link.expiresAt });
-  } catch (e) {
-    next(e);
-  }
+/** Explicit, client-scoped retry. Never schedules other customers' provider work. */
+export async function syncEmrGoogleReviews(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const locationId = await ownedEmrLocation(req.clientId);
+    if (!locationId) { err(res, 'Select your business through the Google connection first', 409, 'PROFILE_REQUIRED'); return; }
+    const key = config.embedmyreviews.apiKey;
+    if (!key) { err(res, 'Review connection is temporarily unavailable', 503); return; }
+    const state = connectionState(await listConnectLinks(key, locationId, 'google'));
+    if (!state.profileSelected) { err(res, 'Finish selecting your business before importing reviews', 409, 'PROFILE_REQUIRED'); return; }
+    const cooldown = `emr:sync:${req.clientId}`;
+    if (!(await redis.set(cooldown, '1', 'EX', 60, 'NX'))) {
+      err(res, 'An import was requested recently. Please wait a minute before retrying.', 429, 'SYNC_PENDING'); return;
+    }
+    try {
+      const source = await db('integrations').where({ client_id: req.clientId, provider: 'embedmyreviews', status: 'connected' }).whereNotNull('api_key_encrypted').first();
+      if (!source) await provisionClient(req.clientId);
+      const ready = await db('integrations').where({ client_id: req.clientId, provider: 'embedmyreviews', status: 'connected' }).whereNotNull('api_key_encrypted').first();
+      if (!ready) throw Object.assign(new Error('Review import setup needs attention. Please contact support.'), { status: 409, code: 'CONNECTION_MAPPING_REQUIRED' });
+      const { reviewsQueue } = await import('../jobs/queue');
+      await reviewsQueue.add('google-connection-import', { clientId: req.clientId, emrOnly: true }, { jobId: `google-import-${req.clientId}-${Math.floor(Date.now() / 60000)}`, removeOnComplete: 100, removeOnFail: 100 });
+    } catch (e) { await redis.del(cooldown); throw e; }
+    ok(res, { queued: true }, 202);
+  } catch (e) { next(e); }
 }
 
 function formatIntegration(integration: Record<string, unknown>) {
