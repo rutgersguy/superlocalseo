@@ -31,3 +31,9 @@ Merge the tested branch to GitHub main and deploy that exact revision with scrip
 After deployment, run `docker exec superlocalseo-api node dist/scripts/rebuild-cached-reports.js --apply` to repair existing downloadable reports without sending email. Every existing PDF is backed up and every replacement is staged before replacement begins. The timestamped report-directory `.repairs` folder contains originals, repaired copies and a manifest. Preserve this backup. The original delivery status, recipient and sent_at remain unchanged; generated_at records the replacement generation time. Previously emailed attachments cannot be replaced by this operation.
 
 If a replacement run stops midway, already replaced files remain valid and originals remain available in the manifest. Restore originals from that run's manifest and originalGeneratedAt if rolling back PDF content; use the predeployment database backup only when necessary. Do not use generateAndSendReport for historical repairs because it sends email.
+
+## Live follow-up verification
+
+GitHub PR #197 merged as 4508f4d and deployment returned site HTTP 200, API validation HTTP 422, and zero API error logs since restart. Read-only reconciliation was repeated against the rebuilt image. Browser verification confirms the new audit labels and citation copy are served. A final copy correction replaces the false universal claim that no tool can check Apple/Bing listings with the actual limitation of this integration.
+
+The signed-in EmbedMyReviews account displays 8 reviews (6 awaiting replies) and no feedback forms. Several review texts name Light Hawk Studios although the organization is labelled NerdBox; owner clarification is required before treating that source as verified NerdBox customer feedback. The vendor empty-state page advertises rating-based routing; no active form was created or changed.

@@ -39,14 +39,14 @@ const PORTALS = [
     name: 'Apple Business Connect',
     url: 'https://businessconnect.apple.com',
     why: 'Powers Apple Maps and Siri on every iPhone.',
-    note: 'Free. Apple verifies by phone call or postcard.',
+    note: 'Follow the verification method offered for your business.',
   },
   {
     key: 'bing',
     name: 'Bing Places for Business',
     url: 'https://www.bingplaces.com',
     why: 'Feeds Bing and Microsoft Copilot.',
-    note: 'Free. Usually verified within a few days.',
+    note: 'Verification methods and timing depend on your business.',
   },
 ];
 
@@ -113,9 +113,9 @@ function LocationCard({ loc, onDismiss }: { loc: LocationRow; onDismiss: () => v
             Two directories you&apos;ll need to claim yourself
           </h3>
           <p className="text-sm text-gray-600 mt-1 max-w-2xl">
-            Apple Maps and Bing Places don&apos;t publish their listings publicly, so no tool can
-            check them automatically. They&apos;re not part of the scan above and won&apos;t be —
-            it&apos;s how those platforms work, not something that&apos;s broken.
+            Our current citation scan does not verify Apple Maps or Bing Places. Review your
+            listings directly using the links below. Marking a listing as claimed records
+            your own confirmation and does not change your verified citation score.
           </p>
         </div>
         <button

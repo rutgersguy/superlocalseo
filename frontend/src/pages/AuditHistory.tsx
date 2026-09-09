@@ -561,7 +561,7 @@ export default function AuditHistory() {
       )}
 
       {latestAudit?.needsScoreRefresh && <p className="text-sm text-amber-700">Older calculated listing and composite scores are withheld because their methodology was inaccurate. Run a new audit to calculate scores from verified observations.</p>}
-      {latestAudit?.scoreMethodology && <p className="text-xs text-gray-500">{latestAudit.scoreMethodology}</p>}
+      {latestAudit?.scoreMethodology && !latestAudit.needsScoreRefresh && <p className="text-xs text-gray-500">{latestAudit.scoreMethodology}</p>}
       {/* Score cards — on-page focused */}
       <div className="grid grid-cols-3 gap-4">
         <ScoreCard label="Page audit estimate" value={latestAudit?.onPageScore ?? null} delta={delta('onPageScore')} tooltip="Heuristic page checks. When Lighthouse is available, the displayed score blends page checks (60%) with lab performance (40%). This is not a Google ranking score." />
