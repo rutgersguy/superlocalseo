@@ -728,12 +728,12 @@ export function renderReportHtml(data: ReportData): string {
   const topKeywordsRows = rankings.topKeywords
     .map(
       (k, i) => `
-        <tr style="background:${i % 2 === 0 ? '#ffffff' : '#f9fafb'}">
-          <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#111827">${escHtml(k.keyword)}</td>
-          <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">${escHtml(k.location)}</td>
-          <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center">${rankCell(k.rank)}</td>
-          <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center;color:#6b7280">${rankCell(k.prevRank)}</td>
-          <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center">${deltaHtml(k.delta)}</td>
+        <tr style="background:${i % 2 === 0 ? '#fffefa' : '#f8f6f0'}">
+          <td style="padding:10px 14px;border-bottom:1px solid #d8ded5;font-size:13px;color:#20362f">${escHtml(k.keyword)}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #d8ded5;font-size:13px;color:#57665e">${escHtml(k.location)}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #d8ded5;font-size:13px;text-align:center">${rankCell(k.rank)}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #d8ded5;font-size:13px;text-align:center;color:#57665e">${rankCell(k.prevRank)}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #d8ded5;font-size:13px;text-align:center">${deltaHtml(k.delta)}</td>
         </tr>`,
     )
     .join('');
@@ -742,9 +742,9 @@ export function renderReportHtml(data: ReportData): string {
     .map(
       (p) => `
         <tr>
-          <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#111827">${escHtml(p.platform)}</td>
-          <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center;color:#111827">${p.count}</td>
-          <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center;color:#f59e0b">${starRating(p.avgRating)}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #d8ded5;font-size:13px;color:#20362f">${escHtml(p.platform)}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #d8ded5;font-size:13px;text-align:center;color:#20362f">${p.count}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #d8ded5;font-size:13px;text-align:center;color:#f59e0b">${starRating(p.avgRating)}</td>
         </tr>`,
     )
     .join('');
@@ -760,15 +760,15 @@ export function renderReportHtml(data: ReportData): string {
 
   const gapSection = (gap.winning + gap.competing + gap.vulnerable + gap.absent) > 0 ? `
   <div style="padding:12px 40px 14px">
-    <h2 style="font-size:14px;font-weight:700;color:${brandColor};margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em">Keyword Position Breakdown</h2>
+    <h2 style="font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:700;color:${brandColor};margin-bottom:10px;letter-spacing:-0.01em">Keyword Position Breakdown</h2>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:${gap.atRisk.length > 0 ? '14px' : '0'}">
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 8px;text-align:center">
         <div style="font-size:20px;font-weight:700;color:#16a34a">${gap.winning}</div>
         <div style="font-size:10px;font-weight:600;color:#15803d;margin-top:2px;text-transform:uppercase;letter-spacing:0.05em">Winning (1–3)</div>
       </div>
-      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px 8px;text-align:center">
+      <div style="background:#eaf0e9;border:1px solid #d8ded5;border-radius:6px;padding:10px 8px;text-align:center">
         <div style="font-size:20px;font-weight:700;color:#28624e">${gap.competing}</div>
-        <div style="font-size:10px;font-weight:600;color:#1d4ed8;margin-top:2px;text-transform:uppercase;letter-spacing:0.05em">Competing (4–10)</div>
+        <div style="font-size:10px;font-weight:600;color:#28624e;margin-top:2px;text-transform:uppercase;letter-spacing:0.05em">Competing (4–10)</div>
       </div>
       <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:10px 8px;text-align:center">
         <div style="font-size:20px;font-weight:700;color:#d97706">${gap.vulnerable}</div>
@@ -781,16 +781,16 @@ export function renderReportHtml(data: ReportData): string {
     </div>
     ${gap.atRisk.length > 0 ? `
     <p style="font-size:12px;font-weight:600;color:#374151;margin-bottom:10px">Keywords needing attention:</p>
-    <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+    <div style="border:1px solid #d8ded5;border-radius:8px;overflow:hidden">
       <table>
         <thead><tr><th>Keyword</th><th>Location</th><th class="center">Current Rank</th><th class="center">Status</th></tr></thead>
         <tbody>
           ${gap.atRisk.map((k, i) => `
-            <tr style="background:${i % 2 === 0 ? '#ffffff' : '#f9fafb'}">
-              <td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#111827">${escHtml(k.keyword)}</td>
-              <td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">${escHtml(k.location)}</td>
-              <td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center;color:#111827">${k.rank ?? '—'}</td>
-              <td style="padding:9px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center">
+            <tr style="background:${i % 2 === 0 ? '#fffefa' : '#f8f6f0'}">
+              <td style="padding:9px 14px;border-bottom:1px solid #d8ded5;font-size:13px;color:#20362f">${escHtml(k.keyword)}</td>
+              <td style="padding:9px 14px;border-bottom:1px solid #d8ded5;font-size:13px;color:#57665e">${escHtml(k.location)}</td>
+              <td style="padding:9px 14px;border-bottom:1px solid #d8ded5;font-size:13px;text-align:center;color:#20362f">${k.rank ?? '—'}</td>
+              <td style="padding:9px 14px;border-bottom:1px solid #d8ded5;font-size:13px;text-align:center">
                 <span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;${k.status === 'absent' ? 'background:#fef2f2;color:#dc2626' : 'background:#fffbeb;color:#d97706'}">
                   ${k.status === 'absent' ? 'Not ranking' : 'Vulnerable'}
                 </span>
@@ -878,7 +878,7 @@ export function renderReportHtml(data: ReportData): string {
     }).join('');
 
     const competitorBlock = aiVisibility.topCompetitors.length === 0 ? '' : `
-      <div style="margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb">
+      <div style="margin-top:12px;padding-top:10px;border-top:1px solid #d8ded5">
         <p style="font-size:11px;font-weight:600;color:#374151;margin-bottom:6px">Who the assistants named this month</p>
         <p style="font-size:11px;color:#6b7280;line-height:1.7">
           ${aiVisibility.topCompetitors.map((c) => c.isYou
@@ -890,8 +890,8 @@ export function renderReportHtml(data: ReportData): string {
     return `
   <!-- AI Visibility -->
   <div style="padding:0 40px 14px">
-    <h2 style="font-size:14px;font-weight:700;color:${brandColor};margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em">AI Assistant Visibility</h2>
-    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px">
+    <h2 style="font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:700;color:${brandColor};margin-bottom:10px;letter-spacing:-0.01em">AI Assistant Visibility</h2>
+    <div style="border:1px solid #d8ded5;border-radius:8px;padding:12px 16px;background:#fffefa">
       <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
         <div>
           <span style="font-size:13px;font-weight:600;color:#111827">Recommended in </span>
@@ -918,8 +918,10 @@ export function renderReportHtml(data: ReportData): string {
 <title>${escHtml(client.businessName)} SEO Report — ${escHtml(period.label)}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #ffffff; color: #111827; }
-  .page { max-width: 900px; margin: 0 auto; background: #ffffff; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #f8f6f0; color: #20362f; }
+  .page { max-width: 900px; margin: 0 auto; background: #fffefa; border: 1px solid #d8ded5; box-shadow: 0 8px 24px rgba(23,62,54,0.08); }
+  h2, h3 { font-family: Georgia, 'Times New Roman', serif; }
+  p { line-height: 1.5; }
   table { width: 100%; border-collapse: collapse; }
   th { background: #eaf0e9; padding: 10px 14px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #57665e; text-align: left; border-bottom: 2px solid #d8ded5; }
   th.center { text-align: center; }
@@ -945,13 +947,14 @@ export function renderReportHtml(data: ReportData): string {
     <div style="border-top:1px solid rgba(255,255,255,0.2);margin-bottom:18px"></div>
     <!-- Centered report title -->
     <div style="text-align:center">
-      <div style="font-size:10px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;opacity:0.6">Monthly SEO Performance Report &mdash; ${escHtml(period.label)}</div>
+      <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;font-weight:700;letter-spacing:-0.01em">Monthly visibility brief</div>
+      <div style="font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;opacity:0.65;margin-top:5px">${escHtml(period.label)}</div>
     </div>
   </div>
 
   <!-- Executive Summary -->
   <div style="padding:28px 40px 12px">
-    <h2 style="font-size:14px;font-weight:700;color:${brandColor};margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em">Executive Summary</h2>
+    <h2 style="font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:700;color:${brandColor};margin-bottom:10px;letter-spacing:-0.01em">Executive Summary</h2>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px">
       ${statBox('Avg. Rank', rankings.avgRank != null ? String(rankings.avgRank) : 'N/A', brandColor)}
       ${statBox('Keywords in Top 10', String(rankings.keywordsInTop10), brandColor)}
@@ -969,13 +972,13 @@ export function renderReportHtml(data: ReportData): string {
   <!-- Citations (Pro only — null on Lite, see gatherReportData) -->
   ${!citations ? '' : `
   <div style="padding:0 40px 14px">
-    <h2 style="font-size:14px;font-weight:700;color:${brandColor};margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em">Citation Health</h2>
-    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px">
+    <h2 style="font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:700;color:${brandColor};margin-bottom:10px;letter-spacing:-0.01em">Citation Health</h2>
+    <div style="border:1px solid #d8ded5;border-radius:8px;padding:12px 16px;background:#fffefa">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <span style="font-size:13px;font-weight:600;color:#111827">Citation Score</span>
         <span style="font-size:16px;font-weight:700;color:${citationBarColor}">${citations.score}%</span>
       </div>
-      <div style="background:#e5e7eb;border-radius:999px;height:8px;overflow:hidden;margin-bottom:10px">
+      <div style="background:#d8ded5;border-radius:999px;height:8px;overflow:hidden;margin-bottom:10px">
         <div style="background:${citationBarColor};width:${citationBarWidth}%;height:100%;border-radius:999px"></div>
       </div>
       <div style="display:flex;gap:20px;flex-wrap:wrap">
@@ -990,7 +993,7 @@ export function renderReportHtml(data: ReportData): string {
   <!-- ROI Estimates -->
   ${roi ? `
   <div style="padding:0 40px 14px">
-    <h2 style="font-size:14px;font-weight:700;color:${brandColor};margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em">ROI &amp; Revenue Attribution</h2>
+    <h2 style="font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:700;color:${brandColor};margin-bottom:10px;letter-spacing:-0.01em">ROI &amp; Revenue Attribution</h2>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
       ${statBox('Est. Monthly Clicks', roi.estClicks.toLocaleString(), brandColor)}
       ${statBox('Est. Monthly Leads', roi.estLeads.toLocaleString(), brandColor)}
@@ -1001,8 +1004,8 @@ export function renderReportHtml(data: ReportData): string {
 
   <!-- Recommendations -->
   <div style="page-break-before:always;padding:40px 40px 20px">
-    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Recommendations</h2>
-    <div style="background:#f0f4ff;border:1px solid #dbeafe;border-radius:8px;padding:20px">
+    <h2 style="font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:700;color:${brandColor};margin-bottom:16px;letter-spacing:-0.01em">Recommendations</h2>
+    <div style="background:#f8ecdf;border:1px solid #f2c7ad;border-radius:8px;padding:20px">
       <ul style="padding-left:18px">
         ${recommendationItems}
       </ul>
@@ -1011,9 +1014,9 @@ export function renderReportHtml(data: ReportData): string {
 
   <!-- Rankings -->
   <div style="page-break-before:always;padding:40px 40px 32px">
-    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Keyword Rankings</h2>
-    <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
-      <div style="padding:14px 16px;background:#f0f4ff;border-bottom:1px solid #e5e7eb;display:flex;gap:32px">
+    <h2 style="font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:700;color:${brandColor};margin-bottom:16px;letter-spacing:-0.01em">Keyword Rankings</h2>
+    <div style="border:1px solid #d8ded5;border-radius:8px;overflow:hidden">
+      <div style="padding:14px 16px;background:#eaf0e9;border-bottom:1px solid #d8ded5;display:flex;gap:32px">
         <span style="font-size:13px;color:#374151"><strong style="color:${brandColor}">${rankings.keywordsInTop3}</strong> in Top 3</span>
         <span style="font-size:13px;color:#374151"><strong style="color:${brandColor}">${rankings.keywordsInTop10}</strong> in Top 10</span>
         <span style="font-size:13px;color:#374151">Avg. Position: <strong style="color:${brandColor}">${rankings.avgRank ?? 'N/A'}</strong></span>
@@ -1036,9 +1039,9 @@ export function renderReportHtml(data: ReportData): string {
 
   <!-- Reviews -->
   <div style="page-break-before:always;padding:40px 40px 32px">
-    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Reviews</h2>
-    <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
-      <div style="padding:14px 16px;background:#f0f4ff;border-bottom:1px solid #e5e7eb;display:flex;gap:32px;flex-wrap:wrap">
+    <h2 style="font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:700;color:${brandColor};margin-bottom:16px;letter-spacing:-0.01em">Reviews</h2>
+    <div style="border:1px solid #d8ded5;border-radius:8px;overflow:hidden">
+      <div style="padding:14px 16px;background:#eaf0e9;border-bottom:1px solid #d8ded5;display:flex;gap:32px;flex-wrap:wrap">
         <span style="font-size:13px;color:#374151">Total: <strong style="color:${brandColor}">${reviews.total}</strong></span>
         <span style="font-size:13px;color:#374151">New this month: <strong style="color:${brandColor}">${reviews.newThisMonth}</strong></span>
         <span style="font-size:13px;color:#374151">Avg. Rating: <strong style="color:#f59e0b">${reviews.avgRating != null ? reviews.avgRating.toFixed(1) + ' ★' : 'N/A'}</strong></span>
@@ -1062,8 +1065,8 @@ export function renderReportHtml(data: ReportData): string {
   <!-- Competitors -->
   ${competitors.length > 0 ? `
   <div style="page-break-before:always;padding:40px 40px 32px">
-    <h2 style="font-size:16px;font-weight:700;color:${brandColor};margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em">Competitor Benchmarking</h2>
-    <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+    <h2 style="font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:700;color:${brandColor};margin-bottom:16px;letter-spacing:-0.01em">Competitor Benchmarking</h2>
+    <div style="border:1px solid #d8ded5;border-radius:8px;overflow:hidden">
       <table>
         <thead>
           <tr>
@@ -1074,18 +1077,18 @@ export function renderReportHtml(data: ReportData): string {
           </tr>
         </thead>
         <tbody>
-          <tr style="background:#f0f4ff">
-            <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:700;color:${brandColor}">${escHtml(client.businessName)} <span style="font-size:10px;font-weight:600;background:${brandColor};color:#fff;padding:1px 6px;border-radius:999px;margin-left:4px">YOU</span></td>
-            <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center;color:#f59e0b">${clientStats.avgRating != null ? `★ ${clientStats.avgRating.toFixed(1)}` : '—'}</td>
-            <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center;font-weight:600;color:#111827">${clientStats.reviewCount.toLocaleString()}</td>
-            <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">—</td>
+          <tr style="background:#eaf0e9">
+            <td style="padding:10px 14px;border-bottom:1px solid #d8ded5;font-size:13px;font-weight:700;color:${brandColor}">${escHtml(client.businessName)} <span style="font-size:10px;font-weight:600;background:${brandColor};color:#fff;padding:1px 6px;border-radius:999px;margin-left:4px">YOU</span></td>
+            <td style="padding:10px 14px;border-bottom:1px solid #d8ded5;font-size:13px;text-align:center;color:#f59e0b">${clientStats.avgRating != null ? `★ ${clientStats.avgRating.toFixed(1)}` : '—'}</td>
+            <td style="padding:10px 14px;border-bottom:1px solid #d8ded5;font-size:13px;text-align:center;font-weight:600;color:#20362f">${clientStats.reviewCount.toLocaleString()}</td>
+            <td style="padding:10px 14px;border-bottom:1px solid #d8ded5;font-size:13px;color:#57665e">—</td>
           </tr>
           ${competitors.map((c, i) => `
-            <tr style="background:${i % 2 === 0 ? '#ffffff' : '#f9fafb'}">
-              <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:600;color:#111827">${escHtml(c.name)}</td>
-              <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center;color:#f59e0b">${c.googleRating != null ? `★ ${c.googleRating.toFixed(1)}` : '—'}</td>
-              <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center;color:#111827">${c.googleReviewCount != null ? c.googleReviewCount.toLocaleString() : '—'}</td>
-              <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">${c.website ? `<a href="${escHtml(c.website)}" style="color:${brandColor}">${escHtml(c.website)}</a>` : '—'}</td>
+            <tr style="background:${i % 2 === 0 ? '#fffefa' : '#f8f6f0'}">
+              <td style="padding:10px 14px;border-bottom:1px solid #d8ded5;font-size:13px;font-weight:600;color:#20362f">${escHtml(c.name)}</td>
+              <td style="padding:10px 14px;border-bottom:1px solid #d8ded5;font-size:13px;text-align:center;color:#f59e0b">${c.googleRating != null ? `★ ${c.googleRating.toFixed(1)}` : '—'}</td>
+              <td style="padding:10px 14px;border-bottom:1px solid #d8ded5;font-size:13px;text-align:center;color:#20362f">${c.googleReviewCount != null ? c.googleReviewCount.toLocaleString() : '—'}</td>
+              <td style="padding:10px 14px;border-bottom:1px solid #d8ded5;font-size:13px;color:#57665e">${c.website ? `<a href="${escHtml(c.website)}" style="color:${brandColor}">${escHtml(c.website)}</a>` : '—'}</td>
             </tr>`).join('')}
         </tbody>
       </table>
@@ -1109,7 +1112,7 @@ function escHtml(str: string): string {
 }
 
 function statBox(label: string, value: string, color: string): string {
-  return `<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px;text-align:center">
+  return `<div style="background:#eaf0e9;border:1px solid #d8ded5;border-radius:8px;padding:10px 14px;text-align:center">
     <div style="font-size:20px;font-weight:700;color:${color};margin-bottom:3px">${escHtml(value)}</div>
     <div style="font-size:11px;color:#6b7280;font-weight:500">${escHtml(label)}</div>
   </div>`;
