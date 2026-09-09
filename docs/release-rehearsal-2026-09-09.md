@@ -35,3 +35,9 @@ This is an assisted-pilot release rehearsal, not evidence that every external cu
 Rebuild and start only the isolated test api/web services with docker-compose.test.yml. Copy the versioned script into slseo-test-api and run it with node. It asserts NODE_ENV=test, a superlocalseo_test database, sk_test credentials, and placeholder email credentials before writing. It removes its unique user and Stripe customer/subscriptions in finally. Never run it against production or replace test credentials with live keys.
 
 The test stack pre-existed this rehearsal. Temporary unit-test Redis/database, SSH forwarding and the browser checkout fixture are cleaned up after validation. Production deployment uses scripts/deploy.sh, a verified database backup, and api/web-only recreation with --no-deps; shared database/Redis services are not restarted.
+
+## Final regression results
+
+101 distinct browser checks passed across the full suite and focused reruns; 6 pre-existing skips remain (4 moved vendor lead-form tests and 2 costly provisioning/provider tests). The initial full run had 90 passing and 10 failing checks. After repairs and selector updates, the affected suites were rerun, ending with all 13 pricing/checkout tests passing on the rebuilt final test stack. This is a union of verified tests, not a claim that the first full run passed unchanged.
+
+The final backend run passed 286/286 tests in 26 suites. The rebuilt API passed all 18 Stripe sandbox/HTTP checks, including simultaneous checkout requests. Frontend and backend TypeScript compilation passed. Test logs are retained on the server under /tmp/slseo-release-20260909. Unit-test Redis/database and the disposable browser-checkout account/customer have been removed.
