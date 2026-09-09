@@ -37,14 +37,14 @@ import {
  */
 
 const PAGES: Array<{ path: string; heading: RegExp; label: string }> = [
-  { path: '/dashboard', heading: /^Dashboard$/, label: 'Dashboard' },
-  { path: '/dashboard/rankings', heading: /^Rankings$/, label: 'Rankings' },
-  { path: '/dashboard/reviews', heading: /^Reviews$/, label: 'Reviews' },
+  { path: '/dashboard', heading: /^Your visibility overview$/, label: 'Dashboard' },
+  { path: '/dashboard/rankings', heading: /^Google rankings$/, label: 'Rankings' },
+  { path: '/dashboard/reviews', heading: /^Your review inbox$/, label: 'Reviews' },
   { path: '/dashboard/campaigns', heading: /^Review Campaigns$/, label: 'Campaigns' },
   { path: '/dashboard/competitors', heading: /^Competitors$/, label: 'Competitors' },
   { path: '/dashboard/citations', heading: /^Citations$/, label: 'Citations' },
   { path: '/dashboard/audit', heading: /^Local SEO Audit$/, label: 'SEO Audit' },
-  { path: '/dashboard/reports', heading: /^Reports$/, label: 'Reports' },
+  { path: '/dashboard/reports', heading: /^Your monthly reports$/, label: 'Reports' },
   { path: '/dashboard/settings', heading: /^Settings$/, label: 'Settings' },
 ];
 
@@ -97,12 +97,10 @@ test.describe('Suite 09 — New user, zero data', () => {
     await loginViaUI(page, client.email, client.password);
     await page.waitForLoadState('networkidle');
 
-    // All four read straight off /metrics, which is entirely null here.
-    // Regression guard for 1c4b4ef.
-    await expect(page.getByText('Avg Rank', { exact: true })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText('Keywords in Top 10', { exact: true })).toBeVisible();
-    await expect(page.getByText('Total Reviews', { exact: true })).toBeVisible();
-    await expect(page.getByText('Avg Rating', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Search rankings', exact: true })).toBeVisible();
+    await expect(page.getByText('Not available', { exact: true }).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('No review data', { exact: true })).toBeVisible();
+    await expect(page.getByText('Not yet checked', { exact: true })).toBeVisible();
 
     errors.assertNoCrash('Dashboard metric cards with null metrics');
   });
@@ -113,7 +111,7 @@ test.describe('Suite 09 — New user, zero data', () => {
 
     // An empty table is not enough — a new user needs the next action.
     await expect(
-      page.getByText('No ranking data yet. Add keywords in Settings to get started.')
+      page.getByText('No ranking data yet. Add keywords in Google rankings to get started.')
     ).toBeVisible({ timeout: 15_000 });
   });
 
@@ -141,9 +139,9 @@ test.describe('Suite 09 — New user, zero data', () => {
 
   // ------------------------------------------ counting and sorting around nulls
 
-  test('TEST-ZD-05 — Keywords Tracked counts keywords, not keyword×engine rows', async ({ page }) => {
+  test('TEST-ZD-05 — observation count matches rows and search-engine filter', async ({ page }) => {
     // Two keywords, each ranked on two engines = four snapshot rows.
-    // Before 2eff6b1 this rendered "4". The user has two keywords.
+    // The observation summary counts the same rows as the filtered table.
     const locationId = seedLocation(client.email, { name: 'Main Office' });
     const kw1 = seedKeyword(locationId, 'emergency plumber tulsa');
     const kw2 = seedKeyword(locationId, 'water heater repair tulsa');
@@ -157,7 +155,9 @@ test.describe('Suite 09 — New user, zero data', () => {
     await page.goto('/dashboard/rankings');
     await page.waitForLoadState('networkidle');
 
-    await expect(statValue(page, 'KEYWORDS TRACKED')).toHaveText('2', { timeout: 15_000 });
+    await expect(statValue(page, 'OBSERVATIONS')).toHaveText('4', { timeout: 15_000 });
+    await page.getByRole('combobox', { name: /Search engine/ }).selectOption('google');
+    await expect(statValue(page, 'OBSERVATIONS')).toHaveText('2');
   });
 
   test('TEST-ZD-06 — unranked keywords are excluded from Avg Rank and In Top 3', async ({ page }) => {
@@ -174,9 +174,9 @@ test.describe('Suite 09 — New user, zero data', () => {
     await page.waitForLoadState('networkidle');
 
     // Exactly one keyword ranks at #2; the null must not be counted.
-    await expect(statValue(page, 'IN TOP 3')).toHaveText('1', { timeout: 15_000 });
+    await expect(statValue(page, 'OBSERVATIONS IN TOP 3')).toHaveText('1', { timeout: 15_000 });
     // Avg Rank is the ranked keyword's position, not an average polluted by null.
-    await expect(statValue(page, 'AVG RANK')).toHaveText('2.0');
+    await expect(statValue(page, 'AVG OBSERVED POSITION')).toHaveText('2.0');
   });
 
   test('TEST-ZD-07 — sorting by rank puts real positions first and unranked last', async ({ page }) => {
@@ -238,11 +238,8 @@ test.describe('Suite 09 — New user, zero data', () => {
     const runScan = page.getByRole('button', { name: 'Run Scan' });
     await expect(runScan).toBeVisible({ timeout: 15_000 });
 
-    // TODO: harden once the geo-grid panel has data-testids — these are the only
-    // two selects rendered on this tab today.
-    const selects = page.locator('select');
-    await selects.nth(0).selectOption({ index: 1 });
-    await selects.nth(1).selectOption({ index: 1 });
+    await page.getByLabel('Map location', { exact: true }).selectOption({ index: 1 });
+    await page.getByLabel('Map keyword', { exact: true }).selectOption({ index: 1 });
 
     await runScan.click();
 
@@ -299,7 +296,7 @@ test.describe('Suite 09 — New user, zero data', () => {
     await page.goto('/dashboard/rankings');
     await page.waitForLoadState('networkidle');
 
-    await expect(page.getByRole('heading', { name: 'Rankings' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: 'Google rankings' })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('button', { name: 'Scan now' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Refresh' })).toHaveCount(0);
   });

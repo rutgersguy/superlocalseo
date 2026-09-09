@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
-import { sendInvite, fetchUnsubscribes, fetchCampaignTemplates, createCampaign as createEMRCampaign } from '../services/embedmyreviews.service';
+import { sendInvite, fetchUnsubscribes, fetchCampaignTemplates } from '../services/embedmyreviews.service';
 import { getClientEMRKey } from '../services/emr_provisioning';
 import { logger } from '../utils/logger';
 
@@ -31,54 +31,11 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
   }
 }
 
-export async function create(req: Request, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const { name, templateId } = req.body as { name?: string; templateId?: string };
-    if (!name?.trim()) {
-      err(res, 'Campaign name required', 400, 'VALIDATION_ERROR');
-      return;
-    }
-
-    const apiKey = await getClientEMRKey(req.clientId);
-    if (!apiKey) {
-      err(res, 'EmbedMyReviews integration not connected. Connect your account in Settings → Integrations.', 400, 'NOT_CONNECTED');
-      return;
-    }
-
-    let emrCampaign: { id: string; name: string };
-    try {
-      emrCampaign = await createEMRCampaign(apiKey, name.trim(), templateId);
-    } catch (e) {
-      const msg = (e as Error).message;
-      logger.warn('EMR createCampaign failed', { clientId: req.clientId, error: msg });
-      const isMethodNotAllowed = msg.includes('405');
-      err(
-        res,
-        isMethodNotAllowed
-          ? 'Campaign creation is not available via the API on your EmbedMyReviews plan. Create campaigns directly in your EmbedMyReviews dashboard — they will appear here automatically.'
-          : 'Could not reach the review platform. Please try again in a moment.',
-        503,
-        'EMR_UNAVAILABLE',
-      );
-      return;
-    }
-
-    const [campaign] = await db('emr_campaigns')
-      .insert({ client_id: req.clientId, emr_campaign_id: emrCampaign.id, name: emrCampaign.name })
-      .returning('*');
-
-    ok(res, {
-      campaign: {
-        id: campaign.id,
-        emrCampaignId: emrCampaign.id,
-        name: emrCampaign.name,
-        invited: 0, opened: 0, clicked: 0, reviewed: 0, privateFeedback: 0, unsubscribed: 0,
-        metricsPulledAt: null,
-      },
-    });
-  } catch (e) {
-    next(e);
-  }
+/** The vendor REST API lists campaigns and sends invites; it cannot create campaigns.
+ * Keep legacy callers explicit and fail closed instead of using an unscoped agency POST.
+ */
+export async function create(_req: Request, res: Response, _next: NextFunction): Promise<void> {
+  err(res, 'Campaign setup is currently assisted. Contact hello@superlocalseo.com with your business name and location.', 501, 'CAMPAIGN_SETUP_REQUIRED');
 }
 
 const inviteSchema = z.object({

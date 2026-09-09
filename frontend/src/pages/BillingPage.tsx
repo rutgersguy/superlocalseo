@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -45,18 +45,17 @@ function CheckoutForm({ onSuccess: _onSuccess }: { onSuccess: () => void }) {
     setSubmitting(true);
     setError('');
 
-    const { error: stripeError } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: `${window.location.origin}/billing`,
-      },
-    });
-
-    // Only reaches here on error — success redirects automatically
-    if (stripeError) {
-      setError(stripeError.message ?? 'Payment failed. Please try again.');
+    try {
+      const { error: stripeError } = await stripe.confirmPayment({
+        elements,
+        confirmParams: { return_url: `${window.location.origin}/billing` },
+      });
+      if (stripeError) setError(stripeError.message ?? 'Payment failed. Please try again.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Payment could not be submitted. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
   return (
@@ -64,7 +63,6 @@ function CheckoutForm({ onSuccess: _onSuccess }: { onSuccess: () => void }) {
       <PaymentElement
         options={{
           layout: 'tabs',
-          fields: { billingDetails: { address: { country: 'never' } } },
         }}
       />
 
@@ -102,7 +100,7 @@ const FEATURES = [
   'Citation health monitoring & builder',
   'Automated monthly PDF reports',
   'Review request campaigns via email & SMS',
-  'ROI & revenue attribution dashboard',
+  'ROI scenarios based on your assumptions',
   'Unlimited team members & roles',
 ];
 
@@ -135,9 +133,10 @@ const PLAN_DETAILS = {
 
 export default function BillingPage() {
   const { logout } = useAuth();
-  const { data: statusData, error: statusError } = useSWR<{ success: boolean; data: BillingStatus }>('/billing/status', fetcher);
+  const { data: statusData, error: statusError, mutate: refreshBilling } = useSWR<{ success: boolean; data: BillingStatus }>('/billing/status', fetcher);
   const billing = statusData?.data;
 
+  const [chosenPlan, setChosenPlan] = useState<'lite' | 'pro' | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [publishableKey, setPubKey] = useState<string | null>(null);
   const [intentError, setIntentError] = useState('');
@@ -172,7 +171,7 @@ export default function BillingPage() {
   // trial users mid-funnel at deploy aren't silently checked out on the cheaper Lite price.
   const storedPlan = localStorage.getItem('selectedPlan');
   const planForCheckout: 'lite' | 'pro' =
-    storedPlan === 'lite' || storedPlan === 'pro' ? storedPlan : (billing?.productLine ?? 'pro');
+    chosenPlan ?? (storedPlan === 'lite' || storedPlan === 'pro' ? storedPlan : (billing?.productLine ?? 'pro'));
   const isUpgrade = new URLSearchParams(window.location.search).get('upgrade') === '1';
 
   // Checkout summary reflects the plan actually being charged (planForCheckout is what
@@ -189,12 +188,15 @@ export default function BillingPage() {
     if (isEarlyTrial && !proceedEarly) return; // don't create intent until user opts in
     if (clientSecret) return;
 
+    let ignore = false;
+    setIntentError('');
     setLoadingIntent(true);
     apiFetch<IntentResponse>('/billing/subscription-intent', {
       method: 'POST',
       body: JSON.stringify({ plan: planForCheckout, extraLocations: 0, promotionCodeId: promoApplied?.id }),
     })
       .then((res) => {
+        if (ignore) return;
         if (!res.success || !res.data?.clientSecret) {
           setIntentError(res.error?.message ?? 'Could not initialize payment');
           return;
@@ -202,9 +204,10 @@ export default function BillingPage() {
         setClientSecret(res.data.clientSecret);
         setPubKey(res.data.publishableKey ?? billing.publishableKey);
       })
-      .catch(() => setIntentError('Network error — please refresh'))
-      .finally(() => setLoadingIntent(false));
-  }, [billing, clientSecret, isEarlyTrial, proceedEarly]);
+      .catch(() => { if (!ignore) setIntentError('Network error — please refresh'); })
+      .finally(() => { if (!ignore) setLoadingIntent(false); });
+    return () => { ignore = true; };
+  }, [billing, clientSecret, isEarlyTrial, proceedEarly, planForCheckout, promoApplied, success]);
 
   // Lite→Pro upgrade: call /billing/upgrade and reuse the payment form for confirmation.
   // product_line flips to 'pro' on the invoice.payment_succeeded webhook once paid.
@@ -261,7 +264,7 @@ export default function BillingPage() {
     setClientSecret(null);
   };
 
-  const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
+  const stripePromise = useMemo(() => publishableKey ? loadStripe(publishableKey) : null, [publishableKey]);
 
   const stripeAppearance = {
     theme: 'stripe' as const,
@@ -358,8 +361,9 @@ export default function BillingPage() {
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
             <CheckCircle2 size={32} className="text-green-500" />
           </div>
-          <h1 className="text-xl font-bold text-slate-900">You're in!</h1>
-          <p className="text-sm text-slate-500">Your subscription is active. Welcome to SuperLocalSEO.</p>
+          <h1 className="text-xl font-bold text-slate-900">Payment confirmation</h1>
+          <p className="text-sm text-slate-500">Your plan activates after payment confirmation reaches us. Check your billing status before continuing.</p>
+          <button onClick={() => void refreshBilling()} className="text-brand-600 underline">Check billing status</button>
           <Link to="/dashboard"
             className="block w-full py-3 rounded-xl bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 transition-colors">
             Go to dashboard →
@@ -408,6 +412,20 @@ export default function BillingPage() {
             </p>
           </div>
 
+          {!isUpgrade && (
+            <label className="block text-sm font-medium text-slate-700">
+              Choose your plan
+              <select aria-label="Choose your plan" value={planForCheckout} disabled={loadingIntent}
+                onChange={e => {
+                  const plan = e.target.value as 'lite' | 'pro';
+                  setChosenPlan(plan); localStorage.setItem('selectedPlan', plan);
+                  setClientSecret(null); setIntentError('');
+                }} className="block w-full mt-2 p-3 border border-slate-300 rounded-lg">
+                <option value="lite">Lite — $149/month</option>
+                <option value="pro">Pro — $349/month</option>
+              </select>
+            </label>
+          )}
           {/* Pricing breakdown */}
           <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">What you're subscribing to</p>
@@ -524,7 +542,7 @@ export default function BillingPage() {
           )}
 
           {clientSecret && stripePromise && (
-            <Elements stripe={stripePromise} options={{ clientSecret, appearance: stripeAppearance }}>
+            <Elements key={clientSecret} stripe={stripePromise} options={{ clientSecret, appearance: stripeAppearance }}>
               <CheckoutForm onSuccess={() => setSuccess(true)} />
             </Elements>
           )}

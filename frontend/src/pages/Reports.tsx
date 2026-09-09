@@ -435,6 +435,7 @@ function DataExports() {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Reports() {
+  const { productLine, loading: planLoading } = useClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [resendModal, setResendModal] = useState<{ month: number; year: number } | null>(null);
   const [previewReport, setPreviewReport] = useState<Report | null>(null);
@@ -579,7 +580,9 @@ export default function Reports() {
         </table>
       </div>
 
-      <details className="workspace-secondary workspace-surface"><summary>Raw data exports</summary><DataExports /></details>
+      {!planLoading && canUseFeature(productLine, 'csvExport') && (
+        <details className="workspace-secondary workspace-surface"><summary>Raw data exports</summary><DataExports /></details>
+      )}
 
       {/* Generate modal */}
       {modalOpen && (

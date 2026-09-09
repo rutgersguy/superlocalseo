@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db/connection';
 import { ok, err } from '../utils/response';
-import { getOrCreateStripeCustomer, createCheckoutSession, createSubscriptionIntent, upgradeToProSubscription, getBillingPortalUrl, handleWebhookEvent, validatePromoCode } from '../services/stripe.service';
+import { stripe, getOrCreateStripeCustomer, createCheckoutSession, createSubscriptionIntent, upgradeToProSubscription, getBillingPortalUrl, handleWebhookEvent, validatePromoCode } from '../services/stripe.service';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
@@ -50,13 +50,32 @@ export async function subscriptionIntent(req: Request, res: Response, next: Next
     const promotionCodeId = typeof req.body.promotionCodeId === 'string' ? req.body.promotionCodeId : undefined;
     const user = await db('users').where({ id: req.userId }).first();
     if (!user) { err(res, 'User not found', 404, 'NOT_FOUND'); return; }
-    const customerId = await getOrCreateStripeCustomer(req.userId!, user.email as string);
-    const { clientSecret, subscriptionId } = await createSubscriptionIntent(customerId, extraLocations, req.userId!, promotionCodeId, plan);
-    // Persist the subscription id now so the sub-id-matched webhooks (invoice.payment_succeeded,
-    // invoice.payment_failed, customer.subscription.deleted) work for the embedded-payment flow.
-    // (Previously only checkout.session.completed set this — never the subscription-intent path.)
-    await db('clients').where({ user_id: req.userId }).update({ stripe_subscription_id: subscriptionId });
-    ok(res, { clientSecret, subscriptionId, publishableKey: config.stripe.publishableKey });
+    // Serialize checkout changes for this client, including simultaneous tabs.
+    // Superseded unpaid intents must not remain payable after switching plans.
+    const result = await db.transaction(async trx => {
+      // Match account-deletion lock order and keep customer persistence on this
+      // transaction's connection; a separate connection can wait on our own lock.
+      await trx('users').where({ id: req.userId }).forUpdate().first();
+      const client = await trx('clients').where({ user_id: req.userId }).forUpdate().first();
+      if (!client) return null;
+      if (client.stripe_subscription_id) {
+        const existing = await stripe.subscriptions.retrieve(client.stripe_subscription_id as string);
+        if (['active', 'trialing', 'past_due', 'unpaid', 'paused'].includes(existing.status)) {
+          return { existing: true as const };
+        }
+        if (existing.status === 'incomplete') await stripe.subscriptions.cancel(existing.id);
+      }
+      const customerId = await getOrCreateStripeCustomer(req.userId!, user.email as string, trx);
+      const intent = await createSubscriptionIntent(customerId, extraLocations, req.userId!, promotionCodeId, plan);
+      await trx('clients').where({ id: client.id }).update({ stripe_subscription_id: intent.subscriptionId });
+      return { ...intent, existing: false as const };
+    });
+    if (!result) { err(res, 'Client not found', 404, 'NOT_FOUND'); return; }
+    if (result.existing) {
+      err(res, 'A subscription already exists. Open billing settings to manage your payment method or plan.', 409, 'SUBSCRIPTION_EXISTS');
+      return;
+    }
+    ok(res, { clientSecret: result.clientSecret, subscriptionId: result.subscriptionId, publishableKey: config.stripe.publishableKey });
   } catch (e) { next(e); }
 }
 

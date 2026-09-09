@@ -434,7 +434,7 @@ function GeoGridPanel() {
       <div className="flex flex-wrap gap-3 items-end">
         <div>
           <label className="block text-xs text-slate-500 mb-1">Location</label>
-          <select value={selectedLocationId} onChange={(e) => setSelectedLocationId(e.target.value)}
+          <select aria-label="Map location" value={selectedLocationId} onChange={(e) => setSelectedLocationId(e.target.value)}
             className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
             <option value="">Select location…</option>
             {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -442,7 +442,7 @@ function GeoGridPanel() {
         </div>
         <div>
           <label className="block text-xs text-slate-500 mb-1">Keyword</label>
-          <select value={selectedKeywordId} onChange={(e) => setSelectedKeywordId(e.target.value)}
+          <select aria-label="Map keyword" value={selectedKeywordId} onChange={(e) => setSelectedKeywordId(e.target.value)}
             className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
             <option value="">Select keyword…</option>
             {keywords.map((k) => <option key={k.id} value={k.id}>{k.keyword}</option>)}
@@ -748,7 +748,7 @@ export default function Rankings() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { label: 'AVG OBSERVED POSITION', value: avgRank != null ? avgRank.toFixed(1) : '—' },
-            { label: 'OBSERVATIONS', value: String(new Set(rows.map((r) => r.keywordId)).size + pendingKeywords.length) },
+            { label: 'OBSERVATIONS', value: String(filtered.length) },
             { label: 'OBSERVATIONS IN TOP 3', value: String(filtered.filter((r) => r.rank != null && r.rank <= 3).length) },
             { label: 'IMPROVED OBSERVATIONS', value: String(filtered.filter((r) => r.delta != null && r.delta > 0).length) },
           ].map((c) => (

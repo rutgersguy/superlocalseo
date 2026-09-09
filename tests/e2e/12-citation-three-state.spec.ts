@@ -41,7 +41,7 @@ let locationId: string;
  */
 async function openCitations(page: import('@playwright/test').Page): Promise<void> {
   await loginViaUI(page, client.email, client.password);
-  await page.getByRole('link', { name: /citations/i }).first().click();
+  await page.getByRole('navigation', { name: /dashboard navigation/i }).getByRole('link', { name: 'Business listings', exact: true }).click();
   await assertRendered(page, /Citations/i);
 }
 

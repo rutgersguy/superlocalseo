@@ -19,7 +19,11 @@ const GRACE_PERIOD_DAYS = 3;
 const BILLING_EXEMPT_PREFIXES = ['/billing', '/auth', '/health', '/clients'];
 
 function checkBillingAccess(req: Request, res: Response, client: Record<string, unknown>): boolean {
-  if (BILLING_EXEMPT_PREFIXES.some((p) => req.path.startsWith(p))) return true;
+  // Express strips the mounted router prefix from req.path (billing/status
+  // becomes /status). Check the full request path so blocked customers can pay.
+  const requestPath = (req.originalUrl ?? `${req.baseUrl ?? ''}${req.path}`).split('?')[0];
+  const apiPath = requestPath.replace(/^\/api(?=\/|$)/, '');
+  if (BILLING_EXEMPT_PREFIXES.some((p) => apiPath === p || apiPath.startsWith(`${p}/`))) return true;
 
   const status = client.subscription_status as string | undefined;
 
