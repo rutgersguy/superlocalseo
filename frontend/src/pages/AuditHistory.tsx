@@ -104,7 +104,7 @@ function getTip(detail: string): Tip | null {
         : d.includes('no ') || d.includes('missing')
           ? 'Add a concise, descriptive tag that accurately represents the page.'
         : d.includes('short')
-          ? 'Add your primary keyword and city to the title. Aim for 50–60 characters. Example: "Heating & AC Repair Tulsa OK | Aire Serv of South Tulsa".'
+          ? 'Write a descriptive title with your service and city where relevant. Google has no fixed title character limit. Example: "Heating & AC Repair Tulsa OK | Aire Serv of South Tulsa".'
           : 'Keep the title concise and descriptive; truncation depends on display width rather than a fixed character limit. Focus on the most important keyword + city + brand.',
     };
   }
@@ -259,8 +259,8 @@ const LH_CATEGORIES = [
     key: 'accessibilityScore' as const,
     auditsKey: 'accessibility' as const,
     label: 'Accessibility',
-    description: 'How usable your site is for people with disabilities — including those using screen readers, keyboard navigation, or requiring high colour contrast. Google treats accessibility as a quality signal.',
-    howToImprove: 'Add alt text to images, ensure buttons have descriptive labels, and verify that text colours meet contrast requirements. Most website builders and SEO plugins highlight these issues automatically.',
+    description: 'How usable your site is for people with disabilities — including those using screen readers, keyboard navigation, or requiring high colour contrast.',
+    howToImprove: 'Add alt text to images, ensure buttons have descriptive labels, and verify that text colours meet contrast requirements. Combine automated checks with keyboard and screen-reader testing.',
   },
   {
     key: 'bestPracticesScore' as const,

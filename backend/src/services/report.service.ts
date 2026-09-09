@@ -507,7 +507,7 @@ export function renderReportHtml(data: ReportData): string {
   if (citations && citations.napAccurate < citations.napChecked) {
     const napIssues = citations.napChecked - citations.napAccurate;
     recommendations.push(
-      `${napIssues} citation${napIssues > 1 ? 's' : ''} have name, address or phone differences. Review the observed fields; formatting differences do not by themselves establish incorrect business information or a Google penalty.`,
+      `${napIssues} citation${napIssues > 1 ? 's have' : ' has'} name, address or phone differences. Review the observed fields; formatting differences do not by themselves establish incorrect business information or a Google penalty.`,
     );
   }
 
@@ -624,7 +624,7 @@ export function renderReportHtml(data: ReportData): string {
       </div>
     </div>
     ${gap.atRisk.length > 0 ? `
-    <p style="font-size:12px;font-weight:600;color:#374151;margin-bottom:10px">Observations to review:</p>
+    <div style="break-inside:avoid"><p style="font-size:12px;font-weight:600;color:#374151;margin-bottom:10px">Observations to review:</p>
     <div style="border:1px solid #d8ded5;border-radius:8px;overflow:hidden">
       <table>
         <thead><tr><th>Keyword</th><th>Location / area / engine</th><th class="center">Period-end rank</th><th class="center">Status</th></tr></thead>
@@ -642,7 +642,7 @@ export function renderReportHtml(data: ReportData): string {
             </tr>`).join('')}
         </tbody>
       </table>
-    </div>` : ''}
+    </div></div>` : ''}
   </div>` : '';
 
   /**
@@ -677,6 +677,7 @@ export function renderReportHtml(data: ReportData): string {
   }
   summaryBoxes.push(statBox('Stored reviews to month end', String(reviews.total), brandColor));
 
+  if (summaryBoxes.length < 3) summaryBoxes.push(statBox('Locations included', String(data.locations.length), brandColor));
   const summaryRowTwo = summaryBoxes.slice(0, 3).join('\n      ');
 
   /**
@@ -733,7 +734,7 @@ export function renderReportHtml(data: ReportData): string {
 
     return `
   <!-- AI Visibility -->
-  <div style="padding:0 40px 14px">
+  <div style="padding:0 40px 14px;break-inside:avoid">
     <h2 style="font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:700;color:${brandColor};margin-bottom:10px;letter-spacing:-0.01em">AI Assistant Visibility</h2>
     <div style="border:1px solid #d8ded5;border-radius:8px;padding:12px 16px;background:#fffefa">
       <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
@@ -762,13 +763,14 @@ export function renderReportHtml(data: ReportData): string {
 <title>${escHtml(client.businessName)} SEO Report — ${escHtml(period.label)}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #f8f6f0; color: #20362f; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #ffffff; color: #20362f; }
   /* Keep the masthead as the only full-width color block. A background on
      this wrapper is repeated by Chromium across every printed page and reads
      as an unintended cream panel beneath the green header. */
   .page { max-width: 900px; margin: 0 auto; background: transparent; border: 0; box-shadow: none; }
   h2, h3 { font-family: Georgia, 'Times New Roman', serif; }
   p { line-height: 1.5; }
+  p:has(+ table) { break-after: avoid; }
   table { width: 100%; border-collapse: collapse; }
   th { background: #eaf0e9; padding: 10px 14px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #57665e; text-align: left; border-bottom: 2px solid #d8ded5; }
   tr { break-inside: avoid; }
@@ -787,7 +789,7 @@ export function renderReportHtml(data: ReportData): string {
   <div style="background:${brandColor};color:#ffffff;padding:28px 40px 24px">
     <!-- Logo left / client info right -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <img src="${brandLogoUrl}" alt="${escHtml(brandName)}" style="height:34px;object-fit:contain;display:block;flex-shrink:0" />
+      ${client.whiteLabel?.logoUrl ? `<img src="${escHtml(brandLogoUrl)}" alt="${escHtml(brandName)}" style="height:34px;object-fit:contain;display:block;flex-shrink:0" />` : `<span style="font-size:20px;font-weight:700">${escHtml(brandName)}</span>`}
       <div style="text-align:right">
         <div style="font-size:18px;font-weight:700;letter-spacing:-0.01em;line-height:1.2">${escHtml(client.businessName)}</div>
         <div style="font-size:11px;opacity:0.7;margin-top:3px;letter-spacing:0.02em">${escHtml(client.email)}</div>
@@ -822,7 +824,7 @@ export function renderReportHtml(data: ReportData): string {
 
   <!-- Citations (Pro only — null on Lite, see gatherReportData) -->
   ${!citations ? '' : `
-  <div style="padding:0 40px 14px">
+  <div style="padding:0 40px 14px;break-inside:avoid">
     <h2 style="font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:700;color:${brandColor};margin-bottom:10px;letter-spacing:-0.01em">Citation Health</h2>
     <div style="border:1px solid #d8ded5;border-radius:8px;padding:12px 16px;background:#fffefa">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -844,7 +846,7 @@ export function renderReportHtml(data: ReportData): string {
 
   <!-- ROI Estimates -->
   ${roi ? `
-  <div style="padding:0 40px 14px">
+  <div style="padding:0 40px 14px;break-inside:avoid">
     <h2 style="font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:700;color:${brandColor};margin-bottom:10px;letter-spacing:-0.01em">Modeled Traffic Scenario</h2>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
       ${statBox('Est. Monthly Clicks', roi.estClicks.toLocaleString(), brandColor)}
@@ -855,7 +857,7 @@ export function renderReportHtml(data: ReportData): string {
   </div>` : ''}
 
   <!-- Recommendations -->
-  <div style="page-break-before:always;padding:40px 40px 20px">
+  <div style="padding:40px 40px 20px">
     <h2 style="font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:700;color:${brandColor};margin-bottom:16px;letter-spacing:-0.01em">Recommendations</h2>
     <div style="background:#f8ecdf;border:1px solid #f2c7ad;border-radius:8px;padding:20px">
       <ul style="padding-left:18px">
@@ -865,7 +867,7 @@ export function renderReportHtml(data: ReportData): string {
   </div>
 
   <!-- Rankings -->
-  <div style="page-break-before:always;padding:40px 40px 32px">
+  <div style="padding:40px 40px 32px">
     <h2 style="font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:700;color:${brandColor};margin-bottom:16px;letter-spacing:-0.01em">Ranking Observations</h2>
     <div style="border:1px solid #d8ded5;border-radius:8px;overflow:hidden">
       <div style="padding:14px 16px;background:#eaf0e9;border-bottom:1px solid #d8ded5;display:flex;gap:32px">
@@ -890,7 +892,7 @@ export function renderReportHtml(data: ReportData): string {
   </div>
 
   <!-- Reviews -->
-  <div style="page-break-before:always;padding:40px 40px 32px">
+  <div style="padding:40px 40px 32px">
     <h2 style="font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:700;color:${brandColor};margin-bottom:16px;letter-spacing:-0.01em">Reviews</h2>
     <div style="border:1px solid #d8ded5;border-radius:8px;overflow:hidden">
       <div style="padding:14px 16px;background:#eaf0e9;border-bottom:1px solid #d8ded5;display:flex;gap:32px;flex-wrap:wrap">
@@ -916,7 +918,7 @@ export function renderReportHtml(data: ReportData): string {
 
   <!-- Competitors -->
   ${competitors.length > 0 ? `
-  <div style="page-break-before:always;padding:40px 40px 32px">
+  <div style="padding:40px 40px 32px">
     <h2 style="font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:700;color:${brandColor};margin-bottom:16px;letter-spacing:-0.01em">Competitor Observations</h2>
     <div style="border:1px solid #d8ded5;border-radius:8px;overflow:hidden">
       <table>

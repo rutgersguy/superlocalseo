@@ -57,8 +57,8 @@ function scoreGoogleProfile(place: PlaceResult): CategoryScore {
   else if (reviews >= 10) { score += 10; details.push(`${reviews} reviews — aim for 50+`); }
   else details.push(`${reviews} reviews — critical to build`);
 
-  if (place.businessStatus === 'OPERATIONAL') { score += 20; details.push('Business verified on Google'); }
-  else details.push('Business status not verified');
+  if (place.businessStatus === 'OPERATIONAL') { score += 20; details.push('Business marked operational on Google'); }
+  else details.push('Business is not marked operational');
 
   return { grade: toGrade(score), score, label: 'Google Business Profile', details, locked: false };
 }
@@ -97,8 +97,8 @@ function stubCategory(label: string): CategoryScore {
   };
 }
 
-function buildAuditData(place: PlaceResult | null, onPage: { score: number; details: string[] } | null, keyword?: string) {
-  const onPageCategory: CategoryScore | null = onPage
+function buildAuditData(place: PlaceResult | null, onPage: { score: number | null; details: string[] } | null, keyword?: string) {
+  const onPageCategory: CategoryScore | null = onPage?.score != null
     ? { grade: toGrade(onPage.score), score: onPage.score, label: 'On-Page SEO', details: onPage.details, locked: false }
     : null;
 
