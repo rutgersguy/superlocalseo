@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import useSWR, { useSWRConfig } from 'swr';
+import useSWR from 'swr';
 import { Mail, Upload, Send, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, UserX, Plus, X } from 'lucide-react';
 import { fetcher, apiFetch } from '../services/api';
 import EMRSetupBanner from '../components/EMRSetupBanner';
@@ -38,11 +38,6 @@ interface CreditsResponse {
   data: { email: number; sms: number; total: number; connected: boolean; available: boolean };
 }
 
-interface TemplatesResponse {
-  success: boolean;
-  data: { templates: Array<{ id: string; name: string; description: string; type: string }> };
-}
-
 // ── Credit badge ────────────────────────────────────────────────────────────
 
 function CreditBadge() {
@@ -66,132 +61,21 @@ function CreditBadge() {
   );
 }
 
-// ── Template picker ─────────────────────────────────────────────────────────
-
-function TemplatePicker({ onSelect }: { onSelect: (name: string, id?: string) => void }) {
-  const { data, isLoading } = useSWR<TemplatesResponse>('/campaigns/templates', fetcher);
-  const templates = data?.data?.templates ?? [];
-
-  if (isLoading) return <div className="text-sm text-slate-400">Loading templates...</div>;
-
-  return (
-    <div className="space-y-3">
-      <p className="text-sm font-medium text-slate-700">Start from a template</p>
-      <div className="grid grid-cols-2 gap-3">
-        {templates.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => onSelect(t.name, t.id)}
-            className="text-left p-3 border border-slate-200 rounded-lg hover:border-brand-400 hover:bg-brand-50 transition-colors"
-          >
-            <p className="text-sm font-medium text-slate-900">{t.name}</p>
-            {t.description && <p className="text-xs text-slate-500 mt-0.5">{t.description}</p>}
-          </button>
-        ))}
-        <button
-          onClick={() => onSelect('', undefined)}
-          className="text-left p-3 border border-dashed border-slate-300 rounded-lg hover:border-brand-400 text-sm text-slate-500 hover:text-brand-600"
-        >
-          Start from scratch
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── New campaign modal ──────────────────────────────────────────────────────
-
+// Campaigns are provisioned in the vendor dashboard, not through its REST API.
 function NewCampaignModal({ onClose }: { onClose: () => void }) {
-  const { mutate } = useSWRConfig();
-  const { data: templatesData, isLoading: templatesLoading } = useSWR<TemplatesResponse>('/campaigns/templates', fetcher);
-  const templates = templatesData?.data?.templates ?? [];
-  const [step, setStep] = useState<'pick' | 'name'>('pick');
-  const [name, setName] = useState('');
-  const [templateId, setTemplateId] = useState<string | undefined>();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const showPicker = step === 'pick' && (templatesLoading || templates.length > 0);
-
-  function handleTemplateSelect(templateName: string, id?: string) {
-    setName(templateName);
-    setTemplateId(id);
-    setStep('name');
-  }
-
-  async function handleCreate() {
-    if (!name.trim()) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await apiFetch<{ success: boolean; error?: { message: string } }>('/campaigns', {
-        method: 'POST',
-        body: JSON.stringify({ name: name.trim(), templateId }),
-      });
-      if (!res.success) {
-        setError(res.error?.message ?? 'Failed to create campaign. Please try again.');
-        setLoading(false);
-        return;
-      }
-      await mutate('/campaigns');
-      onClose();
-    } catch {
-      setError('Failed to create campaign. Please try again.');
-      setLoading(false);
-    }
-  }
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="campaign-setup-title">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <h2 className="font-semibold text-slate-900">New Campaign</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <X size={18} />
-          </button>
+          <h2 id="campaign-setup-title" className="font-semibold text-slate-900">Campaign setup</h2>
+          <button onClick={onClose} aria-label="Close campaign setup" className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
         </div>
-        <div className="px-5 py-5 space-y-4">
-          {showPicker && (
-            <TemplatePicker onSelect={handleTemplateSelect} />
-          )}
-          {!showPicker && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Campaign name</label>
-                <input
-                  autoFocus
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) void handleCreate(); }}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  placeholder="e.g. Post-visit review request"
-                />
-              </div>
-              {error && (
-                <div className="flex items-center gap-2 text-red-600 text-xs">
-                  <AlertCircle size={13} /> {error}
-                </div>
-              )}
-              <div className="flex gap-3">
-                {templates.length > 0 && step === 'name' && (
-                  <button
-                    onClick={() => setStep('pick')}
-                    disabled={loading}
-                    className="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
-                  >
-                    Back
-                  </button>
-                )}
-                <button
-                  onClick={() => void handleCreate()}
-                  disabled={loading || !name.trim()}
-                  className="flex-1 px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 disabled:opacity-50 transition-colors"
-                >
-                  {loading ? 'Creating…' : 'Create Campaign'}
-                </button>
-              </div>
-            </div>
-          )}
+        <div className="px-5 py-5 space-y-4 text-sm text-slate-700">
+          <p>Campaign setup is currently assisted. We will connect a feedback form and campaign to the correct business before you invite customers.</p>
+          <p>Every customer must receive the same opportunity to leave an honest public review, regardless of rating. Ratings and private feedback can help organize your follow-up.</p>
+          <p>Contact us with your business name and location. Once configured and synced, your campaign will appear here.</p>
+          <a href="mailto:hello@superlocalseo.com?subject=Review%20campaign%20setup" className="inline-flex px-4 py-2 bg-brand-500 text-white font-medium rounded-lg">Email us about setup</a>
+          <p className="text-xs text-slate-500">This opens an email draft. No invitations are sent by opening this setup guide.</p>
         </div>
       </div>
     </div>
@@ -660,7 +544,7 @@ export default function Campaigns() {
             onClick={() => setShowNewCampaign(true)}
             className="whitespace-nowrap inline-flex items-center gap-2 px-1.5 py-1 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors"
           >
-            <Plus size={14} /> New Campaign
+            <Plus size={14} /> Campaign setup
           </button>
         </div>
         <p className="text-sm text-slate-500">
@@ -688,7 +572,7 @@ export default function Campaigns() {
           <p className="text-sm text-slate-400">
             {credits?.connected === false
               ? 'Connect your EmbedMyReviews account in Settings → Integrations to get started.'
-              : 'Click "New Campaign" above to create your first review request campaign.'}
+              : 'Choose "Campaign setup" above to arrange your first review request campaign.'}
           </p>
         </div>
       )}

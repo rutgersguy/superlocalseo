@@ -37,13 +37,13 @@ test.describe('Suite 08 — Lite plan gating', () => {
 
     // Lite keeps these
     await expect(nav.getByRole('link', { name: 'Reviews', exact: true })).toBeVisible({ timeout: 10_000 });
-    await expect(nav.getByRole('link', { name: 'Rankings', exact: true })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Google rankings', exact: true })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Reports', exact: true })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Settings', exact: true })).toBeVisible();
 
     // Pro-only — hidden for Lite
-    await expect(nav.getByRole('link', { name: /citations/i })).toHaveCount(0);
-    await expect(nav.getByRole('link', { name: /seo audit/i })).toHaveCount(0);
+    await expect(nav.getByRole('link', { name: /business listings/i })).toHaveCount(0);
+    await expect(nav.getByRole('link', { name: /website audit/i })).toHaveCount(0);
   });
 
   test('TEST-LITE-02 — Competitors shows the upgrade teaser for Lite', async ({ page }) => {
@@ -52,7 +52,7 @@ test.describe('Suite 08 — Lite plan gating', () => {
     await page.goto('/dashboard/competitors');
     await page.waitForLoadState('networkidle');
 
-    await expect(page.getByText("See who's outranking you")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Competitor insights is a Pro feature', { exact: true })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole('link', { name: /upgrade to pro/i })).toBeVisible();
     // The full Pro competitor controls must NOT render for Lite (teaser only).
     await expect(page.getByRole('button', { name: /add competitor/i })).toHaveCount(0);
@@ -72,7 +72,7 @@ test.describe('Suite 08 — Lite plan gating', () => {
     await page.goto('/dashboard/rankings');
     await page.waitForLoadState('networkidle');
 
-    await expect(page.getByRole('heading', { name: 'Rankings' })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: 'Google rankings' })).toBeVisible({ timeout: 10_000 });
     // Pro-only controls hidden for Lite
     await expect(page.getByText('Visibility Map')).toHaveCount(0); // geo-grid tab
     await expect(page.getByRole('button', { name: 'ROI', exact: true })).toHaveCount(0);
@@ -99,7 +99,7 @@ test.describe('Suite 08 — Lite plan gating', () => {
     await page.waitForURL('/dashboard', { timeout: 15_000 });
     await page.waitForLoadState('networkidle');
 
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: 'Your visibility overview' })).toBeVisible({ timeout: 10_000 });
     // Pro-only widgets/actions hidden for Lite
     await expect(page.getByText('Local SEO Score')).toHaveCount(0); // audit metric
     await expect(page.getByText('Unlock your ROI estimate')).toHaveCount(0);
@@ -132,7 +132,7 @@ test.describe('Suite 08 — Lite plan gating', () => {
   test('TEST-LITE-09 — Reviews hides the Export CSV button for Lite', async ({ page }) => {
     await loginViaUI(page, email, password);
     await page.getByRole('link', { name: /reviews/i }).first().click();
-    await expect(page.getByRole('heading', { name: /Reviews/i }).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: 'Your review inbox' }).first()).toBeVisible({ timeout: 15_000 });
 
     await expect(page.getByRole('button', { name: 'Export CSV' })).toHaveCount(0);
   });

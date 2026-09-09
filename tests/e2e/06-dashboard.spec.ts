@@ -16,15 +16,15 @@ test.describe('Suite 06 — Dashboard', () => {
     // Scope to the sidebar nav — the dashboard body also has quick-action cards
     // (e.g. "View Reviews") whose names collide with nav links.
     const nav = page.getByRole('navigation', { name: /dashboard navigation/i });
-    await expect(nav.getByRole('link', { name: 'Rankings', exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(nav.getByRole('link', { name: 'Google rankings', exact: true })).toBeVisible({ timeout: 10_000 });
     await expect(nav.getByRole('link', { name: 'Reviews', exact: true })).toBeVisible();
-    await expect(nav.getByRole('link', { name: 'Citations', exact: true })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Business listings', exact: true })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Reports', exact: true })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Settings', exact: true })).toBeVisible();
   });
 
   test('TEST-DASH-02 — rankings nav link works', async ({ page }) => {
-    await page.getByRole('link', { name: /rankings/i }).click();
+    await page.getByRole('navigation', { name: /dashboard navigation/i }).getByRole('link', { name: 'Google rankings', exact: true }).click();
     await page.waitForURL(/dashboard\/rankings/, { timeout: 5_000 });
     const body = await page.locator('body').innerText();
     expect(body.length).toBeGreaterThan(50);
@@ -38,41 +38,41 @@ test.describe('Suite 06 — Dashboard', () => {
   });
 
   test('TEST-DASH-04 — citations nav link works', async ({ page }) => {
-    await page.getByRole('link', { name: /citations/i }).click();
+    await page.getByRole('navigation', { name: /dashboard navigation/i }).getByRole('link', { name: 'Business listings', exact: true }).click();
     await page.waitForURL(/dashboard\/citations/, { timeout: 5_000 });
     const body = await page.locator('body').innerText();
     expect(body.length).toBeGreaterThan(50);
   });
 
   test('TEST-DASH-05 — reports nav link works', async ({ page }) => {
-    await page.getByRole('link', { name: /reports/i }).click();
+    await page.getByRole('navigation', { name: /dashboard navigation/i }).getByRole('link', { name: 'Reports', exact: true }).click();
     await page.waitForURL(/dashboard\/reports/, { timeout: 5_000 });
     const body = await page.locator('body').innerText();
     expect(body.length).toBeGreaterThan(50);
   });
 
   test('TEST-DASH-06 — audit nav link works', async ({ page }) => {
-    await page.getByRole('navigation', { name: /dashboard navigation/i }).getByRole('link', { name: 'SEO Audit', exact: true }).click();
+    await page.getByRole('navigation', { name: /dashboard navigation/i }).getByRole('link', { name: 'Website audit', exact: true }).click();
     await page.waitForURL(/dashboard\/audit/, { timeout: 5_000 });
     const body = await page.locator('body').innerText();
     expect(body.length).toBeGreaterThan(50);
   });
 
   test('TEST-DASH-07 — settings nav link works', async ({ page }) => {
-    await page.getByRole('link', { name: /settings/i }).click();
+    await page.getByRole('navigation', { name: /dashboard navigation/i }).getByRole('link', { name: 'Settings', exact: true }).click();
     await page.waitForURL(/dashboard\/settings/, { timeout: 5_000 });
     const body = await page.locator('body').innerText();
     expect(body.length).toBeGreaterThan(50);
   });
 
   test('TEST-DASH-08 — settings page has no Yelp panel', async ({ page }) => {
-    await page.getByRole('link', { name: /settings/i }).click();
+    await page.getByRole('navigation', { name: /dashboard navigation/i }).getByRole('link', { name: 'Settings', exact: true }).click();
     await page.waitForURL(/dashboard\/settings/, { timeout: 5_000 });
     await expect(page.getByText(/yelp/i)).not.toBeVisible({ timeout: 5_000 });
   });
 
   test('TEST-DASH-09 — settings page has no BrightLocal mentions', async ({ page }) => {
-    await page.getByRole('link', { name: /settings/i }).click();
+    await page.getByRole('navigation', { name: /dashboard navigation/i }).getByRole('link', { name: 'Settings', exact: true }).click();
     await page.waitForURL(/dashboard\/settings/, { timeout: 5_000 });
     const bodyText = await page.locator('body').innerText();
     expect(bodyText.toLowerCase()).not.toContain('brightlocal');

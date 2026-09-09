@@ -48,6 +48,33 @@ describe('Access control — client data isolation', () => {
     await ensureHealthyTrial('client-b@example.com');
   });
 
+  it('campaign lists remain scoped to the authenticated client', async () => {
+    const a = await db('clients').where({ user_id: db('users').where({ email: 'client-a@example.com' }).select('id') }).first();
+    const b = await db('clients').where({ user_id: db('users').where({ email: 'client-b@example.com' }).select('id') }).first();
+    expect(a).toBeDefined(); expect(b).toBeDefined();
+    const rows = await db('emr_campaigns').insert([
+      { client_id: a.id, emr_campaign_id: `qa-a-${Date.now()}`, name: 'Private campaign A' },
+      { client_id: b.id, emr_campaign_id: `qa-b-${Date.now()}`, name: 'Private campaign B' },
+    ]).returning('*');
+    try {
+      const responseA = await request(app).get('/api/campaigns').set('Authorization', `Bearer ${tokenA}`);
+      const responseB = await request(app).get('/api/campaigns').set('Authorization', `Bearer ${tokenB}`);
+      expect(responseA.status).toBe(200); expect(responseB.status).toBe(200);
+      const idsA = responseA.body.data.campaigns.map((c: { id: string }) => c.id);
+      const idsB = responseB.body.data.campaigns.map((c: { id: string }) => c.id);
+      expect(idsA).toContain(rows[0].id); expect(idsA).not.toContain(rows[1].id);
+      expect(idsB).toContain(rows[1].id); expect(idsB).not.toContain(rows[0].id);
+    } finally { await db('emr_campaigns').whereIn('id', rows.map(r => r.id)).del(); }
+  });
+
+  it('legacy campaign creation explains assisted setup without creating a campaign', async () => {
+    const before = await db('emr_campaigns').count('* as count').first();
+    const response = await request(app).post('/api/campaigns').set('Authorization', `Bearer ${tokenA}`).send({ name: 'Release QA' });
+    expect(response.status).toBe(501);
+    expect(response.body.error.code).toBe('CAMPAIGN_SETUP_REQUIRED');
+    expect(await db('emr_campaigns').count('* as count').first()).toEqual(before);
+  });
+
   it('GET /api/reviews returns only own reviews', async () => {
     // Insert a review for client A directly
     const clientA = await db('clients').where({ user_id: db('users').where({ email: 'client-a@example.com' }).select('id') }).first();

@@ -1,27 +1,37 @@
 # Release rehearsal — 2026-09-09
 
-Base: deployed GitHub main dc0a716. This rehearsal is incomplete because the password-authenticated SSH control session expired. Fresh origin/server synchronization, isolated integration testing, Stripe test-mode testing and deployment must resume after reconnection. Do not treat local passes as end-to-end checkout verification.
+This is an assisted-pilot release rehearsal, not evidence that every external customer journey is ready. Started from GitHub main dc0a716 after verifying origin and server agreed. Application changes are being merged/deployed through GitHub. Vendor settings are separately recorded in vendor-public-form-copy-2026-09-09.md.
 
-## Reproduced failures
+## Repairs found by testing
 
-1. Live campaign creation: in the intentionally unconnected Aire Serv test account, New Campaign → name `Release QA — no invitations — 2026-09-09` → Create Campaign returns an error that campaign creation is unavailable through the API. The modal was closed. No contacts were supplied and no invitations were sent. Current vendor REST docs document listing campaigns and sending invitations, not campaign creation: https://www.embedmyreviews.com/docs/api/ . The supported setup must be verified through the vendor dashboard; the current app button is a dead end.
-2. Delayed invoice event: the actual Stripe webhook handler with isolated database/provider fixtures changed a canceled subscription back to active after receiving an old invoice.payment_succeeded event, even though the provider lookup returned canceled. The local repair only grants access for an active provider subscription whose latest invoice matches the event invoice. Lookup failures now propagate for retry instead of granting access. Both invoice.paid and invoice.payment_succeeded are covered, alongside canceled/past_due/unpaid/paused/incomplete_expired statuses and an old invoice preceding a newer unpaid upgrade.
+- Paid-invoice events now reconcile against the current Stripe subscription and latest invoice. Old payments cannot restore canceled access or grant a newer unpaid upgrade.
+- Failed-invoice events reconcile current subscription/invoice state. A delayed failure cannot revoke access after payment recovery or override a canceled subscription.
+- Mounted Express billing routes remain accessible after cancellation, trial expiry or the payment-failure grace period. Protected customer data still returns 402.
+- Checkout offers Lite/Pro selection. Client-row locking serializes replacement checkout intents; superseded incomplete subscriptions are canceled, while an existing active or delinquent subscription cannot be duplicated. Customers with an existing subscription are directed to billing settings.
+- Stripe Payment Element collects its required country field; thrown submission errors release the processing state. The Stripe instance is memoized, plan changes remount Elements, and the return page no longer declares access active from a URL parameter alone.
+- The failing campaign-creation form is replaced by explicit assisted setup. Legacy POST callers receive CAMPAIGN_SETUP_REQUIRED without an unsupported agency-scoped vendor write. This does not implement self-service campaign provisioning.
+- Rankings now count filtered observations consistently with the label and table; keywords awaiting their first scan are not observations. Geo-grid selectors have accessible names. Lite no longer shows an empty export accordion.
+- Checkout ROI copy describes scenarios rather than revenue attribution. Editable vendor lead-form copy no longer claims 100+ customers or guaranteed freshness/timing.
 
-## Tests completed
+## Validation
 
-- Original cancellation regression failed before the change (expected canceled, actual active) and passed after (actual canceled).
-- Nine new billing-event-order regression tests passed.
-- All 199 local unit tests across 14 suites passed.
-- Backend TypeScript build and git diff --check passed.
-- Live integration screen still shows two Google Business Profile cards: direct connection to a visible location named SuperLocalSEO, and a separate review connection marked not connected. This is intentionally test data, but the confusing customer-facing connection flow remains.
-- Live billing screen renders; no real checkout, payment or cancellation was attempted.
+- 286 backend tests in 26 suites passed against an isolated PostgreSQL database and disposable Redis instance; TypeScript builds passed.
+- scripts/verify-billing-http.cjs passed 18 checks using real Stripe sandbox prices, subscriptions, invoices and test-card confirmations. Covers Lite $149 with no setup fee, switching unpaid checkout plans, concurrent checkout requests, duplicate-subscription prevention, Pro upgrade, invalid signatures, duplicate/delayed events, cancellation, declined payment, grace-period access, billing recovery and successful retry.
+- The billing script delivers locally signed representative events over HTTP to the isolated API. It verifies signature parsing and handler behavior but does not prove Stripe-hosted endpoint network delivery.
+- Browser regression suite exercised signup/login, onboarding/skip/resume, dashboard navigation, plan gates, empty data, pricing, rank calculations, map error feedback and citation states. Stale pre-redesign labels were updated. Final results are recorded in the deployment verification addendum.
+- CUA inspection of the actual Stripe test-mode iframe verified that the country field is now present and both checkout plans are offered. The initial submission stayed in Processing. After truthfully selecting Stripe's AI-agent checkbox, Stripe presented a separate Link Pay Token flow. No Link account was enrolled and no browser payment completion is claimed; SDK sandbox confirmations are covered by the 18-check script.
+- Campaign assisted-setup dialog was inspected in the browser. Two-client campaign-list isolation and the legacy 501 response passed real API/database tests.
+- Public report business lookup reached the contact step. No report email, review invite, review reply or prospect message was sent. No live card was charged.
 
-## Still required
+## Remaining acceptance checks before unrestricted self-service launch
 
-- Sync with origin and the canonical server checkout; apply and test the patch there, then merge/push/deploy through GitHub.
-- Run the isolated PostgreSQL/Redis/API/web stack and complete Stripe test-mode checkout, webhook delivery, failure, cancellation and entitlement checks. Inspect test credentials without printing secrets. Existing billing verification scripts call handlers directly and do not alone establish HTTP webhook delivery.
-- Verify a supported, tenant-scoped campaign setup and matching destination for two controlled accounts; test equal public-review opportunities at low and high ratings. Vendor documentation says the unhappy path can be disabled: https://www.embedmyreviews.com/features/feedback-forms/ . Documentation is not a substitute for observing the configured form.
-- Verify the intended Google business identity and review reply path using an owner-approved controlled profile. Do not publish a live review reply without explicit authorization.
-- Complete free-report delivery and signup/onboarding using a controlled inbox and test account; no report-request or signup submission was performed in this partial rehearsal.
+1. Verify one owner-approved Google profile and both review connection paths end to end. The Aire Serv account is intentional test data; NerdBox's reviews mention LightHawk and need identity confirmation, not automatic relinking (#196).
+2. Configure the first correctly scoped vendor feedback form/campaign, disable rating-based restriction of public-review access, and observe equal public-review choices at low/high ratings. Repeat with a second controlled tenant to verify vendor-side routing (#198). Local API isolation tests do not prove vendor form configuration.
+3. Complete browser payment/return and actual Stripe-hosted webhook delivery to the intended environment (#200). Test-card SDK success is not the same as this external delivery check.
+4. Use an owner-controlled inbox to request and inspect the vendor free report and email. The form also consents to follow-ups. Remaining non-editable vendor claims require correction or substantiation (#199). These free reports are separate from the backend monthly PDFs repaired earlier.
 
-No cards were charged, review replies published, customer messages sent, or existing integrations changed.
+## Running the billing test
+
+Rebuild and start only the isolated test api/web services with docker-compose.test.yml. Copy the versioned script into slseo-test-api and run it with node. It asserts NODE_ENV=test, a superlocalseo_test database, sk_test credentials, and placeholder email credentials before writing. It removes its unique user and Stripe customer/subscriptions in finally. Never run it against production or replace test credentials with live keys.
+
+The test stack pre-existed this rehearsal. Temporary unit-test Redis/database, SSH forwarding and the browser checkout fixture are cleaned up after validation. Production deployment uses scripts/deploy.sh, a verified database backup, and api/web-only recreation with --no-deps; shared database/Redis services are not restarted.

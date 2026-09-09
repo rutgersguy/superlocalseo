@@ -69,23 +69,19 @@ test.describe('Suite 10 — Pricing consistency', () => {
 
   // ------------------------------------------------------------- public surfaces
 
-  test('TEST-PRICE-03 — Landing quotes Lite, Pro, the waived fee and per-location add-on', async ({ page }) => {
+  test('TEST-PRICE-03 — Landing quotes Lite, Pro, no setup fee and per-location add-on', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
     const lite = prices?.lite ?? 149;
     const pro = prices?.pro ?? 349;
     const extra = prices?.extraLocation ?? 125;
-    const setup = prices?.setupFee ?? 499;
-
     await expect(page.getByText(`$${lite}`, { exact: true }).first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(`$${pro}`, { exact: true }).first()).toBeVisible();
-    await expect(page.getByText(new RegExp(`\\+\\$${extra}/mo per additional location`))).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'No setup fee.' })).toBeVisible();
+    await page.getByRole('button', { name: 'Choose your plan' }).click();
+    await expect(page.getByText(`One location included. Additional locations $${extra}/month each.`)).toBeVisible();
 
-    // The fee must be struck through AND labelled waived — never presented as payable.
-    const struck = page.locator('.line-through', { hasText: `$${setup}` });
-    await expect(struck).toBeVisible();
-    await expect(page.getByText('waived', { exact: true })).toBeVisible();
   });
 
   test('TEST-PRICE-04 — both plan CTAs offer the same 7-day trial', async ({ page }) => {
@@ -95,6 +91,7 @@ test.describe('Suite 10 — Pricing consistency', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
+    await page.getByRole('button', { name: 'Choose your plan' }).click();
     const ctas = page.getByRole('link', { name: /start 7-day free trial/i });
     await expect(ctas).toHaveCount(2, { timeout: 15_000 });
 
@@ -160,11 +157,10 @@ test.describe('Suite 10 — Pricing consistency', () => {
     await expect(page.getByText('Due today')).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText('No setup fee on Lite')).toBeVisible();
 
-    const summary = await page.locator('body').innerText();
-    expect(summary).toContain(`$${lite}`);
-    // The Pro price must not appear on a Lite checkout at all.
-    expect(summary, 'Lite checkout must not quote the Pro price')
-      .not.toContain(`$${prices?.pro ?? 349}/mo`);
+    await expect(page.getByRole('combobox', { name: 'Choose your plan', exact: true })).toHaveValue('lite');
+    await expect(page.getByText(`Your card will be charged $${lite} today, then $${lite}/mo.`)).toBeVisible();
+    // Pro remains an available choice, but is not the selected checkout summary.
+    await expect(page.getByText('Pro monthly subscription', { exact: true })).toHaveCount(0);
   });
 
   test('TEST-PRICE-09 — Pro checkout strikes the setup fee to zero', async ({ page }) => {
@@ -233,4 +229,17 @@ test.describe('Suite 10 — Pricing consistency', () => {
     expect(Number(low), 'JSON-LD lowPrice should be the Lite price').toBe(prices?.lite ?? 149);
     expect(Number(high), 'JSON-LD highPrice should be the Pro price').toBe(prices?.pro ?? 349);
   });
+  test('TEST-PRICE-13 — customer can choose either plan before paying', async ({ page }) => {
+    await loginViaUI(page, client.email, client.password);
+    await page.goto('/billing?subscribe=1');
+    const choice = page.getByRole('combobox', { name: 'Choose your plan', exact: true });
+    await expect(choice).toBeEnabled({ timeout: 20000 });
+    await choice.selectOption('lite');
+    await expect(choice).toBeEnabled({ timeout: 20000 });
+    await expect(page.getByText('Your card will be charged $149 today, then $149/mo.')).toBeVisible();
+    await choice.selectOption('pro');
+    await expect(choice).toBeEnabled({ timeout: 20000 });
+    await expect(page.getByText('Your card will be charged $349 today, then $349/mo.')).toBeVisible();
+  });
+
 });
