@@ -86,6 +86,12 @@ else
   step "Migrations skipped (pass --migrate to run them)"
 fi
 
+step "Verify report schema"
+# Migration history alone did not catch production schema drift (#211).
+# Run after opt-in migrations, before publishing the new application image.
+docker exec superlocalseo-postgres psql -U slseo -d superlocalseo -v ON_ERROR_STOP=1 \
+  -c 'SELECT source FROM audit_leads LIMIT 0' >/dev/null
+
 step "Recreate $SERVICES"
 # --no-deps and --force-recreate are the point; see the header.
 docker compose up -d --force-recreate --no-deps $SERVICES
