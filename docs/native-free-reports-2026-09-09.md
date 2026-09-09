@@ -29,7 +29,7 @@ BullMQ has one report worker per API process. Checkpoints preserve profile and c
 
 Queued reports remain queued; a processing report with no progress for 15 minutes gets a safe stalled message. Inspect the BullMQ job and `audit_leads.audit_data` to distinguish provider failure from scheduling failure. Raw provider errors, email and consent metadata are never returned from the public report endpoint. A capability URL exposes only business results; the page is noindex/nofollow and uses no-referrer. Report data remain in the existing audit-lead store; honor existing deletion requests/retention operations.
 
-No migration is needed. Workers must be enabled in production. Rollback should leave a clear unavailable native page rather than restore inaccurate vendor reports. Do not delete completed snapshots or provider connections.
+The source-column reconciliation migration is required on the drifted production database (see below). Workers must be enabled in production. Rollback should leave a clear unavailable native page rather than restore inaccurate vendor reports. Do not delete completed snapshots or provider connections.
 
 ## Verification
 
@@ -45,3 +45,9 @@ Live pilot (2026-09-09): Light Hawk Studios, exact place ID `ChIJnUBk_1kP9YgRfyG
 - https://docs.dataforseo.com/v3/serp/google/maps/live/advanced/
 - https://dataforseo.com/help-center/how-long-do-you-keep-results
 - https://www.census.gov/geographies/reference-files/time-series/geo/gazetteer-files.2025.html
+
+## Production schema reconciliation
+
+The first production submission after #211 failed before insertion: `audit_leads.source` was absent, even though `20260508000000_audit_leads_source.js` was recorded as applied. The fresh test schema contained it. Migration `20260909010000_repair_audit_leads_source` conditionally restores the nullable column without changing historical leads or deleting source values on rollback. Deploy this repair with `scripts/deploy.sh --migrate`; verify the actual column and repeat the anonymous submission. The migration regression creates the missing-column shape in an isolated schema, observes the query failure, repairs it, and verifies both idempotency and data preservation.
+
+The deployment script now checks the actual report source column after migrations and before recreating the app, so a misleading migration-history entry cannot silently pass this check again.
