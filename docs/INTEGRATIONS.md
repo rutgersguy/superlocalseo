@@ -124,7 +124,7 @@ BRIGHTLOCAL_API_KEY=            # Data API key
 
 - Review aggregation from 100+ platforms (Google, Yelp, Facebook, Trustpilot, etc.)
 - Campaign management (email + SMS review request funnels)
-- Smart review gating: happy customers → public review link; unhappy → private feedback form
+- Honest review requests: equal public review access for all ratings; private feedback and rating filters support internal follow-up
 
 ### ⚠️ The API is much larger than what we wrap (audited 2026-07-13)
 

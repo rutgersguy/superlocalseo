@@ -81,14 +81,14 @@ function MetricCard({ label, value, loading, accent, sub }: MetricCardProps) {
 function VisibilityCard({ vis, loading }: { vis?: { current: number | null; delta: number | null; series: Array<{ date: string; score: number }> }; loading: boolean }) {
   return (
     <div className="bg-white rounded-xl shadow-card p-5 col-span-2 lg:col-span-1 flex flex-col gap-3">
-      <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Visibility Score</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Top-10 coverage</p>
       {loading ? (
         <Skeleton className="h-9 w-24" />
       ) : vis?.current != null ? (
         <>
           <div className="flex items-end gap-2">
             <p className="text-3xl font-bold tracking-tight text-slate-900">{vis.current}</p>
-            <span className="text-sm text-slate-400 mb-0.5">/ 100</span>
+            <span className="text-sm text-slate-400 mb-0.5">%</span>
             {vis.delta !== null && (
               <span className={`text-sm font-semibold mb-0.5 ${vis.delta >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                 {vis.delta >= 0 ? '▲' : '▼'} {Math.abs(vis.delta)}
@@ -125,9 +125,9 @@ function DeltaBadge({ delta }: { delta: number }) {
 }
 
 interface RoiTotals {
-  estClicks: number;
-  estLeads: number;
-  estRevenue: number;
+  estClicks: number | null;
+  estLeads: number | null;
+  estRevenue: number | null;
 }
 
 interface RoiResponse {
@@ -428,12 +428,12 @@ export default function Dashboard() {
       <AiVisibilityHero />
 
       <div className="workspace-summary-grid">
-        <Surface className="workspace-summary"><h2>Google rankings</h2><div className="summary-value">{metricsLoading ? '…' : metrics?.avgRank != null ? metrics.avgRank.toFixed(1) : 'Not available'}</div><p>{metrics?.avgRank != null ? 'Average position across recorded ranking observations. See each keyword, area and engine in the detail view.' : 'Add keywords and allow the first scan to complete to see your positions.'}</p><Link to="/dashboard/rankings">View Google rankings →</Link></Surface>
+        <Surface className="workspace-summary"><h2>Search rankings</h2><div className="summary-value">{metricsLoading ? '…' : metrics?.avgRank != null ? metrics.avgRank.toFixed(1) : 'Not available'}</div><p>{metrics?.avgRank != null ? 'Average of latest ranked observations per keyword, area and engine; unranked results excluded. See each keyword, area and engine in the detail view.' : 'Add keywords and allow the first scan to complete to see your positions.'}</p><Link to="/dashboard/rankings">View search rankings →</Link></Surface>
         <Surface className="workspace-summary"><h2>Reviews</h2><div className="summary-value">{metricsLoading ? '…' : metrics?.totalReviews ? metrics.totalReviews.toLocaleString() : 'No review data'}</div><p>{metrics?.totalReviews ? `${metrics.avgRating != null ? metrics.avgRating.toFixed(1) + ' average rating · ' : ''}${metrics.newReviewsThisMonth} new this month` : 'Reviews will appear after your connected review source synchronizes.'}</p><Link to="/dashboard/reviews">Open review inbox →</Link></Surface>
-        <Surface className="workspace-summary"><h2>{isLite ? 'Monthly reports' : 'Business listings'}</h2><div className="summary-value">{isLite ? (latestReport ? 'Ready to read' : 'Not yet available') : metrics?.citationScore != null ? `${metrics.citationScore}/100` : 'Not yet checked'}</div><p>{isLite ? 'A readable record of your rankings, reviews and AI visibility.' : 'Review the accuracy of your business name, address and phone across directories.'}</p><Link to={isLite ? '/dashboard/reports' : '/dashboard/citations'}>{isLite ? 'View reports' : 'Review business listings'} →</Link></Surface>
+        <Surface className="workspace-summary"><h2>{isLite ? 'Monthly reports' : 'Business listings'}</h2><div className="summary-value">{isLite ? (latestReport ? 'Ready to read' : 'Not yet available') : metrics?.citationScore != null ? `${metrics.citationScore}%` : 'Not yet checked'}</div><p>{isLite ? 'A readable record of your rankings, reviews and AI visibility.' : 'Share of checked location-directory pairs with a matching listing. Unverified checks are excluded; NAP differences are reported separately.'}</p><Link to={isLite ? '/dashboard/reports' : '/dashboard/citations'}>{isLite ? 'View reports' : 'Review business listings'} →</Link></Surface>
       </div>
 
-      {(!planLoading && !isLite && metrics?.citationScore != null && metrics.citationScore < 100) && <Surface><h2>Needs attention</h2><ul className="workspace-attention"><li><span>Your business listing score is {metrics.citationScore}/100. Review the latest checks for missing or mismatched details.</span><Link to="/dashboard/citations">Review listings →</Link></li></ul></Surface>}
+      {(!planLoading && !isLite && metrics?.citationScore != null && metrics.citationScore < 100) && <Surface><h2>Needs attention</h2><ul className="workspace-attention"><li><span>Your listing completeness is {metrics.citationScore}%. Review the checks that returned no matching listing.</span><Link to="/dashboard/citations">Review listings →</Link></li></ul></Surface>}
 
       <section className="workspace-report-feature" aria-label="Latest monthly brief">
         <div><p>YOUR MONTHLY BRIEF</p><h2>{latestReport ? new Date(latestReport.periodYear, latestReport.periodMonth - 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) : 'Your next clear picture'}</h2><p>{latestReport ? 'Your latest report is ready. Review your visibility and the recommended next steps.' : 'Monthly reports bring your available business data together. Visit Reports to check availability.'}</p></div>
@@ -443,14 +443,14 @@ export default function Dashboard() {
       <details className="workspace-secondary workspace-surface">
         <summary>More metrics and estimate methodology</summary>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {!isLite && <MetricCard label="Website audit score" value={latestAuditScore != null ? `${latestAuditScore.toFixed(0)}/100` : 'Not available'} loading={false} />}
-          <VisibilityCard vis={vis} loading={!visData} />
+          {!isLite && <MetricCard label="Latest completed location audit" value={latestAuditScore != null ? `${latestAuditScore.toFixed(0)}/100` : 'Not available'} loading={false} />}
+          <VisibilityCard vis={vis} loading={!visData} /><p className="text-sm">Top-10 coverage is the percentage of collected observations ranked 1–10 on each UTC day, including unranked results in the denominator. Comparison spans the displayed days and can change with tracking coverage.</p>
           <MetricCard label="Tracked keywords" value={metrics?.totalKeywords ?? '—'} loading={metricsLoading} />
         </div>
         {!isLite && <div className="mt-5">
-          <h2 className="text-base font-semibold">Revenue estimates</h2>
+          <h2 className="text-base font-semibold">Modeled traffic scenario</h2><p className="text-sm">Stored search volumes × assumed CTR × your conversion settings. Each keyword/location is counted once, averaging its latest Google areas including unranked results. Missing volumes are excluded; overlapping keyword demand is not deduplicated. This is not measured revenue.</p>
           <p className="text-sm text-slate-500 mt-2">These are modeled estimates, not measured sales. Keyword and area projections can overlap; do not add them together as unique customers.</p>
-          {roiConfigured && roi ? <><p className="text-sm mt-2">Assumptions: average customer value ${roi.roiConfig.avgCustomerValue.toLocaleString()}; conversion rate {roi.roiConfig.conversionRate}%.</p><p className="text-sm mt-2">Modeled monthly revenue: {fmt$(roi.totals.estRevenue)}.</p></> : <p className="text-sm mt-2">Add your business assumptions before using revenue estimates.</p>}
+          {roiConfigured && roi ? <><p className="text-sm mt-2">Assumptions: average customer value ${roi.roiConfig.avgCustomerValue.toLocaleString()}; conversion rate {roi.roiConfig.conversionRate}%.</p><p className="text-sm mt-2">Modeled monthly revenue: {roi.totals.estRevenue == null ? 'Unavailable' : fmt$(roi.totals.estRevenue)}.</p></> : <p className="text-sm mt-2">Add your business assumptions before using revenue estimates.</p>}
           <Link to="/dashboard/rankings?roi=1" className="inline-block mt-3 text-sm text-brand-600">Review estimate assumptions →</Link>
         </div>}
       </details>

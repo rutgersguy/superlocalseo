@@ -13,10 +13,10 @@
  *      Without this we accept the wrong business: a real Houzz query returned
  *      "Tropic Aire Patio & Wicker Gallery" for an HVAC company.
  *
- *   2. VERDICT — strict. NAP consistency is an exact-match entity signal, so
+ *   2. VERDICT — strict. We preserve exact-text differences for the owner to review, so
  *      "505 N Armstrong St Suite Ab" and "505 N Armstrong. Ste AB." ARE a real
  *      inconsistency and must be reported. Normalising that away would hide the
- *      exact defect the feature exists to find.
+ *      difference the feature exists to show. A formatting difference alone does not establish a Google penalty or ranking problem.
  *
  * So: fuzzy to decide "is this us?", strict to decide "is it right?". Never reuse
  * normalizeStr()/normalizePhone() from the rankings code for step 2 — they exist
@@ -186,9 +186,9 @@ function isListingEvidence(loc: LocationNap, r: { url: string; title: string; de
 // ── step 2: verdict (strict) ───────────────────────────────────────────────
 
 /**
- * Strict comparison. Case and surrounding whitespace are not meaningful to a
- * search engine, but everything else is — punctuation, abbreviation and word
- * order all distinguish entities. "Ste" vs "Suite" is a genuine mismatch.
+ * Strict comparison. Case and surrounding whitespace are ignored. Other exact-text differences
+ * remain visible for consistency review; they do not prove a different entity
+ * or a Google penalty.
  */
 function strictEqual(a: string | null | undefined, b: string | null | undefined): boolean | null {
   if (!a || !b) return null;

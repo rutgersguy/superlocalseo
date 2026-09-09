@@ -42,6 +42,8 @@ interface AuditRow {
   reviewScore: number | null;
   googleScore: number | null;
   compositeScore: number | null;
+  needsScoreRefresh?: boolean;
+  scoreMethodology?: string;
   onPageScore: number | null;
   onPageDetails: string[];
   dfsLighthouseTaskId: string | null;
@@ -99,26 +101,30 @@ function getTip(detail: string): Tip | null {
       what: 'The <title> tag is the blue clickable headline shown in Google search results. It\'s one of the strongest on-page signals — Google uses it to understand what your page is about. It also affects click-through rate: a clear, descriptive title gets more clicks.',
       howToFix: isGood
         ? 'Your title is the right length — make sure it includes your primary service and city (e.g. "HVAC Repair in Tulsa, OK | Aire Serv").'
+        : d.includes('no ') || d.includes('missing')
+          ? 'Add a concise, descriptive tag that accurately represents the page.'
         : d.includes('short')
-          ? 'Add your primary keyword and city to the title. Aim for 50–60 characters. Example: "Heating & AC Repair Tulsa OK | Aire Serv of South Tulsa".'
-          : 'Trim the title to under 60 characters so it doesn\'t get cut off in search results. Focus on the most important keyword + city + brand.',
+          ? 'Write a descriptive title with your service and city where relevant. Google has no fixed title character limit. Example: "Heating & AC Repair Tulsa OK | Aire Serv of South Tulsa".'
+          : 'Keep the title concise and descriptive; truncation depends on display width rather than a fixed character limit. Focus on the most important keyword + city + brand.',
     };
   }
   if (d.includes('meta description')) {
     const isGood = d.includes('optimal');
     return {
-      what: 'The meta description is the grey snippet of text shown beneath your title in search results. Google doesn\'t use it as a direct ranking factor, but a compelling description increases click-through rate — which indirectly helps your rankings.',
+      what: 'The meta description is the grey snippet of text shown beneath your title in search results. Google doesn\'t use it as a direct ranking factor, but a compelling description increases click-through rate — without establishing a ranking improvement.',
       howToFix: isGood
         ? 'Your description length is good. Make sure it includes a clear call to action and your primary keyword + city.'
+        : d.includes('no ') || d.includes('missing')
+          ? 'Add a concise, descriptive tag that accurately represents the page.'
         : d.includes('short')
           ? 'Expand your meta description to 120–160 characters. Describe what you do, mention your city, and add a call to action like "Call us for same-day service."'
-          : 'Trim the description to 155 characters. Anything longer gets cut off with "..." in search results.',
+          : 'Keep the description concise and accurate. Snippets vary by query and available display width; there is no fixed character cutoff.',
     };
   }
   if (d.includes('h1')) {
     const isGood = d.includes('good');
     return {
-      what: 'The H1 is the main visible heading on your webpage. Search engines treat it as the primary topic signal for the page — it should clearly state what the page is about. Every page should have exactly one H1.',
+      what: 'The H1 is the main visible heading on your webpage. Search engines treat it as the primary topic signal for the page — it should clearly state what the page is about. Use a clear main heading and a logical heading hierarchy; multiple H1 elements do not by themselves prove a ranking problem.',
       howToFix: isGood
         ? 'Your page has exactly 1 H1 — good. Make sure it includes your primary service and city (e.g. "HVAC & AC Repair Services in South Tulsa, OK").'
         : d.includes('no ')
@@ -129,7 +135,7 @@ function getTip(detail: string): Tip | null {
   if (d.includes('schema') || d.includes('json-ld') || d.includes('structured data')) {
     const isGood = d.includes('detected');
     return {
-      what: 'Schema markup (specifically LocalBusiness JSON-LD) is structured data you embed in your page that tells Google exactly what type of business you are, your address, phone number, hours, and service area. It can unlock rich results in search (star ratings, hours, address) and is a proven local SEO signal.',
+      what: 'Schema markup (specifically LocalBusiness JSON-LD) is structured data you embed in your page that tells Google exactly what type of business you are, your address, phone number, hours, and service area. It can unlock rich results in search (star ratings, hours, address) and helps describe the business; eligibility and display of rich results are not guaranteed.',
       howToFix: isGood
         ? 'LocalBusiness schema is detected — great. Make sure it includes your name, address, phone (NAP), opening hours, and geographic area served.'
         : 'Add a LocalBusiness JSON-LD script to your site\'s <head>. Use Google\'s Structured Data Markup Helper (search "Google structured data markup helper") to generate the code, then paste it into your site. In WordPress, the Rank Math or Yoast SEO plugin handles this automatically.',
@@ -246,15 +252,15 @@ const LH_CATEGORIES = [
     key: 'performanceScore' as const,
     auditsKey: 'performance' as const,
     label: 'Overall Performance',
-    description: 'How fast your page loads and feels to visitors. Google uses performance as a ranking signal — slow pages rank lower and lose more than half their visitors before the page even loads.',
+    description: 'How fast your page loads and feels to visitors. Google uses performance as a ranking signal — these lab diagnostics can help identify usability problems, but are not a direct measure of search ranking.',
     howToImprove: 'Work with your web developer to compress images, reduce JavaScript, and enable browser caching. Many of the specific issues below have estimated time savings — focus on the highest-impact ones first.',
   },
   {
     key: 'accessibilityScore' as const,
     auditsKey: 'accessibility' as const,
     label: 'Accessibility',
-    description: 'How usable your site is for people with disabilities — including those using screen readers, keyboard navigation, or requiring high colour contrast. Google treats accessibility as a quality signal.',
-    howToImprove: 'Add alt text to images, ensure buttons have descriptive labels, and verify that text colours meet contrast requirements. Most website builders and SEO plugins highlight these issues automatically.',
+    description: 'How usable your site is for people with disabilities — including those using screen readers, keyboard navigation, or requiring high colour contrast.',
+    howToImprove: 'Add alt text to images, ensure buttons have descriptive labels, and verify that text colours meet contrast requirements. Combine automated checks with keyboard and screen-reader testing.',
   },
   {
     key: 'bestPracticesScore' as const,
@@ -554,9 +560,11 @@ export default function AuditHistory() {
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{triggerError}</div>
       )}
 
+      {latestAudit?.needsScoreRefresh && <p className="text-sm text-amber-700">Older calculated listing and composite scores are withheld because their methodology was inaccurate. Run a new audit to calculate scores from verified observations.</p>}
+      {latestAudit?.scoreMethodology && <p className="text-xs text-gray-500">{latestAudit.scoreMethodology}</p>}
       {/* Score cards — on-page focused */}
       <div className="grid grid-cols-3 gap-4">
-        <ScoreCard label="On-Page SEO" value={latestAudit?.onPageScore ?? null} delta={delta('onPageScore')} tooltip="Website on-page SEO score: title tag, meta description, H1, LocalBusiness schema, canonical URL, HTTPS, and mobile viewport." />
+        <ScoreCard label="Page audit estimate" value={latestAudit?.onPageScore ?? null} delta={delta('onPageScore')} tooltip="Heuristic page checks. When Lighthouse is available, the displayed score blends page checks (60%) with lab performance (40%). This is not a Google ranking score." />
         <ScoreCard label="Reviews" value={latestAudit?.reviewScore ?? null} delta={delta('reviewScore')} tooltip="Average rating and review volume score. Requires Google Business Profile connection." />
         <ScoreCard label="Google Profile" value={latestAudit?.googleScore ?? null} delta={delta('googleScore')} tooltip="Google Business Profile completeness — claimed status, photos, hours, and posts. Requires GBP connection." />
       </div>

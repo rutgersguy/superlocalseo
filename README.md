@@ -15,7 +15,7 @@ Enterprise-grade local SEO platform for service businesses (plumbers, HVAC, elec
 - **Analytics** — Historical ranking charts (30d/90d/all-time), review volume by platform, sentiment trends, CSV exports
 - **Google Business Profile** — OAuth connect for review sync and business info
 - **Google Sign-In** — One-click Google OAuth login/registration alongside email+password
-- **Review Request Campaigns** — Send email/SMS review invites via EmbedMyReviews campaigns; happy customers directed to Google, dissatisfied ones routed to private feedback
+- **Review Request Campaigns** — Send email/SMS review invites via EmbedMyReviews campaigns; invite honest reviews from all customers, with ratings and private feedback organized separately for follow-up
 
 The public homepage, authenticated workspace, login screen, and generated monthly PDFs share a visibility-brief design system: forest green, warm cream, sage data surfaces, editorial headings, and restrained orange actions. The shared red-pin wordmark is used in the login/app shell, and `frontend/public/sls-favicon.svg` provides the favicon. PDF downloads must go through the authenticated frontend API client because report endpoints require a bearer token.
 

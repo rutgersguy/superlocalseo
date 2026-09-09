@@ -1,6 +1,10 @@
 import puppeteer from 'puppeteer';
 import type { LighthouseData, LighthouseAuditItem } from './dataforseo.service';
 
+function escapeReportText(value: unknown): string {
+  return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 // ─── Colour helpers ───────────────────────────────────────────────────────────
 
 function scoreColor(score: number | null): string {
@@ -67,24 +71,28 @@ function getOnPageTip(detail: string): Tip | null {
       what: 'The title tag is the blue clickable headline shown in Google search results. It\'s one of the strongest on-page signals — Google uses it to understand what your page is about and it directly affects click-through rate.',
       howToFix: pass
         ? 'Your title is the right length — make sure it includes your primary service and city (e.g. "HVAC Repair in Tulsa, OK | Your Business").'
+        : d.includes('no ') || d.includes('missing')
+          ? 'Add a concise, descriptive tag that accurately represents the page.'
         : d.includes('short')
-          ? 'Expand the title to 50–60 characters. Include your primary keyword and city: "[Service] in [City, State] | [Brand]".'
-          : 'Trim the title to under 60 characters so it doesn\'t get cut off in search results.',
+          ? 'Make the title descriptive and include your service and city where relevant: "[Service] in [City, State] | [Brand]".'
+          : 'Keep the title concise and descriptive; truncation depends on display width rather than a fixed character limit.',
     };
   }
   if (d.includes('meta description')) {
     return {
-      what: 'The meta description is the grey snippet of text shown beneath your title in search results. A compelling description increases click-through rate — which indirectly improves rankings.',
+      what: 'The meta description is the grey snippet of text shown beneath your title in search results. A compelling description increases click-through rate — without establishing a ranking improvement.',
       howToFix: pass
         ? 'Your description length is good. Make sure it includes your primary keyword, city, and a call to action.'
+        : d.includes('no ') || d.includes('missing')
+          ? 'Add a concise, descriptive tag that accurately represents the page.'
         : d.includes('short')
           ? 'Expand to 120–160 characters. Describe what you do, mention your city, and add a call to action like "Call us for same-day service."'
-          : 'Trim to 155 characters — anything longer gets cut off with "…" in search results.',
+          : 'Keep the description concise and accurate. Snippets vary by query and available display width; there is no fixed character cutoff.',
     };
   }
   if (d.includes('h1')) {
     return {
-      what: 'The H1 is the main visible heading on your webpage. Search engines treat it as the primary topic signal — it should clearly state what the page is about. Every page should have exactly one H1.',
+      what: 'The H1 is the main visible heading on your webpage. Search engines treat it as the primary topic signal — it should clearly state what the page is about. Use a clear main heading and a logical heading hierarchy; multiple H1 elements do not by themselves prove a ranking problem.',
       howToFix: pass
         ? 'Your page has exactly 1 H1 — good. Make sure it includes your primary service and city.'
         : d.includes('no ')
@@ -94,7 +102,7 @@ function getOnPageTip(detail: string): Tip | null {
   }
   if (d.includes('schema') || d.includes('json-ld') || d.includes('structured data')) {
     return {
-      what: 'Schema markup (LocalBusiness JSON-LD) tells Google exactly what type of business you are, your address, phone, hours, and service area. It can unlock rich results in search (star ratings, address, hours) and is a proven local SEO signal.',
+      what: 'Schema markup (LocalBusiness JSON-LD) tells Google exactly what type of business you are, your address, phone, hours, and service area. It can unlock rich results in search (star ratings, address, hours) and helps describe the business; eligibility and display of rich results are not guaranteed.',
       howToFix: pass
         ? 'LocalBusiness schema is detected — great. Make sure it includes your NAP, opening hours, and geographic area served.'
         : 'Add a LocalBusiness JSON-LD script to your site\'s <head>. In WordPress, the Rank Math or Yoast SEO plugin handles this automatically. For other platforms, use Google\'s Structured Data Markup Helper.',
@@ -129,12 +137,12 @@ function getOnPageTip(detail: string): Tip | null {
 
 const LH_CATEGORY_INFO: Record<string, { description: string; howToImprove: string }> = {
   'Overall Performance': {
-    description: 'How fast your page loads and feels to visitors. Google uses performance as a ranking signal — slow pages rank lower and lose more than half their visitors before the page even finishes loading.',
+    description: 'How fast your page loads and feels to visitors. Google uses performance as a ranking signal — these lab diagnostics can help identify usability problems, but are not a direct measure of search ranking.',
     howToImprove: 'Work with your web developer to compress images, reduce JavaScript, and enable browser caching. Focus on the highest-impact issues listed below.',
   },
   'Accessibility': {
-    description: 'How usable your site is for people with disabilities — including those using screen readers, keyboard navigation, or requiring high colour contrast. Google treats accessibility as a quality signal.',
-    howToImprove: 'Add alt text to images, ensure buttons have descriptive labels, and verify that text colours meet contrast requirements. Most SEO plugins highlight these issues automatically.',
+    description: 'How usable your site is for people with disabilities — including those using screen readers, keyboard navigation, or requiring high colour contrast.',
+    howToImprove: 'Add alt text to images, ensure buttons have descriptive labels, and verify that text colours meet contrast requirements. Combine automated checks with keyboard and screen-reader testing.',
   },
   'Best Practices': {
     description: 'Whether your site follows modern web security and quality standards — HTTPS, no browser console errors, correctly sized images, and up-to-date software. Issues here can affect user trust and search indexing.',
@@ -175,7 +183,7 @@ function buildPriorityActions(
   // On-page failures → high priority
   const onPageFixes: Record<string, string> = {
     'https': 'Contact your web host to enable an SSL certificate (free via Let\'s Encrypt). Then set up a 301 redirect from HTTP to HTTPS.',
-    'title': 'Update your <title> tag to 50–60 characters including your primary service keyword and city (e.g. "HVAC Repair Tulsa OK | Your Business").',
+    'title': 'Write a concise, descriptive <title> that accurately identifies the page. Include your service and location where relevant; Google has no fixed title character limit.',
     'meta description': 'Write a 120–160 character meta description with your keyword, city, and a clear call to action.',
     'h1': 'Add a single H1 to your homepage that describes your primary service and location.',
     'schema': 'Add LocalBusiness JSON-LD markup to your site\'s <head>. Use the Rank Math or Yoast plugin in WordPress to generate it automatically.',
@@ -206,8 +214,8 @@ function buildPriorityActions(
     ];
 
     for (const cat of lhCategories) {
-      for (const audit of cat.audits.slice(0, 3)) {
-        if (audit.score != null && audit.score >= 0.5) continue; // only failing
+      for (const audit of cat.audits.filter(a => a.score != null && a.score < 0.5).slice(0, 3)) {
+        if (audit.score == null || audit.score >= 0.5) continue; // only failing
         actions.push({
           priority: cat.score < 50 ? 'high' : 'medium',
           category: cat.name,
@@ -294,7 +302,7 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
   .score-card .badge { font-size: 10px; font-weight: 700; margin-top: 5px; padding: 2px 8px; border-radius: 20px; display: inline-block; }
 
   /* Priority actions */
-  .action-item { display: grid; grid-template-columns: auto 1fr; gap: 12px; padding: 14px 16px; border-radius: 10px; margin-bottom: 10px; border: 1px solid; }
+  .action-item { break-inside: avoid; display: grid; grid-template-columns: auto 1fr; gap: 12px; padding: 14px 16px; border-radius: 10px; margin-bottom: 10px; border: 1px solid; }
   .action-item.high { background: #fff7f7; border-color: #fecaca; }
   .action-item.medium { background: #fffbeb; border-color: #fde68a; }
   .action-badge-col { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 90px; }
@@ -304,7 +312,7 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
   .action-fix { font-size: 12px; color: #475569; }
 
   /* On-page checks */
-  .check-block { border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+  .check-block { break-inside: avoid; border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
   .check-block.pass { background: #f0fdf4; border: 1px solid #bbf7d0; }
   .check-block.fail { background: #fef2f2; border: 1px solid #fecaca; }
   .check-header { display: flex; gap: 10px; align-items: flex-start; padding: 9px 12px; font-size: 12px; }
@@ -326,7 +334,7 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
   .cwv-card .metric-status { font-size: 11px; font-weight: 700; margin-top: 2px; }
 
   /* Lighthouse categories */
-  .lh-row { margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+  .lh-row { break-inside: avoid; margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
   .lh-row-header { padding: 12px 14px 10px; background: #f8fafc; }
   .lh-label { font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 8px; display: block; }
   .lh-detail { padding: 10px 14px 12px; border-top: 1px solid #e2e8f0; }
@@ -354,14 +362,14 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
   <div class="header">
     <div class="header-left">
       <div class="brand">SuperLocalSEO · SEO Audit Report</div>
-      <h1>${businessName}</h1>
-      <div class="header-meta">${[locationName, city, website].filter(Boolean).join(' · ')}</div>
+      <h1>${escapeReportText(businessName)}</h1>
+      <div class="header-meta">${escapeReportText([locationName, city, website].filter(Boolean).join(' · '))}</div>
       <div class="header-meta" style="margin-top:2px;">Audit completed ${completedAt}</div>
     </div>
     ${onPage != null ? `
     <div class="overall-badge" style="border-color:${scoreColor(onPage)};">
       <div class="num" style="color:${scoreColor(onPage)};">${onPage}</div>
-      <div class="lbl">On-Page Score</div>
+      <div class="lbl">${lh ? 'Blended Audit Score' : 'Page Audit Score'}</div>
       <div style="font-size:11px;font-weight:700;color:${scoreColor(onPage)};margin-top:2px;">${scoreLabel(onPage)}</div>
     </div>` : ''}
   </div>
@@ -371,17 +379,17 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
   ${actions.length > 0 ? `
   <div class="section">
     <h2>Priority Actions</h2>
-    <div class="section-subtitle">Fix these issues to improve your local search rankings — listed highest impact first</div>
+    <div class="section-subtitle">Suggested checks, ordered by our audit rules. Verify each finding before acting; search-ranking impact is not measured.</div>
     ${[...highActions, ...medActions].map((a) => `
     <div class="action-item ${a.priority}">
       <div class="action-badge-col">
         ${priorityBadge(a.priority)}
-        <div class="action-category">${a.category}</div>
+        <div class="action-category">${escapeReportText(a.category)}</div>
       </div>
       <div>
-        <div class="action-issue">${a.issue}</div>
+        <div class="action-issue">${escapeReportText(a.issue)}</div>
         <div class="action-fix-label">How to fix</div>
-        <div class="action-fix">${a.fix}</div>
+        <div class="action-fix">${escapeReportText(a.fix)}</div>
       </div>
     </div>`).join('')}
   </div>` : ''}
@@ -397,13 +405,13 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
       return `<div class="check-block ${pass ? 'pass' : 'fail'}">
         <div class="check-header">
           <span class="check-icon ${pass ? 'pass' : 'fail'}">${pass ? '✓' : '✗'}</span>
-          <span>${d}</span>
+          <span>${escapeReportText(d)}</span>
         </div>
         ${tip ? `<div class="check-tip">
           <div class="tip-label">What this means</div>
-          <div style="margin-bottom:6px;">${tip.what}</div>
+          <div style="margin-bottom:6px;">${escapeReportText(tip.what)}</div>
           <div class="tip-label">How to fix it</div>
-          <div>${tip.howToFix}</div>
+          <div>${escapeReportText(tip.howToFix)}</div>
         </div>` : ''}
       </div>`;
     }).join('')}
@@ -413,7 +421,7 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
   <!-- Website Performance -->
   <div class="section" style="page-break-before:always;">
     <h2>Website Performance</h2>
-    <div class="section-subtitle">Measured by Google Lighthouse — these signals directly affect your search rankings and user experience</div>
+    <div class="section-subtitle">Lighthouse lab diagnostics for this page and test run. These scores are not Google ranking scores or field Core Web Vitals results.</div>
 
     ${(lh.lcp != null || lh.cls != null || lh.tbt != null) ? `
     <div class="cwv-grid" style="margin-bottom:24px;">
@@ -434,7 +442,7 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
       ${lh.tbt != null ? `
       <div class="cwv-card">
         <div class="metric-name">Interactivity</div>
-        <div class="metric-sub">How quickly the page responds to clicks</div>
+        <div class="metric-sub">Total blocking time in this lab run; not field interaction latency</div>
         <div class="metric-val" style="color:${cwvColor('tbt', lh.tbt)};">${Math.round(lh.tbt)}ms</div>
         <div class="metric-status" style="color:${cwvColor('tbt', lh.tbt)};">${cwvLabel('tbt', lh.tbt)}</div>
       </div>` : ''}
@@ -442,7 +450,7 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
 
     ${lhCategoryRows.map((cat) => {
       const info = LH_CATEGORY_INFO[cat.label];
-      const failingAudits = cat.audits.filter((a) => a.score == null || a.score < 0.9).slice(0, 4);
+      const failingAudits = cat.audits.filter((a) => a.score != null && a.score < 0.9).slice(0, 4);
       return `
     <div class="lh-row">
       <div class="lh-row-header">
@@ -451,9 +459,9 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
       </div>
       <div class="lh-detail">
         ${info ? `
-        <div class="lh-desc">${info.description}</div>
+        <div class="lh-desc">${escapeReportText(info.description)}</div>
         <div class="lh-improve-label">How to improve it</div>
-        <div class="lh-improve">${info.howToImprove}</div>` : ''}
+        <div class="lh-improve">${escapeReportText(info.howToImprove)}</div>` : ''}
         ${failingAudits.length > 0 ? `
         <div class="lh-issues-label">Issues found</div>
         <div class="lh-issues">
@@ -461,12 +469,12 @@ export function renderAuditReportHtml(row: Record<string, unknown>): string {
           <div class="lh-issue">
             <div class="lh-issue-header">
               <div class="lh-dot" style="background:${auditDotColor(a.score)};"></div>
-              <span class="lh-issue-title">${a.title}</span>
-              ${a.displayValue ? `<span class="lh-issue-val">${a.displayValue}</span>` : ''}
+              <span class="lh-issue-title">${escapeReportText(a.title)}</span>
+              ${a.displayValue ? `<span class="lh-issue-val">${escapeReportText(a.displayValue)}</span>` : ''}
             </div>
-            ${a.description ? `<div class="lh-issue-desc">${a.description}</div>` : ''}
+            ${a.description ? `<div class="lh-issue-desc">${escapeReportText(a.description)}</div>` : ''}
           </div>`).join('')}
-        </div>` : `<div style="font-size:11px;color:#22c55e;">✓ No significant issues found in this category</div>`}
+        </div>` : `<div style="font-size:11px;color:#22c55e;">No scored issues below our threshold were returned. Unscored or omitted checks are not a pass.</div>`}
       </div>
     </div>`;
     }).join('')}

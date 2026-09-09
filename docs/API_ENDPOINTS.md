@@ -341,7 +341,7 @@ Subscription-gated.
 ---
 
 ### `GET /reviews/feedback`
-Returns reviews that were directed to the private feedback form (via EMR smart gating).
+Returns private feedback stored by EMR. This read endpoint does not determine or validate campaign routing.
 
 ---
 

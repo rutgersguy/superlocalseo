@@ -1,5 +1,5 @@
 export interface OnPageResult {
-  score: number;
+  score: number | null;
   details: string[];
 }
 
@@ -52,18 +52,11 @@ export async function checkOnPageSeo(websiteUrl: string): Promise<OnPageResult> 
   const details: string[] = [];
   let score = 0;
 
-  // HTTPS check (10 pts) — before fetch
-  if (websiteUrl.startsWith('https://')) {
-    score += 10;
-    details.push('Site served over HTTPS');
-  } else {
-    details.push('Not using HTTPS — migrate to HTTPS to protect visitors and improve rankings');
-  }
-
   let html = '';
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 6000);
+    timer = setTimeout(() => controller.abort(), 6000);
     const res = await fetch(websiteUrl, {
       signal: controller.signal,
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LocalSEOAuditBot/1.0)' },
@@ -73,13 +66,22 @@ export async function checkOnPageSeo(websiteUrl: string): Promise<OnPageResult> 
 
     if (!res.ok) {
       details.push(`Website returned HTTP ${res.status} — check that the URL is accessible`);
-      return { score, details };
+      return { score: null, details };
     }
 
+    const finalUrl = res.url || websiteUrl;
+    if (finalUrl.startsWith('https://')) {
+      score += 10;
+      details.push('Site served over HTTPS');
+    } else {
+      details.push('Not using HTTPS — enable HTTPS to protect visitors');
+    }
     html = await res.text();
   } catch {
     details.push('Could not fetch website — check that the URL is live and publicly accessible');
-    return { score, details };
+    return { score: null, details };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 
   // Title tag (20 pts)
@@ -91,11 +93,11 @@ export async function checkOnPageSeo(websiteUrl: string): Promise<OnPageResult> 
     const len = title.length;
     if (len >= 30 && len <= 60) {
       score += 10;
-      details.push(`Title tag: "${title.slice(0, 60)}" (${len} characters — optimal length)`);
+      details.push(`Title tag: "${title.slice(0, 60)}" (${len} characters — optimal length by our heuristic)`);
     } else if (len < 30) {
-      details.push(`Title tag: "${title}" (${len} characters — too short, aim for 30–60 characters)`);
+      details.push(`Title tag: "${title}" (${len} characters — shorter than our 30–60 character guideline)`);
     } else {
-      details.push(`Title tag present but too long (${len} characters — trim to 60 or fewer)`);
+      details.push(`Title tag present but too long by our guideline (${len} characters — display truncation depends on width)`);
     }
   }
 
@@ -108,11 +110,11 @@ export async function checkOnPageSeo(websiteUrl: string): Promise<OnPageResult> 
     const len = metaDesc.length;
     if (len >= 120 && len <= 160) {
       score += 10;
-      details.push(`Meta description present (${len} characters — optimal length)`);
+      details.push(`Meta description present (${len} characters — optimal length by our heuristic)`);
     } else if (len < 120) {
       details.push(`Meta description present but short (${len} characters — expand to 120–160 characters)`);
     } else {
-      details.push(`Meta description present but too long (${len} characters — trim to 160 characters to avoid truncation)`);
+      details.push(`Meta description present but too long (${len} characters — review for concision; display truncation depends on width)`);
     }
   }
 

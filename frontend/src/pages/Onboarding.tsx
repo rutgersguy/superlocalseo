@@ -445,7 +445,7 @@ export default function Onboarding() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Business Name
-                  <FieldTooltip content="Enter exactly as it appears on your Google Business Profile. Consistent name, address, and phone (NAP) across the web is a key local ranking factor." />
+                  <FieldTooltip content="Enter exactly as it appears on your Google Business Profile. Consistent business details help customers and platforms identify your business." />
                 </label>
                 <input
                   type="text"
@@ -553,7 +553,7 @@ export default function Onboarding() {
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">
                         Phone
-                        <FieldTooltip content="Use the exact format shown on your Google Business Profile. Inconsistent phone formats across the web hurt local rankings (this is called NAP consistency)." />
+                        <FieldTooltip content="Use the exact format shown on your Google Business Profile. We flag formatting differences for review; they do not by themselves prove a ranking problem." />
                       </label>
                       <input type="text" value={newLocation.phone}
                         onChange={(e) => setNewLocation((p) => ({ ...p, phone: e.target.value }))}

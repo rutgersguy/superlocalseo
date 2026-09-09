@@ -167,21 +167,21 @@ any assistant that did not name the business, because that outranks a citation g
 
 ### 4. Review Request Campaigns
 
-**What it does:** Send personalized review request emails and SMS messages to customers via EmbedMyReviews campaigns. The EMR platform automatically routes happy customers to Google and routes unhappy customers to a private feedback form — protecting your client's public reputation.
+**What it does:** Send personalized review request emails and SMS messages to customers via EmbedMyReviews campaigns. Invite honest reviews from all customers. Organize ratings and optional private feedback internally; public review access must not depend on satisfaction.
 
 **Key capabilities:**
 - Single invite: enter first name, last name (optional), email or phone number
 - Bulk import: upload a CSV or paste contact data (up to 500 contacts per batch)
 - Client-side CSV parser — previews first 5 contacts before sending
 - Per-batch result: shows sent count and any failed invites with error details
-- **Smart gating by EMR:** 4–5★ experience → directed to Google review page; 1–3★ experience → directed to private feedback form
+- **Honest review requests:** offer the same public review opportunity regardless of satisfaction. Keep rating/sentiment segregation internal; optional private feedback must not replace public access. Verify this behavior in EMR before launching a campaign.
 - Funnel metrics per campaign: Invited → Opened → Clicked → Reviewed (public) + Private Feedback + Unsubscribed
 - Visual funnel bars showing conversion rate at each stage
 - Review rate KPI headline (reviewed ÷ invited)
 - Team admin-only access — viewers cannot send invites
 - Campaigns created in EmbedMyReviews dashboard, synced to SuperLocalSEO automatically
 
-**Why it matters:** The average business that asks for reviews gets 4x more reviews than one that doesn't. Smart gating ensures negative experiences never become public 1-star reviews.
+**Why it matters:** Consistent requests invite authentic feedback. Do not promise a review-volume multiplier or suppress dissatisfied customers’ opportunity to review publicly.
 
 ---
 
@@ -573,7 +573,7 @@ any assistant that did not name the business, because that outranks a citation g
 - Daily citation monitoring (BrightLocal)
 - Review aggregation + 6-hour pull + real-time webhook (EMR)
 - AI review response drafting (Claude Haiku)
-- Review request campaigns with smart gating (EMR)
+- Honest review request campaigns with internal feedback triage (EMR)
 - Automated monthly PDF reports via email
 - Historical analytics (rankings + reviews, any date range)
 - CSV data export

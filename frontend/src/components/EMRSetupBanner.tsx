@@ -42,7 +42,7 @@ export default function EMRSetupBanner({ context }: Props) {
         <p className="text-sm font-semibold text-amber-900">Connect your Google Business Profile</p>
         <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
           {context === 'campaigns'
-            ? 'Connect Google so we can send review requests and track who leaves a review. Happy customers go to Google; unhappy ones are routed to a private feedback form.'
+            ? 'Connect Google to request honest reviews and manage customer feedback. Give every customer the same opportunity to leave a public review, regardless of rating.'
             : "Connect Google and we'll pull in your reviews automatically — and let you reply to them right from this page."}
         </p>
         <Link

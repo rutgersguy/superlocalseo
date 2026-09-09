@@ -178,9 +178,9 @@ function LocationCard({ loc, onDismiss }: { loc: LocationRow; onDismiss: () => v
         </div>
         <pre className="text-xs text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">{nap}</pre>
         <p className="text-xs text-gray-500 mt-2">
-          Match this character for character — &ldquo;Ste&rdquo; and &ldquo;Suite&rdquo; count as
-          different addresses to a search engine, and inconsistent details are exactly what hurts
-          local ranking.
+          Keep business details consistent across listings. We flag exact-text differences,
+          including abbreviations, for review. Google may update details using outside sources,
+          but a formatting difference alone does not establish a Google flag or ranking problem.
         </p>
       </div>
     </div>

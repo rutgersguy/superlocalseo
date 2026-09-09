@@ -173,7 +173,7 @@ export default function AiVisibility() {
         <header>
           <h1 className="text-xl font-bold text-slate-900">AI Visibility</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Whether ChatGPT, Claude, Gemini and Perplexity recommend you when someone asks.
+            Whether ChatGPT, Claude, Gemini and Perplexity named your business in our sampled answers.
           </p>
         </header>
         <div className="bg-white rounded-2xl shadow-card p-8 text-center">
@@ -195,14 +195,14 @@ export default function AiVisibility() {
         <div>
           <h1 className="text-xl font-bold text-slate-900">AI Visibility</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Whether ChatGPT, Claude, Gemini and Perplexity recommend you when someone asks.
+            Whether ChatGPT, Claude, Gemini and Perplexity named your business in our sampled answers.
             {' '}Checked {fmtDate(d.scannedAt)} · next {fmtDate(d.nextScanAt)}.
           </p>
         </div>
         {d.mentionRate != null && (
           <div className="shrink-0 text-right">
             <p className="text-3xl font-bold text-slate-900">{d.mentionRate}%</p>
-            <p className="text-xs text-slate-400">of questions recommend you</p>
+            <p className="text-xs text-slate-400">of verified sampled answers name you</p>
           </div>
         )}
       </header>
@@ -300,7 +300,7 @@ export default function AiVisibility() {
             <div className="bg-white rounded-xl shadow-card p-5">
               <p className="text-sm font-semibold text-slate-900">Where they get their answers</p>
               <p className="text-xs text-slate-400 mt-0.5 mb-3">
-                These pages decide local recommendations — several are ones you can get listed on.
+                These sources were cited in the sampled answers. A citation does not establish why an assistant named or omitted your business.
               </p>
               {(d.topSources ?? []).length === 0 ? (
                 <p className="text-sm text-slate-400">No sources were cited.</p>

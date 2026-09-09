@@ -516,7 +516,7 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
           </div>
 
           <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 text-xs text-blue-800">
-            <strong>How it works:</strong> EmbedMyReviews routes each recipient based on their experience — happy customers (4-5★) are directed to Google for a public review; less satisfied customers (1-3★) are routed to a private feedback form instead of a public platform.
+            <strong>How it works:</strong> Invite every customer to share an honest review, regardless of rating. Keep the public review option equally available to everyone. Review ratings and private feedback separately to identify follow-up needs.
           </div>
 
           {/* Send invites */}
@@ -664,7 +664,7 @@ export default function Campaigns() {
           </button>
         </div>
         <p className="text-sm text-slate-500">
-          Send review requests via EmbedMyReviews. Happy customers are routed to Google; others to a private feedback form.
+          Invite customers to share an honest review. Use ratings and private feedback to organize follow-up without restricting who can review publicly.
         </p>
         {credits?.available && credits.total < 50 && (
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
