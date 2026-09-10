@@ -9,7 +9,11 @@ import { setupQueue, updateSetup } from '../controllers/campaign_setup.controlle
 
 import { listFreeReports } from '../controllers/admin_reports.controller';
 
+import { listProviderMappings, updateProviderMapping } from '../controllers/provider_mapping.controller';
+
 const router = Router();
+router.get('/provider-mappings', requireAdmin, listProviderMappings);
+router.put('/provider-mappings/:locationId', requireAdmin, updateProviderMapping);
 router.get('/free-reports', requireAdmin, listFreeReports);
 router.get('/campaign-setup', requireAdmin, setupQueue);
 router.patch('/campaign-setup/:id', requireAdmin, updateSetup);
