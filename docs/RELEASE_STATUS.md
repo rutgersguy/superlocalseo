@@ -66,3 +66,5 @@ EMR still supplies approved Google review connectivity, review ingestion/replies
 Detailed evidence: [native reports](native-free-reports-2026-09-09.md), [Google recovery](google-connection-recovery-2026-09-09.md), [campaign API boundaries](campaign-api-capabilities-2026-09-09.md), [earlier rehearsal](release-rehearsal-2026-09-09.md). Rollback of legacy routing removes only `integrations/embedmyreviews/report-routing.html` from EMR Header Scripts; retain native reports and vendor records.
 
 Campaign verification implementation details: [operator runbook](campaign-setup-verification.md). This revision adds configuration attestation, not automatic provisioning or proof of live delivery. Release validation is recorded on #204/#207.
+
+Reply publication now has durable pending/uncertain state, owner/admin approval, upstream identity checks and a read-only status check without resending. See [reply recovery](reply-publication-recovery.md). Live public-write acceptance and broader #206 lifecycle work remain pending.
