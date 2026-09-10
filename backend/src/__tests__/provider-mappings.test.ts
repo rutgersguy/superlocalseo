@@ -1,3 +1,4 @@
+import { retryMappingTransaction } from '../services/provider_mapping.service';
 import request from 'supertest';
 import app from '../app';
 import { db } from '../db/connection';
@@ -134,4 +135,17 @@ describe('Explicit provider location mapping', () => {
     expect((await save(locationB, input('880011', '880012'))).status).toBe(409);
   });
 
+});
+
+describe('Mapping transaction deadlock recovery', () => {
+  it('retries only PostgreSQL deadlocks and preserves other failures', async () => {
+    const run = jest.fn().mockRejectedValueOnce({ code: '40P01' }).mockResolvedValue('saved');
+    await expect(retryMappingTransaction(run)).resolves.toBe('saved'); expect(run).toHaveBeenCalledTimes(2);
+    const invalid = jest.fn().mockRejectedValue({ code: '23505' });
+    await expect(retryMappingTransaction(invalid)).rejects.toMatchObject({ code: '23505' }); expect(invalid).toHaveBeenCalledTimes(1);
+  });
+  it('bounds retries and returns a recoverable conflict instead of a server error', async () => {
+    const run = jest.fn().mockRejectedValue({ code: '40P01' });
+    await expect(retryMappingTransaction(run)).rejects.toMatchObject({ status: 409 }); expect(run).toHaveBeenCalledTimes(3);
+  });
 });

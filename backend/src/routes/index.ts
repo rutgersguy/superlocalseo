@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import collectionRouter from './collection';
 import prospectReportsRouter from './prospect_reports';
 import healthRouter from './health';
 import authRouter from './auth';
@@ -30,6 +31,7 @@ import { enforcePlanGate } from '../middleware/requireProPlan';
 const router = Router();
 
 // Public / always-accessible routes
+router.use('/collection', collectionRouter);
 router.use('/free-reports', prospectReportsRouter);
 router.use('/health', healthRouter);
 router.use('/auth', authRouter);
