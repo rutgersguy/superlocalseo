@@ -1,6 +1,6 @@
 # Provider location mappings
 
-Status, September 10, 2026: local implementation in progress, not deployed. Live inventory is complete. All 350 backend tests (37 suites), both builds and the isolated browser check passed. GitHub CI and production verification remain release gates. This work covers explicit mapping storage and the identity audit; downstream reviews/campaign routing is a separate change.
+Status, September 10, 2026: mapping storage and inventory implemented in [PR #218](https://github.com/rutgersguy/superlocalseo/pull/218); binding remains disabled. Live inventory is complete. All 350 backend tests (37 suites), both builds and the isolated browser check passed. GitHub CI and post-deployment results are recorded on that PR. This work covers explicit mapping storage and the identity audit; downstream reviews/campaign routing is a separate change.
 
 ## Live inventory — September 10, 2026
 
@@ -16,7 +16,7 @@ Five local customer records were also checked: one additional Brent Broadnax cus
 
 ## Operator screen
 
-After deployment, **Admin → Provider mappings** (`/admin?tab=provider-mappings`) will list local business locations, saved Google Place IDs, historical client-level provider IDs and explicit mappings with revision history. Historical IDs are references only. No automatic backfill or name-based matching is performed.
+**Admin → Provider mappings** (`/admin?tab=provider-mappings`) lists local business locations, saved Google Place IDs, historical client-level provider IDs and explicit mappings with revision history. Historical IDs are references only. No automatic backfill or name-based matching is performed.
 
 Saving is currently disabled. The server also rejects writes with HTTP 409 until the provider evidence adapter is implemented and verified. The presence of a form or passing mocked storage tests does not mean live identity verification works.
 
