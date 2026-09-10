@@ -408,18 +408,30 @@ function ReviewCard({ review, onReplyPosted }: { review: Review; onReplyPosted: 
 // ─── Feedback tab ─────────────────────────────────────────────────────────────
 
 function FeedbackTab() {
-  const { data, isLoading } = useSWR<{ success: boolean; data: { feedback: any[]; total: number } }>('/reviews/feedback', fetcher);
+  const [page, setPage] = useState(1);
+  const [locationId, setLocationId] = useState('');
+  const [rating, setRating] = useState('');
+  const { data: locations } = useSWR<{ data: Array<{ id: string; name: string }> }>('/locations', fetcher);
+  const query = new URLSearchParams({ page: String(page) });
+  if (locationId) query.set('locationId', locationId);
+  if (rating) query.set('rating', rating);
+  const { data, error, isLoading } = useSWR<{ success: boolean; data: { feedback: any[]; total: number; pages: number } }>(`/reviews/feedback?${query}`, fetcher);
   const feedback = data?.data?.feedback ?? [];
   const total = data?.data?.total ?? 0;
 
-  if (isLoading) return <div className="text-sm text-slate-500">Loading...</div>;
 
   return (
     <>
-      {feedback.length === 0 ? (
+      <div className="mb-4 flex flex-wrap gap-4">
+        <label className="text-sm">Feedback location<select value={locationId} onChange={e => { setLocationId(e.target.value); setPage(1); }} className="ml-2 rounded border-slate-300"><option value="">All locations</option>{locations?.data.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
+        <label className="text-sm">Feedback rating<select value={rating} onChange={e => { setRating(e.target.value); setPage(1); }} className="ml-2 rounded border-slate-300"><option value="">All ratings</option>{[1,2,3,4,5].map(n => <option key={n} value={n}>{n} stars</option>)}</select></label>
+      </div>
+      {error && <p role="alert">Unable to load private feedback. Refresh to retry.</p>}
+      {isLoading && <p role="status">Loading private feedback…</p>}
+      {!error && !isLoading && (feedback.length === 0 ? (
         <div className="text-center py-16 text-slate-400">
           <p className="font-medium text-slate-600 mb-1">No private feedback yet</p>
-          <p className="text-sm">When a review requester rates 1–3★, their response appears here instead of going to Google.</p>
+          <p className="text-sm">Optional private feedback appears here at any rating. Everyone has the same opportunity to leave an honest public review.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -448,7 +460,8 @@ function FeedbackTab() {
             </div>
           ))}
         </div>
-      )}
+      ))}
+      {(data?.data.pages ?? 0) > 1 && <div className="mt-4 flex items-center gap-4 text-sm"><button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="underline disabled:opacity-40">Previous feedback</button><span>Page {page} of {data?.data.pages}</span><button disabled={page >= (data?.data.pages ?? 0)} onClick={() => setPage(p => p + 1)} className="underline disabled:opacity-40">Next feedback</button></div>}
     </>
   );
 }

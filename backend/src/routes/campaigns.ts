@@ -5,7 +5,11 @@ import * as campaign from '../controllers/campaign.controller';
 
 import * as setup from '../controllers/campaign_setup.controller';
 
+import * as collection from '../controllers/collection.controller';
 const router = Router();
+router.get('/collection', requireClient, collection.status);
+router.post('/collection/:locationId', requireClient, requireTeamAdmin, collection.issue);
+router.get('/collection/:locationId/qr.png', requireClient, collection.image);
 router.get('/setup', requireAuth, requireClient, setup.setupStatus);
 router.post('/setup', requireAuth, requireClient, requireTeamAdmin, setup.requestSetup);
 

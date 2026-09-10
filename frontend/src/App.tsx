@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthCtx, useAuthState } from './hooks/useAuth';
 import { AppTheme } from './components/ui/Workspace';
 import './workspace.css';
+import ReviewCollection from './pages/ReviewCollection';
 import Landing from './pages/Landing';
 import FreeReport from './pages/FreeReport';
 import Login from './pages/Login';
@@ -42,6 +43,7 @@ function App() {
       <BrowserRouter>
         <AppTheme><Routes>
           {/* Public routes */}
+          <Route path="/review/:token" element={<ReviewCollection />} />
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />

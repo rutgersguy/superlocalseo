@@ -86,7 +86,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
 
 export async function listFeedback(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10));
+    const page = z.coerce.number().int().min(1).max(100000).default(1).parse(req.query.page);
     const limit = 20;
     const campaignId = req.query.campaignId as string | undefined;
 
@@ -96,6 +96,7 @@ export async function listFeedback(req: Request, res: Response, next: NextFuncti
       if (!await db('locations').where({ id: locationId, client_id: req.clientId }).first()) { err(res, 'Location not found', 404); return; }
       query = query.where({ location_id: locationId });
     }
+    if (req.query.rating) query = query.where({ rating: z.coerce.number().int().min(1).max(5).parse(req.query.rating) });
     if (campaignId) query = query.where({ campaign_id: campaignId });
 
     const countResult = await query.clone().count('id as cnt').first();
@@ -110,8 +111,11 @@ export async function listFeedback(req: Request, res: Response, next: NextFuncti
       feedback: rows.map((f) => ({
         id: f.id,
         campaignId: f.campaign_id,
-        contactName: maskName(f.contact_name as string | null),
-        contactEmail: maskEmail(f.contact_email as string | null),
+        locationId: f.location_id,
+        source: f.source,
+        contactConsent: f.contact_consent,
+        contactName: f.source === 'native' ? f.contact_name : maskName(f.contact_name as string | null),
+        contactEmail: f.source === 'native' && f.contact_consent ? f.contact_email : maskEmail(f.contact_email as string | null),
         contactPhone: maskPhone(f.contact_phone as string | null),
         rating: f.rating,
         message: f.message,

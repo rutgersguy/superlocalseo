@@ -1,3 +1,4 @@
+import ReviewCollectionLinks from '../components/ReviewCollectionLinks';
 import { useState, useRef } from 'react';
 import useSWR from 'swr';
 import { Mail, Upload, Send, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, UserX, Plus, X } from 'lucide-react';
@@ -556,6 +557,8 @@ export default function Campaigns() {
           </div>
         )}
       </div>
+
+      <ReviewCollectionLinks />
 
       {isLoading && (
         <div className="space-y-3">
