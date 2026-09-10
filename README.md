@@ -1,8 +1,10 @@
 # SuperLocalSEO
 
-Enterprise-grade local SEO platform for service businesses (plumbers, HVAC, electricians). Aggregates ranking data, reviews, and citations into a unified dashboard with automated monthly PDF reports.
+Local SEO platform for service businesses (plumbers, HVAC, electricians). Aggregates ranking data, reviews, and citations into a unified dashboard with automated monthly PDF reports.
 
 **Live at:** [superlocalseo.com](https://superlocalseo.com)
+
+**Current delivery and launch status:** [Release status](docs/RELEASE_STATUS.md). The native acquisition report and admin lead listing are live; campaign provisioning, collection/review workflows, and external onboarding acceptance still have unfinished scope. Stripe remains last.
 
 ---
 
@@ -11,11 +13,11 @@ Enterprise-grade local SEO platform for service businesses (plumbers, HVAC, elec
 - **Rankings** — Daily keyword rank tracking via BrightLocal, stored permanently in our DB (BrightLocal provides no history — we do)
 - **Reviews** — Multi-platform review monitoring powered by EmbedMyReviews (white-labeled at `app.superlocalseo.com`), with real-time webhook ingestion for new/updated reviews and private feedback
 - **Citations** — Directory listing presence and NAP accuracy monitoring via BrightLocal Data API; guided fix workflow for unlisted/mismatched entries
-- **Reports** — Automated monthly PDF reports generated and emailed on the 1st of each month
+- **Reports** — Native public acquisition reports at `/audit`, with saved map snapshots and an admin lead listing; paid monthly PDF reports are a separate scheduled flow.
 - **Analytics** — Historical ranking charts (30d/90d/all-time), review volume by platform, sentiment trends, CSV exports
-- **Google Business Profile** — OAuth connect for review sync and business info
+- **Google review connection** — Branded EMR connect-link flow launched from our app; see [recovery and remaining acceptance](docs/google-connection-recovery-2026-09-09.md). Our direct GBP API route is not the active review source.
 - **Google Sign-In** — One-click Google OAuth login/registration alongside email+password
-- **Review Request Campaigns** — Send email/SMS review invites via EmbedMyReviews campaigns; invite honest reviews from all customers, with ratings and private feedback organized separately for follow-up
+- **Review Request Campaigns** — Assisted per-location setup requests and existing EMR delivery integration. Business-specific campaign verification, controlled delivery acceptance, and the native collection replacement remain incomplete; see [release status](docs/RELEASE_STATUS.md).
 
 The public homepage, authenticated workspace, login screen, and generated monthly PDFs share a visibility-brief design system: forest green, warm cream, sage data surfaces, editorial headings, and restrained orange actions. The shared red-pin wordmark is used in the login/app shell, and `frontend/public/sls-favicon.svg` provides the favicon. PDF downloads must go through the authenticated frontend API client because report endpoints require a bearer token.
 

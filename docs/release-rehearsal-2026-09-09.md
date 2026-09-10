@@ -1,5 +1,7 @@
 # Release rehearsal — 2026-09-09
 
+> Historical evidence. See [current release status](RELEASE_STATUS.md) for what is live and outstanding. Native reports and the September 9 legacy redirects supersede the vendor acquisition flow described here; earlier unresolved vendor calculations were not repaired upstream.
+
 This is an assisted-pilot release rehearsal, not evidence that every external customer journey is ready. Started from GitHub main dc0a716 after verifying origin and server agreed. Application changes are being merged/deployed through GitHub. Vendor settings are separately recorded in vendor-public-form-copy-2026-09-09.md.
 
 ## Repairs found by testing

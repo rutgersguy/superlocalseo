@@ -1,5 +1,7 @@
 # Vendor public form copy — 2026-09-09
 
+> Historical evidence. See [current release status](RELEASE_STATUS.md) for what is live and outstanding. Native reports and the September 9 legacy redirects supersede the vendor acquisition flow described here; earlier unresolved vendor calculations were not repaired upstream.
+
 Changed through the authenticated EmbedMyReviews agency UI at `/sales-intelligence/public-form`, Page copy → English. Saved and verified by reloading `https://app.superlocalseo.com/intel-request`. These settings live at the vendor, outside this repository; this file records the change for version control and rollback.
 
 | Field | Before | Saved value |

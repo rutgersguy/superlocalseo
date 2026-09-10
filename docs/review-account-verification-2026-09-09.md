@@ -1,5 +1,7 @@
 # Reviewed account and vendor verification — 2026-09-09
 
+> Historical evidence. See [current release status](RELEASE_STATUS.md) for what is live and outstanding. Native reports and the September 9 legacy redirects supersede the vendor acquisition flow described here; earlier unresolved vendor calculations were not repaired upstream.
+
 ## Account / actual reproduced failure
 
 Normal UI and API login with the documented NerdBox test account succeeded. The account email is brent@nerdbox.com. Its EMR location is 33; production contains 8 reviews. Vendor Sources identifies the actual Google business as Light Hawk Studios, Place ID ChIJnUBk_1kP9YgRfyGuF-BkCFk, connected through that same owner email. Vendor shows 8 reviews, 5.0 average, 25% answered (2/8). Workspace naming is test configuration; no source was relinked.
