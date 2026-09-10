@@ -371,7 +371,7 @@ function ReviewCard({ review, onReplyPosted }: { review: Review; onReplyPosted: 
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-slate-900 text-sm">{review.authorName}</span>
               <PlatformBadge platform={review.platform} />
-              {review.status === 'new' && (
+              {review.status === 'new' && !review.replied && (
                 <span className="text-xs bg-yellow-100 text-yellow-700 font-medium px-2 py-0.5 rounded-full">New</span>
               )}
               {alreadyPosted && (
