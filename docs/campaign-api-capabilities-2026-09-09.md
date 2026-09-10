@@ -44,3 +44,7 @@ Legacy POST /campaigns remains an explicit 501 for old callers. The new customer
 - Isolated Docker API/web rebuilt and migrated; Playwright customer → saved request → reload → admin queue journey passed (1 test). No vendor sends or real customer mutations.
 - `git diff --check` and deployment preflight passed.
 - Initial test run failed because macOS archive metadata appeared as a migration file. Transfer metadata was removed; the clean migration and complete rerun passed. No production migrations ran during that failure.
+
+## Current completion boundary
+
+As of deployed #215, the campaign setup queue remains read-only: requests still show requested, and no completion attestation, verification audit history, blocked/reopen state, or customer-visible verified readiness has shipped. Those controls are the next planned #204/#207 slice, not an implemented feature. The newer Admin → Free reports screen is separate and does not close campaign readiness. See [release status](RELEASE_STATUS.md) and the revised [onboarding guide](CUSTOMER_ONBOARDING.md).
