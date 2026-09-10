@@ -4,6 +4,10 @@ Updated September 10, 2026. Invitation tracking and recovery are described in [t
 
 **The remaining work is not just reporting or status checks.** The native acquisition report and its admin listing are live. Campaign provisioning/verification, native collection and private-feedback workflows, review/reply reliability, multi-location onboarding, and external acceptance testing still have unfinished scope. Unrestricted self-service commercial readiness has not been demonstrated. Stripe stays last, including a known subscription-date defect rather than only switching on payments.
 
+## Local engineering awaiting release verification
+
+Three independent branches are in development after production PR #225: acquisition-report recovery, private-feedback follow-up, and [report/website claim corrections](report-claims-audit.md). These are not deployed features yet. SSH access is needed to complete isolated database/browser tests, GitHub PR checks and production deployment. Keep the live-feature table below as the production reference until acceptance evidence is recorded.
+
 ## Work in progress: provider mapping
 
 The registry and operator inspection workflow are implemented. The routing follow-up uses explicit mappings for EMR location operations and adds a VA guide in the admin screen. Storage, conflict protections, history and an admin screen are implemented. Mapping saves now use an explicit operator Google-source inspection plus API-verified organization membership; automatic Google identity verification remains unavailable. Live inventory found three local locations with correct legacy EMR membership but no saved Google Place IDs. The inspection follow-up is validated separately from the original registry release; deployment evidence is recorded in its GitHub release comments. No production customer mappings have been saved by this work. The legacy review-testing fixture remains unchanged. See [routing scope and limits](provider-routing.md). See the [implementation and activation checklist](provider-location-mappings.md).

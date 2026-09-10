@@ -457,7 +457,7 @@ export function renderReportHtml(data: ReportData): string {
 
   if (rankings.avgRank != null && rankings.avgRank > 20) {
     recommendations.push(
-      'Average keyword ranking is above position 20 — focus on on-page SEO and link building to push rankings higher.',
+      'The average among ranked observations is above position 20. Inspect the matching keyword, area and result type before choosing a change; this average does not identify why a page ranks there.',
     );
   }
 
@@ -466,7 +466,7 @@ export function renderReportHtml(data: ReportData): string {
   ).length;
   if (droppedKeywords > 0) {
     recommendations.push(
-      `${droppedKeywords} keyword${droppedKeywords > 1 ? 's' : ''} of the displayed observations declined versus the prior month. Review the matching area and search engine before deciding what to change.`,
+      `${droppedKeywords} displayed observation${droppedKeywords > 1 ? 's' : ''} declined versus the prior month. Review the matching area and search engine before deciding what to change.`,
     );
   }
 
@@ -483,7 +483,7 @@ export function renderReportHtml(data: ReportData): string {
       );
     } else if (silent.length > 0) {
       recommendations.push(
-        `${silent.map((e) => e.label).join(' and ')} did not name your business in this report’s verified sample${rate != null ? `, holding you at ${rate}%` : ''} — each assistant draws on a different mix of sources, so being recommended by one does not carry to the others.`,
+        `${silent.map((e) => e.label).join(' and ')} did not name your business in this report’s verified sample. Compare the sampled questions and cited sources across assistants; these results do not establish why the business was omitted.`,
       );
     }
 
@@ -500,7 +500,7 @@ export function renderReportHtml(data: ReportData): string {
   if (citations && (citations.missing ?? ((citations.checked ?? citations.total) - citations.listed)) > 0) {
     const missing = citations.missing ?? ((citations.checked ?? citations.total) - citations.listed);
     recommendations.push(
-      `${missing} director${missing === 1 ? 'y' : 'ies'} returned no matching listing. Check the evidence and search the directory before creating a new listing.`,
+      `${missing} location-directory check${missing === 1 ? '' : 's'} returned no matching listing. Check the evidence and search the directory before creating a new listing.`,
     );
   }
 
@@ -543,7 +543,7 @@ export function renderReportHtml(data: ReportData): string {
 
   if (auditScore != null && auditScore < 60) {
     recommendations.push(
-      `Latest available location audit score is ${auditScore.toFixed(0)}/100 — review your Google Business Profile completeness, local citations, and on-page SEO signals.`,
+      `Latest available location audit score is ${auditScore.toFixed(0)}/100. Open that location’s audit and review its measured checks and collection date before choosing an action; the score is not a diagnosis of every SEO factor.`,
     );
   }
 
@@ -656,7 +656,7 @@ export function renderReportHtml(data: ReportData): string {
   const summaryBoxes: string[] = [statBox('Reviews dated this month', String(reviews.newThisMonth), brandColor)];
 
   if (citations) {
-    summaryBoxes.push(statBox('Citation Score', citations.score == null ? 'Not verified' : `${citations.score}%`, citationScoreColor(citations.score ?? 0)));
+    summaryBoxes.push(statBox('Verified Listing Coverage', citations.score == null ? 'Not verified' : `${citations.score}%`, citationScoreColor(citations.score ?? 0)));
   }
   if (visibility.current != null) {
     summaryBoxes.push(statBox(
@@ -828,7 +828,7 @@ export function renderReportHtml(data: ReportData): string {
     <h2 style="font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:700;color:${brandColor};margin-bottom:10px;letter-spacing:-0.01em">Citation Health</h2>
     <div style="border:1px solid #d8ded5;border-radius:8px;padding:12px 16px;background:#fffefa">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <span style="font-size:13px;font-weight:600;color:#111827">Citation Score</span>
+        <span style="font-size:13px;font-weight:600;color:#111827">Verified Listing Coverage</span>
         <span style="font-size:16px;font-weight:700;color:${citationBarColor}">${citations.score == null ? 'Not verified' : `${citations.score}%`}</span>
       </div>
       <div style="background:#d8ded5;border-radius:999px;height:8px;overflow:hidden;margin-bottom:10px">
@@ -841,6 +841,7 @@ export function renderReportHtml(data: ReportData): string {
         ${citationStatPill('Location-directory checks', citations.total, '#6b7280')}
         ${citationStatPill('Unverified', citations.unverified ?? 0, '#6b7280')}
       </div>
+      <p style="margin-top:8px;font-size:10px;color:#6b7280">Coverage is ${citations.listed} listed out of ${citations.checked ?? citations.total} verified location-directory checks. Unverified checks are excluded. Exact NAP matches: ${citations.napAccurate} of ${citations.napChecked} readable listing checks. Latest saved observations before month end may have been collected in an earlier month.</p>
     </div>
   </div>`}
 
