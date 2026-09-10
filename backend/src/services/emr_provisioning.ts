@@ -1,3 +1,4 @@
+import { resolveProviderRoute } from './provider_routing';
 import type { Knex } from 'knex';
 import { db } from '../db/connection';
 import { encrypt, decrypt } from '../utils/crypto';
@@ -54,7 +55,17 @@ async function provisionTenancyLocked(clientId: string, force: boolean, query: (
   const orgId = client.emr_organization_id as number | null;
   const locationId = client.emr_location_id as number | null;
   const needsCheck = () => Object.assign(new Error('Review setup needs an account mapping check. Contact support before retrying.'), { status: 409, code: 'CONNECTION_MAPPING_REQUIRED' });
+  const registered = await query('provider_location_mappings').where({ client_id: clientId }).first();
+  if (registered) {
+    if (force) throw needsCheck();
+    const route = await resolveProviderRoute(clientId);
+    if (!route) throw needsCheck();
+    return Number(route.providerLocationId);
+  }
+  const locationCount = Number((await query('locations').where({ client_id: clientId }).count('* as n').first())?.n ?? 0);
+  if (locationCount > 1) throw needsCheck();
   if (!force && orgId && locationId) {
+    await resolveProviderRoute(clientId);
     const shared = await query('clients').whereNot({ id: clientId }).where(q => q
       .where({ emr_organization_id: orgId }).orWhere({ emr_location_id: locationId })).first();
     if (shared) throw needsCheck();
@@ -135,7 +146,7 @@ export async function provisionClient(clientId: string): Promise<void> {
   const now = new Date();
 
   try {
-    await ensureEmrTenancy(clientId);
+    if (!await db('provider_location_mappings').where({ client_id: clientId }).first()) await ensureEmrTenancy(clientId);
     await db('clients').where({ id: clientId }).update({
       emr_provisioning_status: 'provisioned',
       updated_at: now,

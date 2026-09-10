@@ -19,6 +19,13 @@ test('operator inspection form sends explicit evidence and shows membership fail
     await route.fulfill({ status: accept ? 200 : 409, json: accept ? { success: true, data: { revision: 1 } } : { success: false, error: { message: 'The provider location does not belong to the selected organization.' } } });
   });
   await page.goto('/admin?tab=provider-mappings');
+  await page.getByRole('button', { name: 'How to map a location', exact: true }).click();
+  const guide = page.getByRole('dialog', { name: 'Provider mapping guide' });
+  await expect(guide).toBeVisible();
+  await expect(guide).toContainText('The three IDs are different');
+  await expect(guide).toContainText('Stop and ask an administrator');
+  await page.keyboard.press('Escape');
+  await expect(guide).not.toBeVisible();
   await page.getByText('Record a provider mapping', { exact: true }).click();
   await page.getByLabel('EMR organization ID', { exact: true }).fill('880001');
   await page.getByLabel('EMR location ID', { exact: true }).fill('880002');

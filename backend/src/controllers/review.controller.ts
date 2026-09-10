@@ -6,6 +6,7 @@ import { config } from '../config';
 import { logger } from '../utils/logger';
 
 export const listQuerySchema = z.object({
+  locationId: z.string().uuid().optional(),
   platform: z.string().optional(),
   rating: z.coerce.number().int().min(1).max(5).optional(),
   status: z.string().optional(),
@@ -49,6 +50,11 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
 
     let baseQuery = db('reviews').where({ client_id: req.clientId });
 
+    if (query.locationId) {
+      const owned = await db('locations').where({ id: query.locationId, client_id: req.clientId }).first();
+      if (!owned) { err(res, 'Location not found', 404); return; }
+      baseQuery = baseQuery.where({ location_id: query.locationId });
+    }
     if (platform) baseQuery = baseQuery.where({ platform });
     if (rating !== undefined) baseQuery = baseQuery.where({ rating });
     if (status) baseQuery = baseQuery.where({ status });
@@ -85,6 +91,11 @@ export async function listFeedback(req: Request, res: Response, next: NextFuncti
     const campaignId = req.query.campaignId as string | undefined;
 
     let query = db('private_feedback').where({ client_id: req.clientId });
+    if (req.query.locationId) {
+      const locationId = z.string().uuid().parse(req.query.locationId);
+      if (!await db('locations').where({ id: locationId, client_id: req.clientId }).first()) { err(res, 'Location not found', 404); return; }
+      query = query.where({ location_id: locationId });
+    }
     if (campaignId) query = query.where({ campaign_id: campaignId });
 
     const countResult = await query.clone().count('id as cnt').first();

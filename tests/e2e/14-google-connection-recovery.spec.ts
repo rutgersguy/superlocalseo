@@ -7,7 +7,7 @@ test.describe('Google connection recovery UI', () => {
   test('shows failures, popup fallback, business selection and a healthy zero count', async ({ page }) => {
     let phase = 'not_started'; let fail = true; let imports = 0;
     await page.addInitScript(() => { window.open = () => null; });
-    await page.route('**/api/integrations/emr/google/connect-link', async route => {
+    await page.route('**/api/integrations/emr/google/connect-link*', async route => {
       if (route.request().method() === 'POST') {
         if (fail) { fail = false; await route.fulfill({ status: 503, json: { success: false, error: { message: 'Connection is temporarily unavailable. Please retry.' } } }); return; }
         phase = 'awaiting_authorization';
@@ -42,10 +42,33 @@ test.describe('Google connection recovery UI', () => {
       const response = await route.fetch(); const body = await response.json(); body.data.onboardingStep = 4;
       await route.fulfill({ response, json: body });
     });
-    await page.route('**/api/integrations/emr/google/connect-link', route => route.fulfill({ json: { success: true, data: { phase: 'expired', profileSelected: false, reviewCount: null, lastSyncAt: null, connectUrl: null } } }));
+    await page.route('**/api/integrations/emr/google/connect-link*', route => route.fulfill({ json: { success: true, data: { phase: 'expired', profileSelected: false, reviewCount: null, lastSyncAt: null, connectUrl: null } } }));
     await page.goto('/onboarding');
     const card = page.getByRole('region', { name: 'Google review connection' });
     await expect(card.getByText('Connection link expired', { exact: true })).toBeVisible();
     await expect(card.getByRole('button', { name: 'Connect Google' })).toBeEnabled();
   });
+  test('requires an explicit branch and sends its local ID when connecting', async ({ page }) => {
+    const first = '00000000-0000-4000-8000-000000000111';
+    const second = '00000000-0000-4000-8000-000000000222';
+    await page.addInitScript(() => { window.open = () => null; });
+    await page.route('**/api/locations', route => route.fulfill({ json: { success: true, data: [{ id: first, name: 'First branch' }, { id: second, name: 'Second branch' }] } }));
+    let selected: string | undefined;
+    await page.route('**/api/integrations/emr/google/connect-link*', async route => {
+      if (route.request().method() === 'POST') {
+        selected = route.request().postDataJSON().locationId;
+        await route.fulfill({ json: { success: true, data: { connectUrl: 'https://app.superlocalseo.com/connect/branch-test' } } });
+      } else await route.fulfill({ json: { success: true, data: { phase: 'not_started', profileSelected: false, reviewCount: null, lastSyncAt: null, connectUrl: null } } });
+    });
+    await loginViaUI(page, 'pro@fixture.test', 'TestPass123!');
+    await page.goto('/dashboard/settings?tab=integrations');
+    const card = page.getByRole('region', { name: 'Google review connection' });
+    await expect(card.getByLabel('Business location')).toBeVisible();
+    await expect(card.getByRole('button', { name: 'Connect Google', exact: true })).toBeDisabled();
+    await card.getByLabel('Business location').selectOption(second);
+    await card.getByRole('button', { name: 'Connect Google', exact: true }).click();
+    await expect(card.getByRole('link', { name: 'Continue Google connection' })).toBeVisible();
+    expect(selected).toBe(second);
+  });
+
 });
