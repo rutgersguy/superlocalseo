@@ -11,7 +11,7 @@ import { fetchAllReviews, fetchCampaigns, listConnectLinks, sendInvite, replyToR
 jest.mock('../config', () => { const { config } = jest.requireActual('../config'); return { config: { ...config, embedmyreviews: { ...config.embedmyreviews, apiKey: 'test-only' } } }; });
 jest.mock('../services/embedmyreviews.service', () => ({ ...jest.requireActual('../services/embedmyreviews.service'),
   createOrganization: jest.fn().mockResolvedValue({ id: 899990, defaultLocationId: 899991 }), renameLocation: jest.fn().mockResolvedValue(undefined),
-  fetchAllReviews: jest.fn(), fetchCampaigns: jest.fn().mockResolvedValue([]), listConnectLinks: jest.fn().mockResolvedValue([]), sendInvite: jest.fn(), replyToReview: jest.fn() }));
+  fetchAllReviews: jest.fn(), fetchCampaigns: jest.fn().mockResolvedValue([]), listConnectLinks: jest.fn().mockResolvedValue([]), sendInvite: jest.fn().mockResolvedValue({ providerReference: null, httpStatus: 202 }), replyToReview: jest.fn() }));
 
 describe('Explicit provider routing', () => {
   const emails: string[] = [];

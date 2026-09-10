@@ -25,12 +25,12 @@ export interface EMRReview {
 export interface EMRCampaign {
   id: string;
   name: string;
-  invited: number;
-  opened: number;
-  clicked: number;
-  reviewed: number;
-  privateFeedback: number;
-  unsubscribed: number;
+  invited: number | null;
+  opened: number | null;
+  clicked: number | null;
+  reviewed: number | null;
+  privateFeedback: number | null;
+  unsubscribed: number | null;
 }
 
 async function emrFetch(path: string, apiKey: string, options: RequestInit = {}, base?: string): Promise<Response> {
@@ -430,45 +430,31 @@ export async function createLocation(
  * organization per client — see the org-per-client migration.
  */
 export async function fetchCampaigns(apiKey: string, organizationId: number): Promise<EMRCampaign[]> {
-  const res = await emrFetch(`/request-reviews/campaigns?organization_id=${encodeURIComponent(String(organizationId))}`, apiKey);
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`EmbedMyReviews fetchCampaigns failed: ${res.status} ${body}`);
+  const campaigns: EMRCampaign[] = [];
+  const ids = new Set<string>();
+  const metric = (v: unknown): number | null => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 ? v : null;
+  for (let page = 1; page <= 100; page++) {
+    const res = await emrFetch(`/request-reviews/campaigns?organization_id=${encodeURIComponent(String(organizationId))}&page=${page}`, apiKey);
+    if (!res.ok) throw new Error(`Unable to read provider campaigns (${res.status}).`);
+    const payload = await res.json() as { data?: Array<Record<string, any>>; meta?: { current_page: number; last_page: number } };
+    if (!Array.isArray(payload.data)) throw new Error('Provider campaign response is incomplete.');
+    for (const c of payload.data) {
+      if (typeof c.id !== 'string' || !c.id || typeof c.name !== 'string' || ids.has(c.id)) throw new Error('Provider campaign identity or pagination is inconsistent.');
+      ids.add(c.id);
+      campaigns.push({ id:c.id,name:c.name,invited:metric(c.statistics?.invited),opened:metric(c.statistics?.opened),clicked:metric(c.statistics?.clicked),reviewed:metric(c.statistics?.reviewed),privateFeedback:metric(c.statistics?.private_feedback),unsubscribed:metric(c.statistics?.unsubscribed) });
+    }
+    if (!payload.meta) return campaigns;
+    if (payload.meta.current_page !== page || !Number.isInteger(payload.meta.last_page) || payload.meta.last_page < page) throw new Error('Provider campaign pagination is incomplete.');
+    if (page === payload.meta.last_page) return campaigns;
   }
-
-  const data = await res.json() as {
-    data?: Array<{
-      id: string;
-      name: string;
-      statistics?: {
-        invited?: number;
-        opened?: number;
-        clicked?: number;
-        reviewed?: number;
-        private_feedback?: number;
-        unsubscribed?: number;
-      };
-    }>;
-  };
-
-  return (data?.data ?? []).map((c) => ({
-    id: c.id,
-    name: c.name,
-    invited: c.statistics?.invited ?? 0,
-    opened: c.statistics?.opened ?? 0,
-    clicked: c.statistics?.clicked ?? 0,
-    reviewed: c.statistics?.reviewed ?? 0,
-    privateFeedback: c.statistics?.private_feedback ?? 0,
-    unsubscribed: c.statistics?.unsubscribed ?? 0,
-  }));
+  throw new Error('Provider campaign pagination exceeded its safety limit.');
 }
 
 export async function sendInvite(
   apiKey: string,
   campaignId: string,
   contact: { firstName: string; lastName?: string; email?: string; phone?: string },
-): Promise<void> {
+): Promise<{ providerReference: string | null; httpStatus: number }> {
   if (!contact.email && !contact.phone) {
     throw new Error('Invite requires at least email or phone');
   }
@@ -483,10 +469,14 @@ export async function sendInvite(
     }),
   });
 
-  if (!res.ok && res.status !== 202) {
-    const body = await res.text();
-    throw new Error(`EmbedMyReviews sendInvite failed: ${res.status} ${body}`);
-  }
+  if (res.status !== 202) throw new EMRInviteError(res.status);
+  let payload: { id?: unknown } = {};
+  try { payload = await res.json() as { id?: unknown }; } catch { /* Acceptance still observed; reference unavailable. */ }
+  return { providerReference: typeof payload?.id === 'string' && payload.id.length <= 255 ? payload.id : null, httpStatus: res.status };
+}
+export class EMRInviteError extends Error {
+  definite: boolean;
+  constructor(public httpStatus: number) { super(`Provider invitation request returned HTTP ${httpStatus}.`); this.definite=[400,401,402,403,404,422,429].includes(httpStatus); }
 }
 
 export async function validateApiKey(apiKey: string): Promise<boolean> {

@@ -127,6 +127,7 @@ export async function processReviews(_job: Job): Promise<void> {
               client_id: integration.client_id,
               emr_campaign_id: c.id, emr_organization_id: route.organizationId,
               name: c.name,
+              statistics_checked: true,
               invited: c.invited,
               opened: c.opened,
               clicked: c.clicked,
@@ -138,6 +139,7 @@ export async function processReviews(_job: Job): Promise<void> {
             .onConflict(['client_id', 'emr_campaign_id'])
             .merge({
               emr_organization_id: route.organizationId, name: c.name,
+              statistics_checked: true,
               invited: c.invited,
               opened: c.opened,
               clicked: c.clicked,
