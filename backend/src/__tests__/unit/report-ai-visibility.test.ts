@@ -153,3 +153,17 @@ describe('report — AI visibility recommendations', () => {
     expect(html).not.toMatch(/AI assistant recommended you/);
   });
 });
+
+
+describe('report claims stay within measured evidence', () => {
+  it('does not diagnose link building or general SEO factors from a rank or score', () => {
+    const data = baseData();
+    data.rankings.avgRank = 30;
+    data.auditScore = 40;
+    const html = renderReportHtml(data);
+    expect(html).toContain('average among ranked observations');
+    expect(html).toContain('score is not a diagnosis');
+    expect(html).not.toContain('link building to push rankings higher');
+    expect(html).not.toContain('holding you at');
+  });
+});

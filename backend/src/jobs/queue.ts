@@ -82,8 +82,8 @@ export async function startWorkers(): Promise<void> {
 
         const now = new Date();
         // Report is for the previous month
-        const month = now.getMonth() === 0 ? 12 : now.getMonth();
-        const year = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+        const month = now.getUTCMonth() === 0 ? 12 : now.getUTCMonth();
+        const year = now.getUTCMonth() === 0 ? now.getUTCFullYear() - 1 : now.getUTCFullYear();
 
         for (const client of clients) {
           await reportsQueue.add('generate-report', {

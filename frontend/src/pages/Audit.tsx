@@ -270,7 +270,7 @@ export default function Audit() {
 
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 text-center">
               <h3 className="text-sm font-semibold text-gray-900 mb-1">Start fixing these issues today</h3>
-              <p className="text-xs text-gray-500 mb-4">SuperLocalSEO tracks rankings, reviews, and citations daily — and sends you a monthly report showing exactly what moved and why.</p>
+              <p className="text-xs text-gray-500 mb-4">SuperLocalSEO schedules daily ranking checks, periodic review imports and weekly citation checks. Monthly reports summarize collected observations and suggested checks; they do not establish why rankings changed.</p>
               <Link
                 to={`/register?email=${encodeURIComponent(email)}&business=${encodeURIComponent(businessName || audit.businessName || '')}`}
                 className="inline-block bg-brand-500 text-white px-6 py-2.5 rounded-lg font-semibold text-sm hover:bg-brand-600"

@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import places from '../data/us-places-2025.json';
 import { config } from '../config';
 import { db } from '../db/connection';
@@ -60,6 +61,9 @@ export async function scanProspect(placeId: string, areaId: string, keyword: str
   if (!area) throw new Error('Select a supported United States city');
   let progress = prior;
   if (!progress?.business) {
+    if (progress?.profileAttemptedAt) throw new Error('Profile observation needs manual verification; no repeat purchase');
+    progress = { profileAttemptedAt: new Date().toISOString(), points: [] };
+    await save(progress);
     const business = parseBusiness(await dfs('business_data/google/my_business_info/live', { keyword: `place_id:${placeId}`, location_code: 2840, language_code: 'en' }), placeId);
     progress = { business, profileCheckedAt: new Date().toISOString(), points: [] };
     await save(progress);
@@ -84,37 +88,61 @@ export async function scanProspect(placeId: string, areaId: string, keyword: str
     sources: { profile: 'Google business information via DataForSEO', rankings: 'Google Maps via DataForSEO', area: 'U.S. Census Bureau 2025 Places Gazetteer', language: 'English', device: 'Desktop', zoom: '14z', requestedDepth: 20, spacingKm: 2 } };
 }
 function escape(value: string): string { return value.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!)); }
+/** A stale claim can be replaced; every progress write is fenced before the next paid call. */
 export async function processProspectReport(id: string): Promise<void> {
-  const lead = await db('audit_leads').where({ id, source: PROSPECT_SOURCE }).first();
+  const token = randomUUID();
+  const lead = await db.transaction(async trx => {
+    const row = await trx('audit_leads').where({ id, source: PROSPECT_SOURCE }).forUpdate().first();
+    if (!row) return null;
+    const data = row.audit_data ?? {};
+    if (data.generationToken && Date.now() - new Date(row.updated_at).getTime() < 15 * 60000) return null;
+    await trx('audit_leads').where({ id }).update({ audit_data: JSON.stringify({ ...data, generationToken: token }), updated_at: new Date() });
+    return row;
+  });
   if (!lead) return;
-  let data = lead.audit_data;
-  if (!data.snapshot) {
-    await db('audit_leads').where({ id }).update({ audit_data: JSON.stringify({ ...data, status: 'processing' }), updated_at: new Date() });
-    try {
-      const snapshot = await scanProspect(lead.google_place_id, data.areaId, lead.keyword, data.progress, async progress => { data = { ...data, progress }; await db('audit_leads').where({ id }).update({ audit_data: JSON.stringify({ ...data, status: 'processing' }), updated_at: new Date() }); });
-      data = { ...data, progress: undefined, snapshot, status: 'completed', emailStatus: 'pending' };
-      await db('audit_leads').where({ id }).update({ business_name: snapshot.business.name });
-    } catch {
-      data = { ...data, status: 'failed', error: 'We could not complete this report. Check the selected listing and city, or contact hello@superlocalseo.com if the problem continues.' };
-      await db('audit_leads').where({ id }).update({ audit_data: JSON.stringify(data), updated_at: new Date() });
-      return;
-    }
-    await db('audit_leads').where({ id }).update({ audit_data: JSON.stringify(data), updated_at: new Date() });
-  }
-  if (data.emailStatus === 'accepted' || !lead.email) return;
-  const url = `${config.publicUrl}/free-report/${id}`;
+  let data = { ...lead.audit_data, generationToken: token };
+  const save = async (next: any) => {
+    const count = await db('audit_leads').where({ id }).whereRaw("audit_data->>'generationToken' = ?", [token])
+      .update({ audit_data: JSON.stringify(next), updated_at: new Date() });
+    if (!count) throw new Error('Report generation claim replaced');
+    data = next;
+  };
   try {
-    const response = await fetch('https://api.resend.com/emails', { method: 'POST', signal: AbortSignal.timeout(15000),
-      headers: { Authorization: `Bearer ${config.resend.apiKey}`, 'Content-Type': 'application/json', 'Idempotency-Key': `free-report-${id}` },
-      body: JSON.stringify({ from: `${config.resend.fromName} <${config.resend.fromEmail}>`, to: [lead.email],
-        subject: `Your SuperLocalSEO report: ${data.snapshot.business.name}`,
-        html: `<p>Your requested report for <strong>${escape(data.snapshot.business.name)}</strong> is ready.</p><p>It includes available review totals and a nine-point Google Maps search sample. Any unavailable observations are marked clearly.</p><p><a href="${escape(url)}">Open your report</a></p><p>This is a snapshot of the sources checked, not a prediction of traffic or revenue. You can print or save it as a PDF from the report.</p><p>SuperLocalSEO</p>` }) });
-    if (!response.ok) throw new Error('Report email delivery failed');
-    const receipt = await response.json() as { id?: string };
-    if (!receipt.id) throw new Error('Email acceptance could not be confirmed');
-    await db('audit_leads').where({ id }).update({ audit_data: JSON.stringify({ ...data, emailStatus: 'accepted', emailId: receipt.id }), updated_at: new Date() });
-  } catch {
-    await db('audit_leads').where({ id }).update({ audit_data: JSON.stringify({ ...data, emailStatus: 'failed' }), updated_at: new Date() });
-    throw new Error('Report email delivery failed');
+    if (!data.snapshot) {
+      await save({ ...data, status: 'processing', error: undefined });
+      try {
+        const snapshot = await scanProspect(lead.google_place_id, data.areaId, lead.keyword, data.progress,
+          async progress => { await save({ ...data, progress }); });
+        await save({ ...data, progress: undefined, snapshot, status: 'completed', emailStatus: data.emailStatus ?? 'not_started' });
+        await db('audit_leads').where({ id }).whereRaw("audit_data->>'generationToken' = ?", [token]).update({ business_name: snapshot.business.name });
+      } catch {
+        await save({ ...data, status: 'failed', error: 'We could not complete this report. An administrator can review saved progress and recovery options.' });
+        return;
+      }
+    }
+    // Historical failed/pending outcomes without the new durable protocol cannot safely be resent.
+    if (!lead.email || !['not_started', 'rejected'].includes(data.emailStatus)) return;
+    const url = `${config.publicUrl}/free-report/${id}`;
+    const payload = data.emailPayload ?? { from: `${config.resend.fromName} <${config.resend.fromEmail}>`, to: [lead.email],
+      subject: `Your SuperLocalSEO report: ${data.snapshot.business.name}`,
+      html: `<p>Your requested report for <strong>${escape(data.snapshot.business.name)}</strong> is ready.</p><p>It includes available review totals and a nine-point Google Maps search sample. Any unavailable observations are marked clearly.</p><p><a href="${escape(url)}">Open your report</a></p><p>This is a snapshot of the sources checked, not a prediction of traffic or revenue. You can print or save it as a PDF from the report.</p><p>SuperLocalSEO</p>` };
+    // Commit sending BEFORE contacting Resend. A crash leaves a permanently blocked outcome.
+    await save({ ...data, emailStatus: 'sending', emailPayload: payload, emailAttemptedAt: new Date().toISOString() });
+    let definite = false;
+    try {
+      const response = await fetch('https://api.resend.com/emails', { method: 'POST', signal: AbortSignal.timeout(15000),
+        headers: { Authorization: `Bearer ${config.resend.apiKey}`, 'Content-Type': 'application/json', 'Idempotency-Key': `free-report-${id}` },
+        body: JSON.stringify(payload) });
+      if (!response.ok) { definite = [400, 401, 403, 404, 405, 422, 429].includes(response.status); throw new Error('Email rejected'); }
+      const receipt = await response.json() as { id?: unknown };
+      if (typeof receipt.id !== 'string' || !receipt.id || receipt.id.length > 255) throw new Error('Unknown receipt');
+      await save({ ...data, emailStatus: 'accepted', emailId: receipt.id });
+    } catch {
+      await save({ ...data, emailStatus: definite ? 'rejected' : 'uncertain' });
+      throw new Error('Report email acceptance failed');
+    }
+  } finally {
+    await db('audit_leads').where({ id }).whereRaw("audit_data->>'generationToken' = ?", [token])
+      .update({ audit_data: db.raw("audit_data - 'generationToken'"), updated_at: new Date() });
   }
 }

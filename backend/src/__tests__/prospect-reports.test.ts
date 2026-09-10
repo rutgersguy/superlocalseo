@@ -21,7 +21,7 @@ it('queues an anonymous report, caps the recipient, and never exposes their emai
 it('persists an immutable snapshot before email and retries delivery without rescanning',async()=>{
   let scans=0;let mails=0;const payloads:any[]=[];
   const mock=jest.spyOn(global,'fetch').mockImplementation(async(url,init)=>{
-    if(String(url).includes('resend.com')){mails++;payloads.push(JSON.parse(String(init?.body)));return {ok:mails>1,json:async()=>({id:'mail'})} as Response;}
+    if(String(url).includes('resend.com')){mails++;payloads.push(JSON.parse(String(init?.body)));return {ok:mails>1,status:mails>1?200:422,json:async()=>({id:'mail'})} as Response;}
     scans++;return {ok:true,json:async()=>String(url).includes('my_business_info') ? provider([{type:'google_business_info',place_id:body.placeId,title:'Verified <Business>',address:null,rating:{value:5,votes_count:8}}]) : provider([{type:'maps_search',rank_group:1,place_id:body.placeId,title:'Verified Business'}])} as Response;
   });
   try{
@@ -51,7 +51,57 @@ it('enforces the global cap before enqueueing more provider spend',async()=>{
 it('returns a safe failed status when enqueueing is unavailable',async()=>{
   (prospectReportsQueue.add as jest.Mock).mockRejectedValueOnce(new Error('private-provider-detail'));
   const r=await request(app).post('/api/free-reports').set('X-Forwarded-For','198.51.100.3').send({...body,email:'queue-failure@example.test'});expect(r.status).toBe(202);ids.push(r.body.data.id);
-  const state=await request(app).get(`/api/free-reports/${r.body.data.id}`);expect(state.body.data.status).toBe('failed');expect(JSON.stringify(state.body)).not.toContain('private-provider-detail');
+  const state=await request(app).get(`/api/free-reports/${r.body.data.id}`);expect(state.body.data.status).toBe('failed');
+  const lead=await db('audit_leads').where({id:r.body.data.id}).first(); expect(lead.audit_data).toMatchObject({areaId:body.areaId,consentVersion:'report-delivery-only-v1',emailStatus:'not_started'});expect(JSON.stringify(state.body)).not.toContain('private-provider-detail');
+});
+
+it('blocks ambiguous delivery indefinitely and serializes competing workers',async()=>{
+  const [row]=await db('audit_leads').insert({business_name:'Recovery',city:'Atlanta',source:PROSPECT_SOURCE,email:'recovery@example.test',audit_data:JSON.stringify({status:'completed',emailStatus:'not_started',snapshot:{business:{name:'Recovery'}}})}).returning('id'); ids.push(row.id);
+  let release!:()=>void; const wait=new Promise<void>(r=>{release=r;}); let started!:()=>void; const ready=new Promise<void>(r=>{started=r;});
+  const mock=jest.spyOn(global,'fetch').mockImplementation(async()=>{started();await wait; throw new Error('response lost after acceptance');});
+  try {
+    const first=processProspectReport(row.id); await ready;
+    await processProspectReport(row.id); expect(mock).toHaveBeenCalledTimes(1);
+    expect((await db('audit_leads').where({id:row.id}).first()).audit_data.emailStatus).toBe('sending');
+    release(); await expect(first).rejects.toThrow('email');
+    await db('audit_leads').where({id:row.id}).update({updated_at:new Date(Date.now()-48*3600000)});
+    await processProspectReport(row.id); expect(mock).toHaveBeenCalledTimes(1);
+    expect((await db('audit_leads').where({id:row.id}).first()).audit_data.emailStatus).toBe('uncertain');
+  } finally {release();mock.mockRestore();}
+});
+it('does not repurchase an interrupted business profile request',async()=>{
+  const [row]=await db('audit_leads').insert({business_name:'Recovery',city:'Atlanta',source:PROSPECT_SOURCE,google_place_id:body.placeId,keyword:body.keyword,audit_data:JSON.stringify({status:'processing',areaId:body.areaId,generationToken:'dead-worker',progress:{profileAttemptedAt:new Date().toISOString(),points:[]}}),updated_at:new Date(Date.now()-20*60000)}).returning('id'); ids.push(row.id);
+  const mock=jest.spyOn(global,'fetch');
+  try {await processProspectReport(row.id);expect(mock).not.toHaveBeenCalled();expect((await db('audit_leads').where({id:row.id}).first()).audit_data.status).toBe('failed');}finally{mock.mockRestore();}
+});
+
+it('keeps sending blocked when provider accepts but the fenced receipt save fails',async()=>{
+  const [row]=await db('audit_leads').insert({business_name:'Recovery',city:'Atlanta',source:PROSPECT_SOURCE,email:'recovery@example.test',audit_data:JSON.stringify({status:'completed',emailStatus:'not_started',snapshot:{business:{name:'Recovery'}}})}).returning('id');ids.push(row.id);
+  const mock=jest.spyOn(global,'fetch').mockImplementation(async()=>{
+    await db('audit_leads').where({id:row.id}).update({audit_data:db.raw("audit_data || ?::jsonb",[JSON.stringify({generationToken:'replacement'})])});
+    return {ok:true,json:async()=>({id:'accepted-but-not-saved'})} as Response;
+  });
+  try {
+    await expect(processProspectReport(row.id)).rejects.toThrow('claim');
+    expect((await db('audit_leads').where({id:row.id}).first()).audit_data.emailStatus).toBe('sending');
+    await db('audit_leads').where({id:row.id}).update({updated_at:new Date(Date.now()-48*3600000)});
+    await processProspectReport(row.id);expect(mock).toHaveBeenCalledTimes(1);
+  }finally{mock.mockRestore();}
+});
+it('fences a replaced worker before another paid point and preserves the reserved point',async()=>{
+  const [row]=await db('audit_leads').insert({business_name:'Recovery',city:'Atlanta',source:PROSPECT_SOURCE,google_place_id:body.placeId,keyword:body.keyword,audit_data:JSON.stringify({status:'queued',areaId:body.areaId})}).returning('id');ids.push(row.id);
+  let calls=0;
+  const mock=jest.spyOn(global,'fetch').mockImplementation(async()=>{
+    calls++;
+    if(calls===1)return {ok:true,json:async()=>provider([{type:'google_business_info',place_id:body.placeId,title:'Recovery'}])} as Response;
+    await db('audit_leads').where({id:row.id}).update({audit_data:db.raw("audit_data || ?::jsonb",[JSON.stringify({generationToken:'replacement'})])});
+    return {ok:true,json:async()=>provider([])} as Response;
+  });
+  try{
+    await expect(processProspectReport(row.id)).rejects.toThrow('claim');expect(calls).toBe(2);
+    const data=(await db('audit_leads').where({id:row.id}).first()).audit_data;
+    expect(data.generationToken).toBe('replacement');expect(data.progress.points).toHaveLength(1);expect(data.progress.points[0].status).toBe('unavailable');
+  }finally{mock.mockRestore();}
 });
 
 });

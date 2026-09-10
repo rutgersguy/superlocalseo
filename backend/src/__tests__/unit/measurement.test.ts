@@ -60,6 +60,32 @@ describe('measurement accuracy', () => {
     expect(estimateTraffic([rank()], { conversionRate: 0, avgCustomerValue: 100 }).totals.estRevenue).toBe(0);
   });
 
+  it('excludes unsupported or malformed ranked observations without fabricating clicks', () => {
+    const result = estimateTraffic([
+      rank(), rank({ geoLocation: 'unknown', rankType: null }),
+      rank({ geoLocation: 'maps', rankType: 'local_finder' }),
+      rank({ geoLocation: 'outside-pack', rankType: 'local_pack', rank: 4 }),
+      rank({ geoLocation: 'invalid', rank: Number.NaN }),
+      rank({ geoLocation: 'fractional', rank: 1.5 }),
+    ], { avgCustomerValue: 100, conversionRate: 10 });
+    expect(result.totals).toEqual({ estClicks: 285, estLeads: 28.5, estRevenue: 2850 });
+    expect(estimateTraffic([rank({ rankType: null })], {}).totals.estClicks).toBeNull();
+    expect(estimateTraffic([rank({ rank: null, rankType: null })], {}).totals.estClicks).toBe(0);
+  });
+
+  it('keeps invalid source volumes and conversion assumptions unavailable', () => {
+    for (const volume of [-1, Number.NaN, Infinity]) {
+      expect(estimateTraffic([rank({ monthlySearchVolume: volume })], {}).totals.estClicks).toBeNull();
+    }
+    for (const conversionRate of [-1, 101, Number.NaN, Infinity]) {
+      expect(estimateTraffic([rank()], { conversionRate, avgCustomerValue: 100 }).totals)
+        .toEqual({ estClicks: 285, estLeads: null, estRevenue: null });
+    }
+    for (const avgCustomerValue of [-1, Number.NaN, Infinity]) {
+      expect(estimateTraffic([rank()], { avgCustomerValue }).totals.estRevenue).toBeNull();
+    }
+  });
+
   it('uses half-open UTC months including leap days and rejects invalid report periods', () => {
     expect(periodDates(2, 2024)).toEqual({ start: new Date('2024-02-01T00:00:00Z'), end: new Date('2024-03-01T00:00:00Z') });
     expect(periodDates(12, 2026).end).toEqual(new Date('2027-01-01T00:00:00Z'));

@@ -70,9 +70,9 @@ describe('monthly report — Lite gating', () => {
   }
 
   it('omits the Pro-only stat boxes from the Lite executive summary', () => {
-    expect(lite).not.toContain('Citation Score');
+    expect(lite).not.toContain('Verified Listing Coverage');
     expect(lite).not.toContain('SEO Audit Score');
-    expect(pro).toContain('Citation Score');
+    expect(pro).toContain('Verified Listing Coverage');
   });
 
   it('leaves no hole in the Lite summary grid', () => {
@@ -87,10 +87,10 @@ describe('monthly report — Lite gating', () => {
     // A citation recommendation under a report with no citation section is a
     // support ticket, not advice.
     expect(lite).not.toMatch(/Citation score is/);
-    expect(lite).not.toMatch(/incorrect NAP/);
-    expect(lite).not.toMatch(/Local SEO audit score is/);
+    expect(lite).not.toMatch(/name, address or phone differences/);
+    expect(lite).not.toMatch(/Latest available location audit score/);
     // ...and Pro still gets them.
-    expect(pro).toContain('6 directories returned no matching listing');
+    expect(pro).toContain('6 location-directory checks returned no matching listing');
   });
 
   it('keeps everything Lite pays for', () => {

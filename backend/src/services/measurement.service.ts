@@ -87,12 +87,16 @@ export function estimateTraffic(rows: RankObservation[], cfg: { avgCustomerValue
   for (const r of rows) {
     // The modeled CTR curves do not cover local-finder grids or other engines.
     if (r.searchEngine !== 'google') continue;
+    if (r.rank !== null && (!Number.isInteger(r.rank) || r.rank <= 0)) continue;
+    if (r.rankType !== 'organic' && r.rankType !== 'local_pack' && !(r.rank === null && r.rankType === null)) continue;
+    if (r.rankType === 'local_pack' && r.rank !== null && r.rank > 3) continue;
     const key = JSON.stringify([r.keywordId, r.locationId]);
     groups.set(key, [...(groups.get(key) ?? []), r]);
   }
   const keywords = [...groups.values()].map(group => {
     const r = group[0];
-    const volume = r.monthlySearchVolume == null ? null : Number(r.monthlySearchVolume);
+    const rawVolume = r.monthlySearchVolume;
+    const volume = rawVolume != null && Number.isFinite(rawVolume) && rawVolume >= 0 ? rawVolume : null;
     const ctr = group.reduce((sum, row) => {
       if (row.rank === null) return sum;
       const rank = Number(row.rank);
@@ -103,8 +107,12 @@ export function estimateTraffic(rows: RankObservation[], cfg: { avgCustomerValue
     }, 0) / group.length;
     const ranks = group.filter(x => x.rank !== null).map(x => Number(x.rank));
     const clicks = volume === null ? null : Math.round(volume * ctr);
-    const leads = clicks === null ? null : Math.round(clicks * (cfg.conversionRate ?? 2.5) / 100 * 10) / 10;
-    const revenue = leads === null || !cfg.avgCustomerValue ? null : Math.round(leads * cfg.avgCustomerValue);
+    const conversion = cfg.conversionRate ?? 2.5;
+    const validConversion = Number.isFinite(conversion) && conversion >= 0 && conversion <= 100;
+    const value = cfg.avgCustomerValue;
+    const validValue = value != null && Number.isFinite(value) && value > 0;
+    const leads = clicks === null || !validConversion ? null : Math.round(clicks * conversion / 100 * 10) / 10;
+    const revenue = leads === null || !validValue ? null : Math.round(leads * value);
     return { keywordId: r.keywordId, locationId: r.locationId, keyword: r.keyword, location: r.location,
       monthlySearchVolume: volume, rank: ranks.length ? Math.round(ranks.reduce((s, n) => s + n, 0) / ranks.length * 10) / 10 : null,
       ctr: Math.round(ctr * 1000) / 10, estClicks: clicks, estLeads: leads, estRevenue: revenue };
@@ -112,10 +120,10 @@ export function estimateTraffic(rows: RankObservation[], cfg: { avgCustomerValue
   const known = keywords.filter(k => k.estClicks !== null);
   return { keywords, totals: {
     estClicks: known.length ? known.reduce((s, k) => s + (k.estClicks ?? 0), 0) : null,
-    estLeads: known.length ? Math.round(known.reduce((s, k) => s + (k.estLeads ?? 0), 0) * 10) / 10 : null,
-    estRevenue: known.length && cfg.avgCustomerValue ? known.reduce((s, k) => s + (k.estRevenue ?? 0), 0) : null,
+    estLeads: known.length && known.every(k => k.estLeads !== null) ? Math.round(known.reduce((s, k) => s + (k.estLeads ?? 0), 0) * 10) / 10 : null,
+    estRevenue: known.length && known.every(k => k.estRevenue !== null) ? known.reduce((s, k) => s + (k.estRevenue ?? 0), 0) : null,
   }, measuredKeywords: known.length, totalKeywords: keywords.length,
-  methodology: 'Scenario using stored monthly search volumes, assumed CTR and your conversion settings. Latest Google observations per area; unranked observations contribute zero modeled clicks. Areas are equally weighted. Missing volumes are excluded. Overlapping keyword demand is not deduplicated. Not measured traffic, leads or revenue.' };
+  methodology: 'Scenario using stored monthly search volumes, assumed CTR and your conversion settings. Latest supported Google organic/local-pack observations per area; unsupported result types and invalid ranks are excluded. Unranked observations contribute zero modeled clicks. Areas are equally weighted. Missing or invalid volumes are excluded. Invalid conversion or customer-value settings leave the corresponding estimates unavailable. Overlapping keyword demand is not deduplicated. Not measured traffic, leads or revenue.' };
 }
 
 /** Latest collected check per directory/location per UTC day. No carry-forward imputation. */

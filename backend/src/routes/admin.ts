@@ -7,7 +7,7 @@ import { logger } from '../utils/logger';
 
 import { setupQueue, updateSetup } from '../controllers/campaign_setup.controller';
 
-import { listFreeReports } from '../controllers/admin_reports.controller';
+import { listFreeReports, recoverFreeReport } from '../controllers/admin_reports.controller';
 
 import { listProviderMappings, updateProviderMapping } from '../controllers/provider_mapping.controller';
 
@@ -17,6 +17,7 @@ router.get('/campaign-invitations', requireAdmin, adminHistory);
 router.get('/provider-mappings', requireAdmin, listProviderMappings);
 router.put('/provider-mappings/:locationId', requireAdmin, updateProviderMapping);
 router.get('/free-reports', requireAdmin, listFreeReports);
+router.post('/free-reports/:id/recover', requireAdmin, recoverFreeReport);
 router.get('/campaign-setup', requireAdmin, setupQueue);
 router.patch('/campaign-setup/:id', requireAdmin, updateSetup);
 

@@ -2,6 +2,8 @@ import request from 'supertest';
 import app from '../app';
 import { db } from '../db/connection';
 import { PROSPECT_SOURCE } from '../services/prospect_report.service';
+import { prospectReportsQueue } from '../jobs/queue';
+jest.mock('../jobs/queue', () => ({ prospectReportsQueue: { add: jest.fn().mockResolvedValue({id:'fixture'}), getJob: jest.fn().mockResolvedValue(null) } }));
 describe('Admin native reports', () => {
   const prefix = `admin-report-${Date.now()}`; const emails: string[] = []; const ids: string[] = [];
   let adminToken: string, customerToken: string;
@@ -48,4 +50,21 @@ describe('Admin native reports', () => {
   it('rejects malformed filters and page bounds', async () => {
     for (const query of [{ page: 0 }, { page: 1.5 }, { page: 'bad' }, { status: 'injected' }, { search: 'x'.repeat(101) }]) expect((await get(query)).status).toBe(422);
   });
+  it('authorizes recovery and blocks existing active jobs and ambiguous email', async () => {
+    const path=`/api/admin/free-reports/${ids[2]}/recover`;
+    expect((await request(app).post(path)).status).toBe(401);
+    expect((await request(app).post(path).set('Authorization',`Bearer ${customerToken}`)).status).toBe(403);
+    const recover=(id:string)=>request(app).post(`/api/admin/free-reports/${id}/recover`).set('Authorization',`Bearer ${adminToken}`);
+    expect((await recover(ids[3])).status).toBe(409);
+    (prospectReportsQueue.getJob as jest.Mock).mockResolvedValueOnce({getState:async()=>'active'});
+    expect((await recover(ids[2])).status).toBe(409);
+    expect((await recover(ids[2])).status).toBe(202);
+    expect(prospectReportsQueue.add).toHaveBeenCalledWith('generate',{id:ids[2]},expect.objectContaining({jobId:ids[2]}));
+    const before=(await db('audit_leads').where({id:ids[2]}).first()).audit_data;
+    (prospectReportsQueue.add as jest.Mock).mockRejectedValueOnce(new Error('queue unavailable'));
+    expect((await recover(ids[2])).status).toBe(500);
+    expect((await db('audit_leads').where({id:ids[2]}).first()).audit_data).toEqual(before);
+    expect((await recover(ids[27])).status).toBe(404);
+  });
+
 });
