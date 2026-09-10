@@ -32,7 +32,8 @@ interface ReviewResponse {
   reviewId: string;
   draftBody: string;
   finalBody: string | null;
-  status: 'draft' | 'approved' | 'posted';
+  status: 'draft' | 'approved' | 'publishing' | 'uncertain' | 'posted' | 'failed' | 'reply_conflict';
+  lastPublishError?: string | null;
   approvedAt: string | null;
 }
 
@@ -139,6 +140,13 @@ function ResponsePanel({ reviewId, reviewBody }: { reviewId: string; reviewBody:
     setTimeout(() => setCopied(false), 2000);
   };
 
+  if (response && ['publishing', 'uncertain', 'reply_conflict', 'posted'].includes(response.status)) return <div className="mt-3 space-y-2 text-sm">
+    <p className="font-medium">{response.status === 'posted' ? 'Published reply' : response.status === 'reply_conflict' ? 'A different reply exists at the provider' : 'Publication needs confirmation'}</p>
+    <p className="whitespace-pre-wrap">{response.finalBody ?? response.draftBody}</p>
+    {response.lastPublishError && <p className="text-amber-800">{response.lastPublishError}</p>}
+    {['publishing', 'uncertain'].includes(response.status) && <p>Open the reply dialog to check publication status. Do not submit the reply again.</p>}
+  </div>;
+
   if (isLoading) return <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-400">Loading response…</div>;
 
   if (!reviewBody) return (
@@ -165,7 +173,7 @@ function ResponsePanel({ reviewId, reviewBody }: { reviewId: string; reviewBody:
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${response.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-              {response.status === 'approved' ? 'Approved' : 'Draft'}
+              {response.status === 'approved' ? 'Approved' : response.status === 'failed' ? 'Publication failed' : 'Draft'}
             </span>
             <div className="flex gap-2">
               <button
@@ -217,7 +225,8 @@ function ResponsePanel({ reviewId, reviewBody }: { reviewId: string; reviewBody:
                 Edit
               </button>
             )}
-            {response.status === 'approved' && (
+            {response.status === 'failed' && response.lastPublishError && <p className="text-xs text-amber-800">{response.lastPublishError}</p>}
+          {response.status === 'approved' && (
               <button onClick={() => void copyText()} className="px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
                 {copied ? 'Copied!' : 'Copy to clipboard'}
               </button>
@@ -262,16 +271,21 @@ function SyncBLButton({ onSynced }: { onSynced: () => void }) {
 // ─── BL Reply Modal ───────────────────────────────────────────────────────────
 
 function PostReplyModal({ review, onClose, onPosted }: { review: Review; onClose: () => void; onPosted: () => void }) {
-  const { data: responseData } = useSWR<{ success: boolean; data: ReviewResponse | null }>(
+  const { data: responseData, mutate } = useSWR<{ success: boolean; data: ReviewResponse | null }>(
     `/reviews/${review.id}/response`, fetcher,
   );
   const aiDraft = responseData?.data?.finalBody ?? responseData?.data?.draftBody ?? '';
-  const [text, setText] = useState('');
+  const [text, setText] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Pre-fill with AI draft once loaded
-  const effectiveText = text || aiDraft;
+  const effectiveText = text ?? aiDraft;
+  const uncertain = ['publishing', 'uncertain', 'reply_conflict', 'posted'].includes(responseData?.data?.status ?? '');
+  const checkStatus = async () => {
+    setPosting(true); setError(null);
+    try { const r = await apiFetch<{ success: boolean; data?: { published: boolean }; error?: { message: string } }>(`/reviews/${review.id}/reconcile`, { method: 'POST' }); if (!r.success) throw new Error(r.error?.message || 'Unable to check publication.'); if (r.data?.published) onPosted(); else setError('No reply is visible at the provider yet. No resend was attempted.'); } catch(e) { setError((e as Error).message); } finally { await mutate(); setPosting(false); }
+  };
 
   const handlePost = async () => {
     setPosting(true);
@@ -287,6 +301,7 @@ function PostReplyModal({ review, onClose, onPosted }: { review: Review; onClose
     } catch (e) {
       setError((e as Error).message ?? 'Failed to post reply');
     } finally {
+      await mutate();
       setPosting(false);
     }
   };
@@ -295,7 +310,7 @@ function PostReplyModal({ review, onClose, onPosted }: { review: Review; onClose
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg flex flex-col">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">Post Reply to Google</h2>
+          <h2 className="text-base font-semibold text-slate-900">Approve and post reply</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 font-bold text-xl">×</button>
         </div>
         <div className="px-6 py-4 space-y-3">
@@ -303,7 +318,8 @@ function PostReplyModal({ review, onClose, onPosted }: { review: Review; onClose
             Replying to <span className="font-medium text-slate-700">{review.authorName}</span>
           </p>
           <textarea
-            value={text || aiDraft}
+            value={effectiveText}
+            disabled={posting || uncertain}
             onChange={(e) => setText(e.target.value)}
             rows={5}
             maxLength={4000}
@@ -311,13 +327,15 @@ function PostReplyModal({ review, onClose, onPosted }: { review: Review; onClose
             placeholder="Write your reply…"
           />
           <p className="text-xs text-slate-400 text-right">{effectiveText.length}/4000</p>
+          <p className="text-sm text-slate-600">Approving and posting publishes this text publicly on {review.platform}. An uncertain publication must be checked before another attempt.</p>
+          {responseData?.data?.lastPublishError && <p role="status" className="text-sm text-amber-800">{responseData.data.lastPublishError}</p>}
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
         <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
-          <button onClick={() => void handlePost()} disabled={posting || !effectiveText.trim()}
+          <button onClick={() => void (uncertain ? checkStatus() : handlePost())} disabled={posting || (!uncertain && !effectiveText.trim())}
             className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
-            {posting ? 'Posting…' : 'Post to Google'}
+            {posting ? 'Working…' : uncertain ? 'Check publication status' : 'Approve and post'}
           </button>
         </div>
       </div>
@@ -333,7 +351,7 @@ function ReviewCard({ review, onReplyPosted }: { review: Review; onReplyPosted: 
 
   // Replies publish through EMR, so only EMR-sourced reviews qualify. A GBP/Facebook-sourced
   // row carries that platform's own id, which EMR's reply endpoint would not recognise.
-  const canReply = review.source === 'emr' && !review.replied;
+  const canReply = review.source === 'emr' && ['google', 'facebook'].includes(review.platform.toLowerCase()) && !review.replied;
   const alreadyPosted = !!review.replied;
 
   return (
@@ -375,7 +393,7 @@ function ReviewCard({ review, onReplyPosted }: { review: Review; onReplyPosted: 
               onClick={() => setShowReplyModal(true)}
               className="px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50"
             >
-              Post to Google
+              Post to {review.platform}
             </button>
           )}
           {review.platformUrl ? (

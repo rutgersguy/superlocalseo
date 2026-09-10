@@ -180,7 +180,8 @@ export async function replyToReview(
     body: JSON.stringify({ message }),
   });
 
-  if (res.ok) return;
+  if (res.status === 200) return;
+  if (res.ok) throw new Error('Provider accepted the reply without confirming publication. Reconciliation is required.');
 
   const body = await res.text();
   logger.error('EMR replyToReview failed', { emrReviewId, status: res.status, body });
@@ -756,3 +757,15 @@ export interface EMRUnsubscribe {
 
 // Campaign templates, creation, credit balances and unsubscribe lists have no
 // supported REST endpoints. Assisted setup is tracked in campaign_setup_requests.
+
+/** Read authoritative reply state and tenant identity before publishing or reconciling. */
+export async function readReplyState(apiKey: string, emrReviewId: string): Promise<{ id: string; organizationId: string; locationId: string; source: string; reply: string | null; replyDate: Date | null }> {
+  const res = await emrFetch(`/reviews/${encodeURIComponent(emrReviewId)}`, apiKey);
+  if (!res.ok) throw new Error(`Unable to check provider reply state (${res.status}).`);
+  const payload = await res.json() as { data?: Record<string, unknown> };
+  const d = payload.data;
+  const id = (v: unknown) => (typeof v === 'number' && Number.isSafeInteger(v) && v > 0) || (typeof v === 'string' && v.length > 0);
+  if (!d || !id(d.id) || !id(d.organization_id) || !id(d.location_id) || typeof d.source !== 'string' || !Object.prototype.hasOwnProperty.call(d, 'reply') || (d.reply !== null && typeof d.reply !== 'string')) throw new Error('Provider reply state is incomplete. No reply was sent.');
+  const date = typeof d.reply_date === 'string' && Number.isFinite(Date.parse(d.reply_date)) ? new Date(d.reply_date) : null;
+  return { id: String(d.id), organizationId: String(d.organization_id), locationId: String(d.location_id), source: d.source, reply: d.reply as string | null, replyDate: date };
+}

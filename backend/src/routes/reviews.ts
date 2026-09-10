@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth';
-import { requireClient } from '../middleware/requireClient';
+import { requireClient, requireTeamAdmin } from '../middleware/requireClient';
 import { validateQuery } from '../middleware/validate';
 import { aiLimiter } from '../middleware/rateLimit';
 import { handleEmrWebhook } from '../controllers/emr_webhook.controller';
@@ -21,9 +21,11 @@ router.get('/feedback', requireAuth, requireClient, ctrl.listFeedback);
 
 // AI response drafting
 router.get('/:id/response', requireAuth, requireClient, responseCtrl.get);
-router.post('/:id/response/draft', aiLimiter, requireAuth, requireClient, responseCtrl.draft);
-router.patch('/:id/response', requireAuth, requireClient, responseCtrl.update);
+router.post('/:id/response/draft', aiLimiter, requireAuth, requireClient, requireTeamAdmin, responseCtrl.draft);
+router.patch('/:id/response', requireAuth, requireClient, requireTeamAdmin, responseCtrl.update);
 // Publishes the reply live on Google via EMR (the only API that can — BrightLocal cannot).
-router.post('/:id/publish', requireAuth, requireClient, responseCtrl.publish);
+router.post('/:id/publish', requireAuth, requireClient, requireTeamAdmin, responseCtrl.publish);
+
+router.post('/:id/reconcile', requireAuth, requireClient, requireTeamAdmin, responseCtrl.reconcile);
 
 export default router;

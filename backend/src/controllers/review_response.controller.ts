@@ -1,12 +1,10 @@
-import { resolveProviderRoute, withProviderRoute } from '../services/provider_routing';
+import { immutableReplyStates, publishReply, reconcileReply } from '../services/reply_publication';
+import { mappingError } from '../services/provider_mapping.service';
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, notFound, err } from '../utils/response';
 import { draftReviewResponse } from '../services/ai.service';
-import { replyToReview, EMRReplyError } from '../services/embedmyreviews.service';
-import { getClientEMRKey } from '../services/emr_provisioning';
-import { logger } from '../utils/logger';
 
 // POST /reviews/:id/response/draft — generate AI draft
 export async function draft(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -36,20 +34,15 @@ export async function draft(req: Request, res: Response, next: NextFunction): Pr
       platform: review.platform as string,
     });
 
-    // Upsert — replace any existing draft for this review
-    const existing = await db('review_responses').where({ review_id: reviewId }).first();
-    let response;
-
-    if (existing) {
-      [response] = await db('review_responses')
-        .where({ review_id: reviewId })
-        .update({ draft_body: draftText, final_body: null, status: 'draft', approved_at: null, updated_at: new Date() })
-        .returning('*');
-    } else {
-      [response] = await db('review_responses')
-        .insert({ review_id: reviewId, client_id: req.clientId, draft_body: draftText })
-        .returning('*');
-    }
+    const response = await db.transaction(async trx => {
+      await trx.raw('SELECT pg_advisory_xact_lock(hashtext(?))', [`reply:${reviewId}`]);
+      const currentReview = await trx('reviews').where({ id: reviewId, client_id: req.clientId }).first();
+      const existing = await trx('review_responses').where({ review_id: reviewId, client_id: req.clientId }).forUpdate().first();
+      if (currentReview?.replied || (existing && immutableReplyStates.includes(existing.status))) throw mappingError('An existing or unresolved publication cannot be replaced by a draft.');
+      const values = { draft_body: draftText, final_body: null, status: 'draft', approved_at: null, updated_at: new Date() };
+      const [saved] = existing ? await trx('review_responses').where({ id: existing.id }).update(values).returning('*') : await trx('review_responses').insert({ review_id: reviewId, client_id: req.clientId, ...values }).returning('*');
+      return saved;
+    });
 
     ok(res, formatResponse(response as Record<string, unknown>));
   } catch (e) {
@@ -62,33 +55,22 @@ export async function update(req: Request, res: Response, next: NextFunction): P
   try {
     const { id: reviewId } = req.params;
     const { body, approve } = z.object({
-      body: z.string().min(1).optional(),
+      body: z.string().trim().min(1).max(4096).optional(),
       approve: z.boolean().optional(),
     }).parse(req.body);
 
-    const existing = await db('review_responses')
-      .where({ review_id: reviewId, client_id: req.clientId })
-      .first();
-
-    if (!existing) {
-      notFound(res, 'No response draft found — generate one first');
-      return;
-    }
-
-    const updates: Record<string, unknown> = { updated_at: new Date() };
-    if (body !== undefined) updates.final_body = body;
-    if (approve) {
-      updates.status = 'approved';
-      updates.approved_at = new Date();
-      if (!updates.final_body && !existing.final_body) {
-        updates.final_body = existing.draft_body;
-      }
-    }
-
-    const [response] = await db('review_responses')
-      .where({ review_id: reviewId })
-      .update(updates)
-      .returning('*');
+    const response = await db.transaction(async trx => {
+      await trx.raw('SELECT pg_advisory_xact_lock(hashtext(?))', [`reply:${reviewId}`]);
+      const existing = await trx('review_responses').where({ review_id: reviewId, client_id: req.clientId }).forUpdate().first();
+      if (!existing) throw mappingError('No response draft found — generate one first', 404);
+      if (immutableReplyStates.includes(existing.status)) throw mappingError('An existing or unresolved publication cannot be edited.');
+      const updates: Record<string, unknown> = { updated_at: new Date() };
+      if (body !== undefined) { updates.final_body = body; updates.status = 'draft'; updates.approved_at = null; }
+      if (approve) { updates.status = 'approved'; updates.approved_at = new Date(); updates.final_body = body ?? existing.final_body ?? existing.draft_body; }
+      if (approve === false) { updates.status = 'draft'; updates.approved_at = null; }
+      const [saved] = await trx('review_responses').where({ id: existing.id }).update(updates).returning('*');
+      return saved;
+    });
 
     ok(res, formatResponse(response as Record<string, unknown>));
   } catch (e) {
@@ -114,93 +96,17 @@ export async function get(req: Request, res: Response, next: NextFunction): Prom
   }
 }
 
-/**
- * POST /reviews/:id/publish — post the reply publicly on Google, via EMR.
- *
- * EMR is the only path that can do this: BrightLocal told us in writing they don't support
- * review response via API (2026-07-14), and our own Google write scope is inert while the GBP
- * quota request is pending. EMR publishes immediately — no approval step — so this button
- * really does put text on the client's public Google listing.
- */
+// Explicit approval-and-publish action; text is required and never taken silently from an AI draft.
 export async function publish(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { id: reviewId } = req.params;
-    const { body } = z.object({ body: z.string().min(1).max(4096).optional() }).parse(req.body);
-
-    const review = await db('reviews').where({ id: reviewId, client_id: req.clientId }).first();
-    if (!review) {
-      notFound(res, 'Review not found');
-      return;
-    }
-
-    // Only EMR-sourced reviews carry an EMR review id in external_review_id; a GBP-sourced row
-    // holds Google's own reviewId, which EMR's reply endpoint would not recognise.
-    if (review.source !== 'emr') {
-      err(res, 'This review did not come from your connected Google profile, so it cannot be replied to here.', 400, 'REPLY_SOURCE_UNSUPPORTED');
-      return;
-    }
-
-    if (review.replied) {
-      err(res, 'This review already has a reply.', 409, 'ALREADY_REPLIED');
-      return;
-    }
-
-    const existing = await db('review_responses').where({ review_id: reviewId, client_id: req.clientId }).first();
-    const text = body ?? (existing?.final_body as string | undefined) ?? (existing?.draft_body as string | undefined);
-    if (!text) {
-      err(res, 'No reply text — generate or write one first.', 400, 'NO_REPLY_TEXT');
-      return;
-    }
-
-    const apiKey = await getClientEMRKey(req.clientId as string);
-    if (!apiKey) {
-      err(res, 'Review platform is not configured', 503, 'NOT_CONFIGURED');
-      return;
-    }
-
-    try {
-      const route = await resolveProviderRoute(req.clientId, review.location_id ?? undefined);
-      if (!route || (route.mode === 'explicit' && (!review.location_id || review.emr_provider_location_id !== route.providerLocationId))) { err(res, 'Refresh reviews for this mapped location before publishing a reply.', 409); return; }
-      await withProviderRoute(route, async () => { await replyToReview(apiKey, review.external_review_id as string, text); });
-    } catch (e) {
-      if (e instanceof EMRReplyError) {
-        err(res, e.message, e.httpStatus, e.code);
-        return;
-      }
-      throw e;
-    }
-
-    const now = new Date();
-    await db('reviews').where({ id: reviewId }).update({
-      replied: true,
-      reply_date: now,
-      emr_reply_text: text,
-      status: 'responded',
-    });
-
-    if (existing) {
-      await db('review_responses').where({ review_id: reviewId }).update({
-        final_body: text,
-        status: 'posted',
-        approved_at: existing.approved_at ?? now,
-        updated_at: now,
-      });
-    } else {
-      await db('review_responses').insert({
-        review_id: reviewId,
-        client_id: req.clientId,
-        draft_body: text,
-        final_body: text,
-        status: 'posted',
-        approved_at: now,
-      });
-    }
-
-    logger.info('Review reply published to Google via EMR', { clientId: req.clientId, reviewId });
-    ok(res, { published: true, repliedAt: now.toISOString() });
-  } catch (e) {
-    next(e);
-  }
+    const { body } = z.object({ body: z.string().trim().min(1).max(4096) }).strict().parse(req.body);
+    ok(res, await publishReply(req.clientId, req.params.id, body));
+  } catch (e) { next(e); }
+}
+// Read-only upstream reconciliation. It never resends a reply.
+export async function reconcile(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try { ok(res, await reconcileReply(req.clientId, req.params.id)); }
+  catch (e) { next(e); }
 }
 
 function formatResponse(r: Record<string, unknown>) {
@@ -211,6 +117,9 @@ function formatResponse(r: Record<string, unknown>) {
     finalBody: r.final_body ?? null,
     status: r.status,
     approvedAt: r.approved_at ?? null,
+    lastPublishError: r.last_publish_error ?? null,
+    publishingStartedAt: r.publishing_started_at ?? null,
+    reconcileCheckedAt: r.reconcile_checked_at ?? null,
     createdAt: r.created_at,
   };
 }
