@@ -5,13 +5,14 @@ import { registerWebhook } from '../services/embedmyreviews.service';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
-import { setupQueue } from '../controllers/campaign_setup.controller';
+import { setupQueue, updateSetup } from '../controllers/campaign_setup.controller';
 
 import { listFreeReports } from '../controllers/admin_reports.controller';
 
 const router = Router();
 router.get('/free-reports', requireAdmin, listFreeReports);
 router.get('/campaign-setup', requireAdmin, setupQueue);
+router.patch('/campaign-setup/:id', requireAdmin, updateSetup);
 
 router.get('/overview', requireAdmin, ctrl.overview);
 router.get('/clients', requireAdmin, ctrl.clients);

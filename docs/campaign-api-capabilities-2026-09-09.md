@@ -47,4 +47,4 @@ Legacy POST /campaigns remains an explicit 501 for old callers. The new customer
 
 ## Current completion boundary
 
-As of deployed #215, the campaign setup queue remains read-only: requests still show requested, and no completion attestation, verification audit history, blocked/reopen state, or customer-visible verified readiness has shipped. Those controls are the next planned #204/#207 slice, not an implemented feature. The newer Admin → Free reports screen is separate and does not close campaign readiness. See [release status](RELEASE_STATUS.md) and the revised [onboarding guide](CUSTOMER_ONBOARDING.md).
+The setup queue now includes operator status updates, versioned email-configuration attestation, a revisioned audit history and customer-visible configuration status. See [verification runbook](campaign-setup-verification.md). This does not supply a campaign create/edit API, automatic template application, live delivery verification or multi-location mapping. Earlier read-only descriptions above record the initial #209 slice. See [release status](RELEASE_STATUS.md) for remaining work.
