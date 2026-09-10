@@ -57,7 +57,9 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
     }
     if (platform) baseQuery = baseQuery.where({ platform });
     if (rating !== undefined) baseQuery = baseQuery.where({ rating });
-    if (status) baseQuery = baseQuery.where({ status });
+    if (status === 'responded') baseQuery = baseQuery.where({replied:true});
+    else if (status === 'new') baseQuery = baseQuery.where(q=>q.where({replied:false}).orWhereNull('replied'));
+    else if (status) baseQuery = baseQuery.where({ status });
     if (search) {
       baseQuery = baseQuery.where(function () {
         this.whereILike('author_name', `%${search}%`).orWhereILike('body', `%${search}%`);
@@ -69,7 +71,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
 
     const offset = (page - 1) * limit;
     const reviews = await baseQuery
-      .orderBy('review_date', 'desc')
+      .orderBy('review_date', 'desc').orderBy('id', 'desc')
       .limit(limit)
       .offset(offset);
 

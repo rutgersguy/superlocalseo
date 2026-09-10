@@ -1,3 +1,4 @@
+import { startReviewSync, currentReviewSync, completeReviewSync, failReviewSync } from '../services/review_sync_state';
 import { providerRoutes, withProviderRoute } from '../services/provider_routing';
 import { Job } from 'bullmq';
 import { db } from '../db/connection';
@@ -50,17 +51,22 @@ export async function processReviews(_job: Job): Promise<void> {
       const apiKey = decrypt(integration.api_key_encrypted as string);
 
       const routes = await providerRoutes(integration.client_id, _job.data?.locationId);
-      if (!routes.length) continue;
+      if (!routes.length) throw new Error('Provider mapping is required before importing reviews.');
+      let routeFailed = false;
+      let superseded = false;
       let reviewCount = 0;
       const syncedOrganizations = new Set<string>();
       for (const route of routes) {
+      let attempt: Awaited<ReturnType<typeof startReviewSync>> | undefined;
       try {
+      attempt = await startReviewSync(route);
       if (route.mode === 'explicit' && gbpConnectedClientIds.has(integration.client_id)) throw new Error('Choose one Google review source for this customer before importing mapped reviews. Contact support.');
-      const reviews = await fetchAllReviews(apiKey, route.providerLocationId);
+      const reviews = await fetchAllReviews(apiKey, route.providerLocationId, route.organizationId);
       reviewCount += reviews.length;
       const now = new Date();
 
-      await withProviderRoute(route, async trx => {
+      const committed = await withProviderRoute(route, async trx => {
+      if (!await currentReviewSync(trx, route, attempt!.generation)) return false;
       for (const review of reviews) {
         // See gbpConnectedClientIds: a client with a direct Google connection
         // takes Google reviews from there, or the same review lands twice under
@@ -74,6 +80,10 @@ export async function processReviews(_job: Job): Promise<void> {
 
         const previous = await trx('reviews').where({ client_id: integration.client_id, platform: review.platform, external_review_id: review.id }).first();
         if (previous?.emr_provider_location_id && previous.emr_provider_location_id !== route.providerLocationId) throw new Error('Review provider location conflict; import requires reconciliation.');
+        // A reply approved/reconciled while this fetch was in flight is newer than this snapshot.
+        const response = previous ? await trx('review_responses').where({review_id:previous.id}).first() : null;
+        const keepReply = response && new Date(response.updated_at) >= attempt!.startedAt;
+        const replyFields = keepReply ? {} : {replied:review.replied,reply_date:review.replyDate ? new Date(review.replyDate) : null,emr_reply_text:review.replyText};
         await trx('reviews')
           .insert({
             client_id: integration.client_id,
@@ -104,9 +114,8 @@ export async function processReviews(_job: Job): Promise<void> {
             rating: review.rating,
             body: review.body,
             platform_url: review.url,
-            replied: review.replied,
-            reply_date: review.replyDate ? new Date(review.replyDate) : null,
-            emr_reply_text: review.replyText,
+            review_date: new Date(review.date),
+            ...replyFields,
             hidden: review.hidden,
             avatar_url: review.avatarUrl,
             verified: review.verified,
@@ -115,7 +124,10 @@ export async function processReviews(_job: Job): Promise<void> {
       }
 
       if (route.mode === 'explicit') await trx('provider_location_mappings').where({ location_id: route.localLocationId, revision: route.revision }).update({ last_review_sync_at: now, review_sync_error: null });
+      await completeReviewSync(trx, route, attempt!.generation, reviews.length);
+      return true;
       });
+      if (!committed) { superseded = true; continue; }
       const emrOrgId = Number(route.organizationId);
       try {
         if (syncedOrganizations.has(route.organizationId)) throw new SkipCampaigns();
@@ -163,14 +175,17 @@ export async function processReviews(_job: Job): Promise<void> {
       }
 
       } catch (error) {
-        if (route.mode === 'explicit') await db('provider_location_mappings').where({ location_id: route.localLocationId, revision: route.revision }).update({ review_sync_error: 'This location import failed. Existing reviews are retained; contact support or retry.' }).catch(() => undefined);
-        throw error;
+        routeFailed = true;
+        const failedCurrent = attempt ? await failReviewSync(route, attempt.generation).catch(() => 0) : 0;
+        if (attempt && !failedCurrent) superseded = true;
+        if (failedCurrent && route.mode === 'explicit') await db('provider_location_mappings').where({ location_id: route.localLocationId, revision: route.revision }).update({ review_sync_error: 'This location import failed. Existing reviews are retained; contact support or retry.' }).catch(() => undefined);
+        logger.warn('Location review import failed; existing data retained', { clientId: integration.client_id, locationId: route.localLocationId });
       }
       }
       const now = new Date();
       // Private feedback is now received via EMR webhook (POST /webhooks/emr)
 
-      await db('integrations').where({ id: integration.id }).update({ last_pull_at: now, error_message: null });
+      if (!superseded) await db('integrations').where({ id: integration.id }).update(routeFailed ? {error_message:'One or more review locations could not be imported. Existing reviews are retained.'} : { last_pull_at: now, error_message: null });
 
       logger.info('Reviews pulled successfully', {
         clientId: integration.client_id,
@@ -184,7 +199,7 @@ export async function processReviews(_job: Job): Promise<void> {
 
       await db('integrations')
         .where({ id: integration.id })
-        .update({ error_message: (e as Error).message })
+        .update({ error_message: 'Review import failed. Existing reviews are retained; check the connection and location mapping.' })
         .catch(() => undefined);
     }
   }

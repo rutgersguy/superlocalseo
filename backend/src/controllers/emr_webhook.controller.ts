@@ -23,20 +23,26 @@ import { db } from '../db/connection';
  * (mounted under /api, which goes through express.json()).
  */
 export async function handleEmrWebhook(req: Request, res: Response): Promise<void> {
-  // Acknowledge immediately so EMR doesn't retry on slow processing
-  res.json({ received: true });
-
+  try {
+    await processWebhook(req);
+    res.json({received:true});
+  } catch {
+    logger.error('EMR webhook could not be durably processed');
+    res.status(503).json({received:false});
+  }
+}
+async function processWebhook(req: Request): Promise<void> {
   let body: Record<string, unknown>;
   try {
     body = req.body instanceof Buffer
       ? JSON.parse(req.body.toString())
       : req.body as Record<string, unknown>;
   } catch {
-    logger.warn('EMR webhook: failed to parse body');
-    return;
+    throw new Error('Invalid webhook body');
   }
 
-  const eventType = ((body.webhook_event ?? body.event ?? '') as string).toLowerCase();
+  if (!body || typeof body !== 'object') throw new Error('Invalid webhook body');
+  const eventType = String(body.webhook_event ?? body.event ?? '').toLowerCase();
   const data = (body.data ?? body) as Record<string, unknown>;
   const organizationId = (body.organization_id ?? data.organization_id ?? null) as string | null;
 
@@ -45,7 +51,6 @@ export async function handleEmrWebhook(req: Request, res: Response): Promise<voi
   let clientId: string | null = null;
   let localLocationId: string | null = null;
   let providerLocationId: string | null = null;
-  let explicit = false;
   let resolvedRoute: ProviderRoute | null = null;
   try {
     if (!/^[1-9][0-9]{0,14}$/.test(String(organizationId))) return;
@@ -65,7 +70,7 @@ export async function handleEmrWebhook(req: Request, res: Response): Promise<voi
     const route = await resolveProviderRoute(clientId, selected);
     if (!route || route.organizationId !== String(organizationId) || (providerId != null && route.providerLocationId !== String(providerId))) return;
     resolvedRoute = route;
-    localLocationId = route.localLocationId; providerLocationId = route.providerLocationId; explicit = route.mode === 'explicit';
+    localLocationId = route.localLocationId; providerLocationId = route.providerLocationId;
   } catch { logger.warn('EMR webhook routing needs reconciliation', { organizationId, eventType }); return; }
 
   const now = new Date();
@@ -73,52 +78,10 @@ export async function handleEmrWebhook(req: Request, res: Response): Promise<voi
   try {
     if (eventType === 'review-created' || eventType === 'review-updated') {
       if (!clientId) return;
-      if (explicit) {
-        const { reviewsQueue } = await import('../jobs/queue');
-        await reviewsQueue.add('mapped-webhook-import', { clientId, locationId: localLocationId, emrOnly: true }, { jobId: `mapped-webhook-${localLocationId}-${Math.floor(Date.now() / 60000)}`, removeOnComplete: 100, removeOnFail: 100 });
-        return;
-      }
-
-      await withProviderRoute(resolvedRoute!, async trx => {
-      await trx('reviews')
-        .insert({
-          client_id: clientId,
-          location_id: localLocationId, source: 'emr', emr_provider_location_id: providerLocationId,
-          platform: (data.source ?? 'embedmyreviews') as string,
-          external_review_id: data.id as string,
-          author_name: (data.author ?? null) as string | null,
-          rating: (data.rating ?? null) as number | null,
-          body: (data.message ?? null) as string | null,
-          sentiment: null,
-          status: 'new',
-          review_date: data.published_at ? new Date(data.published_at as string) : now,
-          ingested_at: now,
-          platform_url: (data.url ?? null) as string | null,
-          replied: !!(data.reply),
-          reply_date: (data as any).reply?.date ? new Date((data as any).reply.date) : null,
-          emr_reply_text: (data as any).reply?.text ?? null,
-          hidden: (data.hidden ?? false) as boolean,
-          avatar_url: (data.avatar ?? null) as string | null,
-          verified: (data.verified ?? null) as boolean | null,
-        })
-        .onConflict(['client_id', 'platform', 'external_review_id'])
-        .merge({
-          author_name: (data.author ?? null) as string | null,
-          rating: (data.rating ?? null) as number | null,
-          body: (data.message ?? null) as string | null,
-          platform_url: (data.url ?? null) as string | null,
-          replied: !!(data.reply),
-          reply_date: (data as any).reply?.date ? new Date((data as any).reply.date) : null,
-          emr_reply_text: (data as any).reply?.text ?? null,
-          hidden: (data.hidden ?? false) as boolean,
-          avatar_url: (data.avatar ?? null) as string | null,
-          verified: (data.verified ?? null) as boolean | null,
-          ingested_at: now,
-        });
-
-      });
-      logger.info('EMR review upserted via webhook', { clientId, reviewId: data.id, eventType });
-
+      // Notifications are hints, never authoritative snapshots. Re-read the scoped API
+      // for legacy and explicit routes so delayed events cannot restore stale content.
+      const { reviewsQueue } = await import('../jobs/queue');
+      await reviewsQueue.add('provider-webhook-import', {clientId,locationId:localLocationId,emrOnly:true}, {removeOnComplete:100,removeOnFail:100,attempts:3,backoff:{type:'exponential',delay:5000}});
     } else if (eventType === 'private-feedback-created' || eventType === 'private-feedback-updated') {
       if (!clientId) return;
 
@@ -148,6 +111,6 @@ export async function handleEmrWebhook(req: Request, res: Response): Promise<voi
       logger.info('EMR webhook: unhandled event type', { eventType });
     }
   } catch (e) {
-    logger.error('EMR webhook handler error', { eventType, error: (e as Error).message });
+    throw e;
   }
 }

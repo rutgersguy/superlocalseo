@@ -1,3 +1,4 @@
+import {status as syncStatus} from '../controllers/review_sync.controller';
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { requireClient, requireTeamAdmin } from '../middleware/requireClient';
@@ -17,6 +18,7 @@ const router = Router();
 router.post('/webhook', verifyEmrWebhook, handleEmrWebhook);
 
 router.get('/', requireAuth, requireClient, validateQuery(ctrl.listQuerySchema), ctrl.list);
+router.get('/sync-status', requireAuth, requireClient, syncStatus);
 router.get('/feedback', requireAuth, requireClient, ctrl.listFeedback);
 
 // AI response drafting

@@ -65,10 +65,11 @@ async function emrFetch(path: string, apiKey: string, options: RequestInit = {},
 
 export async function fetchReviews(
   apiKey: string,
-  opts: { locationId?: string; page?: number; rating?: number; sourceNames?: string[] } = {},
-): Promise<{ reviews: EMRReview[]; hasMore: boolean }> {
+  opts: { locationId?: string; organizationId?: string; page?: number; rating?: number; sourceNames?: string[] } = {},
+): Promise<{ reviews: EMRReview[]; hasMore: boolean; lastPage: number; total: number | null }> {
   const params = new URLSearchParams();
   if (opts.locationId) params.set('location_id', opts.locationId);
+  if (opts.organizationId) params.set('organization_id', opts.organizationId);
   if (opts.page && opts.page > 1) params.set('page', String(opts.page));
   if (opts.rating) params.set('rating', String(opts.rating));
   if (opts.sourceNames?.length) opts.sourceNames.forEach((s) => params.append('source_names[]', s));
@@ -76,72 +77,42 @@ export async function fetchReviews(
   const query = params.toString() ? `?${params.toString()}` : '';
   const res = await emrFetch(`/reviews${query}`, apiKey);
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`EmbedMyReviews fetchReviews failed: ${res.status} ${body}`);
+  if (!res.ok) throw new Error(`Provider review read failed (HTTP ${res.status}).`);
+  const payload = await res.json() as any;
+  const page = opts.page ?? 1;
+  if (!Array.isArray(payload?.data) || !payload.meta || payload.meta.current_page !== page || !Number.isSafeInteger(payload.meta.last_page) || payload.meta.last_page < page) {
+    throw new Error('Provider review response or pagination is incomplete.');
   }
-
-  const data = await res.json() as {
-    data?: Array<{
-      id: string;
-      source: string;
-      author: string;
-      rating: number;
-      message: string;
-      date: string;
-      source_url?: string;
-      reply?: string | null;
-      reply_date?: string | null;
-      replied?: boolean;
-      hidden?: boolean;
-      avatar?: string | null;
-      verified?: boolean;
-    }>;
-    meta?: { current_page: number; last_page: number };
-  };
-
-  const reviews = (data?.data ?? []).map((r) => ({
-    id: r.id,
-    platform: r.source,
-    author: r.author,
-    rating: r.rating,
-    body: r.message,
-    date: r.date,
-    url: r.source_url ?? null,
-    replied: r.replied ?? !!r.reply,
-    replyDate: r.reply_date ?? null,
-    replyText: r.reply ?? null,
-    hidden: r.hidden ?? false,
-    avatarUrl: r.avatar ?? null,
-    verified: r.verified ?? null,
-  }));
-
-  const meta = data?.meta;
-  const hasMore = meta ? meta.current_page < meta.last_page : false;
-
-  return { reviews, hasMore };
+  const id = (value: unknown) => (typeof value === 'string' && value.length > 0) || (typeof value === 'number' && Number.isSafeInteger(value) && value > 0);
+  const date = (value: unknown) => typeof value === 'string' && Number.isFinite(Date.parse(value));
+  const reviews: EMRReview[] = payload.data.map((r: any) => {
+    if (!r || !id(r.id) || typeof r.source !== 'string' || !r.source || !date(r.date) || !Number.isInteger(r.rating) || r.rating < 1 || r.rating > 5 || !Object.prototype.hasOwnProperty.call(r,'reply') || (r.reply !== null && typeof r.reply !== 'string') || (r.reply_date != null && !date(r.reply_date))) throw new Error('Provider review fields are incomplete.');
+    if (opts.locationId && String(r.location_id) !== opts.locationId) throw new Error('Provider review location does not match the requested business.');
+    if (opts.organizationId && String(r.organization_id) !== opts.organizationId) throw new Error('Provider review organization does not match the requested business.');
+    return {id:String(r.id),platform:r.source,author:r.author ?? '',rating:r.rating,body:r.message ?? '',date:r.date,url:r.source_url ?? null,replied:!!r.reply,replyDate:r.reply_date ?? null,replyText:r.reply,hidden:r.hidden ?? false,avatarUrl:r.avatar ?? null,verified:r.verified ?? null};
+  });
+  if(payload.meta.total != null && (!Number.isSafeInteger(payload.meta.total)||payload.meta.total<0))throw new Error('Provider review total is invalid.');
+  return {reviews,hasMore:page < payload.meta.last_page,lastPage:payload.meta.last_page,total:payload.meta.total??null};
 }
 
-/**
- * Fetches every review visible to `apiKey`, optionally scoped to a single EMR location.
- *
- * ALWAYS pass a locationId for per-client syncs. Without it the agency operator key returns
- * the whole organization's reviews, which is how every client ended up sharing one review
- * set (see migration 20260714000000).
- */
-export async function fetchAllReviews(apiKey: string, locationId?: string): Promise<EMRReview[]> {
-  const all: EMRReview[] = [];
-  let page = 1;
-  let hasMore = true;
-
-  while (hasMore) {
-    const result = await fetchReviews(apiKey, { page, locationId });
-    all.push(...result.reviews);
-    hasMore = result.hasMore;
-    page++;
+/** Complete, bounded snapshot. A failed or inconsistent page never becomes an empty success. */
+export async function fetchAllReviews(apiKey: string, locationId?: string, organizationId?: string): Promise<EMRReview[]> {
+  const all:EMRReview[]=[];
+  const identities=new Set<string>();
+  let lastPage:number|undefined, total:number|null|undefined;
+  for(let page=1;page<=100;page++) {
+    const result=await fetchReviews(apiKey,{page,locationId,organizationId});
+    if(page>1&&(lastPage!==result.lastPage||total!==result.total))throw new Error('Provider review pagination changed during the snapshot.');
+    lastPage=result.lastPage;total=result.total;
+    for(const review of result.reviews) {
+      const identity=JSON.stringify([review.platform,review.id]);
+      if(identities.has(identity)) throw new Error('Provider review pagination repeated a review. Retry the snapshot.');
+      identities.add(identity); all.push(review);
+    }
+    if(!result.hasMore){if(total!==null&&total!==all.length)throw new Error('Provider review total does not match the complete snapshot.');return all;}
+    if(result.reviews.length===0)throw new Error('Provider review pagination contains an incomplete page.');
   }
-
-  return all;
+  throw new Error('Provider review pagination exceeded the 100-page safety limit.');
 }
 
 /** Thrown when EMR refuses the reply for a reason the user needs to hear, not a 500. */
