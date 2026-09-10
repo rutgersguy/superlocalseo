@@ -1,6 +1,6 @@
 # Provider location mappings
 
-Status, September 10, 2026: mapping storage and inventory implemented in [PR #218](https://github.com/rutgersguy/superlocalseo/pull/218); binding remains disabled. Live inventory is complete. All 350 backend tests (37 suites), both builds and the isolated browser check passed. GitHub CI and post-deployment results are recorded on that PR. This work covers explicit mapping storage and the identity audit; downstream reviews/campaign routing is a separate change.
+Status, September 10, 2026: the registry now supports an explicit operator inspection paired with a live API membership check. This replaces PR #218's disabled placeholder. It does **not** provide automatic verification of the attached Google identity. Existing review/campaign routing remains unchanged. No production customer mappings have been recorded by this rollout.
 
 ## Live inventory — September 10, 2026
 
@@ -18,7 +18,16 @@ Five local customer records were also checked: one additional Brent Broadnax cus
 
 **Admin → Provider mappings** (`/admin?tab=provider-mappings`) lists local business locations, saved Google Place IDs, historical client-level provider IDs and explicit mappings with revision history. Historical IDs are references only. No automatic backfill or name-based matching is performed.
 
-Saving is currently disabled. The server also rejects writes with HTTP 409 until the provider evidence adapter is implemented and verified. The presence of a form or passing mocked storage tests does not mean live identity verification works.
+An admin opens the intended organization/location in EMR, inspects its attached Google source and records:
+
+- EMR organization and location IDs, exact Google Place ID, and Google business name shown in EMR.
+- The dashboard page URL, without query parameters/fragments or sign-in links.
+- Inspection time within the last 30 minutes, with explicit confirmations of the selected location, exact Place ID and customer ownership.
+- An internal note explaining the check.
+
+On save, the backend independently checks `GET /locations/{id}`. An inaccessible location, organization mismatch, upstream error or missing credentials blocks the save. The Google identity remains **operator-attested**, labelled separately from API-verified membership in the stored evidence. The admin must actually inspect the source: workspace names, review counts, OAuth completion and source catalogs are insufficient.
+
+For a location without a saved Place ID, a successful inspection atomically records its first ID alongside the mapping and audit event. An existing different ID cannot be overwritten through this form. The submitted previous ID and local identity snapshot prevent stale forms or concurrent edits from applying to changed records.
 
 ## Storage and protection
 
@@ -28,27 +37,22 @@ Saving is currently disabled. The server also rejects writes with HTTP 409 until
 - Existing provider IDs claimed by other customers block a mapping. Previous organization reservations remain after remapping and require deliberate reconciliation.
 - A revision check and transaction lock prevent conflicting saves; a second identity check rejects changes made during external verification.
 - Each successful save records the operator, time, note, revision and provider evidence. Historical events survive location/customer deletion; deleted operators become null.
-- The new registry does not change provider data, send messages, or change existing review/campaign routing. A saved Place ID change marks an existing mapping as needing reverification in the admin list.
+- The new registry does not change provider data, send messages, or change existing review/campaign routing. Changes to local name, address, city, state, ZIP, customer or Place ID invalidate the identity snapshot and require reverification. The record does not automatically detect later changes inside EMR.
 
-## Identity evidence still required
+## Provider capability findings
 
-The [official EMR API documentation](https://www.embedmyreviews.com/docs/api/) inspected September 10 documents `GET /locations/{id}` with `id` and `organization_id`, which can establish membership. Its `/reviews/sources` endpoint is documented as writable testimonial/custom sources; `/sources` is the global source catalog. Neither documented response establishes the attached Google business's Place ID. The repository's older `listReviewSources` comment describes broader historical behavior; that discrepancy needs a live probe before relying on it.
+The [official API documentation](https://www.embedmyreviews.com/docs/api/) and live responses inspected September 10 confirm that `GET /locations/{id}` supplies `id`, `organization_id` and the workspace location name. The writable `/reviews/sources` endpoint does not establish attached Google identity. Live MCP discovery succeeded with the existing token; `list_organizations` and `list_locations` returned membership and aggregate review statistics, without a Google Place ID. These findings do not establish that no other vendor capability exists, but no supported automatic identity source was verified during this work.
 
-`readProviderMappingEvidence` therefore fails closed. Do not replace it with a comparison of operator-supplied IDs, workspace names, global source names, arbitrary scans, or a completed-OAuth flag. None establishes which Google listing is attached to the requested provider location.
+The operator fallback is therefore an explicit design choice, not a claim that an entered Place ID has been validated by Google or EMR. Customer onboarding still requires a real owner-controlled rehearsal. Replacing manual inspection with automation requires a documented/live-verified attached-source identity response and new mismatch/error tests.
 
-To activate:
+## Acceptance and rollout
 
-1. Reconnect SSH and read the canonical server instructions; synchronize with current GitHub main.
-2. Inventory every local location and provider organization/location with complete bounded pagination. Record unresolved, duplicate and conflicting legacy assignments.
-3. Inspect supported authenticated provider responses without logging keys or review/customer content. Establish the exact attached Google Place ID and organization membership. If REST cannot provide that evidence, investigate supported MCP tools or document the remaining vendor-side verification requirement before changing the design.
-4. Implement the evidence adapter with bounded timeouts, response/schema validation, exact identity checks and safe errors; add realistic response tests for mismatches, missing identity, upstream errors and pagination.
-5. Enable the server capability and UI only after those checks pass. Save only confirmed matches through the normal admin API so the audit trail is preserved.
-6. Run database integration tests, browser checks and CI; merge through GitHub, deploy with `scripts/deploy.sh --migrate`, and verify production.
+Run backend tests, both builds and the isolated browser contract test before GitHub merge. Deploy through `scripts/deploy.sh` (no new migration). Verify the production admin page, capability flag and rejection of incomplete evidence; never invent an inspection for a production fixture to make the counter nonzero. GitHub release comments contain deployment evidence.
 
 Owner clarification September 10: NerdBox is an intentional test account used to evaluate reviews, not a true signup. Leave its linked reviews intact for testing; do not rename it, bind it to a real business, or treat its name discrepancy as an onboarding defect. The earlier vendor UI inspection showed Light Hawk Studios, Place ID `ChIJnUBk_1kP9YgRfyGuF-BkCFk`. See [the earlier account investigation](review-account-verification-2026-09-09.md). This does not establish a verified production customer mapping. A live scoped review read on September 10 returned all 8 reviews (HTTP 200, one page), while the writable-source endpoint remained empty.
 
 ## Tests and next phase
 
-Added database tests cover authorization, invalid requests, missing/mismatched evidence, legacy conflicts, revision races, duplicate/cross-customer constraints, same-customer branches, identity changes during verification and retained history. These tests mock the provider evidence adapter; the real-adapter unit test separately proves writes remain blocked without evidence. Local type checks, server builds and all 350 backend tests (37 suites) passed. The isolated Playwright check passed for the admin listing, disabled form and mobile overflow. No production customer data was changed by those tests.
+Database tests cover authorization, strict inspection fields, missing/mismatched evidence, legacy conflicts, revision races, duplicate/cross-customer constraints, first-identity persistence, local identity changes and retained history. Provider adapter unit tests cover membership responses, missing/stale/future inspections, URL safety, upstream failures and missing credentials. Browser coverage exercises the complete inspection form, safe error display, submitted evidence, success message and mobile layout with simulated save responses; it does not prove actual external business ownership.
 
 After the registry is verified and populated, migrate connection, review import, reply and campaign/setup consumers to resolve explicit per-location mappings. Reconcile provisioning and webhook behavior as part of that migration; existing legacy writers do not consult this registry. Then rehearse two distinct businesses and multiple branches before claiming multi-location readiness. Stripe remains last.

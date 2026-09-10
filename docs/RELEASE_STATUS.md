@@ -6,7 +6,7 @@ Updated September 10, 2026. Provider-mapping release: [PR #218](https://github.c
 
 ## Work in progress: provider mapping
 
-The location audit and explicit mapping implementation are underway in parallel. Storage, conflict protections, history and an admin screen are implemented. Saving mappings remains disabled pending a supported, live-verified Google identity source. Live inventory found three local locations with correct legacy EMR membership but no saved Google Place IDs. All 350 backend tests, both builds and the isolated browser check passed; deployment acceptance is tracked on PR #218. No customer mappings have been saved by this work. See the [implementation and activation checklist](provider-location-mappings.md).
+The location audit and explicit mapping implementation are underway in parallel. Storage, conflict protections, history and an admin screen are implemented. Mapping saves now use an explicit operator Google-source inspection plus API-verified organization membership; automatic Google identity verification remains unavailable. Live inventory found three local locations with correct legacy EMR membership but no saved Google Place IDs. The inspection follow-up is validated separately from the original registry release; deployment evidence is recorded in its GitHub release comments. No customer mappings have been saved by this work. See the [implementation and activation checklist](provider-location-mappings.md).
 
 ## What is live and verified
 
