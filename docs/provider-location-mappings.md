@@ -10,7 +10,7 @@ All three local locations were queried directly. EMR returned five organizations
 |---|---|---|---|---|
 | AirServe of Tulsa / Aire Serv of South Tulsa | 23 | 30 | Missing | Membership confirmed; business identity unresolved |
 | Latino Tire / Main office | 25 | 32 | Missing | Membership confirmed; business identity unresolved |
-| NerdBox / NerdBox | 26 | 33 | Missing | Membership confirmed; historical Light Hawk listing mismatch needs reconciliation |
+| NerdBox / NerdBox | 26 | 33 | Missing | Membership confirmed; Intentional review-testing fixture; not a real-customer onboarding failure |
 
 Five local customer records were also checked: one additional Brent Broadnax customer has legacy organization/location 24/31 but no local location; another has no provider IDs and no location. EMR organization 1 is the agency workspace. No duplicate provider IDs occur among the four provisioned customer records. Zero explicit mappings were saved. EMR location 33's writable-source endpoint returned HTTP 200 with `data=[]` and `total=0`; it cannot establish the attached Google identity. This result must not be interpreted as proof that this workspace has no Google reviews.
 
@@ -45,7 +45,7 @@ To activate:
 5. Enable the server capability and UI only after those checks pass. Save only confirmed matches through the normal admin API so the audit trail is preserved.
 6. Run database integration tests, browser checks and CI; merge through GitHub, deploy with `scripts/deploy.sh --migrate`, and verify production.
 
-Historical observation to recheck: the NerdBox workspace's EMR location 33 showed Light Hawk Studios, Place ID `ChIJnUBk_1kP9YgRfyGuF-BkCFk`. See [the earlier account investigation](review-account-verification-2026-09-09.md). This is not a current verified mapping and must not be silently renamed or linked based on its workspace name.
+Owner clarification September 10: NerdBox is an intentional test account used to evaluate reviews, not a true signup. Leave its linked reviews intact for testing; do not rename it, bind it to a real business, or treat its name discrepancy as an onboarding defect. The earlier vendor UI inspection showed Light Hawk Studios, Place ID `ChIJnUBk_1kP9YgRfyGuF-BkCFk`. See [the earlier account investigation](review-account-verification-2026-09-09.md). This does not establish a verified production customer mapping. A live scoped review read on September 10 returned all 8 reviews (HTTP 200, one page), while the writable-source endpoint remained empty.
 
 ## Tests and next phase
 
