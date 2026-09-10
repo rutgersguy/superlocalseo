@@ -117,7 +117,7 @@ describe('EMR onboarding isolation and recovery', () => {
     }
     await processReviews({ data: { clientId, emrOnly: true } } as any);
     expect(fetchAllReviews).toHaveBeenCalledTimes(1);
-    expect(fetchAllReviews).toHaveBeenCalledWith('test-only', '991');
+    expect(fetchAllReviews).toHaveBeenCalledWith('test-only', '991', '990');
     expect((await db('integrations').where({ client_id: clientId, provider: 'embedmyreviews' }).first()).error_message).toBeNull();
     expect((await db('integrations').where({ client_id: otherId, provider: 'embedmyreviews' }).first()).error_message).toBe('Previous failure');
   });

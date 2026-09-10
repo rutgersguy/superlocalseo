@@ -100,7 +100,7 @@ describe('Explicit provider routing', () => {
     await handleEmrWebhook({ body: { event: 'review-created', organization_id: 880100, data: { id: 99 } } } as any, response);
     expect(reviewsQueue.add).not.toHaveBeenCalled();
     await handleEmrWebhook({ body: { event: 'review-created', organization_id: 880100, location_id: 880102, data: { id: 99 } } } as any, response);
-    expect(reviewsQueue.add).toHaveBeenCalledWith('mapped-webhook-import', expect.objectContaining({ clientId: a, locationId: a2, emrOnly: true }), expect.anything());
+    expect(reviewsQueue.add).toHaveBeenCalledWith('provider-webhook-import', expect.objectContaining({ clientId: a, locationId: a2, emrOnly: true }), expect.anything());
   });
   it('invalidates routing after local business identity changes', async () => {
     await db('locations').where({ id: a2 }).update({ name: 'Changed identity' });

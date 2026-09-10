@@ -1,3 +1,4 @@
+import ReviewSyncStatus from '../components/ReviewSyncStatus';
 import { PageHeader, EmptyState } from '../components/ui/Workspace';
 import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
@@ -504,12 +505,16 @@ export default function Reviews() {
   const [search, setSearch] = useState('');
   const [trendRange, setTrendRange] = useState<TrendRange>(30);
 
+  const filterKey=JSON.stringify([locationId,platform,rating,status,search]);
+  const [pagination,setPagination]=useState({key:'',page:1});
+  const page=pagination.key===filterKey?pagination.page:1;
   const params = new URLSearchParams();
+  params.set('page',String(page));
   if (locationId) params.set('locationId', locationId);
   if (platform !== 'All') params.set('platform', platform);
   if (rating !== 'All') params.set('rating', rating);
   if (status !== 'All') params.set('status', status.toLowerCase());
-  if (search) params.set('q', search);
+  if (search) params.set('search', search);
   const queryString = params.toString();
 
   const { data, isLoading, error, mutate: mutateReviews } = useSWR<{ success: boolean; data: { reviews: Review[]; total: number; page: number; pages: number } }>(
@@ -539,6 +544,7 @@ export default function Reviews() {
   return (
     <div className="space-y-6">
       {showEMRBanner && <EMRSetupBanner context="reviews" />}
+      <ReviewSyncStatus locationId={locationId} />
       <div>
         <div className="flex items-center justify-between">
           <PageHeader title="Your review inbox" />
@@ -688,6 +694,7 @@ export default function Reviews() {
               {reviews.map((review) => <ReviewCard key={review.id} review={review} onReplyPosted={() => void mutateReviews()} />)}
             </div>
           )}
+          {(data?.data.pages??0)>1&&<nav aria-label="Review pages" className="flex gap-4 items-center text-sm"><button disabled={page===1} onClick={()=>setPagination({key:filterKey,page:page-1})}>Previous reviews</button><span>Page {page} of {data?.data.pages} · {totalReviews} matching reviews</span><button disabled={page>=(data?.data.pages??0)} onClick={()=>setPagination({key:filterKey,page:page+1})}>Next reviews</button></nav>}
         </>
       )}
     </div>
