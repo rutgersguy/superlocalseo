@@ -465,6 +465,8 @@ export default function Reviews() {
   // CSV export is Pro (#157). The button used to render for Lite and 403.
   const { productLine } = useClient();
   const [activeTab, setActiveTab] = useState<ActiveTab>('reviews');
+  const [locationId, setLocationId] = useState('');
+  const { data: locationData } = useSWR<{ data: Array<{ id: string; name: string }> }>('/locations', fetcher);
   const [platform, setPlatform] = useState('All');
   const [rating, setRating] = useState('All');
   const [status, setStatus] = useState('All');
@@ -472,6 +474,7 @@ export default function Reviews() {
   const [trendRange, setTrendRange] = useState<TrendRange>(30);
 
   const params = new URLSearchParams();
+  if (locationId) params.set('locationId', locationId);
   if (platform !== 'All') params.set('platform', platform);
   if (rating !== 'All') params.set('rating', rating);
   if (status !== 'All') params.set('status', status.toLowerCase());
@@ -499,7 +502,7 @@ export default function Reviews() {
   // into the review portal and link their profiles. This banner is that handoff — it used to
   // be gated to operator admins, so normal clients were never told the account existed and
   // their Reviews page stayed empty forever.
-  const hasFilters = platform !== 'All' || rating !== 'All' || status !== 'All' || search.trim() !== '';
+  const hasFilters = !!locationId || platform !== 'All' || rating !== 'All' || status !== 'All' || search.trim() !== '';
   const showEMRBanner = !error && !hasFilters && !isLoading && totalReviews === 0 && feedbackTotal === 0;
 
   return (
@@ -613,6 +616,8 @@ export default function Reviews() {
         <>
           {/* Filter bar */}
           <div className="bg-white rounded-xl shadow-card p-4 flex flex-wrap gap-3 items-center">
+            {(locationData?.data.length ?? 0) > 1 && <select aria-label="Review list location" value={locationId} onChange={e => setLocationId(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="">All locations</option>{locationData?.data.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select>}
+            {locationId && <p className="w-full text-xs text-slate-500">Only the review list is filtered. Trends and private feedback cover all locations. Earlier unassigned reviews remain under All locations.</p>}
             <select aria-label="Review platform" value={platform} onChange={(e) => setPlatform(e.target.value)}
               className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
               {PLATFORMS.map((p) => <option key={p}>{p}</option>)}

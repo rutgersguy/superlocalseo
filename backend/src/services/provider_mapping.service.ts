@@ -47,7 +47,7 @@ export async function saveProviderMapping(locationId: string, input: MappingInpu
     const revision = input.revision + 1;
     const row = { location_id: locationId, client_id: location.client_id, organization_id: input.organizationId,
       provider_location_id: input.providerLocationId, google_place_id: input.googlePlaceId, revision,
-      note: input.note, evidence: JSON.stringify(evidence), verified_at: evidence.verifiedAt };
+      last_review_sync_at: null, review_sync_error: null, note: input.note, evidence: JSON.stringify(evidence), verified_at: evidence.verifiedAt };
     await trx('provider_location_mappings').insert(row).onConflict('location_id').merge();
     await trx('provider_mapping_events').insert({ location_id: locationId, client_id: location.client_id, actor_id: actorId, revision, note: input.note, evidence: JSON.stringify(evidence) });
     return { locationId, revision };

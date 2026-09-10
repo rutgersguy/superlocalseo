@@ -1,3 +1,4 @@
+import { providerRoutes, withProviderRoute } from '../services/provider_routing';
 import { Job } from 'bullmq';
 import { db } from '../db/connection';
 import { decrypt } from '../utils/crypto';
@@ -10,17 +11,6 @@ import { logger } from '../utils/logger';
 class SkipCampaigns extends Error {}
 
 export async function processReviews(_job: Job): Promise<void> {
-  // An EMR organization shared by more than one client cannot host isolated campaigns —
-  // campaigns filter by organization_id only. Detect those orgs up front and refuse to sync
-  // campaigns for any client sitting in one.
-  const orgCounts = await db('clients')
-    .whereNotNull('emr_organization_id')
-    .select('emr_organization_id')
-    .count('* as n')
-    .groupBy('emr_organization_id') as Array<{ emr_organization_id: number; n: string }>;
-  const sharedOrgIds = new Set(
-    orgCounts.filter((r) => Number(r.n) > 1).map((r) => Number(r.emr_organization_id)),
-  );
   const integrations = await db('integrations')
     .join('clients', 'clients.id', 'integrations.client_id')
     .where({ 'integrations.provider': 'embedmyreviews', 'integrations.status': 'connected' })
@@ -59,22 +49,18 @@ export async function processReviews(_job: Job): Promise<void> {
     try {
       const apiKey = decrypt(integration.api_key_encrypted as string);
 
-      // Every client's integration row holds the SAME agency operator key, so an unscoped
-      // fetch returns the whole organization's reviews — i.e. every client would be handed
-      // every other client's reviews. The EMR location is the tenancy boundary; without one
-      // we must not sync at all. (See migration 20260714000000.)
-      const emrLocationId = integration.emr_location_id as number | null;
-      if (!emrLocationId) {
-        logger.warn('Skipping EMR review sync — client has no EMR location', {
-          clientId: integration.client_id,
-        });
-        continue;
-      }
-
-      const reviews = await fetchAllReviews(apiKey, String(emrLocationId));
-
+      const routes = await providerRoutes(integration.client_id, _job.data?.locationId);
+      if (!routes.length) continue;
+      let reviewCount = 0;
+      const syncedOrganizations = new Set<string>();
+      for (const route of routes) {
+      try {
+      if (route.mode === 'explicit' && gbpConnectedClientIds.has(integration.client_id)) throw new Error('Choose one Google review source for this customer before importing mapped reviews. Contact support.');
+      const reviews = await fetchAllReviews(apiKey, route.providerLocationId);
+      reviewCount += reviews.length;
       const now = new Date();
 
+      await withProviderRoute(route, async trx => {
       for (const review of reviews) {
         // See gbpConnectedClientIds: a client with a direct Google connection
         // takes Google reviews from there, or the same review lands twice under
@@ -86,10 +72,13 @@ export async function processReviews(_job: Job): Promise<void> {
           continue;
         }
 
-        await db('reviews')
+        const previous = await trx('reviews').where({ client_id: integration.client_id, platform: review.platform, external_review_id: review.id }).first();
+        if (previous?.emr_provider_location_id && previous.emr_provider_location_id !== route.providerLocationId) throw new Error('Review provider location conflict; import requires reconciliation.');
+        await trx('reviews')
           .insert({
             client_id: integration.client_id,
-            location_id: null,
+            location_id: route.localLocationId,
+            emr_provider_location_id: route.providerLocationId,
             source: 'emr',
             platform: review.platform,
             external_review_id: review.id,
@@ -110,6 +99,7 @@ export async function processReviews(_job: Job): Promise<void> {
           })
           .onConflict(['client_id', 'platform', 'external_review_id'])
           .merge({
+            location_id: route.localLocationId, emr_provider_location_id: route.providerLocationId,
             author_name: review.author,
             rating: review.rating,
             body: review.body,
@@ -124,35 +114,18 @@ export async function processReviews(_job: Job): Promise<void> {
           });
       }
 
-      // Sync campaigns and their funnel metrics.
-      //
-      // Campaigns scope to an EMR ORGANIZATION, not a location (reviews are the other way
-      // round). Every client currently shares organization 1, so syncing campaigns would
-      // write the SAME org-wide campaign set under every client_id — the exact leak that was
-      // fixed for reviews in migration 20260714000000. Until each client has its own EMR
-      // organization, refuse to sync rather than fabricate cross-tenant data.
-      const emrOrgId = integration.emr_organization_id as number | null;
-      const orgIsShared = sharedOrgIds.has(emrOrgId ?? -1);
-
+      if (route.mode === 'explicit') await trx('provider_location_mappings').where({ location_id: route.localLocationId, revision: route.revision }).update({ last_review_sync_at: now, review_sync_error: null });
+      });
+      const emrOrgId = Number(route.organizationId);
       try {
-        if (!emrOrgId) {
-          logger.warn('Skipping campaign sync — client has no EMR organization', { clientId: integration.client_id });
-          throw new SkipCampaigns();
-        }
-        if (orgIsShared) {
-          logger.warn('Skipping campaign sync — client shares an EMR organization with other clients (would leak campaigns)', {
-            clientId: integration.client_id,
-            organizationId: emrOrgId,
-          });
-          throw new SkipCampaigns();
-        }
-
+        if (syncedOrganizations.has(route.organizationId)) throw new SkipCampaigns();
         const campaigns = await fetchCampaigns(apiKey, emrOrgId);
+        await withProviderRoute(route, async trx => {
         for (const c of campaigns) {
-          await db('emr_campaigns')
+          await trx('emr_campaigns')
             .insert({
               client_id: integration.client_id,
-              emr_campaign_id: c.id,
+              emr_campaign_id: c.id, emr_organization_id: route.organizationId,
               name: c.name,
               invited: c.invited,
               opened: c.opened,
@@ -164,7 +137,7 @@ export async function processReviews(_job: Job): Promise<void> {
             })
             .onConflict(['client_id', 'emr_campaign_id'])
             .merge({
-              name: c.name,
+              emr_organization_id: route.organizationId, name: c.name,
               invited: c.invited,
               opened: c.opened,
               clicked: c.clicked,
@@ -175,6 +148,8 @@ export async function processReviews(_job: Job): Promise<void> {
               updated_at: now,
             });
         }
+        });
+        syncedOrganizations.add(route.organizationId);
       } catch (campaignErr) {
         // A deliberate skip already logged its reason; don't double-log it as a failure.
         if (!(campaignErr instanceof SkipCampaigns)) {
@@ -185,13 +160,19 @@ export async function processReviews(_job: Job): Promise<void> {
         }
       }
 
+      } catch (error) {
+        if (route.mode === 'explicit') await db('provider_location_mappings').where({ location_id: route.localLocationId, revision: route.revision }).update({ review_sync_error: 'This location import failed. Existing reviews are retained; contact support or retry.' }).catch(() => undefined);
+        throw error;
+      }
+      }
+      const now = new Date();
       // Private feedback is now received via EMR webhook (POST /webhooks/emr)
 
       await db('integrations').where({ id: integration.id }).update({ last_pull_at: now, error_message: null });
 
       logger.info('Reviews pulled successfully', {
         clientId: integration.client_id,
-        reviewCount: reviews.length,
+        reviewCount,
       });
     } catch (e) {
       logger.error('Failed to pull reviews for client', {

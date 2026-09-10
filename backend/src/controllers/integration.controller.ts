@@ -1,3 +1,5 @@
+import { z } from 'zod';
+import { resolveProviderRoute, withProviderRoute } from '../services/provider_routing';
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db/connection';
 import { ok, noContent, notFound, err } from '../utils/response';
@@ -10,14 +12,8 @@ import { checkGBPConnection } from '../services/gbp.service';
 import { connectionState, safeConnectUrl } from '../services/emr_connection_state';
 import { redis } from '../db/redis';
 
-/** Status is read-only: opening Settings must never provision or move a business. */
-async function ownedEmrLocation(clientId: string) {
-  const client = await db('clients').where({ id: clientId }).first();
-  if (!client?.emr_organization_id || !client.emr_location_id) return null;
-  const shared = await db('clients').whereNot({ id: clientId }).where(q => q
-    .where({ emr_organization_id: client.emr_organization_id }).orWhere({ emr_location_id: client.emr_location_id })).first();
-  if (shared) throw Object.assign(new Error('This review connection needs an account mapping check. Contact support.'), { status: 409, code: 'CONNECTION_MAPPING_REQUIRED' });
-  return Number(client.emr_location_id);
+function selectedLocation(req: Request): string | undefined {
+  return z.string().uuid().optional().parse(req.body?.locationId ?? req.query.locationId);
 }
 
 export async function getEmrGoogleConnectLink(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -25,7 +21,8 @@ export async function getEmrGoogleConnectLink(req: Request, res: Response, next:
     res.setHeader('Cache-Control', 'no-store');
     if (!config.embedmyreviews.apiKey) { err(res, 'Review connection is temporarily unavailable', 503, 'NOT_CONFIGURED'); return; }
     const clientId = req.clientId;
-    const locationId = await ownedEmrLocation(clientId);
+    const route = await resolveProviderRoute(clientId, selectedLocation(req));
+    const locationId = route ? Number(route.providerLocationId) : null;
     if (!locationId) {
       const pending = await db('clients').where({ id: clientId }).first();
       if (pending?.emr_provisioning_status === 'creating' || pending?.emr_organization_id || pending?.emr_location_id) {
@@ -33,7 +30,7 @@ export async function getEmrGoogleConnectLink(req: Request, res: Response, next:
       }
       ok(res, { phase: 'needs_setup', profileSelected: false, reviewCount: null, lastSyncAt: null, connectUrl: null }); return; }
     // Short server cache avoids downloading all reviews every time the UI polls.
-    const cacheKey = `emr:connect-state:${clientId}:${locationId}`;
+    const cacheKey = `emr:connect-state:${clientId}:${locationId}${route?.revision ? ':' + route.revision : ''}`;
     const cached = await redis.get(cacheKey).catch(() => null);
     let links = cached ? JSON.parse(cached) : null;
     if (!links) {
@@ -42,12 +39,13 @@ export async function getEmrGoogleConnectLink(req: Request, res: Response, next:
     }
     const state = connectionState(links);
     const integration = await db('integrations').where({ client_id: clientId, provider: 'embedmyreviews' }).first();
-    const row = await db('reviews').where({ client_id: clientId, source: 'emr' }).whereRaw('lower(platform) = ?', ['google']).count('* as n').first();
-    const lastSyncAt = integration?.last_pull_at ?? null;
-    ok(res, { ...state, connected: state.profileSelected, connectedAt: state.selectedAt,
+    const row = await db('reviews').where({ client_id: clientId, source: 'emr' }).modify(q => { if (route?.mode === 'explicit') q.where({ location_id: route.localLocationId, emr_provider_location_id: route.providerLocationId }); }).whereRaw('lower(platform) = ?', ['google']).count('* as n').first();
+    const mapping = route?.mode === 'explicit' ? await db('provider_location_mappings').where({ location_id: route.localLocationId }).first() : null;
+    const lastSyncAt = route?.mode === 'explicit' ? mapping?.last_review_sync_at ?? null : integration?.last_pull_at ?? null;
+    ok(res, { ...state, mappingMode: route?.mode, localLocationId: route?.localLocationId, connected: state.profileSelected, connectedAt: state.selectedAt,
       connectUrl: state.connectUrl ? safeConnectUrl(state.connectUrl, config.embedmyreviews.baseUrl) : null,
       reviewCount: lastSyncAt || Number(row?.n) > 0 ? Number(row?.n ?? 0) : null,
-      lastSyncAt, syncError: integration?.error_message ? 'The last review sync failed. Existing reviews are retained.' : null,
+      lastSyncAt, syncError: (route?.mode === 'explicit' ? mapping?.review_sync_error : integration?.error_message) ? 'The last review sync failed. Existing reviews are retained.' : null,
       checkedAt: new Date().toISOString() });
   } catch (e) { next(e); }
 }
@@ -58,18 +56,19 @@ export async function createEmrGoogleConnectLink(req: Request, res: Response, ne
     const key = config.embedmyreviews.apiKey;
     if (!key) { err(res, 'Review connection is temporarily unavailable', 503, 'NOT_CONFIGURED'); return; }
     // Check an existing mapping before provisioning; never silently relocate a shared account.
-    const existing = await ownedEmrLocation(req.clientId);
-    const locationId = existing ?? await ensureEmrLocation(req.clientId);
+    let route = await resolveProviderRoute(req.clientId, selectedLocation(req));
+    if (!route) { await ensureEmrLocation(req.clientId); route = await resolveProviderRoute(req.clientId, selectedLocation(req)); }
+    const locationId = route ? Number(route.providerLocationId) : null;
     if (!locationId) { err(res, 'Unable to prepare your review connection', 503); return; }
     // Serializing link creation avoids invalidating the link returned to a concurrent caller.
-    const link = await db.transaction(async trx => {
+    const link = await withProviderRoute(route!, async trx => {
       await trx.raw('SELECT pg_advisory_xact_lock(hashtext(?))', [`emr-connect:${req.clientId}`]);
       const links = await listConnectLinks(key, locationId, 'google');
       const active = connectionState(links).connectUrl;
       if (active) return links.find(l => l.connectUrl === active)!;
       return createConnectLink(key, 'google', locationId);
     });
-    await redis.del(`emr:connect-state:${req.clientId}:${locationId}`).catch(() => undefined);
+    await redis.del(`emr:connect-state:${req.clientId}:${locationId}${route?.revision ? ':' + route.revision : ''}`).catch(() => undefined);
     ok(res, { connectUrl: safeConnectUrl(link.connectUrl, config.embedmyreviews.baseUrl), expiresAt: link.expiresAt });
   } catch (e) { next(e); }
 }
@@ -77,13 +76,14 @@ export async function createEmrGoogleConnectLink(req: Request, res: Response, ne
 /** Explicit, client-scoped retry. Never schedules other customers' provider work. */
 export async function syncEmrGoogleReviews(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const locationId = await ownedEmrLocation(req.clientId);
+    const route = await resolveProviderRoute(req.clientId, selectedLocation(req));
+    const locationId = route ? Number(route.providerLocationId) : null;
     if (!locationId) { err(res, 'Select your business through the Google connection first', 409, 'PROFILE_REQUIRED'); return; }
     const key = config.embedmyreviews.apiKey;
     if (!key) { err(res, 'Review connection is temporarily unavailable', 503); return; }
     const state = connectionState(await listConnectLinks(key, locationId, 'google'));
     if (!state.profileSelected) { err(res, 'Finish selecting your business before importing reviews', 409, 'PROFILE_REQUIRED'); return; }
-    const cooldown = `emr:sync:${req.clientId}`;
+    const cooldown = `emr:sync:${req.clientId}${route?.mode === 'explicit' ? ':' + route.localLocationId : ''}`;
     if (!(await redis.set(cooldown, '1', 'EX', 60, 'NX'))) {
       err(res, 'An import was requested recently. Please wait a minute before retrying.', 429, 'SYNC_PENDING'); return;
     }
@@ -93,7 +93,7 @@ export async function syncEmrGoogleReviews(req: Request, res: Response, next: Ne
       const ready = await db('integrations').where({ client_id: req.clientId, provider: 'embedmyreviews', status: 'connected' }).whereNotNull('api_key_encrypted').first();
       if (!ready) throw Object.assign(new Error('Review import setup needs attention. Please contact support.'), { status: 409, code: 'CONNECTION_MAPPING_REQUIRED' });
       const { reviewsQueue } = await import('../jobs/queue');
-      await reviewsQueue.add('google-connection-import', { clientId: req.clientId, emrOnly: true }, { jobId: `google-import-${req.clientId}-${Math.floor(Date.now() / 60000)}`, removeOnComplete: 100, removeOnFail: 100 });
+      await reviewsQueue.add('google-connection-import', { clientId: req.clientId, locationId: route?.localLocationId ?? undefined, emrOnly: true }, { jobId: `google-import-${req.clientId}-${route?.localLocationId ?? 'legacy'}-${Math.floor(Date.now() / 60000)}`, removeOnComplete: 100, removeOnFail: 100 });
     } catch (e) { await redis.del(cooldown); throw e; }
     ok(res, { queued: true }, 202);
   } catch (e) { next(e); }

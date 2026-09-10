@@ -1,3 +1,4 @@
+import ProviderMappingHelp from './ProviderMappingHelp';
 import { useState } from 'react';
 import useSWR from 'swr';
 import { apiFetch, fetcher } from '../services/api';
@@ -60,8 +61,9 @@ export default function ProviderMappings() {
   } }>(`/admin/provider-mappings?page=${page}`, fetcher);
   const result = data?.data;
   return <section className="space-y-4">
+    <ProviderMappingHelp />
     <div className="flex justify-between"><h2 className="font-semibold text-slate-900">Provider location mappings</h2><button onClick={() => void mutate()} className="text-sm underline">Refresh</button></div>
-    <p className="text-sm text-slate-600">Match each business location to its EMR organization, EMR location and exact Google Place ID. Account-level IDs below are historical references and have not been verified for each location. Reviews and campaigns still use those account-level IDs until the routing migration is complete.</p>
+    <p className="text-sm text-slate-600">Match each business location to its EMR organization, EMR location and exact Google Place ID. Account-level IDs below are historical references and have not been verified for each location. Explicit mappings route reviews and connections by location. Unmapped single-location accounts retain their historical route; unmapped branches require an inspection. Campaign delivery also needs verified setup.</p>
     {result && !result.verificationAvailable && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{result.verificationUnavailableReason ?? 'Saving mappings is unavailable while provider identity verification is being validated.'}</p>}
     {error && <p role="alert">Could not load provider mappings. Please retry.</p>}
     {isLoading && <p>Loading locations…</p>}

@@ -1,3 +1,4 @@
+import { resolveProviderRoute, withProviderRoute } from '../services/provider_routing';
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
@@ -158,7 +159,9 @@ export async function publish(req: Request, res: Response, next: NextFunction): 
     }
 
     try {
-      await replyToReview(apiKey, review.external_review_id as string, text);
+      const route = await resolveProviderRoute(req.clientId, review.location_id ?? undefined);
+      if (!route || (route.mode === 'explicit' && (!review.location_id || review.emr_provider_location_id !== route.providerLocationId))) { err(res, 'Refresh reviews for this mapped location before publishing a reply.', 409); return; }
+      await withProviderRoute(route, async () => { await replyToReview(apiKey, review.external_review_id as string, text); });
     } catch (e) {
       if (e instanceof EMRReplyError) {
         err(res, e.message, e.httpStatus, e.code);

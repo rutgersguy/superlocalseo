@@ -1,6 +1,6 @@
 # Provider location mappings
 
-Status, September 10, 2026: the registry now supports an explicit operator inspection paired with a live API membership check. This replaces PR #218's disabled placeholder. It does **not** provide automatic verification of the attached Google identity. Existing review/campaign routing remains unchanged. No production customer mappings have been recorded by this rollout.
+Status, September 10, 2026: the registry now supports an explicit operator inspection paired with a live API membership check. This replaces PR #218's disabled placeholder. It does **not** provide automatic verification of the attached Google identity. Explicit mappings now route EMR imports, connection operations, reply guards and verified campaign delivery; the limited legacy path is described in [provider routing](provider-routing.md). No production customer mappings have been recorded by this rollout.
 
 ## Live inventory — September 10, 2026
 
@@ -37,7 +37,7 @@ For a location without a saved Place ID, a successful inspection atomically reco
 - Existing provider IDs claimed by other customers block a mapping. Previous organization reservations remain after remapping and require deliberate reconciliation.
 - A revision check and transaction lock prevent conflicting saves; a second identity check rejects changes made during external verification.
 - Each successful save records the operator, time, note, revision and provider evidence. Historical events survive location/customer deletion; deleted operators become null.
-- The new registry does not change provider data, send messages, or change existing review/campaign routing. Changes to local name, address, city, state, ZIP, customer or Place ID invalidate the identity snapshot and require reverification. The record does not automatically detect later changes inside EMR.
+- Saving an inspection changes local records only; it does not send a message or change provider configuration. Subsequent operations resolve that saved mapping. Changes to local name, address, city, state, ZIP, customer or Place ID invalidate the identity snapshot and require reverification. The record does not automatically detect later changes inside EMR.
 
 ## Provider capability findings
 
@@ -55,4 +55,8 @@ Owner clarification September 10: NerdBox is an intentional test account used to
 
 Database tests cover authorization, strict inspection fields, missing/mismatched evidence, legacy conflicts, revision races, duplicate/cross-customer constraints, first-identity persistence, local identity changes and retained history. Provider adapter unit tests cover membership responses, missing/stale/future inspections, URL safety, upstream failures and missing credentials. Browser coverage exercises the complete inspection form, safe error display, submitted evidence, success message and mobile layout with simulated save responses; it does not prove actual external business ownership.
 
-After the registry is verified and populated, migrate connection, review import, reply and campaign/setup consumers to resolve explicit per-location mappings. Reconcile provisioning and webhook behavior as part of that migration; existing legacy writers do not consult this registry. Then rehearse two distinct businesses and multiple branches before claiming multi-location readiness. Stripe remains last.
+The routing implementation is covered in the [routing runbook](provider-routing.md). Real customer mapping population and owner-controlled acceptance remain outstanding. Then rehearse two distinct businesses and multiple branches before claiming multi-location readiness. Stripe remains last.
+
+## VA guide
+
+Click **How to map a location** at the top of **Admin → Provider mappings**. The modal explains the three IDs, source inspection, examples, notes, first-ID behavior and escalation conditions. Escape or either close button returns to the mapping form.
