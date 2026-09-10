@@ -8,7 +8,7 @@ import type {ReportData} from './report.service';
 type Dependencies={gather:(clientId:string,month:number,year:number)=>Promise<ReportData>;render:(data:ReportData)=>string;pdf:(html:string,file:string)=>Promise<void>;send:(to:string,name:string,period:string,file:string,id:string)=>Promise<string>};
 export async function generateReportOnce(clientId:string,month:number,year:number,deps:Dependencies):Promise<string>{
   const now=new Date();
-  if(!Number.isInteger(month)||month<1||month>12||!Number.isInteger(year)||year<2020||year>now.getUTCFullYear()||(year===now.getUTCFullYear()&&month>now.getUTCMonth()+1))throw new Error('Invalid report period');
+  if(!Number.isInteger(month)||month<1||month>12||!Number.isInteger(year)||year<2020||year>now.getUTCFullYear()||(year===now.getUTCFullYear()&&month>=now.getUTCMonth()+1))throw new Error('Invalid report period');
   const generation=randomUUID();
   const claim=await db.transaction(async trx=>{
     await trx('reports').insert({client_id:clientId,period_month:month,period_year:year,status:'pending',email_status:'not_started'}).onConflict(['client_id','period_month','period_year']).ignore();

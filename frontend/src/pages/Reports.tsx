@@ -79,8 +79,8 @@ interface GenerateModalProps {
 
 function GenerateModal({ onClose, onSuccess, initialMonth, initialYear }: GenerateModalProps) {
   const now = new Date();
-  const defaultMonth = initialMonth ?? (now.getMonth() === 0 ? 12 : now.getMonth());
-  const defaultYear = initialYear ?? (now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear());
+  const defaultMonth = initialMonth ?? (now.getUTCMonth() === 0 ? 12 : now.getUTCMonth());
+  const defaultYear = initialYear ?? (now.getUTCMonth() === 0 ? now.getUTCFullYear() - 1 : now.getUTCFullYear());
 
   const [month, setMonth] = useState<number>(defaultMonth);
   const [year, setYear] = useState<number>(defaultYear);
@@ -88,7 +88,7 @@ function GenerateModal({ onClose, onSuccess, initialMonth, initialYear }: Genera
   const [toast, setToast] = useState<string | null>(null);
   const [toastError, setToastError] = useState(false);
 
-  const currentYear = now.getFullYear();
+  const currentYear = now.getUTCFullYear();
   const years: number[] = [];
   for (let y = currentYear; y >= currentYear - 3; y--) years.push(y);
 
@@ -134,6 +134,7 @@ function GenerateModal({ onClose, onSuccess, initialMonth, initialYear }: Genera
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Generate Report</h2>
 
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+          <p className="text-sm text-slate-600">Choose a completed month. Saved reports are reused so retries cannot replace their snapshot or duplicate an email.</p>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="modal-month">
               Month
@@ -145,7 +146,7 @@ function GenerateModal({ onClose, onSuccess, initialMonth, initialYear }: Genera
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
               {MONTH_NAMES.map((name, i) => (
-                <option key={name} value={i + 1}>{name}</option>
+                <option key={name} value={i + 1} disabled={year === currentYear && i >= now.getUTCMonth()}>{name}</option>
               ))}
             </select>
           </div>

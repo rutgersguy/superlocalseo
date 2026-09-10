@@ -28,6 +28,7 @@ describe('monthly report generation and delivery recovery',()=>{
     const post=(body:object)=>request(app).post('/api/reports/generate').set('Authorization',`Bearer ${token}`).send(body);
     expect((await post({clientId:'00000000-0000-4000-8000-000000000000',month:1,year:2026})).status).toBe(404);
     for(const month of ['1',1.5,0,13])expect((await post({month,year:2026})).status).toBe(422);
+    const now=new Date();expect((await post({month:now.getUTCMonth()+1,year:now.getUTCFullYear()})).status).toBe(422);
     expect(reportsQueue.add).not.toHaveBeenCalled();
     expect((await post({month:1,year:2026})).status).toBe(200);
     expect(reportsQueue.add).toHaveBeenCalledWith('generate-report',{clientId,month:1,year:2026});

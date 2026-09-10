@@ -2,7 +2,7 @@
 
 The monthly report generator now separates creating a PDF from submitting its email. A saved PDF is reused for subsequent requests for that customer and month; it is not regenerated or overwritten merely because a browser/worker retries. Generation claims are serialized in Postgres. A generation older than 15 minutes can be claimed again, with a new token and file path. A late abandoned worker cannot attach or email its obsolete result.
 
-The generation API only accepts the signed-in workspace. A foreign clientId is rejected before queueing; month/year must be integers within the supported, non-future period. Background jobs validate their periods too. Generation does not purchase new rank scans; it renders existing observations using the existing verified report formulas and plan gates.
+The generation API only accepts the signed-in workspace. A foreign clientId is rejected before queueing; month/year must be integers within a completed UTC month. Current-month drafts are not finalized early and then accidentally reused as the completed monthly report. Background jobs validate their periods too. Generation does not purchase new rank scans; it renders existing observations using the existing verified report formulas and plan gates.
 
 ## Email states
 

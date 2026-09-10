@@ -396,8 +396,8 @@ export async function generate(req: Request, res: Response, next: NextFunction):
     const body=z.object({clientId:z.string().uuid().optional(),month:z.number().int().min(1).max(12).optional(),year:z.number().int().min(2020).max(now.getUTCFullYear()).optional()}).strict().parse(req.body);
     if(body.clientId&&body.clientId!==req.clientId){notFound(res,'Customer not found');return;}
     const clientId=req.clientId;
-    const month=body.month??now.getUTCMonth()+1, year=body.year??now.getUTCFullYear();
-    if(year===now.getUTCFullYear()&&month>now.getUTCMonth()+1){err(res,'Future report periods are not available',422);return;}
+    const month=body.month??(now.getUTCMonth()===0?12:now.getUTCMonth()), year=body.year??(now.getUTCMonth()===0?now.getUTCFullYear()-1:now.getUTCFullYear());
+    if(year===now.getUTCFullYear()&&month>=now.getUTCMonth()+1){err(res,'Choose a completed month for your report',422);return;}
     const job = await reportsQueue.add('generate-report', {
       clientId,
       month,
