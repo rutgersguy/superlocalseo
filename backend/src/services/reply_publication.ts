@@ -50,11 +50,9 @@ export async function publishReply(clientId: string, reviewId: string, text: str
   try {
     // Always reconcile the authoritative provider identity and existing reply before a new write.
     if (await observed(clientId, reviewId, route, key, review.external_review_id)) return { published: true, reconciled: true };
-    await withProviderRoute(route, async () => {
+    await withProviderRoute(route, async trx => {
       attempted = true;
       await replyToReview(key, review.external_review_id, text);
-    });
-    await db.transaction(async trx => {
       await trx('reviews').where({ id: reviewId, client_id: clientId }).update({ replied: true, reply_date: new Date(), emr_reply_text: text, status: 'responded' });
       await trx('review_responses').where({ review_id: reviewId, client_id: clientId }).update({ status: 'posted', last_publish_error: null, updated_at: new Date() });
     });
