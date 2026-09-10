@@ -1,3 +1,4 @@
+import FeedbackFollowUp from '../components/FeedbackFollowUp';
 import ReviewSyncStatus from '../components/ReviewSyncStatus';
 import { PageHeader, EmptyState } from '../components/ui/Workspace';
 import { useState } from 'react';
@@ -427,29 +428,55 @@ function ReviewCard({ review, onReplyPosted }: { review: Review; onReplyPosted: 
 // ─── Feedback tab ─────────────────────────────────────────────────────────────
 
 function FeedbackTab() {
+  const { productLine } = useClient();
   const [page, setPage] = useState(1);
   const [locationId, setLocationId] = useState('');
   const [rating, setRating] = useState('');
+  const [status, setStatus] = useState('');
+  const [exportError, setExportError] = useState('');
+  const [exporting, setExporting] = useState(false);
   const { data: locations } = useSWR<{ data: Array<{ id: string; name: string }> }>('/locations', fetcher);
   const query = new URLSearchParams({ page: String(page) });
   if (locationId) query.set('locationId', locationId);
   if (rating) query.set('rating', rating);
-  const { data, error, isLoading } = useSWR<{ success: boolean; data: { feedback: any[]; total: number; pages: number } }>(`/reviews/feedback?${query}`, fetcher);
+  if (status) query.set('status', status);
+  const { data, error, isLoading, mutate } = useSWR<{ success: boolean; data: { feedback: any[]; total: number; pages: number; canManage: boolean; assignees: Array<{ id: string; email: string }>; coverage: string } }>(`/reviews/feedback?${query}`, fetcher);
   const feedback = data?.data?.feedback ?? [];
   const total = data?.data?.total ?? 0;
 
 
+  async function download() {
+    setExportError(''); setExporting(true);
+    try {
+      const response = await apiFetch(`/reviews/feedback/export?${query}`, {}, true);
+      if (!response.ok) { const body = await response.json(); throw new Error(typeof body.error === 'string' ? body.error : body.error?.message || 'Unable to export feedback.'); }
+      const url = URL.createObjectURL(await response.blob());
+      const a = document.createElement('a'); a.href = url; a.download = 'private-feedback.csv'; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) { setExportError(e instanceof Error ? e.message : 'Unable to export feedback.'); }
+    finally { setExporting(false); }
+  }
   return (
     <>
+      <details className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+        <summary className="cursor-pointer font-medium">How to manage private feedback</summary>
+        <p className="mt-2">Assign an owner or accepted admin, mark work in progress, and record the outcome before marking it resolved. Saving a status or note sends no message and publishes nothing. A former teammate must be reassigned before saving.</p>
+        <p className="mt-2">Only contact a person using details they consented to share for follow-up. Masked EMR contact details are not usable contact information. Public review access is the same at every rating; private feedback is optional.</p>
+        <p className="mt-2">Owners and admins on Pro can export up to 5,000 responses matching the current filters, across all pages. Export uses the inbox contact masking and excludes internal notes. Store downloaded files securely and delete them when no longer needed. Saved feedback is retained until an authorized privacy request is handled by support; no automatic retention period is configured.</p>
+      </details>
+      <p className="mb-4 text-sm text-slate-500">{data?.data.coverage ?? 'Historical EMR feedback coverage is not guaranteed. This inbox shows submissions received by SuperLocalSEO.'}</p>
       <div className="mb-4 flex flex-wrap gap-4">
         <label className="text-sm">Feedback location<select value={locationId} onChange={e => { setLocationId(e.target.value); setPage(1); }} className="ml-2 rounded border-slate-300"><option value="">All locations</option>{locations?.data.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
         <label className="text-sm">Feedback rating<select value={rating} onChange={e => { setRating(e.target.value); setPage(1); }} className="ml-2 rounded border-slate-300"><option value="">All ratings</option>{[1,2,3,4,5].map(n => <option key={n} value={n}>{n} stars</option>)}</select></label>
+        <label className="text-sm">Follow-up status<select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }} className="ml-2 rounded border-slate-300"><option value="">All statuses</option><option value="new">New</option><option value="in_progress">In progress</option><option value="resolved">Resolved</option></select></label>
+        {data?.data.canManage && canUseFeature(productLine, 'csvExport') && <button disabled={exporting} onClick={download} className="text-sm underline disabled:opacity-50">{exporting ? 'Exporting…' : 'Export private feedback'}</button>}
       </div>
+      {exportError && <p role="alert" className="text-sm text-red-700">{exportError}</p>}
       {error && <p role="alert">Unable to load private feedback. Refresh to retry.</p>}
       {isLoading && <p role="status">Loading private feedback…</p>}
       {!error && !isLoading && (feedback.length === 0 ? (
         <div className="text-center py-16 text-slate-400">
-          <p className="font-medium text-slate-600 mb-1">No private feedback yet</p>
+          <p className="font-medium text-slate-600 mb-1">No saved feedback matches these filters</p>
           <p className="text-sm">Optional private feedback appears here at any rating. Everyone has the same opportunity to leave an honest public review.</p>
         </div>
       ) : (
@@ -466,6 +493,8 @@ function FeedbackTab() {
                       <span className="text-xs text-slate-500">{'★'.repeat(f.rating)}{'☆'.repeat(5 - f.rating)}</span>
                     )}
                   </div>
+                  <p className="text-xs text-slate-500">Follow-up: {f.status === 'in_progress' ? 'In progress' : f.status === 'resolved' ? 'Resolved' : 'New'} · {f.assignedUserId ? (data?.data.assignees.find(a => a.id === f.assignedUserId)?.email ?? 'Assigned teammate') : 'Unassigned'}</p>
+                  <p className="text-xs text-slate-500">{f.source === 'native' && f.contactConsent ? 'Contact follow-up consent recorded' : 'No verified contact follow-up consent'}</p>
                   {f.contactEmail && <p className="text-xs text-slate-400">{f.contactEmail}</p>}
                   {f.message && <p className="text-sm text-slate-700 mt-2">{f.message}</p>}
                 </div>
@@ -476,6 +505,7 @@ function FeedbackTab() {
 
                 </div>
               </div>
+              {data?.data.canManage && <FeedbackFollowUp key={`${f.id}:${f.version}`} feedback={f} assignees={data.data.assignees} onSaved={() => mutate()} />}
             </div>
           ))}
         </div>

@@ -16,6 +16,7 @@ describe('CSV export gating', () => {
     'reports/export/rankings',
     'reports/export/keywords',
     'reports/export/reviews',
+    'reviews/feedback/export',
     'reports/export/citations',
     'analytics/export',
   ];

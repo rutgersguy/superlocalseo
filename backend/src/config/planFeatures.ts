@@ -24,6 +24,9 @@ export interface RouteGate {
 }
 
 export const PLAN_ROUTE_GATES: RouteGate[] = [
+  { prefix: 'reviews', plans: ['lite', 'pro'], subPaths: [
+    { path: 'reviews/feedback/export', plans: ['pro'] },
+  ] },
   // ── Blocked entirely for Lite ──────────────────────────────────────────────
   { prefix: 'citations',  plans: ['pro'] },
   { prefix: 'geo-grid',   plans: ['pro'] },

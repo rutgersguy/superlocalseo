@@ -6,6 +6,7 @@ import { validateQuery } from '../middleware/validate';
 import { aiLimiter } from '../middleware/rateLimit';
 import { handleEmrWebhook } from '../controllers/emr_webhook.controller';
 import { verifyEmrWebhook } from '../middleware/verifyEmrWebhook';
+import * as feedbackCtrl from '../controllers/private_feedback.controller';
 import * as ctrl from '../controllers/review.controller';
 import * as responseCtrl from '../controllers/review_response.controller';
 
@@ -19,7 +20,9 @@ router.post('/webhook', verifyEmrWebhook, handleEmrWebhook);
 
 router.get('/', requireAuth, requireClient, validateQuery(ctrl.listQuerySchema), ctrl.list);
 router.get('/sync-status', requireAuth, requireClient, syncStatus);
-router.get('/feedback', requireAuth, requireClient, ctrl.listFeedback);
+router.get('/feedback', requireAuth, requireClient, feedbackCtrl.list);
+router.get('/feedback/export', requireAuth, requireClient, requireTeamAdmin, feedbackCtrl.exportCsv);
+router.patch('/feedback/:id', requireAuth, requireClient, requireTeamAdmin, feedbackCtrl.update);
 
 // AI response drafting
 router.get('/:id/response', requireAuth, requireClient, responseCtrl.get);
