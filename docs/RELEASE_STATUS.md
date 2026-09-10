@@ -6,7 +6,7 @@ Updated September 10, 2026. Invitation tracking and recovery are described in [t
 
 ## Local engineering awaiting release verification
 
-Three independent branches are in development after production PR #225: acquisition-report recovery, private-feedback follow-up, and [report/website claim corrections](report-claims-audit.md). These are not deployed features yet. SSH access is needed to complete isolated database/browser tests, GitHub PR checks and production deployment. Keep the live-feature table below as the production reference until acceptance evidence is recorded.
+Three independent tracks are implemented and combined locally after production PR #225: [acquisition-report recovery](free-report-recovery.md), [private-feedback follow-up](private-feedback-follow-up.md), and [report/website claim corrections](report-claims-audit.md). The combined branch passes 308 unit tests across 24 suites, backend compilation, frontend typecheck/build, and compilation of all backend test files. These are not deployed features yet. SSH access is needed to complete isolated database/browser tests, GitHub PR checks and production deployment. Keep the live-feature table below as the production reference until acceptance evidence is recorded.
 
 ## Work in progress: provider mapping
 
