@@ -39,12 +39,12 @@ router.post('/', createLimit, async (req,res,next) => {
       if (total >= 50 || perEmail >= 2) return null;
       const [lead] = await trx('audit_leads').insert({ business_name: 'Report pending verification', city: area.name, keyword: p.keyword,
         email: p.email, google_place_id: p.placeId, source: PROSPECT_SOURCE,
-        audit_data: JSON.stringify({ status: 'queued', areaId: p.areaId, consentAt: new Date().toISOString(), consentVersion: 'report-delivery-only-v1' }) }).returning('id');
+        audit_data: JSON.stringify({ status: 'queued', emailStatus: 'not_started', areaId: p.areaId, consentAt: new Date().toISOString(), consentVersion: 'report-delivery-only-v1' }) }).returning('id');
       return lead.id as string;
     });
     if (!id) { err(res,'The free-report limit has been reached. Please try again tomorrow.',429,'RATE_LIMITED'); return; }
     try { await prospectReportsQueue.add('generate',{ id },{ jobId: id, attempts: 3, backoff: { type: 'exponential', delay: 30000 }, removeOnComplete: 100, removeOnFail: 100 }); }
-    catch { await db('audit_leads').where({ id }).update({ audit_data: JSON.stringify({ status: 'failed', error: 'Report scheduling is temporarily unavailable. Please try again later.' }) }); }
+    catch { await db('audit_leads').where({ id }).update({ audit_data: db.raw("audit_data || ?::jsonb", [JSON.stringify({ status: 'failed', error: 'Report scheduling is temporarily unavailable. An administrator can recover this request.' })]), updated_at: new Date() }); }
     ok(res,{ id },202);
   } catch(e) { next(e); }
 });

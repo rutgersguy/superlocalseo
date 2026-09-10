@@ -31,4 +31,20 @@ test.describe('Admin free reports', () => {
     await page.route('**/api/admin/free-reports?*', r => r.fulfill({ status: 503, json: { success: false, error: { message: 'Unavailable' } } }));
     await page.getByRole('button', { name: 'Refresh reports', exact: true }).click(); await expect(page.getByRole('alert')).toContainText('Could not load reports');
   });
+  test('explains recovery and queues only an eligible saved request', async ({ page }) => {
+    await loginViaUI(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+    let calls=0;
+    await page.route('**/api/admin/free-reports?*', r => r.fulfill({json:{success:true,data:{reports:[{...row,emailStatus:'rejected',needsAttention:true,recovery:{allowed:true,reason:'Send the saved report to its original recipient; no new scan is purchased.'}}],total:1,hasMore:false}}}));
+    await page.route(`**/api/admin/free-reports/${id}/recover`, async r => { expect(r.request().method()).toBe('POST');calls++;await r.fulfill({status:202,json:{success:true,data:{message:'Recovery queued'}}}); });
+    await page.goto('/admin?tab=free-reports');
+    await page.getByText('How report recovery works', {exact:true}).click();
+    await expect(page.getByText('No marketing consent is implied.',{exact:false})).toBeVisible();
+    await page.getByRole('button',{name:'Retry report email',exact:true}).click();
+    await expect(page.getByRole('status')).toContainText('Recovery queued');expect(calls).toBe(1);
+    await page.route('**/api/admin/free-reports?*', r => r.fulfill({json:{success:true,data:{reports:[{...row,emailStatus:'uncertain',recovery:{allowed:false,reason:'Email outcome is unknown; resend blocked.'}}],total:1,hasMore:false}}}));
+    await page.getByRole('button',{name:'Refresh reports',exact:true}).click();
+    await expect(page.getByText('Outcome unknown — resend blocked',{exact:true})).toBeVisible();
+    await expect(page.getByRole('button',{name:'Retry report email',exact:true})).toHaveCount(0);
+  });
+
 });
