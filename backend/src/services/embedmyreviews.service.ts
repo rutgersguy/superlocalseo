@@ -63,10 +63,34 @@ async function emrFetch(path: string, apiKey: string, options: RequestInit = {},
   throw new Error('EmbedMyReviews: max retry attempts exceeded after rate limiting');
 }
 
+/** EMR uses both Laravel full pagination and simple pagination (no last_page). */
+function pagination(payload:any,page:number) {
+  if(!payload?.meta||payload.meta.current_page!==page)throw new Error('Provider pagination is incomplete.');
+  const last=payload.meta.last_page;
+  let hasMore:boolean;
+  if(last!==undefined){
+    if(!Number.isSafeInteger(last)||last<page)throw new Error('Provider pagination is incomplete.');
+    hasMore=page<last;
+  }else{
+    if(!payload.links||!Object.prototype.hasOwnProperty.call(payload.links,'next'))throw new Error('Provider pagination is incomplete.');
+    const next=payload.links.next;
+    if(next===null)hasMore=false;
+    else {
+      if(typeof next!=='string')throw new Error('Provider pagination is incomplete.');
+      const url=new URL(next);
+      if(url.origin!==new URL(config.embedmyreviews.baseUrl).origin||url.searchParams.get('page')!==String(page+1))throw new Error('Provider pagination is inconsistent.');
+      hasMore=true;
+    }
+  }
+  const total=payload.meta.total??null;
+  if(total!==null&&(!Number.isSafeInteger(total)||total<0))throw new Error('Provider total is invalid.');
+  return {hasMore,lastPage:last??null,total};
+}
+
 export async function fetchReviews(
   apiKey: string,
   opts: { locationId?: string; organizationId?: string; page?: number; rating?: number; sourceNames?: string[] } = {},
-): Promise<{ reviews: EMRReview[]; hasMore: boolean; lastPage: number; total: number | null }> {
+): Promise<{ reviews: EMRReview[]; hasMore: boolean; lastPage: number | null; total: number | null }> {
   const params = new URLSearchParams();
   if (opts.locationId) params.set('location_id', opts.locationId);
   if (opts.organizationId) params.set('organization_id', opts.organizationId);
@@ -80,7 +104,7 @@ export async function fetchReviews(
   if (!res.ok) throw new Error(`Provider review read failed (HTTP ${res.status}).`);
   const payload = await res.json() as any;
   const page = opts.page ?? 1;
-  if (!Array.isArray(payload?.data) || !payload.meta || payload.meta.current_page !== page || !Number.isSafeInteger(payload.meta.last_page) || payload.meta.last_page < page) {
+  if (!Array.isArray(payload?.data)) {
     throw new Error('Provider review response or pagination is incomplete.');
   }
   const id = (value: unknown) => (typeof value === 'string' && value.length > 0) || (typeof value === 'number' && Number.isSafeInteger(value) && value > 0);
@@ -91,15 +115,14 @@ export async function fetchReviews(
     if (opts.organizationId && String(r.organization_id) !== opts.organizationId) throw new Error('Provider review organization does not match the requested business.');
     return {id:String(r.id),platform:r.source,author:r.author ?? '',rating:r.rating,body:r.message ?? '',date:r.date,url:r.source_url ?? null,replied:!!r.reply,replyDate:r.reply_date ?? null,replyText:r.reply,hidden:r.hidden ?? false,avatarUrl:r.avatar ?? null,verified:r.verified ?? null};
   });
-  if(payload.meta.total != null && (!Number.isSafeInteger(payload.meta.total)||payload.meta.total<0))throw new Error('Provider review total is invalid.');
-  return {reviews,hasMore:page < payload.meta.last_page,lastPage:payload.meta.last_page,total:payload.meta.total??null};
+  return {reviews,...pagination(payload,page)};
 }
 
 /** Complete, bounded snapshot. A failed or inconsistent page never becomes an empty success. */
 export async function fetchAllReviews(apiKey: string, locationId?: string, organizationId?: string): Promise<EMRReview[]> {
   const all:EMRReview[]=[];
   const identities=new Set<string>();
-  let lastPage:number|undefined, total:number|null|undefined;
+  let lastPage:number|null|undefined, total:number|null|undefined;
   for(let page=1;page<=100;page++) {
     const result=await fetchReviews(apiKey,{page,locationId,organizationId});
     if(page>1&&(lastPage!==result.lastPage||total!==result.total))throw new Error('Provider review pagination changed during the snapshot.');
@@ -414,9 +437,7 @@ export async function fetchCampaigns(apiKey: string, organizationId: number): Pr
       ids.add(c.id);
       campaigns.push({ id:c.id,name:c.name,invited:metric(c.statistics?.invited),opened:metric(c.statistics?.opened),clicked:metric(c.statistics?.clicked),reviewed:metric(c.statistics?.reviewed),privateFeedback:metric(c.statistics?.private_feedback),unsubscribed:metric(c.statistics?.unsubscribed) });
     }
-    if (!payload.meta) return campaigns;
-    if (payload.meta.current_page !== page || !Number.isInteger(payload.meta.last_page) || payload.meta.last_page < page) throw new Error('Provider campaign pagination is incomplete.');
-    if (page === payload.meta.last_page) return campaigns;
+    if (!pagination(payload,page).hasMore) return campaigns;
   }
   throw new Error('Provider campaign pagination exceeded its safety limit.');
 }

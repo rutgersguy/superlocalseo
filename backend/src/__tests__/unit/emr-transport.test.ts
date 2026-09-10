@@ -28,6 +28,10 @@ describe('EMR transport retries', () => {
     global.fetch=jest.fn().mockResolvedValue(new Response(JSON.stringify({data:[],meta:{current_page:2,last_page:2}})));
     await expect(fetchCampaigns('test',26)).rejects.toThrow('pagination');
   });
+  it('accepts the live simple-paginator empty campaign envelope',async()=>{
+    global.fetch=jest.fn().mockResolvedValue(new Response(JSON.stringify({data:[],meta:{current_page:1,from:null,per_page:10,to:null},links:{first:'https://app.superlocalseo.com/api/v1/request-reviews/campaigns?page=1',last:null,prev:null,next:null}})));
+    await expect(fetchCampaigns('test',26)).resolves.toEqual([]);
+  });
   it('requires explicit reply state and retains provider identity on reads', async () => {
     global.fetch = jest.fn().mockResolvedValueOnce(new Response(JSON.stringify({ data: { id: 1, organization_id: 2, location_id: 3, source: 'Google' } }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ data: { id: 1, organization_id: 2, location_id: 3, source: 'Google', reply: null, reply_date: null } }), { status: 200 }));

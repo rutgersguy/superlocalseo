@@ -3,8 +3,8 @@ import path from 'path';
 import puppeteer from 'puppeteer';
 import { db } from '../db/connection';
 import { config } from '../config';
-import { logger } from '../utils/logger';
-import { sendReportEmail } from './email.service';
+import { sendReportAttachment } from './report_delivery';
+import { generateReportOnce } from './report_generation';
 import { ENABLED_AI_ENGINES } from '../config/ai_engines.config';
 import { mergeBusinessCounts } from './ai_visibility.service';
 import { latestRanks, rankKey, summarizeRanks, latestCitations, summarizeCitations, RankObservation } from './measurement.service';
@@ -1010,80 +1010,5 @@ export async function generateAndSendReport(
   month: number,
   year: number,
 ): Promise<string> {
-  // 1. Upsert report row with status='generating'
-  const existing = await db('reports')
-    .where({ client_id: clientId, period_month: month, period_year: year })
-    .first() as { id: string } | undefined;
-
-  let reportId: string;
-
-  if (existing) {
-    await db('reports')
-      .where({ id: existing.id })
-      .update({ status: 'generating', updated_at: db.fn.now() });
-    reportId = existing.id;
-  } else {
-    const inserted = await db('reports')
-      .insert({
-        client_id: clientId,
-        period_month: month,
-        period_year: year,
-        status: 'generating',
-      })
-      .returning('id') as Array<{ id: string }>;
-    reportId = inserted[0].id;
-  }
-
-  try {
-    // 2. Gather data
-    logger.info('Gathering report data', { clientId, month, year });
-    const data = await gatherReportData(clientId, month, year);
-
-    // 3. Render HTML
-    const html = renderReportHtml(data);
-
-    // 4. Build output path
-    const monthStr = String(month).padStart(2, '0');
-    const outputPath = `${config.reports.dir}/${clientId}/${year}-${monthStr}.pdf`;
-
-    // 5. Generate PDF
-    logger.info('Generating PDF', { outputPath });
-    await generatePdf(html, outputPath);
-
-    // 6. Update: status='generated'
-    await db('reports').where({ id: reportId }).update({
-      status: 'generated',
-      file_path: outputPath,
-      generated_at: db.fn.now(),
-      updated_at: db.fn.now(),
-    });
-
-    // 7. Send email
-    logger.info('Sending report email', { to: data.client.email });
-    await sendReportEmail(
-      data.client.email,
-      data.client.businessName,
-      data.period.label,
-      outputPath,
-    );
-
-    // 8. Update: status='sent'
-    await db('reports').where({ id: reportId }).update({
-      status: 'sent',
-      sent_at: db.fn.now(),
-      email_recipient: data.client.email,
-      updated_at: db.fn.now(),
-    });
-
-    logger.info('Report generated and sent', { reportId, clientId, month, year });
-  } catch (error) {
-    // Mark as failed so we don't leave it stuck in 'generating'
-    await db('reports').where({ id: reportId }).update({
-      status: 'failed',
-      updated_at: db.fn.now(),
-    });
-    throw error;
-  }
-
-  return reportId;
+  return generateReportOnce(clientId,month,year,{gather:gatherReportData,render:renderReportHtml,pdf:generatePdf,send:sendReportAttachment});
 }

@@ -1,3 +1,4 @@
+import {z} from 'zod';
 import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db/connection';
@@ -15,6 +16,10 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
         'period_month as periodMonth',
         'period_year as periodYear',
         'status',
+        'email_status as emailStatus',
+        'email_provider_id as emailProviderId',
+        'file_path as filePath',
+        'generation_started_at as generationStartedAt',
         'generated_at as generatedAt',
         'sent_at as sentAt',
         'email_recipient as emailRecipient',
@@ -30,7 +35,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
       emailRecipient: string | null;
     }>;
 
-    ok(res, rows);
+    ok(res, rows.map((row:any)=>({...row,filePath:undefined,available:!!row.filePath,stalled:row.status==='generating'&&row.generationStartedAt&&Date.now()-new Date(row.generationStartedAt).getTime()>15*60000})));
   } catch (e) {
     next(e);
   }
@@ -387,32 +392,12 @@ export async function exportCitations(req: Request, res: Response, next: NextFun
 
 export async function generate(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const body = req.body as {
-      clientId?: string;
-      month?: number;
-      year?: number;
-    };
-
-    const clientId = body.clientId ?? req.clientId;
-
-    // Default to current month
-    const now = new Date();
-    const defaultMonth = now.getMonth() + 1;
-    const defaultYear = now.getFullYear();
-
-    const month = body.month ?? defaultMonth;
-    const year = body.year ?? defaultYear;
-
-    if (month < 1 || month > 12) {
-      err(res, 'month must be between 1 and 12', 400);
-      return;
-    }
-
-    if (year < 2020 || year > now.getFullYear() + 1) {
-      err(res, 'year is out of acceptable range', 400);
-      return;
-    }
-
+    const now=new Date();
+    const body=z.object({clientId:z.string().uuid().optional(),month:z.number().int().min(1).max(12).optional(),year:z.number().int().min(2020).max(now.getUTCFullYear()).optional()}).strict().parse(req.body);
+    if(body.clientId&&body.clientId!==req.clientId){notFound(res,'Customer not found');return;}
+    const clientId=req.clientId;
+    const month=body.month??(now.getUTCMonth()===0?12:now.getUTCMonth()), year=body.year??(now.getUTCMonth()===0?now.getUTCFullYear()-1:now.getUTCFullYear());
+    if(year===now.getUTCFullYear()&&month>=now.getUTCMonth()+1){err(res,'Choose a completed month for your report',422);return;}
     const job = await reportsQueue.add('generate-report', {
       clientId,
       month,
