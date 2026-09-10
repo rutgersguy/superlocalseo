@@ -16,7 +16,7 @@ describe('review synchronization reliability',()=>{
     await request(app).post('/api/auth/register').send({email,password:'Password123!',businessName:'Sync fixture'});
     const user=await db('users').where({email}).first();clientId=(await db('clients').where({user_id:user.id}).first()).id;
     token=(await request(app).post('/api/auth/login').send({email,password:'Password123!'})).body.data.accessToken;
-    await db('clients').where({id:clientId}).update({emr_organization_id:887700,emr_location_id:887701});
+    await db('clients').where({id:clientId}).update({emr_organization_id:887800,emr_location_id:887801});
     locationId=(await db('locations').insert({client_id:clientId,name:'Sync fixture'}).returning('id'))[0].id;
     await db('integrations').where({client_id:clientId,provider:'embedmyreviews'}).delete();
     await db('integrations').insert({client_id:clientId,provider:'embedmyreviews',status:'connected',api_key_encrypted:encrypt('fixture')});
@@ -54,7 +54,7 @@ describe('review synchronization reliability',()=>{
     expect((await status()).body.data.locations[0].status).toBe('stalled');
   });
   it('legacy webhook notifications enqueue reads without overwriting reviews; queue failures are retryable',async()=>{
-    const payload={webhook_event:'review-updated',organization_id:887700,location_id:887701,data:{id:'sync-test',source:'Google',rating:1,message:'Delayed stale payload'}};
+    const payload={webhook_event:'review-updated',organization_id:887800,location_id:887801,data:{id:'sync-test',source:'Google',rating:1,message:'Delayed stale payload'}};
     const res:any={json:jest.fn(),status:jest.fn().mockReturnThis()};
     const before=await db('reviews').where({client_id:clientId}).first();
     await handleEmrWebhook({body:payload} as any,res);

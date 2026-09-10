@@ -13,6 +13,9 @@ interface Report {
   periodMonth: number;
   periodYear: number;
   status: 'pending' | 'generating' | 'generated' | 'sent' | 'failed';
+  emailStatus: 'legacy_unknown'|'not_started'|'sending'|'accepted'|'rejected'|'uncertain';
+  available:boolean;
+  stalled:boolean;
   generatedAt: string | null;
   sentAt: string | null;
   emailRecipient: string | null;
@@ -55,7 +58,7 @@ function StatusBadge({ status }: { status: Report['status'] }) {
     pending: 'Pending',
     generating: 'Generating',
     generated: 'Generated',
-    sent: 'Sent',
+    sent: 'Generated',
     failed: 'Failed',
   };
   return (
@@ -102,7 +105,7 @@ function GenerateModal({ onClose, onSuccess, initialMonth, initialYear }: Genera
         },
       );
       if (res.success && res.data.queued) {
-        setToast('Report queued successfully! It will be emailed when ready.');
+        setToast('Request queued. Check the report and email status below; existing reports are reused.');
         setToastError(false);
         setTimeout(() => {
           onSuccess();
@@ -446,7 +449,7 @@ export default function Reports() {
   });
 
   const reports = [...(data?.data ?? [])].sort((a, b) => b.periodYear - a.periodYear || b.periodMonth - a.periodMonth);
-  const latest = reports.find(r => r.status === 'generated' || r.status === 'sent');
+  const latest = reports.find(r => r.available);
 
   function openResend(report: Report) {
     setResendModal({ month: report.periodMonth, year: report.periodYear });
@@ -476,6 +479,7 @@ export default function Reports() {
   return (
     <div className="space-y-6">
       <PageHeader title="Your monthly reports" description="A clear record of your visibility, with practical next steps. New reports are generated monthly using the data available for your plan." action={<Button onClick={() => setModalOpen(true)}>Generate report</Button>} />
+      <details className="rounded-xl border border-slate-200 bg-white p-4 text-sm"><summary className="cursor-pointer font-medium">Report status and recovery</summary><p className="mt-2">PDF generation and email delivery are separate. Existing PDFs remain downloadable if email fails. Requesting the same period reuses its saved PDF; accepted, unresolved and historical email attempts are not resent.</p><p className="mt-2">For a rejected email, correct the cause with support before requesting the same period again. For an unknown or unresolved outcome, support must check the mail provider. A generation still running after 15 minutes can be recovered by requesting the same period. Legacy email records have not been independently verified.</p></details>
       {latest && <section className="workspace-report-feature" aria-label="Latest monthly report"><div><p>LATEST MONTHLY BRIEF</p><h2>{formatPeriod(latest.periodMonth, latest.periodYear)}</h2><p>Generated {formatDate(latest.generatedAt)} · Your saved business report</p></div><div className="workspace-page-actions"><button className="workspace-button workspace-button-secondary" onClick={() => setPreviewReport(latest)}><Eye size={16} /> Preview latest report</button><button className="workspace-button workspace-button-secondary" onClick={() => void downloadReport(latest)} disabled={downloadingReportId === latest.id}>{downloadingReportId === latest.id ? 'Downloading…' : 'Download PDF'}</button></div></section>}
       <h2 className="text-lg font-semibold text-forest">Report archive</h2>
 
@@ -537,6 +541,8 @@ export default function Reports() {
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={report.status} />
+                    <p className="text-xs text-slate-600 mt-1">{{legacy_unknown:'Historical email outcome unverified',not_started:'Email not submitted',sending:'Email outcome unresolved — do not resend',accepted:'Email accepted; delivery unconfirmed',rejected:'Email rejected or not submitted',uncertain:'Email outcome unknown — do not resend'}[report.emailStatus]??'Email outcome unverified'}</p>
+                    {report.stalled&&<p className="text-xs text-amber-800">Generation stalled; request this period again to recover.</p>}
                   </td>
                   <td className="hidden sm:table-cell px-4 py-3 text-sm text-gray-500">
                     {formatDate(report.generatedAt)}
@@ -546,7 +552,7 @@ export default function Reports() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
-                      {(report.status === 'generated' || report.status === 'sent') && (
+                      {report.available && (
                         <>
                           <button
                             onClick={() => setPreviewReport(report)}
@@ -565,12 +571,12 @@ export default function Reports() {
                           </button>
                         </>
                       )}
-                      <button
+                      {((!report.available && (report.status === 'failed' || report.stalled)) || report.emailStatus === 'rejected') && <button
                         onClick={() => openResend(report)}
                         className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
                       >
-                        Re-send
-                      </button>
+                        {report.emailStatus === 'rejected' ? 'Retry email' : 'Recover report'}
+                      </button>}
                     </div>
                   </td>
                 </tr>
