@@ -19,7 +19,7 @@ export async function saveProviderMapping(locationId: string, input: MappingInpu
   if (evidence.organizationId !== input.organizationId || evidence.providerLocationId !== input.providerLocationId || evidence.googlePlaceId !== input.googlePlaceId || !Number.isFinite(Date.parse(evidence.verifiedAt)))
     throw mappingError('Provider identity evidence does not match the requested mapping.');
   const initialIdentity = mappingIdentity(initial);
-  return db.transaction(async trx => {
+  return retryMappingTransaction(() => db.transaction(async trx => {
     // Serializes first inserts as well as edits. Constraints independently enforce both tenancy boundaries.
     await trx.raw("SELECT pg_advisory_xact_lock(hashtext('provider-location-mapping-v1'))");
     const clients = await trx('clients').orderBy('id').forUpdate();
@@ -51,5 +51,20 @@ export async function saveProviderMapping(locationId: string, input: MappingInpu
     await trx('provider_location_mappings').insert(row).onConflict('location_id').merge();
     await trx('provider_mapping_events').insert({ location_id: locationId, client_id: location.client_id, actor_id: actorId, revision, note: input.note, evidence: JSON.stringify(evidence) });
     return { locationId, revision };
-  });
+  }));
+}
+
+/** PostgreSQL may abort a mapping transaction against concurrent account deletion.
+ * Only retry the rolled-back database work; never repeat the provider inspection.
+ */
+export async function retryMappingTransaction<T>(run: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try { return await run(); }
+    catch (e) {
+      if ((e as { code?: string }).code !== '40P01') throw e;
+      if (attempt === 2) throw mappingError('Account data changed concurrently. Refresh and retry the mapping.');
+      await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)));
+    }
+  }
+  throw mappingError('Refresh and retry the mapping.');
 }
