@@ -6,7 +6,9 @@ import * as campaign from '../controllers/campaign.controller';
 import * as setup from '../controllers/campaign_setup.controller';
 
 import * as collection from '../controllers/collection.controller';
+import { clientHistory } from '../controllers/campaign_history.controller';
 const router = Router();
+router.get('/history', requireClient, clientHistory);
 router.get('/collection', requireClient, collection.status);
 router.post('/collection/:locationId', requireClient, requireTeamAdmin, collection.issue);
 router.get('/collection/:locationId/qr.png', requireClient, collection.image);

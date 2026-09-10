@@ -11,7 +11,9 @@ import { listFreeReports } from '../controllers/admin_reports.controller';
 
 import { listProviderMappings, updateProviderMapping } from '../controllers/provider_mapping.controller';
 
+import { adminHistory } from '../controllers/campaign_history.controller';
 const router = Router();
+router.get('/campaign-invitations', requireAdmin, adminHistory);
 router.get('/provider-mappings', requireAdmin, listProviderMappings);
 router.put('/provider-mappings/:locationId', requireAdmin, updateProviderMapping);
 router.get('/free-reports', requireAdmin, listFreeReports);
