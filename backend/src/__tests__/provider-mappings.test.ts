@@ -2,7 +2,7 @@ import request from 'supertest';
 import app from '../app';
 import { db } from '../db/connection';
 import { readProviderMappingEvidence } from '../services/provider_mapping_evidence';
-jest.mock('../services/provider_mapping_evidence', () => ({ readProviderMappingEvidence: jest.fn() }));
+jest.mock('../services/provider_mapping_evidence', () => ({ ...jest.requireActual('../services/provider_mapping_evidence'), readProviderMappingEvidence: jest.fn() }));
 const readEvidence = readProviderMappingEvidence as jest.Mock;
 
 describe('Explicit provider location mapping', () => {
@@ -19,7 +19,7 @@ describe('Explicit provider location mapping', () => {
     const login = await request(app).post('/api/auth/login').send({ email, password: 'Password123!' });
     return { token: login.body.data.accessToken, client: await db('clients').where({ user_id: user.id }).first() };
   }
-  const input = (org = '880001', providerLoc = '880002', revision = 0) => ({ revision, organizationId: org, providerLocationId: providerLoc, googlePlaceId: place, note: 'Exact source identity checked' });
+  const input = (org = '880001', providerLoc = '880002', revision = 0) => ({ revision, organizationId: org, providerLocationId: providerLoc, googlePlaceId: place, expectedGooglePlaceId: place, note: 'Exact source identity checked', inspection: { providerPageUrl: 'https://app.superlocalseo.com/sources', businessName: 'Fixture Business', inspectedAt: new Date().toISOString(), selectedLocationConfirmed: true as const, exactPlaceIdConfirmed: true as const, customerOwnershipConfirmed: true as const } });
   const save = (id: string, body = input(), auth = adminToken) => request(app).put(`/api/admin/provider-mappings/${id}`).set('Authorization', `Bearer ${auth}`).send(body);
   beforeAll(async () => {
     const a = await account('a'); token = a.token; clientA = a.client.id;
@@ -44,6 +44,8 @@ describe('Explicit provider location mapping', () => {
     expect((await request(app).put(`/api/admin/provider-mappings/${locationA}`).send(input())).status).toBe(401);
     expect((await save(locationA, { ...input(), organizationId: '0880001' })).status).toBe(422);
     expect((await save(locationA, { ...input(), revision: -1 })).status).toBe(422);
+    expect((await save(locationA, { ...input(), inspection: undefined } as any)).status).toBe(422);
+    expect((await save(locationA, { ...input(), inspection: { ...input().inspection, exactPlaceIdConfirmed: false } } as any)).status).toBe(422);
     expect(readEvidence).not.toHaveBeenCalled();
   });
   it('refuses absent or changed local Google identity and failed provider proof', async () => {
@@ -52,6 +54,14 @@ describe('Explicit provider location mapping', () => {
     readEvidence.mockRejectedValue(Object.assign(new Error('No exact provider match'), { status: 409 }));
     expect((await save(locationA)).status).toBe(409);
     expect(await db('provider_location_mappings').where({ location_id: locationA })).toHaveLength(0);
+  });
+  it('records the first Google identity atomically from the explicit inspection', async () => {
+    const [location] = await db('locations').insert({ client_id: clientA, name: 'New inspected branch' }).returning('id');
+    const response = await save(location.id, { ...input('880009', '880010'), expectedGooglePlaceId: null } as any);
+    expect(response.status).toBe(200);
+    expect((await db('locations').where({ id: location.id }).first()).google_place_id).toBe(place);
+    const event = await db('provider_mapping_events').where({ location_id: location.id }).first();
+    expect(event.evidence.previousGooglePlaceId).toBeNull();
   });
   it('rejects foreign legacy organization and location claims without writing', async () => {
     await db('clients').where({ id: clientB }).update({ emr_organization_id: 880001 });
@@ -110,4 +120,18 @@ describe('Explicit provider location mapping', () => {
     expect((await save(locationB, input('880007', '880008'))).status).toBe(409);
     expect(await db('provider_location_mappings').where({ location_id: locationB })).toHaveLength(0);
   });
+  it('rejects expired evidence even after a successful external read', async () => {
+    await db('locations').where({ id: locationB }).update({ google_place_id: place });
+    readEvidence.mockImplementation(async (organizationId, providerLocationId, googlePlaceId) => ({ organizationId, providerLocationId, googlePlaceId, verifiedAt: new Date(Date.now() - 180000).toISOString() }));
+    expect((await save(locationB, input('880011', '880012'))).status).toBe(409);
+    expect(await db('provider_location_mappings').where({ location_id: locationB })).toHaveLength(0);
+  });
+  it('rejects a changed branch name during the membership check', async () => {
+    readEvidence.mockImplementation(async (organizationId, providerLocationId, googlePlaceId) => {
+      await db('locations').where({ id: locationB }).update({ name: 'Changed branch identity' });
+      return { organizationId, providerLocationId, googlePlaceId, verifiedAt: new Date().toISOString() };
+    });
+    expect((await save(locationB, input('880011', '880012'))).status).toBe(409);
+  });
+
 });
