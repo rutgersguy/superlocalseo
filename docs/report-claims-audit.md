@@ -1,6 +1,6 @@
 # Report and website claims audit — September 10, 2026
 
-Status: locally implemented; GitHub checks, isolated database/browser acceptance and deployment are pending server access. Production remains at PR #225 until a later release is recorded.
+Implementation: PR #226. The full isolated backend suite passed 475 tests across 48 suites. See the PR acceptance comment for final browser, GitHub and production verification.
 
 ## Corrections
 
@@ -24,6 +24,6 @@ Status: locally implemented; GitHub checks, isolated database/browser acceptance
 
 ## Validation
 
-Local backend unit suite: 291 tests across 22 suites passed. Backend and frontend type checks passed. Regression coverage includes invalid/unsupported observations, missing inputs versus true zero, conservative report recommendations, and Lite section gating. Full database and browser checks remain pending; this document does not assert production acceptance.
+Local backend unit suite: 291 tests across 22 suites passed. Backend and frontend type checks passed. Regression coverage includes invalid/unsupported observations, missing inputs versus true zero, conservative report recommendations, and Lite section gating. The combined database suite subsequently passed 475 tests across 48 suites; browser and deployment acceptance are recorded separately on PR #226.
 
 Existing live datasets and PDF files must remain intact. Do not regenerate customer PDFs or send email as a verification shortcut. Continue the read-only reconciliation used for PR #225 after deployment.

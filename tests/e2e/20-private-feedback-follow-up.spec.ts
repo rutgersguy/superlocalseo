@@ -10,19 +10,19 @@ test('private feedback guide and saved follow-up work without publishing or cont
   try {
     await loginViaUI(page, 'pro@fixture.test', 'TestPass123!');
     await page.goto('/dashboard/reviews');
-    await page.getByRole('button', { name: 'Private Feedback', exact: true }).click();
+    await page.getByRole('button', { name: /^Private Feedback(?: \d+)?$/ }).click();
     await page.getByText('How to manage private feedback', { exact: true }).click();
     await expect(page.getByText(/Saving a status or note sends no message/)).toBeVisible();
     await expect(page.getByText(/Historical EMR feedback and later edits are not backfilled/)).toBeVisible();
-    const card = page.locator('div.bg-white.rounded-xl').filter({ has: page.getByText('Follow-up browser fixture', { exact: true }) });
+    const card = page.locator('div.bg-white.rounded-xl.p-4').filter({ has: page.getByText('Follow-up browser fixture', { exact: true }) });
     await card.getByText('Manage follow-up', { exact: true }).click();
-    await card.getByLabel('Follow-up status', { exact: true }).selectOption('in_progress');
+    await card.getByLabel('Follow-up status').selectOption('in_progress');
     await card.getByLabel('Assigned teammate').selectOption({ label: 'pro@fixture.test' });
     await card.getByLabel('Internal notes').fill('Owner will discuss in person.');
     await card.getByRole('button', { name: 'Save follow-up' }).click();
     await expect(card.getByText(/Follow-up: In progress/)).toBeVisible();
     await page.reload();
-    await page.getByRole('button', { name: 'Private Feedback', exact: true }).click();
+    await page.getByRole('button', { name: /^Private Feedback(?: \d+)?$/ }).click();
     await card.getByText('Manage follow-up', { exact: true }).click();
     await expect(card.getByLabel('Internal notes')).toHaveValue('Owner will discuss in person.');
     await expect(card.getByText('hidden@example.invalid', { exact: true })).toHaveCount(0);
