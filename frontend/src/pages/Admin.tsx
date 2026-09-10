@@ -1,6 +1,7 @@
 import AdminFreeReports from '../components/AdminFreeReports';
 import { useSearchParams } from 'react-router-dom';
 import CampaignSetupQueue from '../components/CampaignSetupQueue';
+import ProviderMappings from '../components/ProviderMappings';
 import React, { useState, useEffect, useRef } from 'react';
 import useSWR, { mutate } from 'swr';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
@@ -110,7 +111,7 @@ function HealthDot({ ok, label, detail }: { ok: boolean; label: string; detail?:
 
 // ─── Tab bar ──────────────────────────────────────────────────────────────────
 
-type Tab = 'overview' | 'clients' | 'queues' | 'analytics' | 'citations' | 'customers' | 'promos' | 'campaign-setup' | 'free-reports';
+type Tab = 'overview' | 'clients' | 'queues' | 'analytics' | 'citations' | 'customers' | 'promos' | 'campaign-setup' | 'free-reports' | 'provider-mappings';
 
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   const tabs: { key: Tab; label: string }[] = [
@@ -118,6 +119,7 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
     { key: 'clients', label: 'Clients' },
     { key: 'free-reports', label: 'Free reports' },
     { key: 'campaign-setup', label: 'Campaign setup' },
+    { key: 'provider-mappings', label: 'Provider mappings' },
     { key: 'customers', label: 'Customers' },
     { key: 'promos', label: 'Promo Codes' },
     { key: 'queues', label: 'Job Queues' },
@@ -1513,7 +1515,7 @@ function PromoCodesTab() {
 export default function Admin() {
   const [params, setParams] = useSearchParams();
   const candidate = params.get('tab') ?? 'overview';
-  const tab: Tab = ['overview','clients','queues','analytics','citations','customers','promos','campaign-setup','free-reports'].includes(candidate) ? candidate as Tab : 'overview';
+  const tab: Tab = ['overview','clients','queues','analytics','citations','customers','promos','campaign-setup','free-reports','provider-mappings'].includes(candidate) ? candidate as Tab : 'overview';
   const setTab = (value: Tab) => setParams({ tab: value });
 
   return (
@@ -1530,6 +1532,7 @@ export default function Admin() {
         <TabBar active={tab} onChange={setTab} />
         {tab === 'free-reports' && <AdminFreeReports />}
         {tab === 'campaign-setup' && <CampaignSetupQueue />}
+        {tab === 'provider-mappings' && <ProviderMappings />}
         {tab === 'overview' && <OverviewTab />}
         {tab === 'clients' && <ClientsTab />}
         {tab === 'customers' && <CustomersTab />}

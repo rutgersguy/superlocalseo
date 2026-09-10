@@ -1,8 +1,12 @@
 # Commercial release status
 
-Updated September 9, 2026, after deployed main `58fdc82b` ([PR #215](https://github.com/rutgersguy/superlocalseo/pull/215)). This is the current status index; dated investigation documents preserve earlier observations and are not current launch checklists.
+Updated September 10, 2026. Provider-mapping release: [PR #218](https://github.com/rutgersguy/superlocalseo/pull/218). Its deployment acceptance record is on the PR; the preceding verified production release was `de435e0` ([PR #217](https://github.com/rutgersguy/superlocalseo/pull/217)). This is the current status index; dated investigation documents preserve earlier observations and are not current launch checklists.
 
 **The remaining work is not just reporting or status checks.** The native acquisition report and its admin listing are live. Campaign provisioning/verification, native collection and private-feedback workflows, review/reply reliability, multi-location onboarding, and external acceptance testing still have unfinished scope. Unrestricted self-service commercial readiness has not been demonstrated. Stripe stays last, including a known subscription-date defect rather than only switching on payments.
+
+## Work in progress: provider mapping
+
+The location audit and explicit mapping implementation are underway in parallel. Storage, conflict protections, history and an admin screen are implemented. Saving mappings remains disabled pending a supported, live-verified Google identity source. Live inventory found three local locations with correct legacy EMR membership but no saved Google Place IDs. All 350 backend tests, both builds and the isolated browser check passed; deployment acceptance is tracked on PR #218. No customer mappings have been saved by this work. See the [implementation and activation checklist](provider-location-mappings.md).
 
 ## What is live and verified
 
