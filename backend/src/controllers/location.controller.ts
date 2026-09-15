@@ -1,3 +1,4 @@
+import { ensureInitialScans } from '../services/initial_scans';
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
@@ -141,6 +142,7 @@ export async function create(req: Request, res: Response, next: NextFunction): P
     // Auto-geocode in background — non-fatal if it fails.
     void geocodeAndSave((location as Record<string, unknown>).id as string, body.address, body.city, body.state, body.zip);
 
+    await ensureInitialScans(req.clientId, location.id as string);
     created(res, formatLocation(location as Record<string, unknown>));
   } catch (e) {
     next(e);
@@ -164,6 +166,8 @@ export async function update(req: Request, res: Response, next: NextFunction): P
     if (body.phone !== undefined) updates.phone = body.phone;
     if (body.website !== undefined) updates.website = body.website;
     if (body.brightlocalCampaignId !== undefined) updates.brightlocal_campaign_id = body.brightlocalCampaignId || null;
+    // Do not start a map at the previous address while re-geocoding the new one.
+    if (['address', 'city', 'state', 'zip'].some(f => body[f as keyof typeof body] !== undefined)) { updates.lat = null; updates.lng = null; }
     const serviceAreaChanged = body.serviceArea !== undefined;
     if (serviceAreaChanged) updates.service_area = JSON.stringify(body.serviceArea);
 
@@ -204,6 +208,7 @@ export async function update(req: Request, res: Response, next: NextFunction): P
       })();
     }
 
+    await ensureInitialScans(req.clientId, id);
     ok(res, formatLocation(updated));
   } catch (e) {
     next(e);
@@ -287,4 +292,14 @@ export async function remove(req: Request, res: Response, next: NextFunction): P
   } catch (e) {
     next(e);
   }
+}
+
+export async function initialScanStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const rows = await db('initial_scans').join('locations', 'locations.id', 'initial_scans.location_id')
+      .where({ 'initial_scans.client_id': req.clientId, 'locations.client_id': req.clientId })
+      .select('initial_scans.location_id as locationId', 'locations.name as locationName', 'step', 'status', 'reason', 'started_at as startedAt', 'completed_at as completedAt', 'initial_scans.updated_at as updatedAt');
+    ok(res, rows.map(r => r.status === 'running' && new Date(r.startedAt).getTime() < Date.now() - 20 * 60 * 1000
+      ? { ...r, status: 'needs_attention', reason: 'The scan is taking longer than expected. Support should check it before retrying.' } : r));
+  } catch (e) { next(e); }
 }

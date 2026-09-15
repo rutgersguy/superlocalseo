@@ -383,6 +383,8 @@ function GeoGridPanel() {
   const kwKey = selectedLocationId ? `/keywords?locationId=${selectedLocationId}` : null;
   const { data: kwData } = useSWR<KeywordsListResponse>(kwKey, fetcher);
   const keywords = kwData?.data ?? [];
+  useEffect(() => { if (!selectedLocationId && locations[0]) setSelectedLocationId(locations[0].id); }, [locations, selectedLocationId]);
+  useEffect(() => { if (!keywords.some(k => k.id === selectedKeywordId)) setSelectedKeywordId(keywords[0]?.id ?? ''); }, [keywords, selectedKeywordId]);
 
   const reportsKey = selectedLocationId && selectedKeywordId
     ? `/geo-grid?locationId=${selectedLocationId}&keywordId=${selectedKeywordId}`
