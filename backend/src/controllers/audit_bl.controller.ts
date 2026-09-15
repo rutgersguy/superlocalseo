@@ -45,10 +45,20 @@ export async function trigger(req: Request, res: Response, next: NextFunction): 
       .first() as Record<string, unknown> | undefined;
     if (!location) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
 
-    // 30-day cooldown
+    if (typeof location.website !== 'string' || !location.website.trim()) {
+      err(res, 'Add your website in Settings → Locations before running a website audit.', 400, 'WEBSITE_REQUIRED');
+      return;
+    }
+
+    // Only website audits consume the 24-hour website cooldown. Older listing-only
+    // results must not prevent the first crawl after a customer adds their URL.
     const recent = await db('location_audits')
       .where({ location_id: location.id as string, client_id: req.clientId })
-      .whereIn('status', ['complete', 'processing', 'pending'])
+      .where((q) => q.whereIn('status', ['processing', 'pending'])
+        .orWhere((completed) => completed.where('status', 'complete').where((evidence) => evidence
+          .whereNotNull('on_page_score').orWhereNotNull('dfs_on_page_task_id')
+          .orWhereNotNull('dfs_on_page_data')
+          .orWhereRaw("jsonb_array_length(COALESCE(on_page_details, '[]'::jsonb)) > 0"))))
       .orderBy('created_at', 'desc')
       .first() as { created_at: Date } | undefined;
 
@@ -217,17 +227,19 @@ export async function pollPending(): Promise<void> {
       'location_audits.id as auditId',
       'location_audits.location_id as locationId',
       'clients.industry as industry',
-    ) as Array<{ auditId: string; locationId: string; industry: string | null }>;
+      'location_audits.dfs_on_page_task_id as taskId',
+    ) as Array<{ auditId: string; locationId: string; industry: string | null; taskId: string | null }>;
 
   for (const row of dataApiPending) {
     try {
-      const scores = await computeAuditScores(row.locationId, row.industry);
+      const scores = await computeAuditScores(row.locationId, row.industry, row.taskId);
       await db('location_audits').where({ id: row.auditId }).update({
         nap_score: scores.napScore,
         citation_score: scores.citationScore,
         composite_score: scores.compositeScore,
       raw_data: db.raw("COALESCE(raw_data, '{}'::jsonb) || ?::jsonb", [JSON.stringify({ scoreMethodology: 'verified_observations_v2' })]),
       updated_at: new Date(),
+        dfs_on_page_task_id: scores.dfsLighthouseTaskId ?? row.taskId ?? null,
         on_page_score: scores.onPageScore,
         on_page_details: scores.onPageDetails.length ? JSON.stringify(scores.onPageDetails) : null,
         status: 'complete',
@@ -243,6 +255,14 @@ export async function pollPending(): Promise<void> {
   const nullOnPageAudits = await db('location_audits')
     .where({ 'location_audits.status': 'complete' })
     .whereNull('location_audits.on_page_score')
+    .whereNull('location_audits.dfs_on_page_task_id')
+    .whereNull('location_audits.dfs_on_page_data')
+    // A newer website attempt supersedes an older listing-only result. Do not
+    // pay for a historical crawl of the same current website as well.
+    .whereNotExists(db('location_audits as newer').select(db.raw('1'))
+      .whereRaw('newer.location_id = location_audits.location_id')
+      .whereRaw('newer.created_at > location_audits.created_at')
+      .whereIn('newer.status', ['pending', 'processing', 'complete']))
     .whereNull('location_audits.bl_report_id')
     // Skip rows we have already tried recently. Without this, a computation that
     // legitimately returns null writes the row back unchanged, so it re-qualifies
@@ -256,13 +276,15 @@ export async function pollPending(): Promise<void> {
       'location_audits.id as auditId',
       'location_audits.location_id as locationId',
       'clients.industry as industry',
+      'location_audits.dfs_on_page_task_id as taskId',
     )
-    .limit(5) as Array<{ auditId: string; locationId: string; industry: string | null }>;
+    .limit(5) as Array<{ auditId: string; locationId: string; industry: string | null; taskId: string | null }>;
 
   for (const row of nullOnPageAudits) {
     try {
-      const scores = await computeAuditScores(row.locationId, row.industry);
+      const scores = await computeAuditScores(row.locationId, row.industry, row.taskId);
       await db('location_audits').where({ id: row.auditId }).update({
+        dfs_on_page_task_id: scores.dfsLighthouseTaskId ?? row.taskId ?? null,
         on_page_score: scores.onPageScore,
         on_page_details: scores.onPageDetails.length ? JSON.stringify(scores.onPageDetails) : null,
         // Stamped whether or not a score came back — "we tried" is the fact that
@@ -293,21 +315,24 @@ export async function pollPending(): Promise<void> {
       'location_audits.id as auditId',
       'location_audits.location_id as locationId',
       'clients.industry as industry',
+      'location_audits.dfs_on_page_task_id as taskId',
     )
-    .limit(50) as Array<{ auditId: string; locationId: string; industry: string | null }>;
+    .limit(50) as Array<{ auditId: string; locationId: string; industry: string | null; taskId: string | null }>;
 
   for (const row of nullScoreAudits) {
     try {
-      const scores = await computeAuditScores(row.locationId, row.industry);
+      const scores = await computeAuditScores(row.locationId, row.industry, row.taskId);
       await db('location_audits').where({ id: row.auditId }).update({
         nap_score: scores.napScore,
         citation_score: scores.citationScore,
         composite_score: scores.compositeScore,
       raw_data: db.raw("COALESCE(raw_data, '{}'::jsonb) || ?::jsonb", [JSON.stringify({ scoreMethodology: 'verified_observations_v2' })]),
       updated_at: new Date(),
-        on_page_score: scores.onPageScore,
+        dfs_on_page_task_id: scores.dfsLighthouseTaskId ?? row.taskId ?? null,
+        // A completed Lighthouse result has already been blended into this score.
+        // Listing-score recovery must not replace it with the raw page estimate.
+        on_page_score: db.raw('CASE WHEN dfs_on_page_data IS NOT NULL THEN on_page_score ELSE ? END', [scores.onPageScore]),
         on_page_details: scores.onPageDetails.length ? JSON.stringify(scores.onPageDetails) : null,
-        dfs_on_page_task_id: scores.dfsLighthouseTaskId ?? null,
         completed_at: db.raw('COALESCE(completed_at, NOW())'),
         backfill_attempted_at: new Date(),
       });

@@ -1288,7 +1288,7 @@ function LocationForm({
 }
 
 function LocationsTab({ isAdmin }: { isAdmin: boolean }) {
-  const { data, mutate } = useSWR<{ success: boolean; data: Location[] }>('/locations', fetcher);
+  const { data, mutate } = useSWR<{ success: boolean; data: Location[] }>('/locations', fetcher, { refreshInterval: result => result?.data.some(loc => loc.address && (loc.lat == null || loc.lng == null)) ? 5000 : 0 });
   const { data: billingData } = useSWR<BillingResponse>('/billing/status', fetcher);
 
   const locations = data?.data ?? [];
@@ -1423,6 +1423,7 @@ function LocationsTab({ isAdmin }: { isAdmin: boolean }) {
                     {[loc.address, loc.city, loc.state, loc.zip].filter(Boolean).join(', ')}
                   </p>
                 )}
+                {(loc.lat == null || loc.lng == null) && <p className="mt-1 text-xs text-amber-700">The map is waiting for verified address coordinates. Check the street number, street name, city and ZIP, then edit and save this location to retry. Suite details stay in your business address; we also search without them.</p>}
                 {(loc.phone || loc.website) && (
                   <p className="text-xs text-slate-400 mt-0.5">
                     {loc.phone && <span className="mr-3">{loc.phone}</span>}

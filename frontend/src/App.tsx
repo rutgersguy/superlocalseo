@@ -57,11 +57,11 @@ function App() {
           <Route path="/team/accept" element={<TeamAccept />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
-          <Route path="/billing" element={<BillingPage />} />
           <Route path="/billing/success" element={<Navigate to="/dashboard" replace />} />
 
           {/* Protected routes */}
           <Route element={<ProtectedRoute />}>
+            <Route path="/billing" element={<BillingPage />} />
             <Route path="/onboarding" element={<Onboarding />} />
             <Route element={<AdminRoute />}>
               <Route path="/admin" element={<DashboardLayout />}>

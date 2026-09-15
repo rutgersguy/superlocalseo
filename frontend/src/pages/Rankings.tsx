@@ -64,7 +64,7 @@ type MainTab = 'table' | 'map';
 
 // ─── Geo-Grid types ────────────────────────────────────────────────────────────
 
-interface GridPoint { lat: number; lng: number; rank: number | null; url: string | null; }
+interface GridPoint { observationStatus?: 'observed' | 'unverified'; lat: number; lng: number; rank: number | null; url: string | null; }
 interface GeoReport { id: string; locationId: string; keywordId: string; status: string; centerLat: number; centerLng: number; gridData: GridPoint[] | null; completedAt: string | null; createdAt: string; }
 interface GeoReportsResponse { success: boolean; data: { reports: GeoReport[] }; }
 interface LocationOption { id: string; name: string; city?: string; state?: string; }
@@ -473,9 +473,9 @@ function GeoGridPanel() {
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' />
               {latestReport.gridData.map((point, i) => (
                 <CircleMarker key={i} center={[point.lat, point.lng]} radius={16}
-                  fillColor={rankColor(point.rank)} color={rankColor(point.rank)} fillOpacity={0.7} weight={1}>
+                  fillColor={point.observationStatus === 'unverified' ? '#94a3b8' : rankColor(point.rank)} color={point.observationStatus === 'unverified' ? '#94a3b8' : rankColor(point.rank)} fillOpacity={0.7} weight={1}>
                   <Popup>
-                    {point.rank != null ? `Rank #${point.rank}` : 'Not ranked'}
+                    {point.observationStatus === 'unverified' ? 'Not verified — provider result unavailable' : point.rank != null ? `Rank #${point.rank}` : 'Not ranked'}
                     {point.url && <><br /><a href={point.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 break-all">{point.url}</a></>}
                   </Popup>
                 </CircleMarker>
@@ -483,13 +483,15 @@ function GeoGridPanel() {
             </MapContainer>
           </div>
           {(() => {
-            const cells = latestReport.gridData;
+            const unavailable = latestReport.gridData.filter(c => c.observationStatus === 'unverified').length;
+            const cells = latestReport.gridData.filter(c => c.observationStatus !== 'unverified');
             const ranked = cells.filter((c) => c.rank != null);
             const top3 = cells.filter((c) => c.rank != null && c.rank <= 3).length;
             const top10 = cells.filter((c) => c.rank != null && c.rank <= 10).length;
             const avgRank = ranked.length > 0 ? (ranked.reduce((s, c) => s + (c.rank ?? 0), 0) / ranked.length).toFixed(1) : '—';
             return (
               <div className="grid grid-cols-3 gap-4">
+                {unavailable > 0 && <p className="col-span-3 text-sm text-slate-500">{unavailable} point(s) could not be verified and are excluded from these percentages.</p>}
                 {[
                   { label: 'Avg Grid Rank', value: avgRank },
                   { label: '% in Top 3', value: `${cells.length > 0 ? Math.round(top3 / cells.length * 100) : 0}%` },
@@ -515,7 +517,7 @@ function GeoGridPanel() {
       )}
 
       {latestReport?.status === 'complete' && latestReport.gridData && <div className="flex gap-4 text-xs text-slate-500 flex-wrap">
-        {[{ color: '#16a34a', label: '#1–3' }, { color: '#ca8a04', label: '#4–10' }, { color: '#ea580c', label: '#11–20' }, { color: '#dc2626', label: '#21+' }, { color: '#6b7280', label: 'Not ranked' }].map((l) => (
+        {[{ color: '#16a34a', label: '#1–3' }, { color: '#ca8a04', label: '#4–10' }, { color: '#ea580c', label: '#11–20' }, { color: '#dc2626', label: '#21+' }, { color: '#6b7280', label: 'Not ranked' }, { color: '#94a3b8', label: 'Not verified' }].map((l) => (
           <span key={l.label} className="flex items-center gap-1">
             <span className="inline-block w-3 h-3 rounded-full" style={{ background: l.color }} />
             {l.label}

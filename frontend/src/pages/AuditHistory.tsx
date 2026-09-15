@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { fetcher, apiFetch } from '../services/api';
 
-interface LocationOption { id: string; name: string; blCampaignId?: string | null; }
+interface LocationOption { id: string; name: string; website?: string | null; blCampaignId?: string | null; }
 interface LocationsResponse { success: boolean; data: LocationOption[]; }
 
 interface LighthouseAuditItem {
@@ -410,7 +410,7 @@ export default function AuditHistory() {
   const { data: locData } = useSWR<LocationsResponse>('/locations', fetcher);
   const locations = locData?.data ?? [];
 
-  const { data: auditsData, isLoading } = useSWR<AuditsResponse>('/audits/bl', fetcher);
+  const { data: auditsData, isLoading } = useSWR<AuditsResponse>('/audits/bl', fetcher, { refreshInterval: 15000 });
   const allAudits = auditsData?.data?.audits ?? [];
 
   const effectiveLocationId = selectedLocationId || locations[0]?.id || '';
@@ -441,7 +441,8 @@ export default function AuditHistory() {
   // NB: the pre-existing `latestAudit` above is the latest COMPLETE audit and
   // drives the score cards. This one is the latest audit of any status.
   const mostRecentAudit = auditsForLocation[0] ?? null;
-  const lastCompleted = auditsForLocation.find((a) => a.status === 'complete') ?? null;
+  const hasWebsite = Boolean(locations.find((l) => l.id === effectiveLocationId)?.website?.trim());
+  const lastCompleted = auditsForLocation.find((a) => a.status === 'complete' && (a.onPageScore != null || a.onPageDetails.length > 0 || a.dfsLighthouseTaskId || a.dfsOnPageData)) ?? null;
 
   const hoursSince = (iso: string) => (Date.now() - new Date(iso).getTime()) / 3_600_000;
 
@@ -457,12 +458,14 @@ export default function AuditHistory() {
 
   // Blocked only while a run is genuinely in flight, or while a SUCCESSFUL audit
   // is still inside its 24h window. A failed or stale run leaves it enabled.
-  const canTrigger = !auditInProgress && (completedDaysAgo === null || completedDaysAgo >= 1);
+  const canTrigger = hasWebsite && !auditInProgress && (completedDaysAgo === null || completedDaysAgo >= 1);
 
-  const triggerBlockedReason = auditInProgress
+  const triggerBlockedReason = !hasWebsite
+    ? 'Add your website in Settings → Locations to start the first website audit automatically.'
+    : auditInProgress
     ? 'An audit is already running — this usually takes a couple of minutes.'
     : !canTrigger
-      ? 'Your audit runs automatically every day. You can also run one manually again tomorrow.'
+      ? 'You can run another website audit 24 hours after the previous website audit.'
       : '';
 
   const chartData = Object.values(
@@ -554,6 +557,8 @@ export default function AuditHistory() {
           </div>
         </div>
         <p className="text-sm text-gray-500 mt-1">On-page SEO checks and website performance for your location</p>
+        {!hasWebsite && <p className="mt-3 text-sm text-amber-700">Add your website in Settings → Locations to start your first website audit automatically. Listing checks can exist before a website is added.</p>}
+        {latestAudit && <p className="mt-2 text-sm text-slate-500">A dash means no measured result is available, not a score of zero. Listing and NAP scores need verified observations; the overall estimate requires all components. {latestAudit.onPageScore == null && (latestAudit.dfsLighthouseTaskId ? 'Website performance results are still pending.' : 'This audit has no website score. Check that your location has a publicly accessible website URL.')}</p>}
       </div>
 
       {triggerError && (
@@ -565,8 +570,8 @@ export default function AuditHistory() {
       {/* Score cards — on-page focused */}
       <div className="grid grid-cols-3 gap-4">
         <ScoreCard label="Page audit estimate" value={latestAudit?.onPageScore ?? null} delta={delta('onPageScore')} tooltip="Heuristic page checks. When Lighthouse is available, the displayed score blends page checks (60%) with lab performance (40%). This is not a Google ranking score." />
-        <ScoreCard label="Reviews" value={latestAudit?.reviewScore ?? null} delta={delta('reviewScore')} tooltip="Average rating and review volume score. Requires Google Business Profile connection." />
-        <ScoreCard label="Google Profile" value={latestAudit?.googleScore ?? null} delta={delta('googleScore')} tooltip="Google Business Profile completeness — claimed status, photos, hours, and posts. Requires GBP connection." />
+        <ScoreCard label="Lab performance" value={latestAudit?.dfsOnPageData?.performanceScore ?? null} delta={null} tooltip="Lighthouse lab performance for the audited page. Results appear when the website performance task finishes." />
+        <ScoreCard label="Technical SEO" value={latestAudit?.dfsOnPageData?.seoScore ?? null} delta={null} tooltip="Lighthouse technical SEO checks for the audited page. This is not a Google ranking or Business Profile completeness score." />
       </div>
 
       {/* Recommendations */}

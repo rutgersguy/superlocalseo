@@ -129,21 +129,42 @@ async function runInitialAudit(clientId: string, loc: Record<string, any>): Prom
   if (scores.onPageScore == null && !scores.dfsLighthouseTaskId) throw new Error('Website checks unavailable; saved SEO observations retained');
 }
 
-async function runInitialMap(clientId: string, loc: Record<string, any>, keyword: Record<string, any>): Promise<void> {
-  const [report] = await db('geo_grid_reports').insert({ client_id: clientId, location_id: loc.id, keyword_id: keyword.id, status: 'processing', grid_size: 3, center_lat: loc.lat, center_lng: loc.lng }).returning('id');
-  const points = [];
+async function runInitialMap(clientId: string, loc: Record<string, any>, keyword: Record<string, any>, resume?: Record<string, any>): Promise<void> {
+  const report = resume ?? (await db('geo_grid_reports').insert({ client_id: clientId, location_id: loc.id, keyword_id: keyword.id, status: 'processing', grid_size: 3, center_lat: loc.lat, center_lng: loc.lng }).returning('id'))[0];
+  const points: Array<{ gridRow: number; gridCol: number; lat: number; lng: number; rank: number | null; url: string | null; observationStatus?: string }> = resume?.grid_data ?? [];
   try {
     // A bounded 9-point first sample, sequential to avoid provider request bursts.
     for (let row = -1; row <= 1; row++) for (let col = -1; col <= 1; col++) {
       const lat = Number(loc.lat) + row * 0.0145;
       const lng = Number(loc.lng) + col * 0.0145 / Math.max(0.1, Math.cos(Number(loc.lat) * Math.PI / 180));
-      const result = await getRankForCoordinate({ keyword: keyword.keyword, lat, lng, businessName: loc.name, websiteUrl: loc.website, phone: loc.phone });
-      points.push({ gridRow: row, gridCol: col, lat, lng, rank: result.rank, url: result.url });
+      if (points.some(p => p.gridRow === row && p.gridCol === col)) continue;
+      try {
+        const result = await getRankForCoordinate({ keyword: keyword.keyword, lat, lng, businessName: loc.name, websiteUrl: loc.website, phone: loc.phone });
+        points.push({ gridRow: row, gridCol: col, lat, lng, rank: result.rank, url: result.url, observationStatus: 'observed' });
+      } catch (e) {
+        // Preserve a provider failure as unknown and still attempt other points.
+        points.push({ gridRow: row, gridCol: col, lat, lng, rank: null, url: null, observationStatus: 'unverified' });
+        logger.warn('Initial map point unavailable', { locationId: loc.id, row, col, error: (e as Error).message });
+      }
       await db('geo_grid_reports').where({ id: report.id }).update({ grid_data: JSON.stringify(points) });
     }
+    if (points.every(p => p.observationStatus === 'unverified')) throw new Error('Every map point was unavailable');
     await db('geo_grid_reports').where({ id: report.id }).update({ status: 'complete', completed_at: new Date() });
   } catch (e) {
     await db('geo_grid_reports').where({ id: report.id }).update({ status: 'failed' });
     throw e;
   }
+}
+
+/** Operator-only recovery after reviewing a failed first sample; preserve paid observations. */
+export async function resumeInitialMap(clientId: string, locationId: string, reportId: string): Promise<void> {
+  const loc = await db('locations').where({ id: locationId, client_id: clientId }).first();
+  const report = await db('geo_grid_reports').where({ id: reportId, client_id: clientId, location_id: locationId, status: 'failed', grid_size: 3 }).first();
+  if (!loc || !report || Number(loc.lat) !== Number(report.center_lat) || Number(loc.lng) !== Number(report.center_lng)) throw new Error('Failed first sample does not match the current location');
+  const keyword = await db('keywords').where({ id: report.keyword_id, location_id: locationId }).first();
+  if (!keyword) throw new Error('Sample keyword missing');
+  const claimed = await db('geo_grid_reports').where({ id: reportId, status: 'failed' }).update({ status: 'processing' });
+  if (!claimed) return;
+  await runInitialMap(clientId, loc, keyword, report);
+  await db('initial_scans').where({ client_id: clientId, location_id: locationId, step: 'map' }).update({ status: 'complete', reason: 'Map sample saved; unavailable points are labeled separately.', completed_at: new Date(), updated_at: new Date() });
 }

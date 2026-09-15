@@ -1,4 +1,4 @@
-import { resolveProviderRoute } from '../services/provider_routing';
+import { providerRoutes } from '../services/provider_routing';
 import { dispatchInvitations, invitationSchema } from '../services/campaign_invitations';
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
@@ -9,14 +9,36 @@ import { getClientEMRKey } from '../services/emr_provisioning';
 export async function list(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const selected = z.string().uuid().optional().parse(req.query.locationId);
-    const route = selected ? await resolveProviderRoute(req.clientId, selected) : null;
+    // No provider account is an onboarding state, not a failed campaign fetch.
+    // Check local ownership before allowing that empty-state response.
+    if (selected && !await db('locations').where({ id: selected, client_id: req.clientId }).first()) {
+      err(res, 'Location not found', 404, 'NOT_FOUND'); return;
+    }
+    const client = await db('clients').where({ id: req.clientId }).first();
+    const mapping = await db('provider_location_mappings').where({ client_id: req.clientId }).first();
+    if (!mapping && !client?.emr_organization_id && !client?.emr_location_id) {
+      ok(res, { scope: selected ? 'location-organization' : 'customer-organizations',
+        setupState: 'connection_required', campaigns: [] });
+      return;
+    }
+    // Incomplete IDs and invalid/stale/conflicting mappings must remain visible
+    // failures; never return cached campaigns outside a verified provider route.
+    const routes = await providerRoutes(req.clientId, selected);
+    if (!routes.length) {
+      err(res, 'Your review account setup is incomplete. Contact support to finish connecting this business.', 409, 'PROVIDER_SETUP_INCOMPLETE'); return;
+    }
     const campaigns = await db('emr_campaigns')
       .where({ client_id: req.clientId })
-      .modify(q => { if (selected) { if (!route) q.whereRaw('false'); else q.where({ emr_organization_id: route.organizationId }); } })
+      .where(q => {
+        q.whereIn('emr_organization_id', routes.map(route => route.organizationId));
+        // Older single-organization caches predate the organization column.
+        if (routes.length === 1 && routes[0].mode === 'legacy') q.orWhereNull('emr_organization_id');
+      })
       .orderBy('name', 'asc');
 
     ok(res, {
       scope: selected ? 'location-organization' : 'customer-organizations',
+      setupState: campaigns.length ? 'ready' : 'campaign_setup_required',
       campaigns: campaigns.map((c: any) => ({
         id: c.id,
         emrCampaignId: c.emr_campaign_id,

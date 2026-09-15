@@ -6,7 +6,7 @@ import useSWR from 'swr';
 import { Mail, Upload, ChevronDown, ChevronUp, AlertCircle, UserX, Plus, X } from 'lucide-react';
 import { fetcher } from '../services/api';
 import CampaignSetupRequest from '../components/CampaignSetupRequest';
-import EMRSetupBanner from '../components/EMRSetupBanner';
+import { Link } from 'react-router-dom';
 
 interface Campaign {
   id: string;
@@ -23,7 +23,7 @@ interface Campaign {
 
 interface CampaignsResponse {
   success: boolean;
-  data: { campaigns: Campaign[] };
+  data: { campaigns: Campaign[]; setupState?: 'connection_required' | 'campaign_setup_required' | 'ready' };
 }
 
 interface Unsubscribe {
@@ -246,27 +246,29 @@ function UnsubscribedSection() {
 // ── Page ────────────────────────────────────────────────────────────────────
 
 export default function Campaigns() {
-  const { data, error, isLoading } = useSWR<CampaignsResponse>('/campaigns', fetcher);
+  const { data, error, isLoading, mutate } = useSWR<CampaignsResponse>('/campaigns', fetcher, { shouldRetryOnError: false });
   const { data: creditsData } = useSWR<CreditsResponse>('/campaigns/credits', fetcher, { refreshInterval: 60_000 });
   const [showNewCampaign, setShowNewCampaign] = useState(false);
 
   const campaigns = data?.data?.campaigns ?? [];
   const credits = creditsData?.data;
+  const connectionRequired = data?.data?.setupState === 'connection_required';
 
   if (error) {
     return (
-      <div className="flex items-center gap-2 text-red-600 text-sm mt-8 justify-center">
-        <AlertCircle size={16} /> Failed to load campaigns
+      <div className="space-y-3 mt-8 rounded-xl border border-red-200 p-5" role="alert">
+        <h1 className="flex items-center gap-2 text-red-700 font-semibold"><AlertCircle size={16} /> Review requests could not be loaded</h1>
+        <p className="text-sm text-slate-600">{/too many|rate.limit/i.test(error.message ?? '') ? 'Requests are temporarily limited. Wait briefly, then try again. Your review connection has not been changed.' : error.message || 'Please try again. If this continues, contact support so we can check your review account.'}</p>
+        <button onClick={() => void mutate()} className="text-sm font-semibold text-brand-600">Try again</button>
+        <Link to="/dashboard/settings?tab=integrations" className="ml-4 text-sm font-semibold text-brand-600">Review connection settings</Link>
       </div>
     );
   }
 
-  // A connection prompt is useful when there is no campaign, without a second login.
-  const showEMRBanner = !isLoading && campaigns.length === 0;
 
   return (
     <div className="space-y-6">
-      {showEMRBanner && <EMRSetupBanner context="campaigns" />}
+
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -290,8 +292,8 @@ export default function Campaigns() {
         )}
       </div>
 
-      <ReviewCollectionLinks />
-      <CampaignInvitationHistory />
+      {!connectionRequired && <ReviewCollectionLinks />}
+      {!connectionRequired && <CampaignInvitationHistory />}
 
       {isLoading && (
         <div className="space-y-3">
@@ -304,12 +306,13 @@ export default function Campaigns() {
       {!isLoading && campaigns.length === 0 && (
         <div className="bg-white border border-slate-200 rounded-xl p-8 text-center">
           <Mail size={32} className="mx-auto text-slate-300 mb-3" />
-          <h3 className="font-semibold text-slate-700 mb-1">No campaigns yet</h3>
+          <h3 className="font-semibold text-slate-700 mb-1">{connectionRequired ? 'Set up review requests' : 'No campaigns yet'}</h3>
           <p className="text-sm text-slate-400">
-            {credits?.connected === false
-              ? 'Connect your Google Business Profile in Settings → Integrations to get started.'
+            {connectionRequired
+              ? 'Connect Google reviews in Settings → Integrations, then request assisted campaign setup for your business.'
               : 'Choose "Campaign setup" above to arrange your first review request campaign.'}
           </p>
+          {connectionRequired && <Link to="/dashboard/settings?tab=integrations" className="inline-flex mt-4 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white">Connect Google reviews</Link>}
         </div>
       )}
 

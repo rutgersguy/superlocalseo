@@ -13,7 +13,7 @@ export interface AuditScores {
   dfsLighthouseTaskId: string | null;
 }
 
-export async function computeAuditScores(locationId: string, industry: string | null | undefined): Promise<AuditScores> {
+export async function computeAuditScores(locationId: string, industry: string | null | undefined, existingLighthouseTaskId: string | null = null): Promise<AuditScores> {
   const now = new Date();
   const [citationRows, rankRows, location] = await Promise.all([
     db('citation_snapshots').where({ location_id: locationId }).where('pulled_at', '<=', now)
@@ -28,7 +28,7 @@ export async function computeAuditScores(locationId: string, industry: string | 
   // On-page SEO: crawl the location's website if one is configured
   let onPageScore: number | null = null;
   let onPageDetails: string[] = [];
-  let dfsLighthouseTaskId: string | null = null;
+  let dfsLighthouseTaskId: string | null = existingLighthouseTaskId;
   const website = location?.website?.trim();
   if (website) {
     try {
@@ -39,7 +39,7 @@ export async function computeAuditScores(locationId: string, industry: string | 
       // non-blocking — on-page failure doesn't break the audit
     }
     // Submit Lighthouse task asynchronously — result polled later
-    dfsLighthouseTaskId = await submitLighthouseTask(website).catch(() => null);
+    if (!dfsLighthouseTaskId) dfsLighthouseTaskId = await submitLighthouseTask(website).catch(() => null);
   }
 
   return { napScore, citationScore, rankingScore, compositeScore, onPageScore, onPageDetails, dfsLighthouseTaskId };

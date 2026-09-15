@@ -252,9 +252,13 @@ async function geocodeAndSave(
 ): Promise<void> {
   const coords = await geocodeAddress(address, city, state, zip);
   if (!coords) return;
-  await db('locations').where({ id: locationId }).update({ lat: coords.lat, lng: coords.lng }).catch((e) =>
+  // A slow response for the old address must not overwrite a more recent edit.
+  const saved = await db('locations').where({ id: locationId })
+    .whereRaw("COALESCE(address, '') = ? AND COALESCE(city, '') = ? AND COALESCE(state, '') = ? AND COALESCE(zip, '') = ?", [address ?? '', city ?? '', state ?? '', zip ?? ''])
+    .update({ lat: coords.lat, lng: coords.lng }).catch((e) =>
     logger.warn('Failed to save geocoded coordinates', { locationId, error: (e as Error).message }),
   );
+  if (!saved) return;
   logger.info('Location geocoded', { locationId, lat: coords.lat, lng: coords.lng });
 }
 
