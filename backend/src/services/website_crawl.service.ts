@@ -86,7 +86,7 @@ export async function pollWebsiteCrawls(): Promise<void> {
       const reuse = await db.transaction(async trx => {
         await trx('locations').where({ id: audit.location_id }).forUpdate().first();
         const prior = await trx('location_audits').where({ location_id: audit.location_id, client_id: audit.client_id })
-          .whereRaw("split_part(split_part(crawl_url, '?', 1), '#', 1) = ?", [url.href])
+          .whereRaw("split_part(split_part(crawl_url, ?, 1), '#', 1) = ?", ['?', url.href])
           .whereNot('id', audit.id).whereIn('crawl_status', ['submitting', 'running', 'complete', 'needs_review'])
           .where('crawl_started_at', '>', new Date(Date.now() - 86400000)).orderBy('crawl_started_at', 'desc').first();
         if (prior) {
