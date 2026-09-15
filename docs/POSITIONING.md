@@ -1,3 +1,5 @@
+For paid submission limits and trial eligibility, see [Paid listing submissions](LISTING_SUBMISSION_POLICY.md). Counts below describe auditing, not guaranteed provider submission coverage. Personal trainers and gyms use the 10 core directories.
+
 # SuperLocalSEO — Positioning Brief
 
 **Audience:** Anyone writing customer-facing words or designing customer-facing surfaces —

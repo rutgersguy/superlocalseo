@@ -1,3 +1,4 @@
+import { submitInitialListings, submissionDomains } from '../services/citation_submission.service';
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db/connection';
 import { redis } from '../db/redis';
@@ -9,9 +10,8 @@ import {
 } from '../jobs/queue';
 import {
   getCbCredits, createCbCampaign, getCbCampaignLookup,
-  confirmCbCampaign, getCbCampaign,
+  getCbCampaign,
   findOrProvisionBlLocation,
-  type CbPackageId, type CbPublisher,
 } from '../services/brightlocal.service';
 import { z } from 'zod';
 
@@ -273,7 +273,7 @@ const JOB_QUEUE_MAP: Record<string, { queue: typeof rankingsQueue; jobName: stri
 
 export async function citationsOverview(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const [credits, submissions] = await Promise.all([
+    const [credits, submissions, orders] = await Promise.all([
       getCbCredits(),
       db('citation_submissions as cs')
         .join('clients as cl', 'cs.client_id', 'cl.id')
@@ -286,6 +286,10 @@ export async function citationsOverview(req: Request, res: Response, next: NextF
         )
         .orderBy('cs.submitted_at', 'desc')
         .limit(200),
+      db('citation_orders as co').join('locations as l', 'co.location_id', 'l.id')
+        .join('clients as cl', 'co.client_id', 'cl.id')
+        .select('co.status', 'co.credits_reserved', 'co.campaign_id', 'l.name as locationName', 'cl.business_name as clientName')
+        .orderBy('co.created_at', 'desc').limit(200),
     ]);
 
     const byStatus = (submissions as Array<{ status: string }>).reduce<Record<string, number>>((acc, s) => {
@@ -293,7 +297,7 @@ export async function citationsOverview(req: Request, res: Response, next: NextF
       return acc;
     }, {});
 
-    ok(res, { credits, submissions, byStatus });
+    ok(res, { credits, submissions, byStatus, orders });
   } catch (e) {
     next(e);
   }
@@ -314,10 +318,11 @@ export async function adminCitationLocations(req: Request, res: Response, next: 
         'locations.brightlocal_location_id as blLocationId',
         'clients.id as clientId',
         'clients.business_name as clientName',
+        'clients.industry', 'clients.subscription_status as subscriptionStatus',
       )
       .orderBy('clients.business_name')
       .orderBy('locations.name');
-    ok(res, { locations: rows });
+    ok(res, { locations: rows.map(row => ({ ...row, allowedDomains: submissionDomains(row.industry) })) });
   } catch (e) { next(e); }
 }
 
@@ -357,6 +362,7 @@ export async function adminGetCampaignLookup(req: Request, res: Response, next: 
 const adminConfirmSchema = z.object({
   clientId: z.string().uuid(),
   locationId: z.string().uuid(),
+  detailsConfirmed: z.boolean().default(false),
   packageId: z.enum(['cb0', 'cb10', 'cb15', 'cb25', 'cb30', 'cb50', 'cb75', 'cb100']),
   citations: z.array(z.string()).default([]),
   publishers: z.array(z.enum(['dataaxle', 'neustar', 'foursquare', 'gpsnetwork', 'ypnetwork', 'locafynetwork'])).default([]),
@@ -370,15 +376,9 @@ export async function adminConfirmCampaign(req: Request, res: Response, next: Ne
   try {
     const parsed = adminConfirmSchema.parse({ ...req.body, ...req.params });
     const { campaignId } = req.params as { campaignId: string };
-    const { clientId, locationId, packageId, citations, publishers, autoSelect, removeDuplicates, notes, express } = parsed;
+    const { clientId, locationId } = parsed;
 
-    await confirmCbCampaign(campaignId, { packageId: packageId as CbPackageId, citations, publishers: publishers as CbPublisher[], autoSelect, removeDuplicates, notes, express });
-
-    const now = new Date();
-    const rows = citations.map((domain) => ({ client_id: clientId, location_id: locationId, directory: domain, status: 'pending', bl_submission_id: campaignId, submitted_at: now }));
-    if (rows.length > 0) {
-      await db('citation_submissions').insert(rows).onConflict(['location_id', 'directory']).merge(['status', 'bl_submission_id', 'submitted_at']);
-    }
+    await submitInitialListings(clientId, locationId, campaignId, { ...parsed, detailsConfirmed: parsed.detailsConfirmed });
     ok(res, { message: 'Campaign confirmed' });
   } catch (e) { next(e); }
 }

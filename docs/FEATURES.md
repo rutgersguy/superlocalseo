@@ -1,3 +1,7 @@
+# Current listing submission policy (2026-09-15)
+
+See [Paid listing submissions](LISTING_SUBMISSION_POLICY.md): Pro only, after a verified non-zero subscription payment; one initial campaign per location, up to 15 credits. No trial submissions or included aggregator extras. Older broad-package and paid-BrightLocal-plan prerequisites below are superseded. BrightLocal Management API access was verified with 30 Citation Builder credits available before any submissions.
+
 # SuperLocalSEO — Complete Feature Reference
 
 > **Scope:** This document covers every feature, API endpoint, background job, email, data model, and workflow in the SuperLocalSEO platform as of the current production build. It is intended as the authoritative internal reference for developers, operators, and future contributors.
@@ -812,7 +816,7 @@ would have sent every one of those customers chasing a fault that does not exist
 ### Which directories are actually audited
 
 **33 directories**, chosen by measurement rather than ambition: 10 core plus 1–5
-relevant to the industry, so any one business sees 11–15. A directory ships only
+relevant to the industry, so a business sees 10–15. Personal trainers and gyms use the core set without physician directories. A directory ships only
 where we demonstrated we can find listings on it — the bar is **25% found**, on
 34 businesses for core directories and 8 same-industry businesses for vertical
 ones.

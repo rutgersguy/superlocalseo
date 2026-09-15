@@ -227,6 +227,6 @@ export function getPrimaryKeyword(industry: string | null | undefined, city?: st
  * Two lists that must agree will eventually disagree. There is now one.
  */
 export function getDirectoriesForIndustry(industry: string | null | undefined): string[] {
-  const group = industry ? INDUSTRY_MAP[industry]?.group : null;
+  const group = industry && !['Personal Training', 'Gym / Fitness Studio'].includes(industry) ? INDUSTRY_MAP[industry]?.group : null;
   return directoriesForVertical(verticalForGroup(group)).map((d) => d.key);
 }

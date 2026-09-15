@@ -1,7 +1,8 @@
+import { getDirectoriesForIndustry } from '../config/industry.config';
+import { auditableDirectories } from '../config/directories.config';
 import { Job } from 'bullmq';
 import { db } from '../db/connection';
-import { INDUSTRY_MAP } from '../config/industry.config';
-import { directoriesForVertical, verticalForGroup, UNAUDITABLE_KEYS } from '../config/directories.config';
+import { UNAUDITABLE_KEYS } from '../config/directories.config';
 import { scanLocation, LocationNap } from '../services/citation_scan.service';
 import { logger } from '../utils/logger';
 
@@ -103,8 +104,7 @@ export async function processCitations(job: Job): Promise<void> {
 }
 
 async function syncCitationsForLocation(loc: LocationRow): Promise<void> {
-  const group = loc.industry ? INDUSTRY_MAP[loc.industry]?.group : null;
-  const dirs = directoriesForVertical(verticalForGroup(group));
+  const dirs = auditableDirectories(getDirectoriesForIndustry(loc.industry));
 
   const nap: LocationNap = {
     name: loc.name,

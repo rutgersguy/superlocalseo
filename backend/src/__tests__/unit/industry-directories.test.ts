@@ -64,11 +64,15 @@ describe('getDirectoriesForIndustry', () => {
         'Professional Services': 'professional',
         'Real Estate': 'realestate',
       };
-      const viaVertical = directoriesForVertical(GROUPS[def.group] ?? null)
+      const viaVertical = directoriesForVertical(['Personal Training', 'Gym / Fitness Studio'].includes(industry) ? null : GROUPS[def.group] ?? null)
         .map((d) => d.key)
         .sort();
       expect(viaIndustry).toEqual(viaVertical);
     }
+  });
+
+  it.each(['Personal Training', 'Gym / Fitness Studio'])('does not assign physician directories to %s', industry => {
+    expect(getDirectoriesForIndustry(industry)).toEqual(directoriesForVertical(null).map(d => d.key));
   });
 
   it('falls back to the core set for an unknown or missing industry', () => {

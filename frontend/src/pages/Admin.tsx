@@ -559,20 +559,9 @@ function AnalyticsTab() {
 // ─── Citation Builder wizard (admin) ─────────────────────────────────────────
 
 const CB_PACKAGES = [
-  { id: 'cb0', label: 'Aggregators only' },
-  { id: 'cb10', label: '10 citations' }, { id: 'cb15', label: '15 citations' },
-  { id: 'cb25', label: '25 citations' }, { id: 'cb30', label: '30 citations' },
-  { id: 'cb50', label: '50 citations' }, { id: 'cb75', label: '75 citations' },
-  { id: 'cb100', label: '100 citations' },
+  { id: 'cb10', label: '10 credits' }, { id: 'cb15', label: '15 credits' },
 ];
-
-const CB_PUBLISHERS = [
-  { id: 'dataaxle', label: 'Data Axle' }, { id: 'neustar', label: 'Neustar' },
-  { id: 'foursquare', label: 'Foursquare' }, { id: 'ypnetwork', label: 'YP Network' },
-  { id: 'gpsnetwork', label: 'GPS Network' }, { id: 'locafynetwork', label: 'Locafy' },
-];
-
-interface AdminLocation { locationId: string; locationName: string; clientId: string; clientName: string; blLocationId: number | null; }
+interface AdminLocation { locationId: string; locationName: string; clientId: string; clientName: string; blLocationId: number | null; allowedDomains: string[]; subscriptionStatus: string; address: string; city: string; state: string; }
 interface LookupCitation { domain: string; profileUrl: string; }
 
 type WizardStep = 'select' | 'creating' | 'lookup' | 'configure' | 'done';
@@ -590,10 +579,9 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
   const [campaignId, setCampaignId] = useState<string | null>(null);
   const [lookupCitations, setLookupCitations] = useState<LookupCitation[]>([]);
   const [existingDomains, setExistingDomains] = useState<Set<string>>(new Set());
-  const [packageId, setPackageId] = useState('cb25');
+  const [packageId, setPackageId] = useState('cb10');
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
-  const [selectedPublishers, setSelectedPublishers] = useState<Set<string>>(new Set(['dataaxle', 'neustar', 'foursquare', 'ypnetwork', 'gpsnetwork']));
-  const [removeDuplicates, setRemoveDuplicates] = useState(true);
+  const [detailsConfirmed, setDetailsConfirmed] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lookupElapsed, setLookupElapsed] = useState(0);
@@ -601,6 +589,8 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const chosenLocation = allLocations.find(l => l.locationId === selectedLocationId);
+  const relevant = (domain: string) => { try { return chosenLocation?.allowedDomains.includes(new URL(domain.includes('://') ? domain : `https://${domain}`).hostname.replace(/^www\./, '')) ?? false; } catch { return false; } };
   const filteredLocations = allLocations.filter((l) => l.clientId === selectedClientId);
 
   const createCampaign = async () => {
@@ -629,8 +619,8 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
       const existing = new Set(data.citations.map((c) => c.domain));
       const allDomains = data.availableCitations.length > 0 ? data.availableCitations : data.citations.map((c) => c.domain);
       setExistingDomains(existing);
-      setLookupCitations(allDomains.map((d) => ({ domain: d, profileUrl: data.citations.find((c) => c.domain === d)?.profileUrl ?? '', nap: {} })));
-      setSelectedDomains(new Set(allDomains));
+      setLookupCitations(allDomains.filter(relevant).map((d) => ({ domain: d, profileUrl: data.citations.find((c) => c.domain === d)?.profileUrl ?? '', nap: {} })));
+      setSelectedDomains(new Set());
       setStep('configure');
     };
 
@@ -661,8 +651,8 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
       const existing = new Set(res.data.citations.map((c) => c.domain));
       const allDomains = res.data.availableCitations.length > 0 ? res.data.availableCitations : res.data.citations.map((c) => c.domain);
       setExistingDomains(existing);
-      setLookupCitations(allDomains.map((d) => ({ domain: d, profileUrl: res.data.citations.find((c) => c.domain === d)?.profileUrl ?? '', nap: {} })));
-      setSelectedDomains(new Set(allDomains));
+      setLookupCitations(allDomains.filter(relevant).map((d) => ({ domain: d, profileUrl: res.data.citations.find((c) => c.domain === d)?.profileUrl ?? '', nap: {} })));
+      setSelectedDomains(new Set());
     } catch { /* proceed with empty */ }
     setStep('configure');
   };
@@ -672,16 +662,16 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
     setConfirming(true);
     setError(null);
     try {
-      const res = await apiFetch<{ success: boolean; error?: string }>(`/admin/citations/campaign/${encodeURIComponent(campaignId)}/confirm`, {
+      const res = await apiFetch<{ success: boolean; error?: string | { message?: string } }>(`/admin/citations/campaign/${encodeURIComponent(campaignId)}/confirm`, {
         method: 'POST',
         body: JSON.stringify({
           clientId: selectedClientId, locationId: selectedLocationId,
           packageId, citations: Array.from(selectedDomains),
-          publishers: Array.from(selectedPublishers),
-          removeDuplicates, autoSelect: false, express: false,
+          publishers: [], detailsConfirmed,
+          removeDuplicates: false, autoSelect: false, express: false,
         }),
       });
-      if (!res.success) throw new Error(res.error ?? 'Confirmation failed');
+      if (!res.success) throw new Error((typeof res.error === 'string' ? res.error : res.error?.message) ?? 'Confirmation failed');
       await mutate('/admin/citations');
       setStep('done');
     } catch (e) {
@@ -755,7 +745,7 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
                   <p className="text-xs text-gray-400">{Math.floor(lookupElapsed / 60)}:{String(lookupElapsed % 60).padStart(2, '0')} elapsed</p>
                   {lookupElapsed >= 90 && (
                     <div className="mt-2 space-y-2">
-                      <p className="text-xs text-amber-600">Lookup is still running — you can proceed now and submit to all available directories.</p>
+                      <p className="text-xs text-amber-600">Lookup is still running. Submissions remain blocked until the lookup completes.</p>
                       <button onClick={() => void proceedWithAvailable()}
                         className="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700">
                         Proceed anyway
@@ -816,26 +806,15 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
                 </div>
               )}
 
-              <div className="px-6 py-4">
-                <h3 className="text-sm font-semibold text-gray-800 mb-3">Aggregator networks</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {CB_PUBLISHERS.map((pub) => (
-                    <label key={pub.id} className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={selectedPublishers.has(pub.id)} onChange={() => toggle(selectedPublishers, setSelectedPublishers as React.Dispatch<React.SetStateAction<Set<string>>>, pub.id)} className="rounded border-gray-300" />
-                      <span className="text-sm text-gray-700">{pub.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="px-6 py-4">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" checked={removeDuplicates} onChange={(e) => setRemoveDuplicates(e.target.checked)} className="rounded border-gray-300" />
-                  <div>
-                    <span className="text-sm text-gray-700">Remove duplicates</span>
-                    <p className="text-xs text-gray-400">Clean up existing duplicate listings.</p>
-                  </div>
+              <div className="px-6 py-4 space-y-3 text-sm text-slate-700">
+                <p>Initial allowance: up to 15 credits per paid Pro location, once. This package reserves {pkgCount} credits even if fewer directories are selected. Only relevant directories available through BrightLocal can be submitted. Do not add unnecessary directories to fill a package.</p>
+                <p>Aggregators, expedited service and duplicate removal are not included. A successful subscription payment is verified before any submission spending.</p>
+                <p className="font-medium">{chosenLocation?.locationName} · {chosenLocation?.address}, {chosenLocation?.city}, {chosenLocation?.state}</p>
+                <label className="flex items-start gap-2">
+                  <input type="checkbox" checked={detailsConfirmed} onChange={e => setDetailsConfirmed(e.target.checked)} />
+                  I have confirmed the business details with the customer and checked that each selected listing needs creation or correction.
                 </label>
+                {chosenLocation?.subscriptionStatus !== 'active' && <p className="text-amber-700">Review the listing plan now. Submissions begin after the first paid Pro subscription payment.</p>}
               </div>
 
               {error && <div className="px-6 py-3"><div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">{error}</div></div>}
@@ -848,7 +827,7 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
                 <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
               </div>
               <p className="font-semibold text-gray-900">Campaign confirmed</p>
-              <p className="text-sm text-gray-500">Citations submitted. Track progress in the submissions table.</p>
+              <p className="text-sm text-gray-500">Listing order accepted. Track submission progress in the submissions table.</p>
             </div>
           )}
         </div>
@@ -867,7 +846,7 @@ function AdminCitationWizard({ onClose }: { onClose: () => void }) {
           ) : step === 'configure' ? (
             <>
               <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
-              <button disabled={confirming || !!overLimit} onClick={() => void handleConfirm()}
+              <button disabled={confirming || !!overLimit || !selectedDomains.size || !detailsConfirmed || chosenLocation?.subscriptionStatus !== 'active'} onClick={() => void handleConfirm()}
                 className="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2">
                 {confirming && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
                 Confirm &amp; Submit
@@ -898,6 +877,7 @@ interface CitationSubmissionRow {
 
 interface CitationsOverview {
   credits: number;
+  orders: Array<{ campaign_id: string; status: string; credits_reserved: number; locationName: string; clientName: string }>;
   byStatus: Record<string, number>;
   submissions: CitationSubmissionRow[];
 }
@@ -945,6 +925,12 @@ function CitationsTab() {
         </div>
       )}
 
+      {!!d?.orders?.length && <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-2">
+        <h4 className="font-semibold text-slate-900">Initial listing allocations</h4>
+        {d.orders.map(order => <div key={order.campaign_id} className="text-sm text-slate-700">
+          {order.clientName} · {order.locationName}: {order.credits_reserved} credits reserved · {order.status === 'submitted' ? 'Order accepted' : 'Acceptance needs verification — do not resubmit'}
+        </div>)}
+      </div>}
       {/* Submissions table */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100">
