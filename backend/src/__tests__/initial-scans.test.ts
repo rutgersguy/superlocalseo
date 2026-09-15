@@ -2,7 +2,7 @@ import request from 'supertest';
 import app from '../app';
 import { db } from '../db/connection';
 import { initialScansQueue, rankingsQueue, citationsQueue, aiVisibilityQueue } from '../jobs/queue';
-import { ensureInitialScans, processInitialScans, reconcileInitialScans } from '../services/initial_scans';
+import { ensureInitialScans, processInitialScans, reconcileInitialScans, resumeInitialMap } from '../services/initial_scans';
 import { syncRankingsForClient } from '../jobs/rankings.job';
 import { processCitations } from '../jobs/citations.job';
 import { processAiVisibility } from '../jobs/ai_visibility.job';
@@ -119,4 +119,19 @@ describe('durable scoped initial scans', () => {
     expect(map.status).toBe('complete'); expect(map.grid_data).toHaveLength(9); expect(map.grid_data[4]).toMatchObject({ lat: 36, lng: -96, gridRow: 0, gridCol: 0 });
     await db('locations').where({ id: locationId }).update({ lat: null, lng: null, website: null });
   });
+  it('resumes missing map points, preserves saved observations and labels provider failure unknown', async () => {
+    const keyword = await db('keywords').where({ location_id: locationId }).first();
+    await db('locations').where({ id: locationId }).update({ lat: 36, lng: -96 });
+    const [report] = await db('geo_grid_reports').insert({ client_id: clientId, location_id: locationId, keyword_id: keyword.id, status: 'failed', grid_size: 3, center_lat: 36, center_lng: -96,
+      grid_data: JSON.stringify([{ gridRow: -1, gridCol: -1, lat: 35.9855, lng: -96.018, rank: 2, url: null }]) }).returning('id');
+    (getRankForCoordinate as jest.Mock).mockResolvedValue({ rank: 5, url: null }).mockRejectedValueOnce(new Error('Provider unavailable'));
+    await resumeInitialMap(clientId, locationId, report.id);
+    expect(getRankForCoordinate).toHaveBeenCalledTimes(8);
+    const saved = await db('geo_grid_reports').where({ id: report.id }).first();
+    expect(saved.status).toBe('complete'); expect(saved.grid_data).toHaveLength(9);
+    expect(saved.grid_data[0].rank).toBe(2);
+    expect(saved.grid_data[1]).toMatchObject({ rank: null, observationStatus: 'unverified' });
+    await expect(resumeInitialMap(clientId, locationId, report.id)).rejects.toThrow('does not match');
+  });
+
 });
