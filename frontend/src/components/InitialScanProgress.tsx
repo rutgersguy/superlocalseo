@@ -7,7 +7,7 @@ const names: Record<string, string> = { rankings: 'Rankings and competitors', ci
 export function InitialScanProgress() {
   const { role } = useAuth();
   const { mutate } = useSWRConfig();
-  const { data } = useSWR<{ data: Scan[] }>(role === 'client' ? '/locations/initial-scans' : null, fetcher, { refreshInterval: 15000 });
+  const { data } = useSWR<{ data: Scan[] }>(role === 'client' ? '/locations/initial-scans' : null, fetcher, { refreshInterval: result => !result?.data.length ? 60000 : result.data.some(s => s.status === 'running' || (s.status === 'waiting' && !s.reason)) ? 15000 : result.data.some(s => s.status === 'waiting') ? 60000 : 0 });
   const scans = data?.data ?? [];
   const previous = useRef('');
   const signature = JSON.stringify(scans);

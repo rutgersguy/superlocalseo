@@ -8,10 +8,12 @@ const skip = (req: Request) =>
 
 export const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  // Dashboard pages make multiple reads and poll scan progress.
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
-  skip,
+  // A user must always be able to end their own session.
+  skip: req => skip(req) || (req.method === 'POST' && req.path === '/api/auth/logout'),
   validate: false,
   message: { success: false, error: { message: 'Too many requests', code: 'RATE_LIMITED' } },
 });
