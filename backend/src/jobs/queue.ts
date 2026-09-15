@@ -183,26 +183,12 @@ export async function startWorkers(): Promise<void> {
     { repeat: { pattern: '0 6 * * *' } },
   );
 
-  // Weekly, not daily (#174). Citations change on the order of weeks, so a daily
-  // scan bought nothing but seven times the API cost — and under the DataForSEO
-  // scanner every run is metered per directory. Monday morning so a customer
-  // starting the week sees fresh data.
-  //
-  // The repeat key includes the pattern, so BullMQ treats this as a NEW
-  // repeatable and the old daily one keeps firing until it is removed. That
-  // removal happens below rather than being left to whoever notices.
-  await citationsQueue.add(
-    'weekly-scan',
-    {},
-    { repeat: { pattern: '0 7 * * 1' } },
-  );
-
-  // Remove the superseded daily schedule. Without this the old job continues to
-  // run forever alongside the new one, at 7× the cost, and both write snapshots.
+  // Monthly monitoring does not purchase Citation Builder submissions.
+  await citationsQueue.add('monthly-scan', {}, { repeat: { pattern: '0 7 1 * *', tz: 'UTC' } });
   for (const r of await citationsQueue.getRepeatableJobs()) {
-    if (r.name === 'daily-pull') {
+    if (['daily-pull', 'weekly-scan'].includes(r.name)) {
       await citationsQueue.removeRepeatableByKey(r.key);
-      logger.info('Removed superseded daily citation schedule', { key: r.key });
+      logger.info('Removed superseded citation schedule', { key: r.key });
     }
   }
 

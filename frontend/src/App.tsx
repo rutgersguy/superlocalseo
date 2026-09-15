@@ -73,7 +73,7 @@ function App() {
               <Route path="ai-visibility" element={<AiVisibility />} />
               <Route path="rankings" element={<Rankings />} />
               <Route path="reviews" element={<Reviews />} />
-              <Route path="citations" element={<ProRoute feature="Citations" description="Weekly citation audits across the directories that matter for your industry, plus guided citation building."><Citations /></ProRoute>} />
+              <Route path="citations" element={<ProRoute feature="Citations" description="Monthly citation audits across the directories that matter for your industry, plus guided citation building."><Citations /></ProRoute>} />
               <Route path="reports" element={<Reports />} />
               <Route path="campaigns" element={<Campaigns />} />
               <Route path="competitors" element={<Competitors />} />

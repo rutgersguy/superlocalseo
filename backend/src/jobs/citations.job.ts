@@ -7,7 +7,7 @@ import { scanLocation, LocationNap } from '../services/citation_scan.service';
 import { logger } from '../utils/logger';
 
 /**
- * Weekly citation audit (#174).
+ * Monthly citation audit for active Pro accounts. Initial scoped scans remain available during trial.
  *
  * REPLACES BRIGHTLOCAL
  * --------------------
@@ -65,6 +65,7 @@ export async function processCitations(job: Job): Promise<void> {
 
   if (job.data?.locationId && !clientId) throw new Error('A location scan requires clientId');
   if (clientId) q = q.where('locations.client_id', clientId);
+  if (!clientId || job.name === 'monthly-scan') q = q.where('clients.subscription_status', 'active').where('clients.product_line', 'pro');
   if (job.data?.locationId) q = q.where('locations.id', job.data.locationId);
 
   const locations = (await q) as LocationRow[];

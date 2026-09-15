@@ -240,20 +240,20 @@ function hasNapError(dir: Directory): boolean {
 /**
  * How stale the citation data is.
  *
- * The scan runs weekly (Monday 07:00 UTC), so anything past ~9 days means the
+ * The scan runs monthly (first day, 07:00 UTC), so anything past 35 days means the
  * pull is failing.
  * That state used to be invisible: the page rendered whatever was in the table as
  * if it were current, so when BrightLocal's Data API began returning 401 for every
  * request, clients kept seeing listing status that was months old with no
  * indication anything was wrong (issue #149).
  */
-const STALE_AFTER_DAYS = 9;
+const STALE_AFTER_DAYS = 35;
 
 function FreshnessNotice({ lastPulledAt }: { lastPulledAt: string | null }) {
   if (!lastPulledAt) {
     return (
       <span className="text-sm text-gray-500">
-        Not scanned yet — your first scan runs within a week.
+        No scan results yet. Initial scans start after location setup; paid Pro listings are checked monthly.
       </span>
     );
   }
@@ -311,7 +311,9 @@ export default function Citations() {
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-brand-200 bg-brand-50 p-4 text-sm text-slate-700 mb-4">
-        Review your listing plan during your trial. Submissions begin after your first paid Pro subscription payment and confirmation of your business details. Each paid location includes one initial allocation of up to 15 relevant directory submissions or updates; existing accurate listings do not need resubmission. Additional services are separate.
+        <p className="font-semibold text-slate-900">Automatic monthly listing checks</p>
+        <p className="mt-1">Paid Pro locations are checked on the first day of each month at 07:00 UTC. Accurate listings are left alone; missing listings or differences are flagged for review.</p>
+        <p className="mt-2">Each paid location includes one initial allocation of up to 15 submission credits, after payment and confirmation of business details. Credits do not refill monthly. Further paid submissions require a separately approved and paid add-on; we will not automatically purchase repeat submissions.</p>
       </div>
       <div>
         <div className="flex items-center justify-between">
