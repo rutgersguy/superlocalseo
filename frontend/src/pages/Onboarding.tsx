@@ -742,24 +742,16 @@ export default function Onboarding() {
               </div>
 
 
-              {/* Facebook */}
-              <div className="border border-gray-200 rounded-xl p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900">Facebook</h3>
-                    <p className="text-xs text-gray-500">Sync Facebook page ratings and reviews</p>
-                  </div>
+              {/* Facebook is not configured yet; keep onboarding consistent with Settings. */}
+              <div className="border border-slate-200 rounded-xl p-5">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <h3 className="text-sm font-semibold text-slate-900">Facebook</h3>
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Coming soon</span>
                 </div>
-                <a
-                  href="/dashboard/settings?tab=integrations"
-                  className="inline-block bg-[#1877F2] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#1565d8] transition-colors"
-                >
-                  Connect Facebook in Settings →
-                </a>
-                <p className="text-xs text-gray-400 mt-2">Optional — you can connect Facebook any time from Settings.</p>
+                <p className="text-xs text-slate-500">Facebook review connections are not available yet. You can finish onboarding with Google; no Facebook setup is needed.</p>
               </div>
 
-              <p className="text-xs text-gray-400">You can also connect or change platforms any time in Settings.</p>
+              <p className="text-xs text-slate-400">You can manage your Google review connection any time in Settings.</p>
             </div>
           )}
 
