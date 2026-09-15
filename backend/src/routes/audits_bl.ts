@@ -9,6 +9,7 @@ router.use(requireAuth, requireClient);
 router.get('/', ctrl.list);
 router.get('/location/:locationId/history', ctrl.history);
 router.post('/generate', ctrl.trigger);
+router.post('/:id/crawl', ctrl.startExpandedCrawl);
 router.get('/:id/report', ctrl.reportDownload);
 router.get('/:id', ctrl.get);
 
