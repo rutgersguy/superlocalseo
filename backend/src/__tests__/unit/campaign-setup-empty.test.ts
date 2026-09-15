@@ -8,7 +8,7 @@ import { list } from '../../controllers/campaign.controller';
 
 const query = (value: any) => {
   const q: any = {};
-  q.where = jest.fn(() => q); q.whereIn = jest.fn(() => q);
+  q.where = jest.fn((value: unknown) => { if (typeof value === 'function') value(q); return q; }); q.whereIn = jest.fn(() => q); q.orWhereNull = jest.fn(() => q);
   q.first = jest.fn().mockResolvedValue(value); q.orderBy = jest.fn().mockResolvedValue(value);
   return q;
 };

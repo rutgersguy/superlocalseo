@@ -29,7 +29,11 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
     }
     const campaigns = await db('emr_campaigns')
       .where({ client_id: req.clientId })
-      .whereIn('emr_organization_id', routes.map(route => route.organizationId))
+      .where(q => {
+        q.whereIn('emr_organization_id', routes.map(route => route.organizationId));
+        // Older single-organization caches predate the organization column.
+        if (routes.length === 1 && routes[0].mode === 'legacy') q.orWhereNull('emr_organization_id');
+      })
       .orderBy('name', 'asc');
 
     ok(res, {

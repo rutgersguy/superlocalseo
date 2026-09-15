@@ -52,9 +52,11 @@ describe('Access control — client data isolation', () => {
     const a = await db('clients').where({ user_id: db('users').where({ email: 'client-a@example.com' }).select('id') }).first();
     const b = await db('clients').where({ user_id: db('users').where({ email: 'client-b@example.com' }).select('id') }).first();
     expect(a).toBeDefined(); expect(b).toBeDefined();
+    await db('clients').where({ id: a.id }).update({ emr_organization_id: 841100, emr_location_id: 841101 });
+    await db('clients').where({ id: b.id }).update({ emr_organization_id: 841200, emr_location_id: 841201 });
     const rows = await db('emr_campaigns').insert([
-      { client_id: a.id, emr_campaign_id: `qa-a-${Date.now()}`, name: 'Private campaign A' },
-      { client_id: b.id, emr_campaign_id: `qa-b-${Date.now()}`, name: 'Private campaign B' },
+      { client_id: a.id, emr_organization_id: '841100', emr_campaign_id: `qa-a-${Date.now()}`, name: 'Private campaign A' },
+      { client_id: b.id, emr_organization_id: '841200', emr_campaign_id: `qa-b-${Date.now()}`, name: 'Private campaign B' },
     ]).returning('*');
     try {
       const responseA = await request(app).get('/api/campaigns').set('Authorization', `Bearer ${tokenA}`);
@@ -64,7 +66,11 @@ describe('Access control — client data isolation', () => {
       const idsB = responseB.body.data.campaigns.map((c: { id: string }) => c.id);
       expect(idsA).toContain(rows[0].id); expect(idsA).not.toContain(rows[1].id);
       expect(idsB).toContain(rows[1].id); expect(idsB).not.toContain(rows[0].id);
-    } finally { await db('emr_campaigns').whereIn('id', rows.map(r => r.id)).del(); }
+    } finally {
+      await db('emr_campaigns').whereIn('id', rows.map(r => r.id)).del();
+      await db('clients').where({ id: a.id }).update({ emr_organization_id: a.emr_organization_id, emr_location_id: a.emr_location_id });
+      await db('clients').where({ id: b.id }).update({ emr_organization_id: b.emr_organization_id, emr_location_id: b.emr_location_id });
+    }
   });
 
   it('legacy campaign creation explains assisted setup without creating a campaign', async () => {
