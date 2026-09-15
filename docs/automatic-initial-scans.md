@@ -7,7 +7,7 @@ Saving a location (during onboarding or in Settings) enrolls that location in si
 | Rankings and competitors | Business name, city/state, keyword | Ranking snapshots, keyword volumes, and competitors observed in the same search results |
 | Citations | Pro, business name and city/state | Verified/unverified directory observations |
 | AI visibility | Business name and city/state | Sampled assistant answers, including honest unavailable outcomes |
-| Reviews | Connected EMR integration and valid location mapping | Scoped review import; no invitation or public reply |
+| Reviews | Connected EMR integration, valid location mapping and confirmed Google profile selection | Scoped review import; no invitation or public reply |
 | Map | Pro, keyword, address and geocoded coordinates | One nine-point sample for the oldest keyword, at roughly one-mile spacing |
 | Website audit | Pro and website | Existing verified-observation score calculation, website checks, and a Lighthouse task whose result is polled normally |
 
@@ -17,7 +17,7 @@ The dashboard shows first-scan progress and prerequisite guidance. While first s
 
 ## Recovery and limits
 
-`initial_scans` has one row per location and step. Before external work, a conditional update claims `waiting` → `running`. Duplicate deliveries cannot reclaim an attempted step. Existing snapshots are reused. Each step finishes as `complete`, `existing`, or `needs_attention`; missing inputs remain `waiting`. Running longer than twenty minutes is displayed as needing attention.
+`initial_scans` has one row per location and step. Before external work, a conditional update claims `waiting` → `running`. Duplicate deliveries cannot reclaim an attempted step. Existing snapshots are reused. Pre-ledger pilot jobs named `initial-{rankings|citations|ai}-{locationId}` are adopted: active jobs are awaited and finished jobs without observations require review instead of another purchase. Each step finishes as `complete`, `existing`, or `needs_attention`; missing inputs remain `waiting`. Running longer than twenty minutes is displayed as needing attention; reconciliation can proceed with unrelated unattempted checks without reclaiming the interrupted step.
 
 A crash after a paid call but before saving the result is ambiguous. The system deliberately does not automatically repurchase that step. Support must inspect saved observations, provider evidence and queue state before authorizing a fresh attempt. Failed steps retain partial snapshots. The regular refresh schedules remain separate; this ledger deduplicates first-scan enrollment, not all scheduled/manual scans.
 

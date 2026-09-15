@@ -1,7 +1,7 @@
 import request from 'supertest';
 import app from '../app';
 import { db } from '../db/connection';
-import { initialScansQueue } from '../jobs/queue';
+import { initialScansQueue, rankingsQueue, citationsQueue, aiVisibilityQueue } from '../jobs/queue';
 import { ensureInitialScans, processInitialScans, reconcileInitialScans } from '../services/initial_scans';
 import { syncRankingsForClient } from '../jobs/rankings.job';
 import { processCitations } from '../jobs/citations.job';
@@ -20,6 +20,7 @@ describe('durable scoped initial scans', () => {
   const run = () => processInitialScans({ data: { clientId, locationId } } as any);
   beforeAll(async () => {
     jest.spyOn(initialScansQueue, 'add').mockResolvedValue({} as never);
+    for (const queue of [rankingsQueue, citationsQueue, aiVisibilityQueue]) jest.spyOn(queue, 'getJob').mockResolvedValue(undefined);
     await request(app).post('/api/auth/register').send({ email, password: 'Password123!', businessName: 'Initial scan fixture' });
     const user = await db('users').where({ email }).first();
     clientId = (await db('clients').where({ user_id: user.id }).first()).id;
@@ -67,6 +68,14 @@ describe('durable scoped initial scans', () => {
     expect(syncRankingsForClient).not.toHaveBeenCalled();
     expect((await db('initial_scans').where({ location_id: locationId, step: 'rankings' }).first()).status).toBe('existing');
     await db('ranking_snapshots').where({ location_id: locationId }).delete();
+  });
+  it('adopts active pre-ledger pilot jobs and does not repurchase failed jobs', async () => {
+    await ensureInitialScans(clientId, locationId);
+    (rankingsQueue.getJob as jest.Mock).mockResolvedValueOnce({ getState: async () => 'active' });
+    await run(); expect(syncRankingsForClient).not.toHaveBeenCalled();
+    (rankingsQueue.getJob as jest.Mock).mockResolvedValueOnce({ getState: async () => 'failed' });
+    await run(); expect(syncRankingsForClient).not.toHaveBeenCalled();
+    expect((await db('initial_scans').where({ location_id: locationId, step: 'rankings' }).first()).status).toBe('needs_attention');
   });
   it('queue failure leaves durable enrollment for reconciliation', async () => {
     (initialScansQueue.add as jest.Mock).mockRejectedValueOnce(new Error('Redis unavailable'));

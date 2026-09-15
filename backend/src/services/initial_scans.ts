@@ -1,4 +1,7 @@
 import { Job } from 'bullmq';
+import { config } from '../config';
+import { connectionState } from './emr_connection_state';
+import { listConnectLinks } from './embedmyreviews.service';
 import { db } from '../db/connection';
 import { logger } from '../utils/logger';
 import { INITIAL_STEPS, InitialStep, initialWaitingReason } from './initial_scan_policy';
@@ -55,13 +58,41 @@ export async function processInitialScans(job: Job): Promise<void> {
   for (const step of INITIAL_STEPS) {
     const key = { client_id: clientId, location_id: locationId, step };
     const row = await db('initial_scans').where(key).first();
-    if (row?.status === 'running') return; // another delivery owns this location's sequence
+    if (row?.status === 'running') {
+      if (new Date(row.started_at).getTime() > Date.now() - 20 * 60 * 1000) return;
+      // Never reclaim an interrupted paid attempt, but let unrelated checks proceed.
+      await db('initial_scans').where(key).where({ status: 'running' }).update({ status: 'needs_attention', reason: 'The initial attempt was interrupted or is taking longer than expected. Support must check it before retrying.', updated_at: new Date() });
+      continue;
+    }
     if (!row || row.status !== 'waiting') continue;
-    const reason = initialWaitingReason(step, loc, Boolean(keyword), hasReviewConnection);
-    if (reason) { await db('initial_scans').where(key).where({ status: 'waiting' }).update({ reason, updated_at: new Date() }); continue; }
     if (await hasEvidence(step, locationId)) {
       await db('initial_scans').where(key).where({ status: 'waiting' }).update({ status: 'existing', reason: 'Existing scan data retained.', completed_at: new Date(), updated_at: new Date() });
       continue;
+    }
+    let profileSelected = hasReviewConnection;
+    if (step === 'reviews' && profileSelected) {
+      profileSelected = Boolean(config.embedmyreviews.apiKey) && (await Promise.all(reviewRoutes.map(async route => {
+        try { return connectionState(await listConnectLinks(config.embedmyreviews.apiKey, Number(route.providerLocationId), 'google')).profileSelected; }
+        catch { return false; }
+      }))).every(Boolean);
+    }
+    const reason = initialWaitingReason(step, loc, Boolean(keyword), profileSelected);
+    if (reason) { await db('initial_scans').where(key).where({ status: 'waiting' }).update({ reason, updated_at: new Date() }); continue; }
+    // Adopt the explicit pilot jobs started before this ledger was deployed.
+    if (['rankings', 'citations', 'ai'].includes(step)) {
+      const queues = await import('../jobs/queue');
+      const queue = step === 'rankings' ? queues.rankingsQueue : step === 'citations' ? queues.citationsQueue : queues.aiVisibilityQueue;
+      const previous = await queue.getJob(`initial-${step}-${locationId}`);
+      if (previous) {
+        const state = await previous.getState();
+        if (['waiting', 'active', 'delayed', 'waiting-children', 'prioritized'].includes(state)) {
+          await db('initial_scans').where(key).where({ status: 'waiting' }).update({ reason: 'An initial scan is already queued or running.', updated_at: new Date() });
+          return;
+        }
+        // A completed/failed source job without observations is not safe to repurchase.
+        await db('initial_scans').where(key).where({ status: 'waiting' }).update({ status: 'needs_attention', reason: 'A previous initial scan finished without usable saved observations. Support must review it before retrying.', updated_at: new Date() });
+        continue;
+      }
     }
     // CAS before paid work. An interrupted/uncertain attempt is never auto-repurchased.
     const claimed = await db('initial_scans').where(key).where({ status: 'waiting' }).update({ status: 'running', reason: null, started_at: new Date(), updated_at: new Date() });
@@ -79,7 +110,7 @@ export async function processInitialScans(job: Job): Promise<void> {
         if (states.length !== reviewRoutes.length || states.some(s => s.status !== 'succeeded')) throw new Error('Review import did not confirm a successful scoped read');
       } else if (step === 'map') await runInitialMap(clientId, loc, keyword);
       else await runInitialAudit(clientId, loc);
-      await db('initial_scans').where(key).update({ status: 'complete', completed_at: new Date(), updated_at: new Date() });
+      await db('initial_scans').where(key).update({ status: 'complete', reason: step === 'audit' ? 'Website checks saved. A submitted performance check may still be processing.' : null, completed_at: new Date(), updated_at: new Date() });
     } catch (e) {
       await db('initial_scans').where(key).update({ status: 'needs_attention', reason: 'The initial attempt did not fully complete. Existing observations are retained; support must review before retrying.', updated_at: new Date() });
       logger.warn('Initial scan needs attention', { clientId, locationId, step, error: (e as Error).message });
@@ -93,6 +124,7 @@ async function runInitialAudit(clientId: string, loc: Record<string, any>): Prom
     nap_score: scores.napScore, citation_score: scores.citationScore, composite_score: scores.compositeScore,
     on_page_score: scores.onPageScore, on_page_details: JSON.stringify(scores.onPageDetails), dfs_on_page_task_id: scores.dfsLighthouseTaskId ?? null,
     raw_data: JSON.stringify({ scoreMethodology: 'verified_observations_v2' }), completed_at: new Date(), backfill_attempted_at: new Date() });
+  if (scores.onPageScore == null && !scores.dfsLighthouseTaskId) throw new Error('Website checks unavailable; saved SEO observations retained');
 }
 
 async function runInitialMap(clientId: string, loc: Record<string, any>, keyword: Record<string, any>): Promise<void> {
