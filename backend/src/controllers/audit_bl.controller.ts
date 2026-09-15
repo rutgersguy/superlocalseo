@@ -447,3 +447,20 @@ export async function startExpandedCrawl(req: Request, res: Response, next: Next
     ok(res, { message: 'Expanded checks queued or already requested. Results appear here when ready.' }, 202);
   } catch (error) { next(error); }
 }
+
+// Scope choices affect future dispatches only; never reset an accepted paid task.
+export async function crawlScope(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const audit = await db('location_audits').where({ id: req.params.id, client_id: req.clientId }).first();
+    if (!audit) { err(res, 'Audit not found', 404, 'NOT_FOUND'); return; }
+    const location = await db('locations').where({ id: audit.location_id, client_id: req.clientId }).first();
+    if (!location) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
+    if (req.method === 'PUT') {
+      const parsed = z.object({ scope: z.enum(['auto', 'website', 'section', 'page']) }).safeParse(req.body);
+      if (!parsed.success) { err(res, 'Choose a valid crawl scope.', 400, 'VALIDATION_ERROR'); return; }
+      await db('locations').where({ id: location.id, client_id: req.clientId }).update({ website_crawl_scope: parsed.data.scope });
+      location.website_crawl_scope = parsed.data.scope;
+    }
+    ok(res, { scope: location.website_crawl_scope ?? 'auto', website: location.website });
+  } catch (error) { next(error); }
+}

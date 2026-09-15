@@ -28,7 +28,7 @@ describe('expanded website crawl lifecycle', () => {
     await db('location_audits').where({ client_id: clientId }).delete();
     await db('clients').where({ id: clientId }).update({ subscription_status: 'active', product_line: 'pro' });
     auditId = (await db('location_audits').insert({ client_id: clientId, location_id: locationId, status: 'complete' }).returning('id'))[0].id;
-    (fetchPublicWebsite as jest.Mock).mockResolvedValue({ ok: true, url: 'https://crawl.example/' });
+    (fetchPublicWebsite as jest.Mock).mockResolvedValue({ ok: true, url: 'https://crawl.example/', text: async () => '' });
     fetchMock.mockImplementation(async (input: string) => ({ ok: true, json: async () => ({ status_code: 20000, tasks: [input.endsWith('task_post')
       ? { status_code: 20100, id: 'crawl-task' }
       : { status_code: 20000, result: [input.includes('/summary/') ? { crawl_progress: finished ? 'finished' : 'in_progress', crawl_status: { pages_crawled: 1, pages_in_queue: 0 } } : { items: empty ? null : [page], total_items_count: empty ? 0 : 1 }] }] }) }));
@@ -48,9 +48,25 @@ describe('expanded website crawl lifecycle', () => {
   });
   it('reuses a recent crawl across audits without a second paid task', async () => {
     finished = true; await pollWebsiteCrawls();
+    // Old accepted tasks may retain tracking parameters; normalization must not buy a duplicate.
+    await db('location_audits').where({ id: auditId }).update({ crawl_url: 'https://crawl.example/?utm_source=old' });
     await db('location_audits').insert({ client_id: clientId, location_id: locationId, status: 'complete' });
     await pollWebsiteCrawls();
     expect(fetchMock.mock.calls.filter(c => String(c[0]).endsWith('task_post'))).toHaveLength(1);
+  });
+  it('saves tenant scope without buying or resetting a crawl', async () => {
+    expect((await request(app).put(`/api/audits/bl/${auditId}/crawl-scope`).set('Authorization', `Bearer ${token}`).send({ scope: 'section' })).status).toBe(200);
+    expect((await db('locations').where({ id: locationId }).first()).website_crawl_scope).toBe('section');
+    expect((await request(app).get(`/api/audits/bl/${auditId}/crawl-scope`).set('Authorization', `Bearer ${token}`)).body.data.scope).toBe('section');
+    expect((await request(app).put(`/api/audits/bl/${auditId}/crawl-scope`).set('Authorization', `Bearer ${token}`).send({ scope: 'invalid' })).status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+    await db('locations').where({ id: locationId }).update({ website_crawl_scope: 'auto' });
+  });
+  it('sends and persists the actual limits in the provider request', async () => {
+    await pollWebsiteCrawls();
+    const call = fetchMock.mock.calls.find(c => String(c[0]).endsWith('task_post'))!;
+    expect(JSON.parse(call[1].body)[0]).toMatchObject({ max_crawl_pages: 25, max_crawl_depth: 3, respect_sitemap: false });
+    expect((await db('location_audits').where({ id: auditId }).first()).crawl_data.policy.pageLimit).toBe(25);
   });
   it('holds uncertain paid submissions instead of retrying', async () => {
     fetchMock.mockRejectedValue(new Error('Network failure after sending'));
@@ -75,9 +91,9 @@ describe('expanded website crawl lifecycle', () => {
     const response = await request(app).post('/api/audits/bl/00000000-0000-4000-8000-000000000001/crawl').set('Authorization', `Bearer ${token}`);
     expect(response.status).toBe(404); expect(fetchMock).not.toHaveBeenCalled();
   });
-  it('limits a shared website branch to its saved page', () => {
+  it('caps websites at 25 pages and defaults saved paths to one page', () => {
     expect(crawlPageLimit('https://shared.example/tulsa/')).toBe(1);
-    expect(crawlPageLimit('https://business.example/')).toBe(100);
+    expect(crawlPageLimit('https://business.example/')).toBe(25);
   });
   it('keeps missing metrics null and excludes resources from page checks', () => {
     const result = summarizeCrawl({}, [page, { resource_type: 'image', checks: { no_description: true } }], 'https://crawl.example');
