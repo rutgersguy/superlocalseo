@@ -1,5 +1,15 @@
 # Commercial release status
 
+## Website audit update — September 15, 2026
+
+**Deployed:** [expanded on-page audits #232](https://github.com/rutgersguy/superlocalseo/pull/232) and [crawl scope and limits #233](https://github.com/rutgersguy/superlocalseo/pull/233). The audit screen preserves Lighthouse and adds page findings with repair instructions. New crawls use a 25-page / three-link-depth maximum, exclusions, prioritization and explicit customer scope selection; automatic non-root scope stays single-page. A URL section is not assumed to be location-specific. Onboarding/monthly scheduling and 24-hour reuse remain.
+
+The scope-save flow was verified in live AirServe after a production rebuild. Existing results retain their original coverage; expanded PDF findings remain unfinished. See the [current runbook and release evidence](WEBSITE_CRAWLER.md).
+
+The older commercial-readiness assessment below is dated separately; this audit update does not re-certify its unrelated launch areas.
+
+## Earlier commercial-readiness assessment
+
 Updated September 10, 2026. Invitation tracking and recovery are described in [the recovery runbook](campaign-invitation-recovery.md); deployment acceptance is recorded on the implementation PR. Previously deployed: [reply recovery #222](https://github.com/rutgersguy/superlocalseo/pull/222), [native collection #221](https://github.com/rutgersguy/superlocalseo/pull/221), and [provider routing #220](https://github.com/rutgersguy/superlocalseo/pull/220). This is the current status index; dated investigation documents preserve earlier observations and are not current launch checklists.
 
 **The remaining work is not just reporting or status checks.** The native acquisition report and its admin listing are live. Campaign provisioning/verification, native collection and private-feedback workflows, review/reply reliability, multi-location onboarding, and external acceptance testing still have unfinished scope. Unrestricted self-service commercial readiness has not been demonstrated. Stripe stays last, including a known subscription-date defect rather than only switching on payments.

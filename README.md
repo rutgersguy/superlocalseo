@@ -10,6 +10,8 @@ Local SEO platform for service businesses (plumbers, HVAC, electricians). Aggreg
 
 ## What It Does
 
+- **Website audit** — Lighthouse performance plus actionable DataForSEO on-page findings. New crawls have a 25-page / three-link-depth maximum and explicit website, URL-section or single-page scope. [Current behavior and VA guide](docs/WEBSITE_CRAWLER.md).
+
 - **Rankings** — Daily keyword rank tracking via BrightLocal, stored permanently in our DB (BrightLocal provides no history — we do)
 - **Reviews** — Multi-platform review monitoring powered by EmbedMyReviews (white-labeled at `app.superlocalseo.com`), with real-time webhook ingestion for new/updated reviews and private feedback
 - **Citations** — Directory listing presence and NAP accuracy monitoring via BrightLocal Data API; guided fix workflow for unlisted/mismatched entries
