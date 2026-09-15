@@ -1,0 +1,11 @@
+# Pilot onboarding corrections — September 15, 2026
+
+The pilot exposed two separate Google connection paths. The EMR Google review connection completed and imported reviews. The direct SuperLocalSEO OAuth path returned Google's testing-only `403 access_denied` screen. API quota approval and OAuth audience/verification are separate requirements; do not infer the current quota from this error.
+
+Settings now marks direct profile access Coming soon and directs customers to the working Google review connection. Facebook is also Coming soon in onboarding, with no link to an unavailable setup flow. General availability of direct Google profile access still requires the Google Cloud OAuth audience and any applicable verification requirements to be resolved, then tested with a non-tester account.
+
+Registration dates are the dates the account was created, not the date onboarding was completed. Both password and Google registration already start a seven-day trial. Regression tests check both creation paths and confirm returning Google sign-in preserves the original dates. The pilot received an explicitly requested seven-day trial reset, recorded in a private server backup; its historical registration dates were preserved. Customer identifiers and that backup are not included in GitHub.
+
+Competitor selection now copies the selected name and Google Place ID immediately, then fetches that one listing's name and website through a Pro-gated Place Details endpoint. Selecting another business replaces previous values, including clearing a website missing from the new listing. Failed lookups retain the selected identity and allow manual website entry. Website entry accepts bare domains (for example `www.example.com/services`) and the backend adds HTTPS before validation/storage. Explicit HTTP/HTTPS URLs remain intact; non-web schemes and malformed URLs are rejected.
+
+Validation covers Google detail success, missing websites and provider failure; switching businesses and submitting bare domains through the browser; URL normalization; registration dates; and the existing EMR recovery flow. The automatic initial-scan workflow is tracked separately and is not delivered by this change.
