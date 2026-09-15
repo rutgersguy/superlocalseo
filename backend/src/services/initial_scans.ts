@@ -40,6 +40,8 @@ async function hasEvidence(step: InitialStep, locationId: string): Promise<boole
   if (step === 'reviews') return Boolean(await db('reviews').where({ location_id: locationId }).first());
   let q = db(tables[step]).where({ location_id: locationId });
   if (['map', 'audit'].includes(step)) q = q.whereIn('status', ['complete', 'processing', 'pending']);
+  // A historical SEO score without a website check must not consume the first website audit.
+  if (step === 'audit') q = q.where(builder => builder.whereNotNull('on_page_score').orWhereNotNull('dfs_on_page_task_id'));
   return Boolean(await q.first());
 }
 

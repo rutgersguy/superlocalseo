@@ -95,6 +95,19 @@ describe('durable scoped initial scans', () => {
     expect(res.status).toBe(200); expect(res.body.data.find((s: any) => s.step === 'rankings').status).toBe('needs_attention');
     expect(JSON.stringify(res.body)).not.toContain('Unknown upstream outcome');
   });
+  it('an old audit without website evidence does not suppress the first website check', async () => {
+    await db('location_audits').insert({ client_id: clientId, location_id: locationId, status: 'complete', composite_score: 50 });
+    await ensureInitialScans(clientId, locationId); await run();
+    expect((await db('initial_scans').where({ location_id: locationId, step: 'audit' }).first()).status).toBe('waiting');
+    expect(computeAuditScores).not.toHaveBeenCalled();
+    (computeAuditScores as jest.Mock).mockResolvedValue({ napScore: null, citationScore: null, compositeScore: null, onPageScore: 90, onPageDetails: [] });
+    await db('locations').where({ id: locationId }).update({ website: 'https://example.com' });
+    await run(); await run();
+    expect(computeAuditScores).toHaveBeenCalledTimes(1);
+    expect(await db('location_audits').where({ location_id: locationId })).toHaveLength(2);
+    await db('location_audits').where({ location_id: locationId }).delete();
+    await db('locations').where({ id: locationId }).update({ website: null });
+  });
   it('resumes when details arrive and bounds the first map to nine sequential observations', async () => {
     await ensureInitialScans(clientId, locationId);
     (getRankForCoordinate as jest.Mock).mockResolvedValue({ rank: 2, url: null });

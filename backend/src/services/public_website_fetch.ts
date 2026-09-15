@@ -6,7 +6,7 @@ import https from 'https';
 export function isPublicAddress(address: string): boolean {
   if (isIP(address) === 6) {
     // Global unicast only. Exclude documentation, Teredo, and mapped IPv4 forms.
-    return /^[23][0-9a-f]{0,3}:/i.test(address) && !/^2001:(?:db8:|0*:)/i.test(address) && !/^2002:|^3fff:/i.test(address);
+    return /^[23][0-9a-f]{3}:/i.test(address) && !/^2001:(?:db8:|0*:)/i.test(address) && !/^2002:|^3fff:/i.test(address);
   }
   if (isIP(address) !== 4) return false;
   const [a, b, c] = address.split('.').map(Number);

@@ -1,7 +1,7 @@
 import { fetchPublicWebsite, isPublicAddress } from '../../services/public_website_fetch';
 const publicAddress = { address: '93.184.216.34', family: 4 };
 describe('public website request boundaries', () => {
-  test.each(['127.0.0.1', '10.0.0.1', '169.254.169.254', '172.16.0.1', '192.168.0.1', '100.64.0.1', '0.0.0.0', '::1', 'fe80::1', 'fc00::1', '::ffff:127.0.0.1', '2001::1', '2002:7f00:1::', '2001:db8::1'])('rejects private address %s', ip => expect(isPublicAddress(ip)).toBe(false));
+  test.each(['127.0.0.1', '10.0.0.1', '169.254.169.254', '172.16.0.1', '192.168.0.1', '100.64.0.1', '0.0.0.0', '::1', 'fe80::1', 'fc00::1', '::ffff:127.0.0.1', '2001::1', '2002:7f00:1::', '2001:db8::1', '2::1', '3::1'])('rejects private address %s', ip => expect(isPublicAddress(ip)).toBe(false));
   it('pins the address that was checked and preserves the public hostname', async () => {
     const resolve = jest.fn().mockResolvedValue([publicAddress]);
     const request = jest.fn().mockResolvedValue({ status: 200, body: 'public' });
