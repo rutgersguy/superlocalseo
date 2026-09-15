@@ -1,18 +1,19 @@
+jest.mock('../../services/public_website_fetch', () => ({ fetchPublicWebsite: jest.fn() }));
+import { fetchPublicWebsite } from '../../services/public_website_fetch';
 import { checkOnPageSeo } from '../../services/onpage.service';
 import { renderAuditReportHtml } from '../../services/audit_report.service';
 
-const originalFetch = global.fetch;
-afterEach(() => { global.fetch = originalFetch; });
+afterEach(() => { jest.resetAllMocks(); });
 
 describe('on-page evidence accuracy', () => {
   it('does not score an unreachable or forbidden page as a failed audit', async () => {
-    global.fetch = jest.fn().mockRejectedValue(new Error('network error'));
+    (fetchPublicWebsite as jest.Mock).mockRejectedValue(new Error('network error'));
     expect((await checkOnPageSeo('https://example.com')).score).toBeNull();
-    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 403 });
+    (fetchPublicWebsite as jest.Mock).mockResolvedValue({ ok: false, status: 403 });
     expect((await checkOnPageSeo('https://example.com')).score).toBeNull();
   });
   it('checks the final response URL for HTTPS after redirects', async () => {
-    global.fetch = jest.fn().mockResolvedValue({ ok: true, url: 'https://example.com/', text: async () => '<html></html>' });
+    (fetchPublicWebsite as jest.Mock).mockResolvedValue({ ok: true, url: 'https://example.com/', text: async () => '<html></html>' });
     const result = await checkOnPageSeo('http://example.com');
     expect(result.details).toContain('Site served over HTTPS');
     expect(result.score).toBe(10);

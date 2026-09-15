@@ -343,7 +343,9 @@ export async function getRankForCoordinate(params: {
     device: 'desktop',
   }]) as {
     tasks?: Array<{
+      status_code?: number;
       result?: Array<{
+        items_count?: number;
         items?: Array<{
           type: string;
           rank_group?: number;
@@ -355,7 +357,9 @@ export async function getRankForCoordinate(params: {
     }>;
   };
 
-  const items = data.tasks?.[0]?.result?.[0]?.items ?? [];
+  const result = data.tasks?.[0]?.result?.[0];
+  if (data.tasks?.[0]?.status_code !== 20000 || !result || (!Array.isArray(result.items) && result.items_count !== 0)) throw new Error('Maps observation unavailable: missing provider result');
+  const items = result.items ?? [];
   for (const item of items) {
     if (businessMatches(item.title, item.url, item.phone, params.businessName, params.websiteUrl, params.phone)) {
       return { rank: item.rank_group ?? null, url: item.url ?? null, rankType: 'local_pack' };

@@ -6,6 +6,7 @@ import { useClient } from '../hooks/useClient';
 import { fetcher, apiFetch } from '../services/api';
 import { NAV_ITEMS as PLAN_NAV } from '../config/planFeatures';
 import useSWR from 'swr';
+import { InitialScanProgress } from '../components/InitialScanProgress';
 import { BrandWordmark } from '../components/BrandWordmark';
 
 declare global {
@@ -299,7 +300,7 @@ export default function DashboardLayout() {
         </header>
         <VerifyEmailBanner />
         <TrialBanner />
-        <main id="workspace-main" className="workspace-content flex-1 overflow-y-auto min-w-0" tabIndex={-1}><Outlet /></main>
+        <main id="workspace-main" className="workspace-content flex-1 overflow-y-auto min-w-0" tabIndex={-1}><InitialScanProgress /><Outlet /></main>
       </div>
     </div>
   </>;

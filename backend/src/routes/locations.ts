@@ -6,6 +6,7 @@ import * as ctrl from '../controllers/location.controller';
 
 const router = Router();
 
+router.get('/initial-scans', requireAuth, requireClient, ctrl.initialScanStatus);
 router.get('/', requireAuth, requireClient, ctrl.list);
 router.post('/', requireAuth, requireClient, requireTeamAdmin, validate(ctrl.locationSchema), ctrl.create);
 router.post('/:id/provision', requireAuth, requireClient, requireTeamAdmin, ctrl.provision);

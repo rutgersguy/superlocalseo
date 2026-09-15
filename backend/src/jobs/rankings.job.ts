@@ -13,7 +13,7 @@ export interface SyncResult {
   notConfigured: boolean;
 }
 
-export async function syncRankingsForClient(clientId: string): Promise<SyncResult> {
+export async function syncRankingsForClient(clientId: string, locationId?: string): Promise<SyncResult> {
   const result: SyncResult = {
     locationsFound: 0,
     locationsWithKeywords: 0,
@@ -36,6 +36,7 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
 
   const locations = await db('locations')
     .where({ client_id: clientId })
+    .modify(q => { if (locationId) q.where({ id: locationId }); })
     .select('id', 'name', 'city', 'state', 'zip', 'phone', 'website', 'service_area');
   result.locationsFound = locations.length;
 
@@ -166,6 +167,7 @@ export async function syncRankingsForClient(clientId: string): Promise<SyncResul
 
 export async function processRankings(job: Job): Promise<void> {
   const clientId: string | undefined = job.data?.clientId;
+  if (job.data?.locationId && !clientId) throw new Error('A location scan requires clientId');
 
   let query = db('clients')
     .whereNotIn('subscription_status', ['canceled', 'past_due'])
@@ -177,7 +179,7 @@ export async function processRankings(job: Job): Promise<void> {
 
   for (const { clientId: cid } of clients) {
     try {
-      const syncResult = await syncRankingsForClient(cid);
+      const syncResult = await syncRankingsForClient(cid, job.data?.locationId);
       logger.info('Rankings sync complete', { clientId: cid, ...syncResult });
     } catch (e) {
       logger.error('Failed to sync rankings for client', {

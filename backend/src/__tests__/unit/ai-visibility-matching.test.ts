@@ -559,3 +559,8 @@ describe('mergeBusinessCounts — account name vs location name', () => {
     expect(counts[0].isYou).toBe(false);
   });
 });
+
+ it('uses an immediate contact prompt without inventing an emergency for personal trainers', () => {
+   expect(buildPrompt(AI_PROMPTS[1], { industry: 'Personal Training', city: 'Tulsa', state: 'Oklahoma' }))
+     .toBe('I need personal trainers in Tulsa, Oklahoma now. Who can I call?');
+ });

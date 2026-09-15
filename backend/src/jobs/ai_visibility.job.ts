@@ -57,7 +57,9 @@ export async function processAiVisibility(job: Job): Promise<void> {
       'clients.industry as industry',
     );
 
+  if (job.data?.locationId && !clientId) throw new Error('A location scan requires clientId');
   if (clientId) q = q.where('locations.client_id', clientId);
+  if (job.data?.locationId) q = q.where('locations.id', job.data.locationId);
 
   const locations = (await q) as LocationRow[];
   logger.info(`AI visibility job: ${locations.length} locations`, {

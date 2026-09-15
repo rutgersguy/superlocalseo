@@ -1,3 +1,4 @@
+import { fetchPublicWebsite } from './public_website_fetch';
 export interface OnPageResult {
   score: number | null;
   details: string[];
@@ -53,16 +54,8 @@ export async function checkOnPageSeo(websiteUrl: string): Promise<OnPageResult> 
   let score = 0;
 
   let html = '';
-  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const controller = new AbortController();
-    timer = setTimeout(() => controller.abort(), 6000);
-    const res = await fetch(websiteUrl, {
-      signal: controller.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LocalSEOAuditBot/1.0)' },
-      redirect: 'follow',
-    });
-    clearTimeout(timer);
+    const res = await fetchPublicWebsite(websiteUrl);
 
     if (!res.ok) {
       details.push(`Website returned HTTP ${res.status} — check that the URL is accessible`);
@@ -80,8 +73,6 @@ export async function checkOnPageSeo(websiteUrl: string): Promise<OnPageResult> 
   } catch {
     details.push('Could not fetch website — check that the URL is live and publicly accessible');
     return { score: null, details };
-  } finally {
-    if (timer) clearTimeout(timer);
   }
 
   // Title tag (20 pts)

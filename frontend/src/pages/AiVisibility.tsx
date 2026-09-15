@@ -180,7 +180,7 @@ export default function AiVisibility() {
           <Sparkles size={24} className="text-brand-500 mx-auto mb-3" />
           <p className="text-sm font-semibold text-slate-900">Your first check hasn't run yet</p>
           <p className="text-sm text-slate-500 mt-1">
-            We check every Monday{d?.nextScanAt ? `, starting ${fmtDate(d.nextScanAt)}` : ''}.
+            Your first check starts automatically after you save your business name, city and state. Results appear as the checks finish; later checks run weekly.
           </p>
         </div>
       </div>
