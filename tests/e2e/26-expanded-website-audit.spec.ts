@@ -8,16 +8,27 @@ test('expanded SEO findings show repairs while retaining Lighthouse performance'
   await page.route('**/api/locations', r => r.fulfill({ json: { success: true, data: [{ id, name: 'Fitness fixture', website: 'https://fitness.example' }] } }));
   const audits = [{ id: 'audit-fixture', locationId: id, status: 'complete', onPageScore: 87, onPageDetails: [], createdAt: new Date().toISOString(),
     dfsLighthouseTaskId: 'existing-lighthouse', dfsOnPageData: { performanceScore: 83, accessibilityScore: 97, bestPracticesScore: 73, seoScore: 100, lcp: 1900, cls: 0.02, tbt: 50, categoryAudits: { performance: [], accessibility: [], bestPractices: [], seo: [] } },
-    websiteCrawl: { status: 'complete', data: { target: 'https://fitness.example', pagesReturned: 2, pagesCrawled: 2, pageLimit: 100, fetchedAt: new Date().toISOString(), pages: [], checks: [
+    websiteCrawl: { status: 'complete', data: { target: 'https://fitness.example', pagesReturned: 2, pagesCrawled: 2, pageLimit: 25, maxDepth: 3, fetchedAt: new Date().toISOString(), pages: [], checks: [
       { key: 'no_description', title: 'Missing meta descriptions', priority: 'medium', why: 'Search engines have no supplied summary.', fix: 'Add a page-specific description in your CMS SEO settings.', testedPages: 2, affectedPages: 1, urls: ['https://fitness.example/training'] },
       { key: 'no_title', title: 'Missing page titles', priority: 'medium', why: '', fix: '', testedPages: 0, affectedPages: 0, urls: [] },
     ] } },
   }];
   await page.route('**/api/audits/bl', r => r.fulfill({ json: { success: true, data: { audits } } }));
   await page.route('**/api/audits/bl/location/*/history', r => r.fulfill({ json: { success: true, data: { audits } } }));
+  let scope = 'auto';
+  await page.route('**/api/audits/bl/audit-fixture/crawl-scope', async r => {
+    if (r.request().method() === 'PUT') scope = r.request().postDataJSON().scope;
+    await r.fulfill({ json: { success: true, data: { scope, website: 'https://fitness.example/' } } });
+  });
   await loginViaUI(page, 'pro@fixture.test', 'TestPass123!'); await page.goto('/dashboard/audit');
   await expect(page.getByRole('heading', { name: 'Website Performance', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'On-Page SEO Checks', exact: true })).toBeVisible();
+  await page.getByText('Crawl scope and limits', { exact: true }).click();
+  await page.getByRole('combobox', { name: 'Scope for future crawls' }).selectOption('website');
+  await page.getByRole('button', { name: 'Save crawl scope' }).click();
+  await expect(page.getByText('Saved for the next crawl. Existing results are unchanged.')).toBeVisible();
+  expect(scope).toBe('website');
+  await expect(page.getByText('Crawl depth limit: 3 links from the starting page.')).toBeVisible();
   await page.locator('summary').filter({ hasText: 'Missing meta descriptions' }).click();
   await expect(page.getByText('How to fix it', { exact: true })).toBeVisible();
   await expect(page.getByText('Add a page-specific description in your CMS SEO settings.', { exact: true })).toBeVisible();

@@ -3,10 +3,13 @@ import { db } from '../db/connection';
 import { fetchPublicWebsite } from './public_website_fetch';
 import { logger } from '../utils/logger';
 
-export const CRAWL_PAGE_LIMIT = 100;
-// A saved branch/page URL on a shared domain must not expand into other businesses.
-export function crawlPageLimit(target: string): number {
-  return new URL(target).pathname.replace(/\/+$/, '') ? 1 : CRAWL_PAGE_LIMIT;
+import { CRAWL_PAGE_LIMIT, crawlPolicy, crawlTaskOptions, normalizeCrawlUrl, isCrawlPageAllowed, CrawlPolicy } from './website_crawl_policy';
+export { CRAWL_PAGE_LIMIT } from './website_crawl_policy';
+export const crawlPageLimit = (target: string) => crawlPolicy(target).pageLimit;
+// Preserve the limits of tasks already purchased before the policy change.
+function storedPolicy(audit: any): CrawlPolicy {
+  return audit.crawl_data?.policy ?? { version: 1, pageLimit: new URL(audit.crawl_url).pathname.replace(/\/+$/, '') ? 1 : 100,
+    maxDepth: null, scope: new URL(audit.crawl_url).pathname.replace(/\/+$/, '') ? 'saved_page' : 'website', scopePath: new URL(audit.crawl_url).pathname.replace(/\/+$/, '') || '/' };
 }
 type Rule = { key: string; scope: 'checks' | 'page'; title: string; priority: 'high' | 'medium'; why: string; fix: string };
 export const CRAWL_RULES: Rule[] = [
@@ -25,16 +28,16 @@ export const CRAWL_RULES: Rule[] = [
   { key: 'recursive_canonical', scope: 'checks', title: 'Canonical reference loops', priority: 'high', why: 'A loop makes the intended preferred URL unclear.', fix: 'Review canonical tags on the affected URLs and point alternate versions directly to one accessible, indexable preferred page. Remove circular canonical references.' },
 ];
 const finite = (n: unknown): number | null => typeof n === 'number' && Number.isFinite(n) ? n : null;
-export function summarizeCrawl(summary: any, pages: any[], target: string) {
-  const html = pages.filter(p => p && ['html', 'broken'].includes(p.resource_type));
+export function summarizeCrawl(summary: any, pages: any[], target: string, policy = crawlPolicy(target)) {
+  const html = pages.filter(p => p && (policy.version < 2 || isCrawlPageAllowed(p.url, target, policy)) && ['html', 'broken'].includes(p.resource_type));
   const checks = CRAWL_RULES.map(rule => {
     const tested = html.filter(p => typeof (rule.scope === 'page' ? p[rule.key] : p.checks?.[rule.key]) === 'boolean');
     const affected = tested.filter(p => (rule.scope === 'page' ? p[rule.key] : p.checks?.[rule.key]) === true);
     return { ...rule, testedPages: tested.length, affectedPages: affected.length,
       urls: affected.map(p => p.url).filter((u): u is string => typeof u === 'string') };
   });
-  return { target, fetchedAt: new Date().toISOString(), pageLimit: crawlPageLimit(target),
-    scope: crawlPageLimit(target) === 1 ? 'saved_page' : 'website',
+  return { target, fetchedAt: new Date().toISOString(), pageLimit: policy.pageLimit, policy, maxDepth: policy.maxDepth,
+    scope: policy.scope,
     pagesCrawled: finite(summary.crawl_status?.pages_crawled), pagesReturned: html.length,
     pagesInQueue: finite(summary.crawl_status?.pages_in_queue),
     checks, pages: html.map(p => ({ url: typeof p.url === 'string' ? p.url : '',
@@ -70,13 +73,20 @@ export async function pollWebsiteCrawls(): Promise<void> {
       if (!location?.website || !['active', 'trialing'].includes(client?.subscription_status) || client.product_line !== 'pro' || (client.subscription_status === 'trialing' && client.trial_ends_at && new Date(client.trial_ends_at) < new Date())) {
         await db('location_audits').where({ id: audit.id }).update({ crawl_status: 'unavailable', crawl_data: JSON.stringify({ message: 'A saved website and eligible Pro account are required for the expanded crawl.' }) }); continue;
       }
-      const input = location.website.includes('://') ? location.website : `https://${location.website}`;
+      const input = normalizeCrawlUrl(location.website.includes('://') ? location.website : `https://${location.website}`);
       const checked = await fetchPublicWebsite(input);
       if (!checked.ok) throw new Error('Website could not be reached for crawling. Check the saved URL and access restrictions.');
-      const url = new URL(checked.url);
+      const url = new URL(normalizeCrawlUrl(checked.url));
+      const policy = crawlPolicy(input, location.website_crawl_scope);
+      // A redirect must not escape the saved location section (www/HTTPS canonicalization is fine).
+      const initial = new URL(input);
+      const redirectTarget = new URL(url.href); redirectTarget.host = initial.host; redirectTarget.protocol = initial.protocol;
+      if (url.hostname.replace(/^www\./, '') !== initial.hostname.replace(/^www\./, '') || !isCrawlPageAllowed(redirectTarget.href, input, policy)) throw new Error('Website redirect leaves crawl scope');
+      const options = crawlTaskOptions(url.href, await checked.text(), policy);
       const reuse = await db.transaction(async trx => {
         await trx('locations').where({ id: audit.location_id }).forUpdate().first();
-        const prior = await trx('location_audits').where({ location_id: audit.location_id, client_id: audit.client_id, crawl_url: url.href })
+        const prior = await trx('location_audits').where({ location_id: audit.location_id, client_id: audit.client_id })
+          .whereRaw("split_part(split_part(crawl_url, '?', 1), '#', 1) = ?", [url.href])
           .whereNot('id', audit.id).whereIn('crawl_status', ['submitting', 'running', 'complete', 'needs_review'])
           .where('crawl_started_at', '>', new Date(Date.now() - 86400000)).orderBy('crawl_started_at', 'desc').first();
         if (prior) {
@@ -86,14 +96,13 @@ export async function pollWebsiteCrawls(): Promise<void> {
               crawl_url: prior.crawl_url, crawl_started_at: prior.crawl_started_at });
           return true;
         }
-        await trx('location_audits').where({ id: audit.id }).update({ crawl_url: url.href });
+        await trx('location_audits').where({ id: audit.id }).update({ crawl_url: url.href, crawl_data: JSON.stringify({ policy }) });
         return false;
       });
       if (reuse) continue;
       dispatched = true;
       const task = await provider('task_post', [{ target: url.hostname.replace(/^www\./, ''), start_url: url.href,
-        max_crawl_pages: crawlPageLimit(url.href), load_resources: true, enable_javascript: true,
-        allow_subdomains: false, tag: `sls-audit-${audit.id}` }]);
+        ...options, load_resources: true, enable_javascript: true, tag: `sls-audit-${audit.id}` }]);
       if (!task.id || task.status_code !== 20100) throw new Error('Crawl acceptance could not be confirmed.');
       await db('location_audits').where({ id: audit.id }).update({ crawl_status: 'running', crawl_task_id: task.id });
     } catch (error) {
@@ -112,13 +121,13 @@ export async function pollWebsiteCrawls(): Promise<void> {
       const summary = task.result?.[0];
       if (!summary) continue;
       if (summary.crawl_progress !== 'finished') {
-        await db('location_audits').where({ id: audit.id, crawl_status: 'running' }).update({ crawl_data: JSON.stringify({ target: audit.crawl_url, pagesCrawled: finite(summary.crawl_status?.pages_crawled), pageLimit: crawlPageLimit(audit.crawl_url) }) }); continue;
+        await db('location_audits').where({ id: audit.id, crawl_status: 'running' }).update({ crawl_data: JSON.stringify({ target: audit.crawl_url, pagesCrawled: finite(summary.crawl_status?.pages_crawled), policy: storedPolicy(audit), pageLimit: storedPolicy(audit).pageLimit }) }); continue;
       }
-      const result = await provider('pages', [{ id: audit.crawl_task_id, limit: CRAWL_PAGE_LIMIT, offset: 0 }]);
+      const result = await provider('pages', [{ id: audit.crawl_task_id, limit: Math.max(CRAWL_PAGE_LIMIT, storedPolicy(audit).pageLimit), offset: 0 }]);
       const pageResult = result.result?.[0];
       const pages = pageResult?.items ?? (pageResult?.total_items_count === 0 ? [] : null);
       if (!Array.isArray(pages)) throw new Error('Crawl page results are not available yet.');
-      const data = summarizeCrawl(summary, pages, audit.crawl_url);
+      const data = summarizeCrawl(summary, pages, audit.crawl_url, storedPolicy(audit));
       await db('location_audits').where({ id: audit.id, crawl_status: 'running' }).update({
         crawl_status: data.pagesReturned ? 'complete' : 'unavailable',
         crawl_data: JSON.stringify(data.pagesReturned ? data : { ...data, message: 'No readable pages were returned. The website may block crawling or have no accessible pages. No SEO verdict is available.' }),
