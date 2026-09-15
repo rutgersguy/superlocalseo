@@ -1,3 +1,4 @@
+import WebsiteCrawlPanel, { type WebsiteCrawl } from '../components/WebsiteCrawlPanel';
 import { useState } from 'react';
 import useSWR, { mutate } from 'swr';
 import { ChevronDown, ChevronRight } from 'lucide-react';
@@ -34,6 +35,7 @@ interface LighthouseData {
 }
 
 interface AuditRow {
+  websiteCrawl?: WebsiteCrawl;
   id: string;
   locationId: string;
   status: string;
@@ -630,11 +632,13 @@ export default function AuditHistory() {
         </div>
       )}
 
-      {/* On-Page SEO detail */}
+      {mostRecentAudit && <WebsiteCrawlPanel auditId={mostRecentAudit.id} crawl={mostRecentAudit.websiteCrawl} hasWebsite={hasWebsite} />}
+
+      {/* Homepage quick checks retained alongside expanded crawl */}
       {latestAudit?.onPageDetails && latestAudit.onPageDetails.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-gray-900">On-Page SEO Checks</h2>
+            <h2 className="text-base font-semibold text-gray-900">Homepage Quick Checks</h2>
             <span className="text-xs text-gray-400">Click any item to learn more</span>
           </div>
           <ul className="space-y-1.5">

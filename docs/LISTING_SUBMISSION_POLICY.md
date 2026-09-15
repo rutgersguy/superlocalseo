@@ -43,4 +43,4 @@ An uncertain provider response or local persistence failure leaves the allocatio
 
 ## Related work
 
-The DataForSEO website crawler and integrated audit presentation remain a separate, unfinished implementation. This submission policy does not mark that request complete.
+The separate [Website crawler](WEBSITE_CRAWLER.md) adds on-page findings and repair guidance while preserving Lighthouse performance. Listing credits and website audit tasks are separate services.

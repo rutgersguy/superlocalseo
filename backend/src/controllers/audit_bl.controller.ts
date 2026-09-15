@@ -1,3 +1,4 @@
+import { pollWebsiteCrawls } from '../services/website_crawl.service';
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
@@ -191,6 +192,8 @@ export async function get(req: Request, res: Response, next: NextFunction): Prom
 }
 
 export async function pollPending(): Promise<void> {
+  try { await pollWebsiteCrawls(); } catch (error) { logger.warn('Expanded crawl poll failed', { error: (error as Error).message }); }
+
   // Poll BL for audits that have a bl_report_id (legacy Management API audits)
   const blPending = await db('location_audits')
     .where({ status: 'processing' })
@@ -421,6 +424,7 @@ export function formatAudit(row: Record<string, unknown>) {
     reviewScore: row.review_score != null ? parseFloat(row.review_score as string) : null,
     googleScore: row.google_score != null ? parseFloat(row.google_score as string) : null,
     compositeScore: verifiedScores && row.composite_score != null ? parseFloat(row.composite_score as string) : null,
+    websiteCrawl: { status: row.crawl_status ?? 'not_started', data: row.crawl_data ?? null },
     onPageScore: row.on_page_score != null ? Number(row.on_page_score) : null,
     onPageDetails: (row.on_page_details as string[] | null) ?? [],
     dfsLighthouseTaskId: (row.dfs_on_page_task_id as string | null) ?? null,
@@ -429,4 +433,17 @@ export function formatAudit(row: Record<string, unknown>) {
     completedAt: row.completed_at,
     createdAt: row.created_at,
   };
+}
+
+export async function startExpandedCrawl(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const audit = await db('location_audits').where({ id: req.params.id, client_id: req.clientId }).first();
+    if (!audit) { err(res, 'Audit not found', 404, 'NOT_FOUND'); return; }
+    const latest = await db('location_audits').where({ location_id: audit.location_id, client_id: req.clientId }).orderBy('created_at', 'desc').first();
+    if (latest?.id !== audit.id) { err(res, 'Start expanded checks from the most recent audit.', 409, 'AUDIT_SUPERSEDED'); return; }
+    const location = await db('locations').where({ id: audit.location_id, client_id: req.clientId }).first();
+    if (!location?.website) { err(res, 'Save your website in Settings before starting the expanded checks.', 422, 'WEBSITE_REQUIRED'); return; }
+    await db('location_audits').where({ id: audit.id, client_id: req.clientId }).whereNull('crawl_status').update({ crawl_status: 'queued' });
+    ok(res, { message: 'Expanded checks queued or already requested. Results appear here when ready.' }, 202);
+  } catch (error) { next(error); }
 }
