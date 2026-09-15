@@ -64,6 +64,7 @@ export const PLAN_ROUTE_GATES: RouteGate[] = [
       { path: 'competitors/review-trend',      plans: ['pro'] },
       { path: 'competitors/head-to-head',      plans: ['pro'] },
       { path: 'competitors/search',            plans: ['pro'] },
+      { path: 'competitors/place-details',            plans: ['pro'] },
       { path: 'competitors/sync-rankings',     plans: ['pro'] },
       { path: 'competitors/discover-keywords', plans: ['pro'] },
       // POST /competitors (add competitor) — Pro only (mapped to __create__ in middleware)

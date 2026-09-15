@@ -1,6 +1,6 @@
 import { PageHeader } from '../components/ui/Workspace';
 import { ProGate } from '../components/ProGate';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import useSWR, { mutate } from 'swr';
 import { Plus, RefreshCw, Trash2, Star, MessageSquare, ExternalLink, Search, AlertCircle, X, TrendingDown, TrendingUp, Target, BarChart2, Lightbulb, ChevronDown, Check, Loader2 } from 'lucide-react';
 import { fetcher, apiFetch } from '../services/api';
@@ -77,6 +77,9 @@ function AddCompetitorModal({ onClose, onAdded }: { onClose: () => void; onAdded
   const [name, setName] = useState('');
   const [website, setWebsite] = useState('');
   const [placeId, setPlaceId] = useState('');
+  const selectionVersion = useRef(0);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [placeNotice, setPlaceNotice] = useState('');
   const [searchQ, setSearchQ] = useState('');
   const [searchResults, setSearchResults] = useState<PlaceResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -92,11 +95,27 @@ function AddCompetitorModal({ onClose, onAdded }: { onClose: () => void; onAdded
     } catch { /* silent */ } finally { setSearching(false); }
   }
 
-  function selectPlace(r: PlaceResult) {
-    if (!name) setName(r.name);
+  async function selectPlace(r: PlaceResult) {
+    const version = ++selectionVersion.current;
+    setName(r.name);
+    setWebsite('');
     setPlaceId(r.placeId);
     setSearchResults([]);
     setSearchQ('');
+    setPlaceNotice('');
+    setLoadingDetails(true);
+    try {
+      const res = await apiFetch<{ success: boolean; data: { name: string; website: string | null } }>(`/competitors/place-details?placeId=${encodeURIComponent(r.placeId)}`);
+      if (version !== selectionVersion.current) return;
+      if (!res.success) throw new Error('Lookup failed');
+      setName(res.data.name);
+      setWebsite(res.data.website ?? '');
+      if (!res.data.website) setPlaceNotice('Google has no website listed for this business. You can enter one below.');
+    } catch {
+      if (version === selectionVersion.current) setPlaceNotice('Website lookup failed. The selected name and Place ID are filled in; enter the website manually or select the business again.');
+    } finally {
+      if (version === selectionVersion.current) setLoadingDetails(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -143,7 +162,7 @@ function AddCompetitorModal({ onClose, onAdded }: { onClose: () => void; onAdded
                   </button>
                 </div>
                 {searchResults.map((r) => (
-                  <button key={r.placeId} type="button" onClick={() => selectPlace(r)}
+                  <button key={r.placeId} type="button" onClick={() => void selectPlace(r)}
                     className="w-full text-left px-3 py-2.5 hover:bg-slate-50 border-b border-slate-100 last:border-0 transition-colors">
                     <div className="font-medium text-sm text-slate-800">{r.name}</div>
                     <div className="text-xs text-slate-400 mt-0.5">{r.address ?? ''}
@@ -156,24 +175,27 @@ function AddCompetitorModal({ onClose, onAdded }: { onClose: () => void; onAdded
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Competitor name *</label>
-            <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Plumbing Co."
+            <input required disabled={loadingDetails} value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Plumbing Co."
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Website <span className="text-brand-500">(required for keyword tracking)</span></label>
-            <input type="url" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://acmeplumbing.com"
+            <input type="text" inputMode="url" autoCapitalize="none" autoCorrect="off" disabled={loadingDetails} value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://acmeplumbing.com"
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
           </div>
+          <p className="text-xs text-slate-500">You can enter example.com; we’ll add https:// automatically.</p>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Google Place ID</label>
-            <input value={placeId} onChange={(e) => setPlaceId(e.target.value)}
+            <input disabled={loadingDetails} value={placeId} onChange={(e) => setPlaceId(e.target.value)}
               placeholder="ChIJ… (auto-filled when you pick from search)"
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500" />
           </div>
+          {loadingDetails && <p role="status" className="text-sm text-slate-500">Loading business details…</p>}
+          {placeNotice && <p role="status" className="text-sm text-slate-500">{placeNotice}</p>}
           {error && <div className="flex items-center gap-2 text-red-600 text-sm"><AlertCircle size={14} /> {error}</div>}
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">Cancel</button>
-            <button type="submit" disabled={saving} className="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 disabled:opacity-50 transition-colors">
+            <button type="submit" disabled={saving || loadingDetails} className="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 disabled:opacity-50 transition-colors">
               {saving ? 'Adding…' : 'Add competitor'}
             </button>
           </div>

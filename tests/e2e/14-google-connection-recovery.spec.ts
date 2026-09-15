@@ -18,6 +18,9 @@ test.describe('Google connection recovery UI', () => {
     await page.route('**/api/integrations/emr/google/sync', async route => { imports++; await route.fulfill({ status: 202, json: { success: true, data: { queued: true } } }); });
     await loginViaUI(page, 'pro@fixture.test', 'TestPass123!');
     await page.goto('/dashboard/settings?tab=integrations');
+    const direct = page.getByRole('region', { name: 'Direct Google profile access' });
+    await expect(direct).toContainText('Coming soon');
+    await expect(direct.getByRole('button')).toHaveCount(0);
     const card = page.getByRole('region', { name: 'Google review connection' });
     await card.getByRole('button', { name: 'Connect Google', exact: true }).click();
     await expect(card.getByRole('alert')).toContainText('temporarily unavailable');

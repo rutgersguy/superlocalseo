@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import { optionalWebsiteSchema } from '../utils/website';
 import { Queue } from 'bullmq';
 import { db } from '../db/connection';
 import { redis } from '../db/redis';
@@ -11,7 +12,7 @@ import { getOutrankingCompetitors } from '../services/competitor_discovery.servi
 
 const createSchema = z.object({
   name: z.string().min(1).max(255),
-  website: z.string().url().optional().or(z.literal('')),
+  website: optionalWebsiteSchema,
   googlePlaceId: z.string().max(255).optional(),
 });
 
@@ -250,6 +251,25 @@ export async function search(req: Request, res: Response, next: NextFunction): P
   } catch (e) {
     next(e);
   }
+}
+
+// Fetch only the selected listing; text search does not include its website.
+export async function placeDetails(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const placeId = String(req.query.placeId ?? '').trim();
+    if (!placeId || placeId.length > 255) { err(res, 'Valid Place ID required', 400, 'BAD_REQUEST'); return; }
+    if (!config.googlePlacesApiKey) { err(res, 'Google Places is unavailable', 503, 'UNAVAILABLE'); return; }
+    const url = new URL('https://maps.googleapis.com/maps/api/place/details/json');
+    url.searchParams.set('place_id', placeId);
+    url.searchParams.set('fields', 'place_id,name,website');
+    url.searchParams.set('key', config.googlePlacesApiKey);
+    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    const data = await response.json() as { status?: string; result?: { place_id?: string; name?: string; website?: string } };
+    if (!response.ok || data.status !== 'OK' || !data.result?.name) {
+      err(res, 'Could not retrieve this business. You can enter its details manually.', 502, 'PLACE_LOOKUP_FAILED'); return;
+    }
+    ok(res, { placeId: data.result.place_id ?? placeId, name: data.result.name, website: data.result.website ?? null });
+  } catch (e) { next(e); }
 }
 
 export async function gap(req: Request, res: Response, next: NextFunction): Promise<void> {
