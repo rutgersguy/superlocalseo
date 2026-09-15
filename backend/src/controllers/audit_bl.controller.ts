@@ -329,7 +329,9 @@ export async function pollPending(): Promise<void> {
       raw_data: db.raw("COALESCE(raw_data, '{}'::jsonb) || ?::jsonb", [JSON.stringify({ scoreMethodology: 'verified_observations_v2' })]),
       updated_at: new Date(),
         dfs_on_page_task_id: scores.dfsLighthouseTaskId ?? row.taskId ?? null,
-        on_page_score: scores.onPageScore,
+        // A completed Lighthouse result has already been blended into this score.
+        // Listing-score recovery must not replace it with the raw page estimate.
+        on_page_score: db.raw('CASE WHEN dfs_on_page_data IS NOT NULL THEN on_page_score ELSE ? END', [scores.onPageScore]),
         on_page_details: scores.onPageDetails.length ? JSON.stringify(scores.onPageDetails) : null,
         completed_at: db.raw('COALESCE(completed_at, NOW())'),
         backfill_attempted_at: new Date(),
