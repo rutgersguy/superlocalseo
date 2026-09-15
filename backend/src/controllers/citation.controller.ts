@@ -1,3 +1,4 @@
+import { submitInitialListings } from '../services/citation_submission.service';
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
@@ -6,11 +7,8 @@ import {
   getCbCredits,
   createCbCampaign,
   getCbCampaignLookup,
-  confirmCbCampaign,
   getCbCampaign,
   findOrProvisionBlLocation,
-  type CbPackageId,
-  type CbPublisher,
 } from '../services/brightlocal.service';
 import { citationHistory, napVerdict } from '../services/measurement.service';
 import { logger } from '../utils/logger';
@@ -211,6 +209,7 @@ export async function getCampaignLookup(req: Request, res: Response, next: NextF
 }
 
 const confirmCampaignSchema = z.object({
+  detailsConfirmed: z.boolean().default(false),
   packageId: z.enum(['cb0', 'cb10', 'cb15', 'cb25', 'cb30', 'cb50', 'cb75', 'cb100']),
   citations: z.array(z.string()).default([]),
   publishers: z.array(z.enum(['dataaxle', 'neustar', 'foursquare', 'gpsnetwork', 'ypnetwork', 'locafynetwork'])).default([]),
@@ -232,32 +231,7 @@ export async function confirmCampaign(req: Request, res: Response, next: NextFun
     const location = await db('locations').where({ id: locationId, client_id: req.clientId }).first();
     if (!location) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
 
-    await confirmCbCampaign(campaignId, {
-      packageId: opts.packageId as CbPackageId,
-      citations: opts.citations,
-      publishers: opts.publishers as CbPublisher[],
-      autoSelect: opts.autoSelect,
-      removeDuplicates: opts.removeDuplicates,
-      notes: opts.notes,
-      express: opts.express,
-    });
-
-    // Record confirmed citations as pending submissions for tracking
-    const now = new Date();
-    const rows = opts.citations.map((domain) => ({
-      client_id: req.clientId as string,
-      location_id: locationId,
-      directory: domain,
-      status: 'pending',
-      bl_submission_id: campaignId,
-      submitted_at: now,
-    }));
-    if (rows.length > 0) {
-      await db('citation_submissions')
-        .insert(rows)
-        .onConflict(['location_id', 'directory'])
-        .merge(['status', 'bl_submission_id', 'submitted_at']);
-    }
+    await submitInitialListings(req.clientId!, locationId, campaignId!, opts);
 
     ok(res, { message: 'Campaign confirmed' });
   } catch (e) {

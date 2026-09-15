@@ -310,6 +310,9 @@ export default function Citations() {
 
   return (
     <div className="space-y-6">
+      <div className="rounded-lg border border-brand-200 bg-brand-50 p-4 text-sm text-slate-700 mb-4">
+        Review your listing plan during your trial. Submissions begin after your first paid Pro subscription payment and confirmation of your business details. Each paid location includes one initial allocation of up to 15 relevant directory submissions or updates; existing accurate listings do not need resubmission. Additional services are separate.
+      </div>
       <div>
         <div className="flex items-center justify-between">
           <div>

@@ -1,3 +1,5 @@
+Current correction (2026-09-15): Citation Builder Management API access is configured and credit balance verified. Older references below to a required BrightLocal plan upgrade are superseded. See [Paid listing submissions](LISTING_SUBMISSION_POLICY.md) for the implemented payment gate and 15-credit initial cap.
+
 # SuperLocalSEO — API Gap Analysis & Implementation Tickets
 
 **Last updated:** 2026-05-07  
