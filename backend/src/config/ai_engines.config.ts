@@ -93,8 +93,8 @@ export const AI_PROMPTS: AiPromptDef[] = [
   },
   {
     key: 'emergency',
-    intent: 'Urgency — the highest-intent moment, when the customer will call the first name given',
-    template: 'I need an emergency {industry} in {place} right now. Which company should I call?',
+    intent: 'Ready to contact — looking for a business to call now',
+    template: 'I need {industry} in {place} now. Who can I call?',
   },
   {
     key: 'most_trusted',

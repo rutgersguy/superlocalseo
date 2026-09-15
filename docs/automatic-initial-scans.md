@@ -26,3 +26,5 @@ No migration backfills all historical customers. To enroll a specific existing c
 The map uses geocoded address coordinates, which remain an estimate rather than a verified rooftop location. Service-area businesses without a saved address wait for a usable center. A missing/malformed Maps provider result fails instead of recording an invented unranked observation.
 
 Website fetching accepts public HTTP(S) destinations on standard ports only. Every redirect is checked, DNS addresses are pinned to prevent rebinding, private/reserved addresses are rejected, response size is capped at 2 MiB, and the fetch has a six-second total deadline. An unavailable or blocked website yields an unscored check rather than a fabricated failing score.
+
+The second AI question now asks “I need {industry} in {place} now. Who can I call?” without inventing an emergency for industries such as personal training. Saved answer text and the question actually sent remain unchanged in historical snapshots; a fresh scan is required to collect answers to the revised question.
