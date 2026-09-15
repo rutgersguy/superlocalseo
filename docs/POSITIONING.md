@@ -144,7 +144,7 @@ trust — we have to demonstrate it.** Published method is the testimonial subst
 > For a plumbing company we check 14 directories — the 10 that matter for every local business,
 > plus Angi, Houzz, Thumbtack and HomeAdvisor. We picked them by measurement, not opinion: we
 > tested them against real businesses and dropped anything we found less than 25% of the time.
-> We re-check every Monday, and we keep every snapshot we've ever taken.
+> Paid Pro listings are re-checked monthly, and we keep every snapshot we've ever taken.
 
 Every clause there is verifiable in this repo. This paragraph does more work than a testimonial
 would, and competitors will not copy it, because publishing your hit rates only works if they
@@ -167,7 +167,7 @@ falsifiable attack on a named competitor and it is not worth the risk. Make the 
 
 The three trust assets we do have, in order of strength:
 
-1. **Method transparency** — measured directory selection, weekly cadence, permanent history.
+1. **Method transparency** — measured directory selection, monthly listing checks, permanent history.
 2. **Real product surfaces** — the geo-grid heatmap is the signature visual. Nobody at our
    price point shows one, and it reads as evidence at a glance.
 3. **The free report itself** — a live demonstration beats a claim about a demonstration.
@@ -192,7 +192,7 @@ Plainspoken like Jobber. Evidenced like a lab report.
 pack, SERP, GEO, schema, backlinks, domain authority*. These are fine deeper in the page and in
 the app, where the reader has already opted in.
 
-**Preferred:** concrete nouns and real numbers over adjectives. "We re-check every Monday"
+**Preferred:** concrete nouns and real numbers over adjectives. "We check paid Pro listings monthly"
 beats "always up to date." "33 directories" beats "comprehensive coverage."
 
 **Never:** "revolutionary," "cutting-edge," "unlock the power of," "in today's digital

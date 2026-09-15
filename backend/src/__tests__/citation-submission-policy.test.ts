@@ -1,3 +1,6 @@
+import { processCitations } from '../jobs/citations.job';
+import { scanLocation } from '../services/citation_scan.service';
+jest.mock('../services/citation_scan.service', () => ({ scanLocation: jest.fn() }));
 import request from 'supertest';
 import app from '../app';
 import { db } from '../db/connection';
@@ -78,6 +81,24 @@ it('also blocks an administrator from spending for a trial customer', async () =
   const response = await request(app).post('/api/admin/citations/campaign/campaign-policy/confirm').set('Authorization', `Bearer ${adminToken}`).send({ ...options, clientId, locationId });
   expect(response.status).toBe(402); expect(confirmCbCampaign).not.toHaveBeenCalled();
   await db('users').where({ email }).update({ role: 'client' });
+});
+
+it('monthly checks exclude trials, inactive subscriptions and Lite without submitting', async () => {
+  const scan = scanLocation as jest.Mock;
+  scan.mockResolvedValue([{ directory: 'yelp', status: 'listed', nameMatch: true, addressMatch: true, phoneMatch: true }]);
+  for (const subscription_status of ['trialing', 'canceled', 'past_due']) {
+    await db('clients').where({ id: clientId }).update({ subscription_status });
+    await processCitations({ name: 'monthly-scan', data: { clientId } } as any);
+    expect(scan).not.toHaveBeenCalled();
+  }
+  await db('clients').where({ id: clientId }).update({ subscription_status: 'active', product_line: 'lite' });
+  await processCitations({ name: 'monthly-scan', data: { clientId } } as any);
+  expect(scan).not.toHaveBeenCalled();
+  await db('clients').where({ id: clientId }).update({ product_line: 'pro' });
+  await processCitations({ name: 'monthly-scan', data: { clientId } } as any);
+  expect(scan).toHaveBeenCalledTimes(1);
+  expect(confirmCbCampaign).not.toHaveBeenCalled();
+  expect(await db('citation_orders').where({ location_id: locationId })).toHaveLength(0);
 });
 
 });

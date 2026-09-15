@@ -2,6 +2,12 @@
 
 Approved 2026-09-15. This supersedes older references to broad 40+ directory submission packages or a manual-first fallback.
 
+## Monthly operation — lower-cost policy approved 2026-09-15
+
+Automatic listing checks run on the first of each month at 07:00 UTC for active Pro accounts. This replaces the weekly recurring scan; scoped initial onboarding scans remain available during trial. The worker removes the previous daily and weekly schedules when registering the monthly schedule. A check flags findings for review and never calls the paid Citation Builder confirmation endpoint.
+
+The included submission allowance remains one initial campaign capped at 15 credits per paid location. There is no monthly credit refill or automatic paid repeat submission. Later paid work requires a separately authorized and paid add-on. That follow-up ordering/billing flow is not implemented yet; no promise of automatic monthly submissions is made in the UI. VAs continue to approve the initial order. The Business Listings screen states the schedule and distinction explicitly.
+
 ## Customer promise
 
 Pro includes one initial listing campaign per paid location, capped at 15 Citation Builder credits. It is not a monthly allowance. Trial users can review audits and prepare their details, but no submission spending occurs during a trial. Submission requires confirmed business details and a successful non-zero Pro subscription payment. Payment does not automatically order listings: the operator reviews and confirms the prepared campaign.

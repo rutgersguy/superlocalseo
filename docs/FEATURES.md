@@ -903,10 +903,7 @@ so this limit is visible rather than hidden.
 
 ### Cadence
 
-The scan runs **weekly**, Monday 07:00 UTC (was daily). Citations change over
-weeks, so daily scanning bought nothing but seven times the metered API cost.
-Weekly refresh is a genuine differentiator worth stating in marketing: most
-competitors at this price re-audit monthly or on demand.
+The recurring scan runs **monthly**, on the first day at 07:00 UTC, for active Pro locations. Initial scoped onboarding scans remain available during trial. Monthly monitoring never purchases submissions; see [Paid listing submissions](LISTING_SUBMISSION_POLICY.md). The prior daily and weekly repeating jobs are removed during scheduler registration.
 
 ### Citation Data
 

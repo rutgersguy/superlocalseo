@@ -32,4 +32,6 @@ test('customer sees the paid listing allowance', async ({ page }) => {
   await loginViaUI(page, 'pro@fixture.test', 'TestPass123!');
   await page.goto('/dashboard/citations');
   await expect(page.getByText('Each paid location includes one initial allocation', { exact: false })).toBeVisible();
+  await expect(page.getByText('Automatic monthly listing checks', { exact: true })).toBeVisible();
+  await expect(page.getByText('Credits do not refill monthly.', { exact: false })).toBeVisible();
 });
