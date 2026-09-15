@@ -1,5 +1,25 @@
 # Expanded on-page website checks
 
+**Deployed September 15, 2026:** [expanded audits #232](https://github.com/rutgersguy/superlocalseo/pull/232) and [crawl limits and explicit scope #233](https://github.com/rutgersguy/superlocalseo/pull/233).
+
+## Customer and VA walkthrough
+
+1. Open **Website Audit → On-Page SEO Checks → Crawl scope and limits**. Refresh the browser if the newly deployed control is missing; a new audit is not needed just to see it.
+2. Review the saved website and choose the scope below. A URL path alone does not prove that it represents a separate business location.
+3. Click **Save crawl scope**. This saves the preference for future crawl dispatches; it does not purchase a crawl, restart an accepted task, or change existing findings.
+4. Expand an issue to see why it matters, **How to fix it**, and affected page URLs. Review **All checks and coverage** for missing observations.
+
+| Scope choice | Pages eligible for a future crawl | Cap |
+|---|---|---|
+| Automatic | Homepage URL: website; non-root URL: saved page only | 25 or 1 |
+| Website | Broader website, potentially covering several locations | 25 |
+| Saved URL section and subpages | Exact saved path and its descendants; not necessarily location-specific | 25 |
+| Saved page only | Saved page, without expanding to other pages | 1 |
+
+Every new scope uses a maximum linking depth of three. A shared franchise site without distinct location paths can use Website for broader findings or Saved page only for narrower coverage. Do not describe broader website findings as specific to one location.
+
+## Implemented behavior
+
 DataForSEO OnPage crawling supplements the existing homepage checks. Website Performance remains powered by Lighthouse with its existing metrics and repair explanations; this feature does not replace or reweight those results.
 
 New eligible audits queue a crawl automatically at onboarding, monthly (first day at 09:00 UTC), and on manual audit requests subject to the existing cooldown. Historical audits are not purchased in bulk; the latest older audit can be enrolled from Website Audit. The maximum is now **25 pages and three links deep** (starting page depth zero). Sitemap ordering is disabled because the provider ignores depth limits when it is enabled. Service, location, contact and about URLs discovered directly on the starting page are prioritized (maximum 20); no guessed URLs are purchased.
@@ -20,3 +40,25 @@ Sources:
 - https://docs.dataforseo.com/v3/on_page/task_post/
 - https://docs.dataforseo.com/v3/on_page/summary/
 - https://docs.dataforseo.com/v3/on_page/pages/
+
+## Release verification and limits
+
+- The implementation passed 612 backend tests, targeted crawl policy/lifecycle tests, browser scope-save and repair-guidance tests, and all five GitHub release checks.
+- Production was rebuilt and migrated from GitHub main. The live AirServe scope control saved successfully while its existing one-page audit and Lighthouse metrics were preserved.
+- Before the limit change, live crawls completed for AirServe (one page) and Legacy Fitness (seven pages). Those results are historical evidence, not new crawls under the revised policy. The new provider request limits and exclusions were checked in automated tests and in the rebuilt runtime; saving scope did not trigger another paid crawl.
+- Expanded findings remain in the app only; adding them to the downloadable audit PDF is not implemented.
+
+## API and storage reference
+
+All routes below require the signed-in client and the existing Pro feature gate. Audit IDs and locations are checked against the current client.
+
+| Route | Behavior |
+|---|---|
+| `GET /api/audits/bl` | Client audit history, including crawl state and findings |
+| `POST /api/audits/bl/generate` | Request a new location audit; existing 24-hour website cooldown applies |
+| `POST /api/audits/bl/:id/crawl` | Enroll the latest older audit if it has no crawl; does not reset an accepted task |
+| `GET /api/audits/bl/:id/crawl-scope` | Read the location's saved scope and website |
+| `PUT /api/audits/bl/:id/crawl-scope` | Save `scope`: `auto`, `website`, `section`, or `page`; no paid dispatch |
+| `GET /api/audits/bl/location/:locationId/history` | Completed location audit history |
+
+`locations.website_crawl_scope` stores the future preference. New accepted tasks preserve their policy in `location_audits.crawl_data.policy`, alongside durable task identity and status. Do not rewrite historical policies to match current limits.

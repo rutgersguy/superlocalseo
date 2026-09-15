@@ -1294,47 +1294,18 @@ Overall grade: A (90+), B (75+), C (60+), D (45+), F (<45)
 6. User submits email → all categories unlock
 7. CTA: "Get your free 7-day trial" → links to `/register`
 
-### 14b. BrightLocal Location Audits (`/dashboard/audit`)
+### 14b. Website Audit (`/dashboard/audit`)
 
-A deeper, BrightLocal-powered audit of a specific location. Runs monthly automatically; can also be triggered manually (30-day cooldown per location).
+Updated September 15, 2026. The authenticated Website Audit combines **Lighthouse performance**, homepage quick checks, and **DataForSEO OnPage crawl findings**. A BrightLocal campaign is not required for the website checks. The `/audits/bl` API prefix is retained for compatibility; it does not mean all audit data comes from BrightLocal.
 
-**`POST /api/audits/bl`**
-```json
-{ "locationId": "<uuid>" }
-```
-- Requires location to have a `brightlocal_campaign_id`
-- 30-day cooldown enforced (returns 429 with `nextAllowed` date if too soon)
-- Queues a BrightLocal report generation; polls for completion via job
+- New eligible audits include expanded checks at onboarding, monthly (first day at 09:00 UTC), and on manual request subject to the 24-hour website cooldown.
+- New crawls are capped at **25 pages and three links deep**; single-page scope is capped at one. Relevant discovered links are prioritized; query variants and search/filter/account/cart paths are excluded.
+- **Crawl scope and limits** offers Automatic, Website, Saved URL section and subpages, or Saved page only. Automatic uses one page for non-root URLs. Website/section coverage must not be assumed to represent one location.
+- Saving scope affects future dispatches without purchasing another crawl. Same-website requests within 24 hours reuse accepted tasks/results. Historical findings retain their actual scope.
+- Findings include priority, affected URLs, explanation and **How to fix it**. Missing observations are explicitly unchecked; empty results are not a clean audit.
+- Lighthouse metrics, homepage estimates and their existing guidance remain. The expanded findings are not yet included in the downloadable PDF.
 
-**`GET /api/audits/bl`** — Lists all audits for the client
-
-**`GET /api/audits/bl/:id`** — Full audit detail:
-```json
-{
-  "locationId": "...",
-  "status": "complete",
-  "napScore": 82,
-  "citationScore": 74,
-  "reviewScore": 90,
-  "googleScore": 88,
-  "compositeScore": 83,
-  "recommendations": [
-    "Add more photos to your Google Business Profile (currently 2, aim for 10+)",
-    "Inconsistent phone number on 8 directories"
-  ],
-  "completedAt": "2026-05-01T09:15:00Z"
-}
-```
-
-**`GET /api/audits/bl/history/:locationId`** — Historical audit scores for trend analysis
-
-#### Audit History Page Walkthrough
-
-1. **Location selector** — dropdown to switch between locations
-2. **Audit cards** — Each completed audit shows composite score, individual category scores as circular gauges
-3. **Recommendations** — Prioritised action items from BrightLocal
-4. **Trigger button** — "Run New Audit" — disabled with countdown if within 30-day cooldown
-5. **Score history** — trend of composite score over time
+See the [website crawler runbook](WEBSITE_CRAWLER.md) for the customer/VA walkthrough, API routes, storage, release evidence, and failure recovery. Deployed in [#232](https://github.com/rutgersguy/superlocalseo/pull/232) and [#233](https://github.com/rutgersguy/superlocalseo/pull/233).
 
 ---
 
