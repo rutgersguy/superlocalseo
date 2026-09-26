@@ -18,6 +18,9 @@ describe('private feedback privacy and spreadsheet safety', () => {
     const csv = feedbackCsv([feedbackView(input, true)]);
     expect(csv).not.toContain('Private operational note');
     expect(csv).not.toContain('person@example.com');
+    expect(csv).toContain('"Imported feedback"');
+    expect(csv).not.toContain('"emr"');
+    expect(input.source).toBe('emr');
   });
   it('rejects unsupported statuses, invalid assignees, missing version, and unknown write fields', () => {
     const valid = { version: 0, status: 'new', assignedUserId: null, notes: '' };

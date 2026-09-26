@@ -459,12 +459,13 @@ function FeedbackTab() {
   return (
     <>
       <details className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-        <summary className="cursor-pointer font-medium">How to manage private feedback</summary>
-        <p className="mt-2">Assign an owner or accepted admin, mark work in progress, and record the outcome before marking it resolved. Saving a status or note sends no message and publishes nothing. A former teammate must be reassigned before saving.</p>
-        <p className="mt-2">Only contact a person using details they consented to share for follow-up. Masked EMR contact details are not usable contact information. Public review access is the same at every rating; private feedback is optional.</p>
+        <summary className="cursor-pointer font-medium">How private feedback works</summary>
+        <p className="mt-2">Customers can send feedback directly to your business through your review page. It appears in this inbox for your team to review and does not become a public Google review. Customers can share private feedback, leave a public review, or do both, at any rating.</p>
+        <p className="mt-2">Assign a team member, mark feedback as In progress while you follow up, and record the outcome before marking it Resolved. Account owners and admins can manage follow-up. Saving a status or internal note does not send a message to the customer or publish a review. Reassign feedback if its owner has left your team.</p>
+        <p className="mt-2">Only contact a customer using details they agreed to share for follow-up. Hidden or partially masked details cannot be used to contact them. Private feedback is optional and never limits access to public reviews.</p>
         <p className="mt-2">Owners and admins on Pro can export up to 5,000 responses matching the current filters, across all pages. Export uses the inbox contact masking and excludes internal notes. Store downloaded files securely and delete them when no longer needed. Saved feedback is retained until an authorized privacy request is handled by support; no automatic retention period is configured.</p>
       </details>
-      <p className="mb-4 text-sm text-slate-500">{data?.data.coverage ?? 'Historical EMR feedback coverage is not guaranteed. This inbox shows submissions received by SuperLocalSEO.'}</p>
+      <p className="mb-4 text-sm text-slate-500">{data?.data.coverage ?? 'This inbox shows feedback received through your review page and connected review campaigns. Older submissions and later changes may not appear here.'}</p>
       <div className="mb-4 flex flex-wrap gap-4">
         <label className="text-sm">Feedback location<select value={locationId} onChange={e => { setLocationId(e.target.value); setPage(1); }} className="ml-2 rounded border-slate-300"><option value="">All locations</option>{locations?.data.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
         <label className="text-sm">Feedback rating<select value={rating} onChange={e => { setRating(e.target.value); setPage(1); }} className="ml-2 rounded border-slate-300"><option value="">All ratings</option>{[1,2,3,4,5].map(n => <option key={n} value={n}>{n} stars</option>)}</select></label>

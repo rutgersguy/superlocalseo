@@ -46,7 +46,7 @@ export default function Privacy() {
             <p className="text-slate-600 leading-relaxed mb-4">
               To provide ranking, review, and citation services we collect the business name, address,
               phone number, website URL, and keywords you enter. This data is submitted to third-party
-              SEO data providers (BrightLocal, EmbedMyReviews) on your behalf to generate reports.
+              SEO data and review management providers on your behalf to provide these services and generate reports.
             </p>
             <h3 className="text-base font-medium text-slate-800 mb-2">Third-Party OAuth Tokens</h3>
             <p className="text-slate-600 leading-relaxed mb-4">
@@ -105,9 +105,9 @@ export default function Privacy() {
                     <td className="py-3">Business name, address, phone, keywords</td>
                   </tr>
                   <tr className="border-b border-slate-100">
-                    <td className="py-3 pr-6 font-medium">EmbedMyReviews</td>
-                    <td className="py-3 pr-6">Review aggregation &amp; widgets</td>
-                    <td className="py-3">Business name, location data</td>
+                    <td className="py-3 pr-6 font-medium">Review management provider</td>
+                    <td className="py-3 pr-6">Review imports, invitations, feedback &amp; widgets</td>
+                    <td className="py-3">Business and location details, connected reviews, campaign contacts and feedback you submit or connect</td>
                   </tr>
                   <tr className="border-b border-slate-100">
                     <td className="py-3 pr-6 font-medium">Google / Facebook</td>

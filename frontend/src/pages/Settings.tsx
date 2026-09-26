@@ -431,7 +431,7 @@ function WidgetAdvancedPanel({ widgetId }: { widgetId: string }) {
             <textarea
               value={cfg.customCss ?? ''}
               onChange={(e) => setDraft((d) => ({ ...d, customCss: e.target.value }))}
-              placeholder=".emr-widget { ... }"
+              placeholder="/* Add custom styles for your review widget */"
               rows={4}
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
               style={{ height: 120 }}
