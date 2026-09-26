@@ -44,3 +44,7 @@ An uncertain provider response or local persistence failure leaves the allocatio
 ## Related work
 
 The separate [Website crawler](WEBSITE_CRAWLER.md) adds on-page findings and repair guidance while preserving Lighthouse performance. Listing credits and website audit tasks are separate services.
+
+## Business Listings presentation (September 26, 2026)
+
+Directory cards precede the owner-managed directory guide and the collapsed Listing coverage history. History loads only when opened and is labeled as listings found among checked entries, excluding unverified entries; changing scan coverage can change this percentage. Trial accounts see a benefit-focused banner explaining that the first paid Pro subscription payment, confirmed business details, and team approval unlock eligible initial submissions or corrections. Monthly checks remain distinct from additional paid submissions.
