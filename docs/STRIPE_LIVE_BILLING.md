@@ -1,28 +1,35 @@
 # Stripe live billing
 
-## Preparation status — September 26, 2026
+## Live status — September 26, 2026
 
 The Stripe account is `acct_1BbClXBjmrnTgLcA`. Following representative verification
 and the owner's bank update, Stripe's Account Status page confirms **Payments and
 Payouts are active**, with no active tasks remaining. This confirms capabilities;
-the application still needs the cutover and real-payment acceptance below.
+real-payment acceptance still remains below.
 
-**The application remains in test mode.** Live credential installation, webhook
-configuration, test-reference reconciliation, and the pilot promotion are pending.
-Creating the live catalog does not activate application billing or charge anyone.
+**The production application now uses live Stripe billing.** Live credentials,
+prices, webhook signing, the customer portal, and the pilot promotion are installed
+and verified. No customer was subscribed or charged during this setup. The cutover
+used GitHub commit `3890ee7ac27cdf0c28b08269ca373d23ec3e726a`
+([preparation PR #236](https://github.com/rutgersguy/superlocalseo/pull/236)).
 
 The following live products were created and their monthly USD prices checked
 against the application. Leave the older 2019 products alone.
 
-| Application setting | Product | Monthly price | Live product ID |
+| Application setting | Product | Monthly price | Live price ID |
 | --- | --- | ---: | --- |
-| `STRIPE_BASE_PRICE_ID` | SuperLocalSEO Pro | $349 | `prod_VKZJaWxviejQbb` |
-| `STRIPE_LITE_BASE_PRICE_ID` | SuperLocalSEO Lite | $149 | `prod_VKZJJkD0bWq2ef` |
-| `STRIPE_LOCATION_PRICE_ID` | SuperLocalSEO Pro — Additional Location | $125 | `prod_VKZKBQIcdu89ym` |
+| `STRIPE_BASE_PRICE_ID` | SuperLocalSEO Pro | $349 | `price_1UJuAiBjmrnTgLcA1YQslnM8` |
+| `STRIPE_LITE_BASE_PRICE_ID` | SuperLocalSEO Lite | $149 | `price_1UJuB6BjmrnTgLcAqUOpQBYE` |
+| `STRIPE_LOCATION_PRICE_ID` | SuperLocalSEO Pro — Additional Location | $125 | `price_1UJuBYBjmrnTgLcAPxof9Tu7` |
 
-These are **product IDs**, not values to put into the price settings. Retrieve each
-product's active recurring price and verify the amount, currency, monthly interval,
-and live mode before assigning its `price_...` ID. Keep setup fees disabled.
+The matching products are `prod_VKZJaWxviejQbb` (Pro), `prod_VKZJJkD0bWq2ef`
+(Lite), and `prod_VKZKBQIcdu89ym` (additional location). The running API verified
+each live price's amount, currency, and monthly interval. Setup fees remain disabled.
+
+The live webhook is `we_1UJvjbBjmrnTgLcAuQoF60Ai`, using API version `2024-06-20`.
+The active default portal configuration is `bpc_1UJvjbBjmrnTgLcAz3TDA1GT`; it allows
+invoice history, payment-method updates, and cancellation at the period end. Plan
+changes stay in the application so subscription metadata remains consistent.
 
 ## Cutover procedure
 
@@ -59,17 +66,26 @@ and live mode before assigning its `price_...` ID. Keep setup fees disabled.
    public website/API, and the live webhook configuration. A healthy HTTP response
    is not proof of a successful live payment.
 
-The September 26 read-only audit found six linked customers in test mode. Stephen's
-subscription was an incomplete test subscription. Two other stored subscription
-references could not be retrieved with the current test key; they require explicit
-reconciliation rather than being treated as confirmed test subscriptions.
+The audit found six linked test customers, one incomplete test subscription for
+Stephen, and two subscription references absent from both the old test account and
+the live account. After a dry run and verified database/environment backups, a
+transaction reconciled those references while the API was stopped. Stephen's new
+live customer is linked; other accounts create their live customer when needed.
+One non-administrator demo account with no valid paid subscription returned to
+trial status. Administrator access, registration dates, and existing trial dates
+were preserved. The previous application test webhook was disabled.
 
 ## Legacy Fitness pilot
 
 The agreed price is **$1 USD/month for the ongoing one-location Pro subscription**.
-Prepare a $348 USD amount-off coupon with `duration=forever`, restricted to the
-current $349 Pro base product, and a promotion code restricted to Stephen's live
-customer. Verify the resulting first invoice and recurring total before he pays.
+The $348 USD amount-off coupon with `duration=forever` is prepared, restricted to the
+current $349 Pro base product, with a promotion code restricted to Stephen's live
+customer. Both first-invoice and recurring-invoice live previews returned **$1.00**.
+A recurring preview with one extra location returned **$126.00**, confirming that
+the extra location remains $125. The application also successfully validated the
+promotion through its running Stripe service. The code has no redemption-count cap
+so restarting an incomplete checkout cannot exhaust it; its customer restriction
+prevents other accounts from using it.
 Do not apply the discount to additional locations or Lite. Do not use the unrelated
 legacy Demo Product $1. A future move to a different base price requires reviewing
 the discount so the promised $1 recurring total is preserved.
@@ -77,7 +93,22 @@ the discount so the promised $1 recurring total is preserved.
 Stephen enters his own card during the next session. Do not create a paid
 subscription, charge a stored card, or submit directory orders as part of
 administrative preparation. Keep the real trial expiration unchanged during the
-mode transition unless the owner requests an extension.
+mode transition unless the owner requests an extension. Stephen's preserved trial
+ends **October 3, 2026 at 6:14 a.m. America/Chicago**.
+
+## Deployment verification
+
+- Public website HTTP 200, API validation HTTP 422, and no API startup errors.
+- Running secret/publishable keys both live; payments and payouts enabled for the
+  expected account; all configured prices verified against Stripe.
+- Every remaining customer reference resolves to a live customer. Stephen remains
+  on his trial, with no live subscription created during preparation.
+- An intentionally harmless, signed `customer.created` probe returned HTTP 200;
+  an invalid signature returned HTTP 400. This checks signature handling without
+  changing subscription state. It is **not** proof of Stripe-delivered payment
+  events, which remain part of customer acceptance.
+- The active default customer portal and customer/product restrictions on the
+  ongoing pilot discount were checked through the live API.
 
 ## Acceptance still required
 
@@ -100,3 +131,4 @@ first; do not blindly restore test credentials and overwrite newer billing recor
 - [Stripe go-live checklist](https://docs.stripe.com/get-started/checklist/go-live)
 - [Stripe API keys](https://docs.stripe.com/keys)
 - [Stripe webhook endpoints](https://docs.stripe.com/webhooks)
+- [Stripe invoice previews](https://docs.stripe.com/api/invoices/upcoming?api-version=2024-06-20)
