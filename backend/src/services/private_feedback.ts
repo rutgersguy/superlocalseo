@@ -11,7 +11,7 @@ export const feedbackUpdate = z.object({
   assignedUserId: z.string().uuid().nullable(),
   notes: z.string().max(4000),
 }).strict();
-export const feedbackCoverage = 'This inbox contains native submissions and EMR webhook events received by SuperLocalSEO. Historical EMR feedback and later edits are not backfilled or guaranteed complete.';
+export const feedbackCoverage = 'This inbox shows feedback received through your review page and connected review campaigns. Older submissions and later changes may not appear here.';
 
 function maskName(name: string | null): string | null {
   return name ? name.trim().split(/\s+/).map(p => p[0] + '***').join(' ') : null;
@@ -42,5 +42,5 @@ export function csvCell(value: unknown): string {
 }
 export function feedbackCsv(rows: Record<string, any>[]): string {
   const keys = ['id', 'source', 'locationId', 'campaignId', 'receivedAt', 'rating', 'message', 'contactName', 'contactEmail', 'contactPhone', 'contactConsent', 'status', 'assignedUserId'];
-  return [keys.map(csvCell).join(','), ...rows.map(row => keys.map(key => csvCell(row[key] instanceof Date ? row[key].toISOString() : row[key])).join(','))].join('\r\n');
+  return [keys.map(csvCell).join(','), ...rows.map(row => keys.map(key => csvCell(key === 'source' && row[key] === 'emr' ? 'Imported feedback' : row[key] instanceof Date ? row[key].toISOString() : row[key])).join(','))].join('\r\n');
 }

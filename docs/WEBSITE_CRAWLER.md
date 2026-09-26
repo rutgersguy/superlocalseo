@@ -1,5 +1,7 @@
 # Expanded on-page website checks
 
+The Website Audit screen focuses on the current audit, Lighthouse performance, and actionable on-page findings. The Score History chart was removed on September 26, 2026. Stored audits and their history remain available for existing comparisons and reporting.
+
 **Deployed September 15, 2026:** [expanded audits #232](https://github.com/rutgersguy/superlocalseo/pull/232) and [crawl limits and explicit scope #233](https://github.com/rutgersguy/superlocalseo/pull/233).
 
 ## Customer and VA walkthrough

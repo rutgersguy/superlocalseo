@@ -47,7 +47,8 @@ describe('private feedback management authorization and recovery', () => {
     const result = await request(app).get('/api/reviews/feedback?status=in_progress').set('Authorization', `Bearer ${viewerToken}`);
     expect(result.status).toBe(200); expect(result.body.data.total).toBe(1);
     expect(result.body.data).toMatchObject({ canManage: false, assignees: [] });
-    expect(result.body.data.coverage).toContain('not backfilled');
+    expect(result.body.data.coverage).toContain('Older submissions and later changes may not appear here');
+    expect(result.body.data.coverage).not.toMatch(/\bEMR\b|EmbedMyReviews/i);
     expect(result.body.data.feedback[0]).not.toHaveProperty('notes');
     expect(JSON.stringify(result.body)).not.toContain('secret@example.com');
   });

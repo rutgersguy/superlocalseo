@@ -135,7 +135,7 @@ export default function Terms() {
             <h2 className="text-xl font-semibold text-slate-900 mb-3">8. Third-Party Integrations</h2>
             <p className="text-slate-600 leading-relaxed mb-4">
               The Service integrates with Google Business Profile, Facebook, BrightLocal,
-              EmbedMyReviews, and Stripe. By connecting these integrations you authorize us to
+              review management providers, and Stripe. By connecting these integrations you authorize us to
               access and use your data on those platforms as described in our Privacy Policy.
             </p>
             <p className="text-slate-600 leading-relaxed">

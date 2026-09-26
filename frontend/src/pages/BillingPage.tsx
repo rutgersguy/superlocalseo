@@ -6,6 +6,7 @@ import { CheckCircle2, ShieldCheck, Lock, Tag, X } from 'lucide-react';
 import useSWR from 'swr';
 import { fetcher, apiFetch } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
+import { BrandWordmark } from '../components/BrandWordmark';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -380,8 +381,8 @@ export default function BillingPage() {
     <div className="min-h-screen bg-slate-50">
       {/* Top nav strip */}
       <div className="bg-white border-b border-slate-100 px-6 py-3 flex items-center justify-between">
-        <Link to="/dashboard" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-          <img src="/sls_logo_wide_color.png" alt="SuperLocalSEO" className="h-7 w-auto" />
+        <Link to="/dashboard" aria-label="SuperLocalSEO dashboard" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+          <BrandWordmark />
         </Link>
         <button onClick={() => void logout()} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
           Sign out

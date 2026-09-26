@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import useSWR from 'swr';
+import { Link } from 'react-router-dom';
+import { useClient } from '../hooks/useClient';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
@@ -274,6 +276,9 @@ function FreshnessNotice({ lastPulledAt }: { lastPulledAt: string | null }) {
 }
 
 export default function Citations() {
+  const { client } = useClient();
+  const isTrial = client?.billing.status === 'trialing';
+  const [showTrend, setShowTrend] = useState(false);
   const [trendDays, setTrendDays] = useState<TrendDays>(90);
   const [expandedDir, setExpandedDir] = useState<string | null>(null);
   const [showErrorsOnly, setShowErrorsOnly] = useState(false);
@@ -281,7 +286,7 @@ export default function Citations() {
 
   const { data, isLoading, error } = useSWR<CitationsResponse>('/citations', fetcher);
   const { data: trendData, isLoading: trendLoading } = useSWR<TrendResponse>(
-    `/citations/history?days=${trendDays}`,
+    showTrend && activeTab === 'directories' ? `/citations/history?days=${trendDays}` : null,
     fetcher,
   );
   const { data: submissionsData } = useSWR<SubmissionsResponse>('/citations/submissions', fetcher);
@@ -310,15 +315,10 @@ export default function Citations() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-brand-200 bg-brand-50 p-4 text-sm text-slate-700 mb-4">
-        <p className="font-semibold text-slate-900">Automatic monthly listing checks</p>
-        <p className="mt-1">Paid Pro locations are checked on the first day of each month at 07:00 UTC. Accurate listings are left alone; missing listings or differences are flagged for review.</p>
-        <p className="mt-2">Each paid location includes one initial allocation of up to 15 submission credits, after payment and confirmation of business details. Credits do not refill monthly. Further paid submissions require a separately approved and paid add-on; we will not automatically purchase repeat submissions.</p>
-      </div>
       <div>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Citations</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Business listings</h1>
           </div>
           <div className="flex gap-2">
             <button
@@ -338,6 +338,13 @@ export default function Citations() {
           </p>
         )}
       </div>
+
+      {isTrial && <section aria-label="Listing submissions after your trial" className="rounded-xl border border-brand-200 bg-brand-50 p-4 text-sm text-slate-700">
+        <h2 className="font-semibold text-slate-900">Turn these insights into stronger business listings</h2>
+        <p className="mt-1">Activate a paid Pro subscription and confirm your business details to unlock your initial listing campaign. Our team reviews and approves eligible new listings and corrections before submitting them to your included directories.</p>
+        <p className="mt-2">Monthly checks then help spot new gaps and outdated details, so you can keep your business information consistent.</p>
+        <Link to="/billing?subscribe=1" className="mt-3 inline-block font-semibold text-brand-700 underline">View plans</Link>
+      </section>}
 
       {error && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
@@ -436,69 +443,6 @@ export default function Citations() {
           <FreshnessNotice lastPulledAt={summary.lastPulledAt ?? null} />
         </div>
       ) : null}
-
-      {/* Apple Maps and Bing Places cannot be audited by any search-based
-          method — we link the customer to the self-serve portals instead (#173). */}
-      <UnauditedDirectories />
-
-      {/* Completeness over time */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-gray-900">Completeness over time</h2>
-          <div className="flex gap-1">
-            {TREND_RANGES.map((r) => (
-              <button
-                key={r.value}
-                onClick={() => setTrendDays(r.value)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                  trendDays === r.value ? 'bg-brand-500 text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        {trendLoading ? (
-          <div className="h-48 bg-gray-50 rounded-lg animate-pulse" />
-        ) : trendSeries.length === 0 ? (
-          <div className="h-48 flex items-center justify-center text-gray-400 text-sm">
-            No citation history yet.
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={trendSeries} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis
-                dataKey="date"
-                tick={{ fontSize: 11, fill: '#6b7280' }}
-                tickFormatter={(v: string) => {
-                  const d = new Date(v);
-                  return `${d.getMonth() + 1}/${d.getDate()}`;
-                }}
-              />
-              <YAxis
-                domain={[0, 100]}
-                tick={{ fontSize: 11, fill: '#6b7280' }}
-                tickFormatter={(v: number) => `${v}%`}
-                width={40}
-              />
-              <Tooltip
-                formatter={(value: number) => [`${value}%`, 'Completeness']}
-                labelFormatter={(label: string) => label}
-              />
-              <Line
-                type="monotone"
-                dataKey="completeness"
-                stroke="#6366f1"
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        )}
-      </div>
 
       {/* Directory grid */}
       {isLoading ? (
@@ -620,7 +564,78 @@ export default function Citations() {
           })}
         </div>
       )}
+      {/* Apple Maps and Bing Places cannot be audited by any search-based
+          method — we link the customer to the self-serve portals instead (#173). */}
+      <UnauditedDirectories />
+
+      <details open={showTrend} onToggle={e => setShowTrend(e.currentTarget.open)} className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+        <summary className="cursor-pointer text-sm font-semibold text-gray-900">Listing coverage history</summary>
+        {showTrend && <div className="mt-4">
+        <p className="mb-4 text-sm text-gray-600">The percentage of checked directory entries where a listing was found. Entries we could not verify are excluded. The directories checked can change between scans, so use the listing cards above to see what needs attention.</p>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-medium text-gray-700">Listings found across scans</h2>
+          <div className="flex gap-1">
+            {TREND_RANGES.map((r) => (
+              <button
+                key={r.value}
+                onClick={() => setTrendDays(r.value)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                  trendDays === r.value ? 'bg-brand-500 text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {trendLoading ? (
+          <div className="h-48 bg-gray-50 rounded-lg animate-pulse" />
+        ) : trendSeries.length === 0 ? (
+          <div className="h-48 flex items-center justify-center text-gray-400 text-sm">
+            History will appear after your first completed listing check.
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={trendSeries} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 11, fill: '#6b7280' }}
+                tickFormatter={(v: string) => {
+                  const d = new Date(v);
+                  return `${d.getMonth() + 1}/${d.getDate()}`;
+                }}
+              />
+              <YAxis
+                domain={[0, 100]}
+                tick={{ fontSize: 11, fill: '#6b7280' }}
+                tickFormatter={(v: number) => `${v}%`}
+                width={40}
+              />
+              <Tooltip
+                formatter={(value: number) => [`${value}%`, 'Listings found']}
+                labelFormatter={(label: string) => label}
+              />
+              <Line
+                type="monotone"
+                dataKey="completeness"
+                stroke="#1b4339"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+        </div>}
+      </details>
+
       </>)}
+      <details className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700">
+        <summary className="cursor-pointer font-semibold text-slate-900">How listing submissions and monthly checks work</summary>
+        <p className="mt-1">Paid Pro locations are checked on the first day of each month at 07:00 UTC. Accurate listings are left alone; missing listings or differences are flagged for review.</p>
+        <p className="mt-2">Each paid location includes one initial allocation of up to 15 submission credits, after payment and confirmation of business details. Credits do not refill monthly. Further paid submissions require a separately approved and paid add-on; we will not automatically purchase repeat submissions.</p>
+      </details>
     </div>
   );
 }
