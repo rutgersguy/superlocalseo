@@ -2,7 +2,6 @@ import WebsiteCrawlPanel, { type WebsiteCrawl } from '../components/WebsiteCrawl
 import { useState } from 'react';
 import useSWR, { mutate } from 'swr';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { fetcher, apiFetch } from '../services/api';
 
 interface LocationOption { id: string; name: string; website?: string | null; blCampaignId?: string | null; }
@@ -470,16 +469,6 @@ export default function AuditHistory() {
       ? 'You can run another website audit 24 hours after the previous website audit.'
       : '';
 
-  const chartData = Object.values(
-    historyAudits
-      .filter((a) => a.status === 'complete' && a.completedAt)
-      .reduce<Record<string, { date: string; NAP: number | null; Citations: number | null; Reviews: number | null; Google: number | null; Overall: number | null }>>((acc, a) => {
-        const day = new Date(a.completedAt!).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        acc[day] = { date: day, NAP: a.napScore, Citations: a.citationScore, Reviews: a.reviewScore, Google: a.googleScore, Overall: a.compositeScore };
-        return acc;
-      }, {}),
-  );
-
   const handleDownload = async () => {
     if (!latestAudit) return;
     setDownloading(true);
@@ -646,28 +635,6 @@ export default function AuditHistory() {
               <OnPageItem key={i} detail={detail} />
             ))}
           </ul>
-        </div>
-      )}
-
-      {/* History chart */}
-      {chartData.length > 1 && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <h2 className="text-base font-semibold text-gray-900 mb-4">Score History</h2>
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="Overall" stroke="#6366f1" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="NAP" stroke="#10b981" strokeWidth={1.5} dot={false} />
-                <Line type="monotone" dataKey="Citations" stroke="#f59e0b" strokeWidth={1.5} dot={false} />
-                <Line type="monotone" dataKey="Reviews" stroke="#3b82f6" strokeWidth={1.5} dot={false} />
-                <Line type="monotone" dataKey="Google" stroke="#ef4444" strokeWidth={1.5} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
         </div>
       )}
 
