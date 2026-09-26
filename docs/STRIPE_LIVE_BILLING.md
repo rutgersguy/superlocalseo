@@ -2,10 +2,10 @@
 
 ## Preparation status — September 26, 2026
 
-The Stripe account is `acct_1BbClXBjmrnTgLcA`. Payments are active following
-representative verification. The owner subsequently reported updating the bank
-details; payout capability still needs to be checked again. Enabling payments does
-not prove that payouts work.
+The Stripe account is `acct_1BbClXBjmrnTgLcA`. Following representative verification
+and the owner's bank update, Stripe's Account Status page confirms **Payments and
+Payouts are active**, with no active tasks remaining. This confirms capabilities;
+the application still needs the cutover and real-payment acceptance below.
 
 **The application remains in test mode.** Live credential installation, webhook
 configuration, test-reference reconciliation, and the pilot promotion are pending.
