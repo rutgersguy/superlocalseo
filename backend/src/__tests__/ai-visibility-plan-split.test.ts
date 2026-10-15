@@ -38,7 +38,7 @@ async function seedFor(email: string, plan: 'lite' | 'pro'): Promise<string> {
   // this reason. Seeding is idempotent instead of assuming a fresh database.
   await db('locations').where({ client_id: client.id }).del();
   await db('clients').where({ id: client.id }).update({
-    product_line: plan,
+    product_line: plan, pricing_version: '2026-10', plan_key: plan === 'lite' ? 'starter' : 'pro',
     subscription_status: 'active',
     industry: 'HVAC',
   });

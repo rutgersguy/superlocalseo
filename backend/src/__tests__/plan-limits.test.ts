@@ -46,6 +46,10 @@ it('Starter can read its small maps but cannot request larger grids or white-lab
   expect(response.status).toBe(409); expect(response.body.error.code).toBe('PLAN_LIMIT');
   expect((await request(app).patch('/api/clients').set('Authorization', `Bearer ${token}`).send({ whiteLabelCompanyName: 'Not entitled' })).status).toBe(409);
 });
+it.each(['/citations', '/audits/bl', '/reputation', '/team', '/qr', '/competitors/gap', '/analytics/rankings', '/rankings/export'])('Starter keeps %s locked behind Pro', async path => {
+  const r = await request(app).get(`/api${path}`).set('Authorization', `Bearer ${token}`);
+  expect(r.status).toBe(403); expect(r.body.error.code).toBe('PRO_REQUIRED');
+});
 it('expired trials cannot reserve provider work', async () => {
   await db('clients').where({ id: clientId }).update({ subscription_status: 'trialing', trial_ends_at: new Date(0) });
   await expect(reserveUsage(clientId, locationId, 'aiChecks')).rejects.toMatchObject({ code: 'PLAN_LIMIT' });

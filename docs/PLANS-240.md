@@ -80,7 +80,7 @@ remain available.
 `node dist/scripts/configure-plan-catalog.js` inspects the catalog. `--apply`
 creates the versioned products and all monthly/annual prices and disables portal
 plan switching. Run in isolated Stripe test mode first; old prices remain active.
-Migration: `20261015120000_plan_catalog`.
+Migrations: `20261015120000_plan_catalog` and `20261015123000_checkout_attempts`.
 
 Required release checks: six new signup plan/interval combinations; 14-day no-card
 trial; $0 promo and saved/no-card checkout; existing-subscription plan and interval
@@ -91,7 +91,7 @@ full unit/integration suite, builds, deploy preflight, post-deploy verification.
 
 ## QA evidence before production rollout
 
-- Full backend suite: 651 tests, 68 suites passed, including concurrent keyword/scan
+- Full backend suite: 659 tests, 68 suites passed on a fresh database, including concurrent keyword/scan
   limits, trial duration, annual arithmetic, zero-dollar activation, and durable
   checkout retry after an ambiguous response.
 - Stripe test-mode API: all six plan/interval signups, exact invoice-versus-preview

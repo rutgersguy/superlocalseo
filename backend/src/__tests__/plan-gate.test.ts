@@ -23,7 +23,7 @@ async function setProductLine(email: string, plan: 'lite' | 'pro') {
   // status 'active' too — otherwise a Lite route could 402 (billing) before the 403 (gate).
   await db('clients')
     .where({ user_id: user.id })
-    .update({ product_line: plan, subscription_status: 'active' });
+    .update({ product_line: plan, subscription_status: 'active', pricing_version: 'legacy', plan_key: null });
 }
 
 describe('Plan gate — requireProPlan middleware', () => {
