@@ -16,7 +16,7 @@ export function ProGate({ feature, description }: ProGateProps) {
       <p className="font-semibold text-slate-800 mb-1 text-base">{feature} is a Pro feature</p>
       <p className="text-sm text-slate-500 mb-5">{description}</p>
       <Link
-        to="/billing?upgrade=1"
+        to="/dashboard/settings?tab=billing&upgrade=1"
         className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-brand-500 text-white text-sm font-semibold rounded-lg hover:bg-brand-600 transition-colors"
       >
         Upgrade to Pro →

@@ -1,3 +1,4 @@
+import { BillingChanges } from '../components/BillingChanges';
 import GoogleConnectCard from '../components/GoogleReviewConnection';
 import { useState, useRef, useEffect, type ChangeEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -13,6 +14,7 @@ import { canUseFeature } from '../config/planFeatures';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ClientData {
+  productLine: 'lite' | 'pro';
   email: string;
   businessName: string;
   industry: string;
@@ -1384,10 +1386,10 @@ function LocationsTab({ isAdmin }: { isAdmin: boolean }) {
         </div>
         {isAdmin && !showAdd && (
           <button
-            onClick={() => setShowAdd(true)}
+            onClick={() => { if (isAtLimit) window.location.href = '/dashboard/settings?tab=billing'; else setShowAdd(true); }}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors"
           >
-            <Plus size={14} /> Add location
+            <Plus size={14} /> {isAtLimit ? 'Add capacity in Billing' : 'Add location details'}
           </button>
         )}
       </div>
@@ -1476,7 +1478,7 @@ function LocationsTab({ isAdmin }: { isAdmin: boolean }) {
             <div className="flex items-start gap-2 text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs mb-4">
               <AlertCircle size={13} className="mt-0.5 shrink-0" />
               <span>
-                You've used all {included} included location{included !== 1 ? 's' : ''}. This location will be billed at an additional ${extraPrice}/mo.
+                You've used all {included} available location{included !== 1 ? 's' : ''}. Preview and confirm additional capacity in Settings → Billing first.
               </span>
             </div>
           )}
@@ -1662,6 +1664,7 @@ function KeywordsTab({ isAdmin, onGoToLocations }: { isAdmin: boolean; onGoToLoc
 // ─── Billing tab ─────────────────────────────────────────────────────────────
 
 interface BillingStatus {
+  canManageBilling: boolean;
   status: string;
   trialDaysLeft: number | null;
   trialEndsAt: string | null;
@@ -1793,7 +1796,7 @@ function WhiteLabelSection() {
   );
 }
 
-function BillingTab({ onGoToLocations, isAdmin, isPlatformAdmin }: { onGoToLocations: () => void; isAdmin: boolean; isPlatformAdmin: boolean }) {
+function BillingTab({ onGoToLocations, isPlatformAdmin }: { onGoToLocations: () => void; isPlatformAdmin: boolean }) {
   const { data, isLoading, mutate: mutateBilling } = useSWR<BillingResponse>('/billing/status', fetcher, { refreshInterval: 30000 });
   const { data: locData, mutate: mutateLocs } = useSWR<{ success: boolean; data: Location[] }>('/locations', fetcher);
   const billing = data?.data;
@@ -1978,11 +1981,11 @@ function BillingTab({ onGoToLocations, isAdmin, isPlatformAdmin }: { onGoToLocat
             <div>
               <p className="text-sm font-medium text-slate-700">Locations</p>
               <p className="text-xs text-slate-400 mt-0.5">
-                {billing.locationCount} / {billing.locationsLimit} included
+                {billing.locationCount} / {billing.locationsLimit} available
                 {extraLocations > 0 && <span className="text-amber-600 ml-1"> · {extraLocations} extra (+${extraLocations * 125}/mo)</span>}
               </p>
             </div>
-            {isAdmin && !showAddLoc && (
+            {billing.canManageBilling && !showAddLoc && billing.locationCount < billing.locationsLimit && (
               <button
                 onClick={() => setShowAddLoc(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
@@ -2013,7 +2016,7 @@ function BillingTab({ onGoToLocations, isAdmin, isPlatformAdmin }: { onGoToLocat
           )}
 
           {/* Add location inline form */}
-          {showAddLoc && isAdmin && (
+          {showAddLoc && billing.canManageBilling && (
             <div className="border border-brand-200 bg-brand-50/30 rounded-xl p-4 space-y-3">
               {billing.locationCount >= billing.locationsLimit && (
                 <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
@@ -2058,7 +2061,7 @@ function BillingTab({ onGoToLocations, isAdmin, isPlatformAdmin }: { onGoToLocat
         ) : (
           <button
             onClick={() => void openPortal()}
-            disabled={portalLoading}
+            disabled={portalLoading || !billing.canManageBilling}
             className="text-sm font-medium text-brand-500 hover:text-brand-700 disabled:opacity-50"
           >
             {portalLoading ? 'Redirecting…' : 'Manage payment & invoices →'}
@@ -2071,6 +2074,8 @@ function BillingTab({ onGoToLocations, isAdmin, isPlatformAdmin }: { onGoToLocat
           </p>
         )}
       </div>
+
+      {isActive && billing.canManageBilling && <BillingChanges isLite={isLitePlan} publishableKey={billing.publishableKey} onLocations={onGoToLocations} />}
 
       {/* White-label report branding — operator admin only */}
       {isPlatformAdmin && <WhiteLabelSection />}
@@ -2086,12 +2091,13 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
   const { data, isLoading, error, mutate } = useSWR<ClientResponse>('/clients', fetcher);
   const client = data?.data;
-  const { data: teamData } = useSWR<{ success: boolean; data: { owner: { userId: string } | null; members: Array<{ userId: string | null; role: string; accepted: boolean }> } }>('/team', fetcher);
+  const { data: teamData } = useSWR<{ success: boolean; data: { owner: { userId: string } | null; members: Array<{ userId: string | null; role: string; accepted: boolean }> } }>(client?.productLine === 'pro' ? '/team' : null, fetcher);
   const { userId, role: platformRole } = useAuth();
   const isPlatformAdmin = platformRole === 'admin'; // JWT role='admin' = operator-level admin account
   const isOwner = !!(teamData?.data?.owner?.userId && teamData.data.owner.userId === userId);
   const currentMember = teamData?.data?.members?.find((m) => m.userId === userId && m.accepted);
-  const isAdmin = isOwner || currentMember?.role === 'admin';
+  const { data: billingAccess } = useSWR<BillingResponse>('/billing/status', fetcher);
+  const isAdmin = billingAccess?.data.canManageBilling ?? (isOwner || currentMember?.role === 'admin');
 
   // Account form state
   const [businessName, setBusinessName] = useState('');
@@ -2256,7 +2262,7 @@ export default function Settings() {
         {activeTab === 'team' && <TeamTab />}
 
         {/* Billing tab */}
-        {activeTab === 'billing' && <BillingTab onGoToLocations={() => setActiveTab('locations')} isAdmin={isAdmin} isPlatformAdmin={isPlatformAdmin} />}
+        {activeTab === 'billing' && <BillingTab onGoToLocations={() => setActiveTab('locations')} isPlatformAdmin={isPlatformAdmin} />}
       </div>
     </div>
   );

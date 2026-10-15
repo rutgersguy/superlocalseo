@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { CheckCircle2, ShieldCheck, Lock, Tag, X } from 'lucide-react';
@@ -132,7 +132,7 @@ const PLAN_DETAILS = {
   },
 } as const;
 
-export default function BillingPage() {
+function SubscriptionCheckout() {
   const { logout } = useAuth();
   const { data: statusData, error: statusError, mutate: refreshBilling } = useSWR<{ success: boolean; data: BillingStatus }>('/billing/status', fetcher);
   const billing = statusData?.data;
@@ -215,30 +215,6 @@ export default function BillingPage() {
       .finally(() => { if (!ignore) setLoadingIntent(false); });
     return () => { ignore = true; };
   }, [billing, clientSecret, isEarlyTrial, proceedEarly, planForCheckout, promoApplied, success]);
-
-  // Lite→Pro upgrade: call /billing/upgrade and reuse the payment form for confirmation.
-  // product_line flips to 'pro' on the invoice.payment_succeeded webhook once paid.
-  useEffect(() => {
-    if (!isUpgrade || success) return;
-    if (!billing || billing.status !== 'active' || billing.productLine !== 'lite') return;
-    if (clientSecret || loadingIntent) return;
-
-    setLoadingIntent(true);
-    apiFetch<{ success: boolean; data: { clientSecret: string | null }; error?: { message?: string } }>(
-      '/billing/upgrade', { method: 'POST' },
-    )
-      .then((res) => {
-        if (!res.success) { setIntentError(res.error?.message ?? 'Upgrade failed'); return; }
-        if (res.data.clientSecret) {
-          setClientSecret(res.data.clientSecret);
-          setPubKey(billing.publishableKey);
-        } else {
-          setSuccess(true); // covered by proration credit — no extra payment needed
-        }
-      })
-      .catch(() => setIntentError('Network error — please refresh'))
-      .finally(() => setLoadingIntent(false));
-  }, [isUpgrade, billing, clientSecret, loadingIntent, success]);
 
   const applyPromo = async () => {
     const code = promoInput.trim();
@@ -559,4 +535,12 @@ export default function BillingPage() {
       </div>
     </div>
   );
+}
+
+// Upgrade links are navigation only. The billing settings flow previews first.
+export default function BillingPage() {
+  if (new URLSearchParams(window.location.search).get('upgrade') === '1') {
+    return <Navigate to="/dashboard/settings?tab=billing&upgrade=1" replace />;
+  }
+  return <SubscriptionCheckout />;
 }

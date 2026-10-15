@@ -85,3 +85,17 @@ describe('subscription update event ordering', () => {
     expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ subscription_status: 'active' }));
   });
 });
+
+
+describe('pending upgrade does not revoke the existing paid plan', () => {
+  it('ignores failed payment on an unapplied pending upgrade', async () => {
+    mockRetrieve.mockResolvedValue({ ...subscription(), pending_update: { expires_at: 1800000000 } });
+    await handleWebhookEvent(paid('invoice.payment_failed'));
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+  it('does not grant a plan before Stripe applies its pending update', async () => {
+    mockRetrieve.mockResolvedValue({ ...subscription(), pending_update: { expires_at: 1800000000 } });
+    await handleWebhookEvent(paid());
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+});

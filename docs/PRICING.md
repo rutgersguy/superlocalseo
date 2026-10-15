@@ -248,3 +248,54 @@ Live browser QA also exposed delayed `customer.subscription.updated` events from
 superseded unpaid checkouts overwriting the replacement's active status. Those
 events now retrieve current Stripe state and update only the matching subscription
 ID. Regression coverage lives in `billing-event-order.test.ts`.
+
+### Existing subscriptions: previews and confirmed changes (#239)
+
+Settings → Billing now offers Lite → Pro and additional Pro location capacity.
+The old `/billing?upgrade=1` URL redirects there; the old POST `/billing/upgrade`
+returns `PREVIEW_REQUIRED` and never charges. Lite billing permissions come from
+`/billing/status.canManageBilling`, not the Pro-only `/team` endpoint.
+
+- `POST /billing/changes/preview` accepts `action: upgrade | add_location` and an
+  optional `promoCode`. Stripe `invoices.createPreview` supplies the exact amount
+  due, using `always_invoice` and a fixed proration timestamp. Prices come from
+  Stripe. Previews expire after 15 minutes; they do not change the subscription.
+- Quotes are scoped to the client in `billing_changes`. Setup, confirmation,
+  status and cancellation require owner/admin access. A SetupIntent collects a
+  card only when payment is due and no default payment method exists.
+- Confirming revalidates the subscription, promo and exact amount. It records the
+  confirmation before calling Stripe, then uses a stable per-quote idempotency
+  key and client-row locks. Retries reuse the same invoice. Competing quotes
+  cannot add capacity twice. A network-ambiguous confirmation remains retryable;
+  a definitive provider rejection requires a fresh preview.
+- The existing subscription is updated with `pending_if_incomplete`; a failed
+  upgrade leaves the paid plan intact. The UI resumes outstanding payments after
+  reload and can cancel an unpaid change. Free invoices bypass card entry.
+- Paid changes reconcile the plan and location allowance immediately. Stripe
+  price IDs, rather than stale `metadata.plan`, determine the plan, including
+  portal downgrades. Pending invoice failures never revoke the existing plan.
+- Location creation consumes already-confirmed capacity under a client-row lock;
+  it no longer silently modifies Stripe. Deleting an extra location awaits the
+  Stripe quantity reduction and reconciles capacity before completing.
+
+Migration: `20261015100000_billing_changes`. Deploy with `scripts/deploy.sh --migrate`.
+Enable Lite/Pro switching in the default portal with
+`node dist/scripts/configure-billing-portal.js --apply`. It preserves existing
+cancellation and payment-method settings. Stripe's hosted portal may not permit
+plan changes on subscriptions with multiple items; extra locations use the app flow.
+
+QA commands/artifacts:
+- Unit suite: `npm test -- --selectProjects unit --runInBand` (417 passing tests).
+- Browser scenarios: `scripts/qa-billing-changes.cjs` with explicit disposable
+  `QA_CREDENTIALS_FILE`; saved card, free promo, no card, declined card, and extra
+  capacity. `scripts/qa-location-capacity.cjs` checks location details and limits.
+- Isolated Stripe/database checks: `node dist/scripts/qa-billing-changes.js`.
+  It asserts invoice/preview equality, one subscription per account, expired
+  quotes, cross-account access, competing changes, retry, downgrade, and cancel.
+- Browser card entry was rendered and filled, but Stripe CAPTCHA blocked automated
+  submission on this host. The real SetupIntent was confirmed with Stripe's
+  supported test PaymentMethod API; application confirmation then succeeded.
+  This is explicitly logged separately from full browser payment coverage.
+
+Only disposable test customers are used. Cleanup cancels their subscriptions and
+removes their accounts. Never run the isolated Stripe script with live credentials.

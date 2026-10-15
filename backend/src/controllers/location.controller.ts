@@ -3,7 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
 import { ok, created, noContent, notFound, err } from '../utils/response';
-import { addLocationToSubscription, removeLocationFromSubscription } from '../services/stripe.service';
+import { removeLocationFromSubscription, syncPaidSubscription } from '../services/stripe.service';
 import { getIndustryKeywords } from '../config/industry.config';
 import { geocodeAddress } from '../services/geocode.service';
 import { getAggregatedSearchVolumes } from '../services/dataforseo.service';
@@ -97,12 +97,19 @@ export async function create(req: Request, res: Response, next: NextFunction): P
     const body = req.body as LocationBody;
     const client = req.client;
 
-    // Check if this is the first location (make it primary)
-    const existingCountRow = await db('locations').where({ client_id: req.clientId }).count('id as cnt').first();
-    const existingCount = parseInt(String((existingCountRow as Record<string, unknown>)?.cnt ?? 0), 10);
-    const isPrimary = existingCount === 0;
-
-    const [location] = await db('locations').insert({
+    // Purchasing capacity is a separate preview/confirm action in Billing.
+    // Lock the client so two requests cannot both consume the last paid slot.
+    const location = await db.transaction(async trx => {
+      const current = await trx('clients').where({ id: req.clientId }).forUpdate().first();
+      const count = await trx('locations').where({ client_id: req.clientId }).count('id as cnt').first();
+      const existingCount = Number(count?.cnt ?? 0);
+      if (existingCount >= (current.locations_limit ?? 1)) {
+        throw Object.assign(new Error(current.product_line === 'lite'
+          ? 'Upgrade to Pro in Settings > Billing before adding another location.'
+          : 'Add location capacity in Settings > Billing before creating another location.'), { status: 409, code: 'LOCATION_LIMIT' });
+      }
+      const isPrimary = existingCount === 0;
+    const [location] = await trx('locations').insert({
       client_id: req.clientId,
       name: body.name,
       address: body.address ?? null,
@@ -118,17 +125,8 @@ export async function create(req: Request, res: Response, next: NextFunction): P
       updated_at: new Date(),
     }).returning('*');
 
-    // Bill only when the new total exceeds the plan's included location count
-    if (client.stripe_subscription_id) {
-      const tier = (client.subscription_tier as number) as 1 | 2 | 3;
-      const included = INCLUDED_PER_TIER[tier] ?? 1;
-      const newTotal = existingCount + 1;
-      if (newTotal > included) {
-        addLocationToSubscription(client.stripe_subscription_id as string, tier).catch((e: unknown) =>
-          logger.error('Failed to add location to Stripe subscription', { error: (e as Error).message }),
-        );
-      }
-    }
+      return location;
+    });
 
     // Seed starter keywords so the rankings job has something to query on first run.
     const industry = (req.client as Record<string, unknown>)?.industry as string | null;
@@ -279,18 +277,18 @@ export async function remove(req: Request, res: Response, next: NextFunction): P
       return;
     }
 
-    await db('locations').where({ id }).delete();
-
-    // Remove billing only when the deleted location was beyond the plan's included count
-    if (client.stripe_subscription_id) {
-      const tier = (client.subscription_tier as number) as 1 | 2 | 3;
-      const included = INCLUDED_PER_TIER[tier] ?? 1;
-      if (totalCount > included) {
-        removeLocationFromSubscription(client.stripe_subscription_id as string, tier).catch((e: unknown) =>
-          logger.error('Failed to remove location from Stripe subscription', { error: (e as Error).message }),
-        );
+    await db.transaction(async trx => {
+      const current = await trx('clients').where({ id: req.clientId }).forUpdate().first();
+      const target = await trx('locations').where({ id, client_id: req.clientId }).first();
+      if (!target) return;
+      const count = await trx('locations').where({ client_id: req.clientId }).count('id as cnt').first();
+      if (Number(count?.cnt ?? 0) <= 1) throw Object.assign(new Error('Cannot delete the only location'), { status: 400 });
+      if (current.stripe_subscription_id && current.product_line === 'pro' && current.locations_limit > 1) {
+        await removeLocationFromSubscription(current.stripe_subscription_id, undefined, `remove-location-${id}`);
+        await syncPaidSubscription(current.stripe_subscription_id, trx);
       }
-    }
+      await trx('locations').where({ id }).delete();
+    });
 
     noContent(res);
   } catch (e) {
