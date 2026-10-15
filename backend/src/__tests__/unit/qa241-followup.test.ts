@@ -63,3 +63,9 @@ it('refuses ambiguous businesses, wrong addresses, and address-only places',()=>
  expect(matchingBusiness(location,[{...candidate,types:['street_address']}])).toBeNull();
  expect(matchingBusiness({...location,name:'Another Company'},[candidate])).toBeNull();
 });
+
+it('keeps the originating subscription when pricing an existing redeemed discount', async () => {
+  const d={id:'di_existing',coupon:{...p.coupon,duration:'forever'}};
+  await previewRenewal('cus_1',[{price:'price_pro',quantity:1}],[d],'month',undefined,{subscription:'sub_1',items:[{id:'si_base',price:'price_pro',quantity:1}]});
+  expect(stripe.invoices.createPreview).toHaveBeenLastCalledWith(expect.objectContaining({subscription:'sub_1',preview_mode:'recurring',discounts:[{discount:'di_existing'}]}));
+});

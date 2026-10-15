@@ -90,7 +90,7 @@ export async function previewBillingChange(clientId: string, action: BillingActi
   const renewalItems = [{ price: base.id, quantity: 1 }];
   if (extras) renewalItems.push({ price: (await catalogPrice(targetPlan, interval, true)).id, quantity: extras });
   const discounts = p ? [{ coupon: p.coupon }] : sub.discounts.filter((d): d is Stripe.Discount => typeof d !== 'string');
-  const renewal = await previewRenewal(customerId, renewalItems, discounts, interval, interval === details?.interval ? sub.current_period_end : undefined);
+  const renewal = await previewRenewal(customerId, renewalItems, discounts, interval, interval === details?.interval ? sub.current_period_end : undefined, { subscription: sub.id, items });
   const quote: Quote = { ...renewal, action, fingerprint: subscriptionFingerprint(sub), customerId, items, prorationDate,
     promoCode: p?.code ?? '', promotionId: p?.id, amountDue: preview.amount_due, currency: preview.currency,
     targetPlan, interval, targetCapacity, targetPriceId: base.id, removeLocationIds, locationFingerprint: locations.map(l => l.id).join(','),

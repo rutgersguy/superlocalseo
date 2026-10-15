@@ -40,7 +40,7 @@ export async function assertPromotionEligible(p: Stripe.PromotionCode, customer:
 
 // Ask Stripe to price the full recurring items, without proration or customer
 // balance. Do not present an initial-only discount as a renewal discount.
-export async function previewRenewal(customer: string, items: Array<{ price: string; quantity: number }>, discounts: Array<{ id?: string; coupon: Stripe.Coupon; end?: number | null }>, interval: BillingInterval, renewalAt?: number) {
+export async function previewRenewal(customer: string, items: Array<{ price: string; quantity: number }>, discounts: Array<{ id?: string; coupon: Stripe.Coupon; end?: number | null }>, interval: BillingInterval, renewalAt?: number, existing?: { subscription: string; items: Stripe.InvoiceCreatePreviewParams.SubscriptionDetails.Item[] }) {
   const date = new Date(); date.setUTCMonth(date.getUTCMonth() + (interval === 'year' ? 12 : 1));
   const next = renewalAt ?? Math.floor(date.getTime()/1000);
   const ongoing = discounts.filter(d => {
@@ -50,7 +50,7 @@ export async function previewRenewal(customer: string, items: Array<{ price: str
     const ends = new Date(); ends.setUTCMonth(ends.getUTCMonth() + (d.coupon.duration_in_months ?? 0));
     return Math.floor(ends.getTime()/1000) > next;
   });
-  const renewal = await stripe.invoices.createPreview({ customer, subscription_details: { items }, discounts: ongoing.map(d => d.id ? { discount: d.id } : { coupon: d.coupon.id }) });
+  const renewal = await stripe.invoices.createPreview({ customer, preview_mode: 'recurring', ...(existing ? { subscription: existing.subscription } : {}), subscription_details: { items: existing?.items ?? items }, discounts: ongoing.map(d => d.id ? { discount: d.id } : { coupon: d.coupon.id }) });
   return { renewalAmount: renewal.total, renewalDiscount: ongoing.map(d => discountLabel(d.coupon)).join('; ') || null };
 }
 export interface CheckoutSelection { plan: PlanKey; interval: BillingInterval; extraLocations: number; promotionCodeId?: string; }
