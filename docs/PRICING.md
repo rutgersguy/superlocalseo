@@ -299,3 +299,14 @@ QA commands/artifacts:
 
 Only disposable test customers are used. Cleanup cancels their subscriptions and
 removes their accounts. Never run the isolated Stripe script with live credentials.
+
+Deployment verification: live browser upgrades and extra-location confirmations
+both succeeded with $0 previews/invoices, on one disposable subscription. The
+live default portal configuration now enables Lite/Pro switching and retains
+cancellation. Test customer cleanup runs after verification.
+
+Fixture setup/cleanup is available in `scripts/qa-billing-fixtures.cjs` (execute
+through `docker exec -i slseo-test-api node - create|cleanup`). It refuses live
+Stripe keys. Store its generated credentials only in a private, mode-600 file.
+The browser runner accepts `freePromo: true` for a $0 extra-location production
+smoke test; it asserts the zero preview before confirming.

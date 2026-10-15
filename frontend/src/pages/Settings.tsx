@@ -1873,7 +1873,7 @@ function BillingTab({ onGoToLocations, isPlatformAdmin }: { onGoToLocations: () 
   const isPastDue = billing.status === 'past_due';
   const isCanceled = billing.status === 'canceled';
   const needsSubscription = !isActive && !isTrialing;
-  const extraLocations = Math.max(0, billing.locationCount - billing.locationsLimit);
+  const extraLocations = isActive && billing.productLine === 'pro' ? Math.max(0, billing.locationsLimit - 1) : 0;
   const isLitePlan = billing.productLine === 'lite';
 
   const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
