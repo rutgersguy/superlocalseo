@@ -34,7 +34,7 @@ export function validateSubmission(options: SubmissionOptions, industry: string 
 /** Both admin and tenant routes use this gate. Never retry a paid PUT after an uncertain outcome. */
 export async function submitInitialListings(clientId: string, locationId: string, campaignId: string, options: SubmissionOptions): Promise<void> {
   const client = await db('clients').where({ id: clientId }).first();
-  const location = await db('locations').where({ id: locationId, client_id: clientId }).first();
+  const location = await db('active_locations as locations').where({ id: locationId, client_id: clientId }).first();
   if (!location) reject('Location not found.', 404);
   if (client?.subscription_status !== 'active' || client.product_line !== 'pro' || !client.stripe_subscription_id) reject('Listing submissions begin after a successful paid Pro subscription payment. Trials are not eligible.', 402);
   const domains = validateSubmission(options, client.industry);

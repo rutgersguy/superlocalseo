@@ -15,7 +15,7 @@ const replySchema = z.object({
 
 export async function syncBLReviews(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const locations = await db('locations')
+    const locations = await db('active_locations as locations')
       .where({ client_id: req.clientId })
       .whereNotNull('brightlocal_campaign_id')
       .select('id', 'brightlocal_campaign_id') as Array<{ id: string; brightlocal_campaign_id: string }>;

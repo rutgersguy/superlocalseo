@@ -1,3 +1,4 @@
+import { catalog } from '../config/plans';
 import { planFor } from '../config/plans';
 import { assertResourcesMutable, limitError } from '../services/plan-usage';
 import { Request, Response, NextFunction } from 'express';
@@ -84,7 +85,7 @@ export async function invite(req: Request, res: Response, next: NextFunction): P
       const client = await trx('clients').where({ id: req.clientId }).forUpdate().first();
       await assertResourcesMutable(trx, req.clientId);
       const count = Number((await trx('team_members').where({ client_id: req.clientId }).whereNot({ email: email.toLowerCase() }).where(q => q.whereNotNull('accepted_at').orWhere('invite_expires_at', '>', new Date())).count('* as n').first())?.n ?? 0);
-      if (client.pricing_version === '2026-10' && count + 1 >= planFor(client).teamSeats) throw limitError(`Your plan includes ${planFor(client).teamSeats} team seats including the owner. Remove a member or upgrade.`);
+      if (client.pricing_version === catalog.version && count + 1 >= planFor(client).teamSeats) throw limitError(`Your plan includes ${planFor(client).teamSeats} team seats including the owner. Remove a member or upgrade.`);
     // Upsert — replace any existing pending invite for this email+client
     await trx('team_members')
       .where({ client_id: req.clientId, email: email.toLowerCase() })

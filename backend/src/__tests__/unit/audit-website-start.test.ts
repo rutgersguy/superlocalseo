@@ -30,7 +30,7 @@ it('rejects a website audit before metered requests or cooldown lookups when the
 });
 
 it('reuses a submitted Lighthouse task during score recovery rather than purchasing another', async () => {
-  (db as unknown as jest.Mock).mockImplementation((table: string) => query(table === 'locations' ? { website: 'https://example.com' } : []));
+  (db as unknown as jest.Mock).mockImplementation((table: string) => query(table === 'active_locations as locations' ? { website: 'https://example.com' } : []));
   (checkOnPageSeo as jest.Mock).mockResolvedValue({ score: 60, details: ['Title present'] });
   const scores = await computeAuditScores('location', 'Trainer', 'already-submitted');
   expect(scores.dfsLighthouseTaskId).toBe('already-submitted');
@@ -39,7 +39,7 @@ it('reuses a submitted Lighthouse task during score recovery rather than purchas
 });
 
 it('returns the new Lighthouse task ID for the caller to persist even if page checks cannot score', async () => {
-  (db as unknown as jest.Mock).mockImplementation((table: string) => query(table === 'locations' ? { website: 'https://example.com' } : []));
+  (db as unknown as jest.Mock).mockImplementation((table: string) => query(table === 'active_locations as locations' ? { website: 'https://example.com' } : []));
   (checkOnPageSeo as jest.Mock).mockResolvedValue({ score: null, details: ['Could not fetch website'] });
   (submitLighthouseTask as jest.Mock).mockResolvedValue('new-task');
   const scores = await computeAuditScores('location', 'Trainer');

@@ -341,7 +341,7 @@ export default function Citations() {
 
       {isTrial && <section aria-label="Listing submissions after your trial" className="rounded-xl border border-brand-200 bg-brand-50 p-4 text-sm text-slate-700">
         <h2 className="font-semibold text-slate-900">Turn these insights into stronger business listings</h2>
-        <p className="mt-1">Activate a paid Pro subscription and confirm your business details to unlock your initial listing campaign. Our team reviews and approves eligible new listings and corrections before submitting them to your included directories.</p>
+        <p className="mt-1">Your Pro trial includes listing scans and audit results. Directory submissions use paid provider credits and become available after you subscribe and confirm your business details. Submission review is separate from scan access.</p>
         <p className="mt-2">Monthly checks then help spot new gaps and outdated details, so you can keep your business information consistent.</p>
         <Link to="/billing?subscribe=1" className="mt-3 inline-block font-semibold text-brand-700 underline">View plans</Link>
       </section>}

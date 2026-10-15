@@ -21,7 +21,7 @@ export async function computeAuditScores(locationId: string, industry: string | 
     db('ranking_snapshots').where({ location_id: locationId }).where('pulled_at', '<=', now)
       .distinctOn('keyword_id', 'search_engine', 'geo_location').select('rank')
       .orderByRaw('keyword_id, search_engine, geo_location, pulled_at DESC, id DESC'),
-    db('locations').where({ id: locationId }).select('website').first() as Promise<{ website: string | null } | undefined>,
+    db('active_locations as locations').where({ id: locationId }).select('website').first() as Promise<{ website: string | null } | undefined>,
   ]);
   const { napScore, citationScore, rankingScore, compositeScore } = summarizeAuditScores(citationRows, rankRows);
 

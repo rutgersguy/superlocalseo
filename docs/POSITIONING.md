@@ -1,3 +1,5 @@
+> Pricing note (October 2026): any older price or Lite/setup-fee references below are historical or legacy compatibility details. Current self-serve prices, limits and trial policy are in [PLANS-240.md](PLANS-240.md) and the runtime plan catalog.
+
 For paid submission limits and trial eligibility, see [Paid listing submissions](LISTING_SUBMISSION_POLICY.md). Counts below describe auditing, not guaranteed provider submission coverage. Personal trainers and gyms use the 10 core directories.
 
 # SuperLocalSEO — Positioning Brief

@@ -27,7 +27,7 @@ const createSchema = z.object({
 export async function list(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const qrCodes = await db('qr_codes')
-      .leftJoin('locations', 'qr_codes.location_id', 'locations.id')
+      .leftJoin('active_locations as locations', 'qr_codes.location_id', 'locations.id')
       .where({ 'qr_codes.client_id': req.clientId })
       .orderBy('qr_codes.created_at', 'desc')
       .select(
@@ -68,7 +68,7 @@ export async function create(req: Request, res: Response, next: NextFunction): P
     }
 
     if (parsed.data.locationId) {
-      const loc = await db('locations').where({ id: parsed.data.locationId, client_id: req.clientId }).first();
+      const loc = await db('active_locations as locations').where({ id: parsed.data.locationId, client_id: req.clientId }).first();
       if (!loc) {
         err(res, 'Location not found', 404, 'NOT_FOUND');
         return;

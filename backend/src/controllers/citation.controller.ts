@@ -51,7 +51,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
             db.raw('DISTINCT ON (citation_snapshots.location_id, citation_snapshots.directory) citation_snapshots.*'),
             'locations.name as location_name',
           )
-          .join('locations', 'citation_snapshots.location_id', 'locations.id')
+          .join('active_locations as locations', 'citation_snapshots.location_id', 'locations.id')
           .where('locations.client_id', req.clientId)
           .orderByRaw('citation_snapshots.location_id, citation_snapshots.directory, citation_snapshots.pulled_at DESC, citation_snapshots.id DESC')
           .as('latest'),
@@ -67,7 +67,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
     // Preserve each location: a healthy listing must not hide another location’s issue.
     // Self-attested claims for the directories no audit can reach (#173).
     const claimRows = await db('location_directory_claims')
-      .join('locations', 'location_directory_claims.location_id', 'locations.id')
+      .join('active_locations as locations', 'location_directory_claims.location_id', 'locations.id')
       .where('locations.client_id', req.clientId)
       .modify((q) => { if (locationId) q.where('location_directory_claims.location_id', locationId); })
       .select('location_directory_claims.location_id', 'location_directory_claims.directory', 'location_directory_claims.claimed_at');
@@ -165,7 +165,7 @@ export async function createCampaign(req: Request, res: Response, next: NextFunc
     if (!parsed.success) { err(res, parsed.error.errors[0]?.message ?? 'Validation error', 400, 'VALIDATION_ERROR'); return; }
 
     const { locationId } = parsed.data;
-    const location = await db('locations')
+    const location = await db('active_locations as locations')
       .where({ id: locationId, client_id: req.clientId })
       .first() as {
         id: string;
@@ -184,7 +184,7 @@ export async function createCampaign(req: Request, res: Response, next: NextFunc
     if (!blLocationId) {
       try {
         blLocationId = await findOrProvisionBlLocation(location);
-        await db('locations').where({ id: locationId }).update({ brightlocal_location_id: blLocationId });
+        await db('active_locations as locations').where({ id: locationId }).update({ brightlocal_location_id: blLocationId });
       } catch (provErr) {
         err(res, `Could not register location with BrightLocal: ${(provErr as Error).message}`, 422, 'BL_PROVISION_FAILED');
         return;
@@ -228,7 +228,7 @@ export async function confirmCampaign(req: Request, res: Response, next: NextFun
     const { campaignId } = req.params;
     const { locationId, ...opts } = parsed.data;
 
-    const location = await db('locations').where({ id: locationId, client_id: req.clientId }).first();
+    const location = await db('active_locations as locations').where({ id: locationId, client_id: req.clientId }).first();
     if (!location) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
 
     await submitInitialListings(req.clientId!, locationId, campaignId!, opts);
@@ -352,7 +352,7 @@ const claimSchema = z.object({
 
 /** Confirms the location belongs to the caller. Never trust a body-supplied id. */
 async function assertOwnedLocation(clientId: string | undefined, locationId: string): Promise<boolean> {
-  const row = await db('locations').where({ id: locationId, client_id: clientId }).first('id');
+  const row = await db('active_locations as locations').where({ id: locationId, client_id: clientId }).first('id');
   return !!row;
 }
 

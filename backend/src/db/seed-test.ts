@@ -59,7 +59,7 @@ function assertSafeToRun(): void {
 }
 
 async function seedClientData(clientId: string, businessName: string): Promise<void> {
-  const [location] = await db('locations')
+  const [location] = await db('active_locations as locations')
     .insert({
       client_id: clientId,
       name: `${businessName} — Main`,

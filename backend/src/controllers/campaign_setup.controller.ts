@@ -11,12 +11,12 @@ export async function requestSetup(req: Request, res: Response, next: NextFuncti
   try {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) { err(res, 'Select a business location', 400, 'VALIDATION_ERROR'); return; }
-    const location = await db('locations').where({ id: parsed.data.locationId, client_id: req.clientId }).first();
+    const location = await db('active_locations as locations').where({ id: parsed.data.locationId, client_id: req.clientId }).first();
     if (!location) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
     await db('campaign_setup_requests').insert({ client_id: req.clientId, location_id: location.id, requested_by: req.userId })
       .onConflict(['client_id', 'location_id']).ignore();
     const row = await db('campaign_setup_requests').where({ client_id: req.clientId, location_id: location.id }).first();
-    const [client, locations, campaigns] = await Promise.all([db('clients').where({ id: req.clientId }).first(), db('locations').where({ client_id: req.clientId }), db('emr_campaigns').where({ client_id: req.clientId })]);
+    const [client, locations, campaigns] = await Promise.all([db('clients').where({ id: req.clientId }).first(), db('active_locations as locations').where({ client_id: req.clientId }), db('emr_campaigns').where({ client_id: req.clientId })]);
     const mappings = await db('provider_location_mappings').where({ client_id: req.clientId });
     ok(res, setupView(row, location, mappedCampaignClient(client, location, mappings), campaigns, locations.length));
   } catch (e) { next(e); }
@@ -24,9 +24,9 @@ export async function requestSetup(req: Request, res: Response, next: NextFuncti
 
 export async function setupStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const locations = await db('locations').where({ client_id: req.clientId }).select('id', 'name', 'city');
+    const locations = await db('active_locations as locations').where({ client_id: req.clientId }).select('id', 'name', 'city');
     const requests = await db('campaign_setup_requests').where({ client_id: req.clientId });
-    const fullLocations = await db('locations').where({ client_id: req.clientId });
+    const fullLocations = await db('active_locations as locations').where({ client_id: req.clientId });
     const client = await db('clients').where({ id: req.clientId }).first();
     const campaigns = await db('emr_campaigns').where({ client_id: req.clientId });
     const mappings = await db('provider_location_mappings').where({ client_id: req.clientId });
@@ -40,7 +40,7 @@ export async function setupQueue(req: Request, res: Response, next: NextFunction
     res.setHeader('Cache-Control', 'no-store');
     const page = z.coerce.number().int().min(1).max(1000000).default(1).parse(req.query.page);
     const rows = await db('campaign_setup_requests as r')
-      .join('clients as c', 'c.id', 'r.client_id').join('locations as l', 'l.id', 'r.location_id')
+      .join('clients as c', 'c.id', 'r.client_id').join('active_locations as l', 'l.id', 'r.location_id')
       .select('r.id', 'r.location_id as locationId', 'r.created_at as requestedAt', 'c.business_name as businessName', 'l.name as locationName',
         'l.city', 'l.google_place_id as googlePlaceId', 'r.status', 'r.revision', 'r.verification', 'r.updated_at as updatedAt', 'c.emr_organization_id as organizationId', 'c.emr_location_id as providerLocationId', 'r.client_id as clientId')
       .orderBy('r.created_at', 'asc').limit(50).offset((page - 1) * 50);
@@ -48,7 +48,7 @@ export async function setupQueue(req: Request, res: Response, next: NextFunction
     const campaigns = rows.length ? await db('emr_campaigns').whereIn('client_id', rows.map(r => r.clientId))
       .select('client_id', 'name', 'emr_campaign_id', 'metrics_pulled_at', 'emr_organization_id') : [];
     const clientIds = rows.map(r => r.clientId);
-    const locations = clientIds.length ? await db('locations').whereIn('client_id', clientIds) : [];
+    const locations = clientIds.length ? await db('active_locations as locations').whereIn('client_id', clientIds) : [];
     const clients = clientIds.length ? await db('clients').whereIn('id', clientIds) : [];
     const events = rows.length ? await db('campaign_setup_events').whereIn('request_id', rows.map(r => r.id)).orderBy('revision', 'desc') : [];
     const mappings = clientIds.length ? await db('provider_location_mappings').whereIn('client_id', clientIds) : [];
@@ -87,7 +87,7 @@ export async function updateSetup(req: Request, res: Response, next: NextFunctio
       if (p.status === 'verified') {
         if (!p.proof) return { code: 400, message: 'Complete every verification check.' };
         const storedClient = await trx('clients').where({ id: r.client_id }).forUpdate().first();
-        const locations = await trx('locations').where({ client_id: r.client_id }).forShare();
+        const locations = await trx('active_locations as locations').where({ client_id: r.client_id }).forShare();
         const location = locations.find(l => l.id === r.location_id);
         const mappings = await trx('provider_location_mappings').where({ client_id: r.client_id });
         const client = mappedCampaignClient(storedClient, location, mappings);

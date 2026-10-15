@@ -25,7 +25,7 @@ export default function RegisterSuccess() {
             <p className="font-semibold text-gray-900 text-sm mb-4">{email}</p>
           )}
           <p className="text-gray-600 text-sm mb-8">
-            Click the link in that email to verify your account, then sign in below.
+            Click the link to verify your email address. You can sign in and start your trial while verification is pending.
           </p>
 
           <Link

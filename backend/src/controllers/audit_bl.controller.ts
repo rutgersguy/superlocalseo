@@ -24,7 +24,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
 export async function history(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { locationId } = req.params;
-    const location = await db('locations').where({ id: locationId, client_id: req.clientId }).first();
+    const location = await db('active_locations as locations').where({ id: locationId, client_id: req.clientId }).first();
     if (!location) { err(res, 'Not found', 404, 'NOT_FOUND'); return; }
     const audits = await db('location_audits')
       .where({ location_id: locationId, client_id: req.clientId, status: 'complete' })
@@ -42,7 +42,7 @@ export async function trigger(req: Request, res: Response, next: NextFunction): 
     const parsed = triggerSchema.safeParse(req.body);
     if (!parsed.success) { err(res, parsed.error.errors[0]?.message ?? 'Validation error', 400, 'VALIDATION_ERROR'); return; }
 
-    const location = await db('locations')
+    const location = await db('active_locations as locations')
       .where({ id: parsed.data.locationId, client_id: req.clientId })
       .first() as Record<string, unknown> | undefined;
     if (!location) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
@@ -226,7 +226,7 @@ export async function pollPending(): Promise<void> {
     .where({ 'location_audits.status': 'processing' })
     .whereNull('location_audits.bl_report_id')
     .where('location_audits.created_at', '<', new Date(Date.now() - 5 * 60 * 1000))
-    .join('locations', 'location_audits.location_id', 'locations.id')
+    .join('active_locations as locations', 'location_audits.location_id', 'locations.id')
     .join('clients', 'location_audits.client_id', 'clients.id')
     .select(
       'location_audits.id as auditId',
@@ -274,7 +274,7 @@ export async function pollPending(): Promise<void> {
     // on the very next tick — forever (issue #158).
     .where((q) => q.whereNull('location_audits.backfill_attempted_at')
       .orWhere('location_audits.backfill_attempted_at', '<', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)))
-    .join('locations', 'location_audits.location_id', 'locations.id')
+    .join('active_locations as locations', 'location_audits.location_id', 'locations.id')
     .join('clients', 'location_audits.client_id', 'clients.id')
     .whereNotNull('locations.website')
     .select(
@@ -314,7 +314,7 @@ export async function pollPending(): Promise<void> {
     // on the very next tick — forever (issue #158).
     .where((q) => q.whereNull('location_audits.backfill_attempted_at')
       .orWhere('location_audits.backfill_attempted_at', '<', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)))
-    .join('locations', 'location_audits.location_id', 'locations.id')
+    .join('active_locations as locations', 'location_audits.location_id', 'locations.id')
     .join('clients', 'location_audits.client_id', 'clients.id')
     .select(
       'location_audits.id as auditId',
@@ -382,7 +382,7 @@ export async function reportDownload(req: Request, res: Response, next: NextFunc
     const { id } = req.params;
     const audit = await db('location_audits')
       .where({ 'location_audits.id': id, 'location_audits.client_id': req.clientId })
-      .join('locations', 'location_audits.location_id', 'locations.id')
+      .join('active_locations as locations', 'location_audits.location_id', 'locations.id')
       .join('clients', 'location_audits.client_id', 'clients.id')
       .select(
         'location_audits.*',
@@ -443,7 +443,7 @@ export async function startExpandedCrawl(req: Request, res: Response, next: Next
     if (!audit) { err(res, 'Audit not found', 404, 'NOT_FOUND'); return; }
     const latest = await db('location_audits').where({ location_id: audit.location_id, client_id: req.clientId }).orderBy('created_at', 'desc').first();
     if (latest?.id !== audit.id) { err(res, 'Start expanded checks from the most recent audit.', 409, 'AUDIT_SUPERSEDED'); return; }
-    const location = await db('locations').where({ id: audit.location_id, client_id: req.clientId }).first();
+    const location = await db('active_locations as locations').where({ id: audit.location_id, client_id: req.clientId }).first();
     if (!location?.website) { err(res, 'Save your website in Settings before starting the expanded checks.', 422, 'WEBSITE_REQUIRED'); return; }
     await db('location_audits').where({ id: audit.id, client_id: req.clientId }).whereNull('crawl_status').update({ crawl_status: 'queued' });
     ok(res, { message: 'Expanded checks queued or already requested. Results appear here when ready.' }, 202);
@@ -455,12 +455,12 @@ export async function crawlScope(req: Request, res: Response, next: NextFunction
   try {
     const audit = await db('location_audits').where({ id: req.params.id, client_id: req.clientId }).first();
     if (!audit) { err(res, 'Audit not found', 404, 'NOT_FOUND'); return; }
-    const location = await db('locations').where({ id: audit.location_id, client_id: req.clientId }).first();
+    const location = await db('active_locations as locations').where({ id: audit.location_id, client_id: req.clientId }).first();
     if (!location) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
     if (req.method === 'PUT') {
       const parsed = z.object({ scope: z.enum(['auto', 'website', 'section', 'page']) }).safeParse(req.body);
       if (!parsed.success) { err(res, 'Choose a valid crawl scope.', 400, 'VALIDATION_ERROR'); return; }
-      await db('locations').where({ id: location.id, client_id: req.clientId }).update({ website_crawl_scope: parsed.data.scope });
+      await db('active_locations as locations').where({ id: location.id, client_id: req.clientId }).update({ website_crawl_scope: parsed.data.scope });
       location.website_crawl_scope = parsed.data.scope;
     }
     ok(res, { scope: location.website_crawl_scope ?? 'auto', website: location.website });

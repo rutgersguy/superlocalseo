@@ -99,7 +99,7 @@ export async function summary(req: Request, res: Response, next: NextFunction): 
     const plan = planOf(req);
     const isPro = plan === 'pro';
 
-    let locQ = db('locations').where('client_id', req.clientId).select('id', 'name');
+    let locQ = db('active_locations as locations').where('client_id', req.clientId).select('id', 'name');
     if (locationId) locQ = locQ.where('id', locationId);
     const locations = (await locQ) as Array<{ id: string; name: string }>;
 
@@ -138,7 +138,7 @@ export async function summary(req: Request, res: Response, next: NextFunction): 
     }
 
     const rows = (await db('ai_visibility_snapshots as s')
-      .join('locations as l', 's.location_id', 'l.id')
+      .join('active_locations as l', 's.location_id', 'l.id')
       .whereIn('s.location_id', locationIds)
       .where('s.scanned_at', '=', db('ai_visibility_snapshots')
         .whereIn('location_id', locationIds)
@@ -303,7 +303,7 @@ export async function answer(req: Request, res: Response, next: NextFunction): P
     const { id } = req.params;
 
     const row = (await db('ai_visibility_snapshots as s')
-      .join('locations as l', 's.location_id', 'l.id')
+      .join('active_locations as l', 's.location_id', 'l.id')
       .where('s.id', id)
       // Scoped to the caller's own locations — an id from another client must
       // 404, not leak an answer.

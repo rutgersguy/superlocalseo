@@ -68,7 +68,7 @@ the subscription. SetupIntent collects a card only when needed; $0 skips it.
 When capacity is lower than existing location count, the customer must select
 exactly which locations to remove. No location is automatically selected. The
 preview names the locations and warns that their stored location data will be
-permanently deleted; the customer can export data first. Removal happens only
+archived; the customer can export data first. Removal happens only
 after successful confirmation. Changed location membership invalidates a preview.
 Pending changes block location creation/deletion. Downgrades with too many
 keywords or team seats require explicit cleanup first; inaccessible competitor
@@ -146,5 +146,4 @@ limits using `plan_usage` totals and observed vendor costs, not advertised maxim
 A pricing change requires a new catalog version; do not edit subscribed Stripe
 prices. Rollback should keep the new price IDs recognizable and preserve paid
 entitlements and usage rows. Do not roll back schema while subscriptions use it.
-Selected-location deletion is explicit and irreversible through the app; export
-before confirming. Deployment backups remain the operator recovery path.
+Selected locations are archived, excluded from active capacity and scans, and retained for operator-assisted recovery. Deployment backups remain the operator recovery path.

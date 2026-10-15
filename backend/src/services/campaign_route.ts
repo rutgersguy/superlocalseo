@@ -9,7 +9,7 @@ export async function campaignRoute(clientId: string, campaignId: string, locati
   const candidates = requests.filter(r => !selected || r.location_id === selected);
   if (candidates.length !== 1) throw Object.assign(new Error('This campaign needs a verified setup for one business location before invitations can be sent.'), { status: 409 });
   const request = candidates[0];
-  const locations = await db('locations').where({ client_id: clientId });
+  const locations = await db('active_locations as locations').where({ client_id: clientId });
   const location = locations.find(l => l.id === request.location_id);
   const client = await db('clients').where({ id: clientId }).first();
   const mappings = await db('provider_location_mappings').where({ client_id: clientId });

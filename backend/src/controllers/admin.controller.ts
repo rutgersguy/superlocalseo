@@ -149,7 +149,7 @@ export async function clients(req: Request, res: Response, next: NextFunction): 
 
     const clientIds = (rows as Array<{ id: string }>).map((r) => r.id);
     const locationCounts = clientIds.length > 0
-      ? await db('locations').whereIn('client_id', clientIds).select('client_id').count('id as count').groupBy('client_id') as Array<{ client_id: string; count: string }>
+      ? await db('active_locations as locations').whereIn('client_id', clientIds).select('client_id').count('id as count').groupBy('client_id') as Array<{ client_id: string; count: string }>
       : [];
     const locMap = new Map(locationCounts.map((r) => [r.client_id, parseInt(r.count, 10)]));
 
@@ -277,7 +277,7 @@ export async function citationsOverview(req: Request, res: Response, next: NextF
       getCbCredits(),
       db('citation_submissions as cs')
         .join('clients as cl', 'cs.client_id', 'cl.id')
-        .join('locations as l', 'cs.location_id', 'l.id')
+        .join('active_locations as l', 'cs.location_id', 'l.id')
         .select(
           'cs.id', 'cs.directory', 'cs.status', 'cs.listing_url',
           'cs.submitted_at', 'cs.live_at', 'cs.bl_submission_id',
@@ -286,7 +286,7 @@ export async function citationsOverview(req: Request, res: Response, next: NextF
         )
         .orderBy('cs.submitted_at', 'desc')
         .limit(200),
-      db('citation_orders as co').join('locations as l', 'co.location_id', 'l.id')
+      db('citation_orders as co').join('active_locations as l', 'co.location_id', 'l.id')
         .join('clients as cl', 'co.client_id', 'cl.id')
         .select('co.status', 'co.credits_reserved', 'co.campaign_id', 'l.name as locationName', 'cl.business_name as clientName')
         .orderBy('co.created_at', 'desc').limit(200),
@@ -309,7 +309,7 @@ export async function citationsOverview(req: Request, res: Response, next: NextF
 
 export async function adminCitationLocations(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const rows = await db('locations')
+    const rows = await db('active_locations as locations')
       .join('clients', 'locations.client_id', 'clients.id')
       .select(
         'locations.id as locationId',
@@ -329,7 +329,7 @@ export async function adminCitationLocations(req: Request, res: Response, next: 
 export async function adminCreateCampaign(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { clientId, locationId } = z.object({ clientId: z.string().uuid(), locationId: z.string().uuid() }).parse(req.body);
-    const location = await db('locations').where({ id: locationId, client_id: clientId }).first() as {
+    const location = await db('active_locations as locations').where({ id: locationId, client_id: clientId }).first() as {
       id: string; name: string; address: string | null; city: string | null;
       state: string | null; zip: string | null; phone: string | null; website: string | null;
       brightlocal_location_id?: number | null;
@@ -340,7 +340,7 @@ export async function adminCreateCampaign(req: Request, res: Response, next: Nex
     if (!blLocationId) {
       try {
         blLocationId = await findOrProvisionBlLocation(location);
-        await db('locations').where({ id: locationId }).update({ brightlocal_location_id: blLocationId });
+        await db('active_locations as locations').where({ id: locationId }).update({ brightlocal_location_id: blLocationId });
       } catch (provErr) {
         err(res, `Could not register location with BrightLocal: ${(provErr as Error).message}`, 422, 'BL_PROVISION_FAILED');
         return;
@@ -429,7 +429,7 @@ export async function adminListCustomers(req: Request, res: Response, next: Next
 
     const clientIds = rows.map((r: any) => r.id as string);
     const locCounts = clientIds.length
-      ? await db('locations').whereIn('client_id', clientIds).count('id as cnt').select('client_id').groupBy('client_id') as Array<{ client_id: string; cnt: string }>
+      ? await db('active_locations as locations').whereIn('client_id', clientIds).count('id as cnt').select('client_id').groupBy('client_id') as Array<{ client_id: string; cnt: string }>
       : [];
     const locMap = new Map(locCounts.map((r) => [r.client_id, parseInt(r.cnt, 10)]));
 

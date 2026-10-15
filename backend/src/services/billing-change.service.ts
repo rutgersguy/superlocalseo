@@ -1,3 +1,4 @@
+import { resolvePromotion, discountLabel } from './checkout-preview';
 import { catalog, PlanKey, BillingInterval, isPlanKey, recurringAmount } from '../config/plans';
 import { catalogPrice, subscriptionDetails } from './stripe-catalog';
 import Stripe from 'stripe';
@@ -13,17 +14,6 @@ export function subscriptionFingerprint(sub: Stripe.Subscription): string {
   return JSON.stringify({ items: sub.items.data.map(i => [i.id, i.price.id, i.quantity]).sort(),
     end: sub.current_period_end, cancel: sub.cancel_at_period_end, discounts: sub.discounts });
 }
-export function changeItems(sub: Stripe.Subscription, action: BillingAction): Stripe.SubscriptionUpdateParams.Item[] {
-  const lite = sub.items.data.find(i => i.price.id === config.stripe.prices.liteBase);
-  const pro = sub.items.data.find(i => i.price.id === config.stripe.prices.base);
-  if (action === 'upgrade') {
-    if (!lite || pro) problem('This subscription is already on Pro or cannot be upgraded. Refresh billing.');
-    return [{ id: lite.id, price: config.stripe.prices.base, quantity: 1 }];
-  }
-  if (!pro || lite) problem('Upgrade to Pro before adding another location.');
-  const extra = sub.items.data.find(i => i.price.id === config.stripe.prices.location);
-  return [{ ...(extra ? { id: extra.id } : {}), price: config.stripe.prices.location, quantity: (extra?.quantity ?? 0) + 1 }];
-}
 async function subscription(client: Record<string, any>): Promise<Stripe.Subscription> {
   if (!client.stripe_subscription_id) problem('An active subscription is required.');
   const sub = await stripe.subscriptions.retrieve(client.stripe_subscription_id, { expand: ['customer', 'latest_invoice.payment_intent'] });
@@ -36,13 +26,7 @@ function hasCard(sub: Stripe.Subscription): boolean {
 }
 async function promotion(code: string, customer: string): Promise<Stripe.PromotionCode | undefined> {
   if (!code.trim()) return;
-  const result = await stripe.promotionCodes.list({ code: code.trim(), active: true, limit: 1 });
-  const p = result.data[0];
-  if (!p || !p.coupon.valid || (p.expires_at && p.expires_at <= Date.now() / 1000)
-    || (p.max_redemptions && p.times_redeemed >= p.max_redemptions)
-    || (p.customer && objectId(p.customer) !== customer)) problem('Invalid or expired promo code.', 400);
-  if (p.coupon.metadata?.applyTo === 'setup') problem('This code only applies to setup fees; there is no setup fee for this change.', 400);
-  return p;
+  return resolvePromotion(code, customer);
 }
 interface Quote {
   action: BillingAction; fingerprint: string; customerId: string; prorationDate: number;
@@ -62,7 +46,7 @@ async function assertPlanResources(executor: typeof db, clientId: string, plan: 
   const target = catalog.plans[plan];
   // Keep historical data on inaccessible features; require explicit cleanup for
   // resources that remain usable but would exceed the destination plan's limits.
-  const remaining = (await executor('locations').where({ client_id: clientId }).whereNotIn('id', removeLocationIds).select('id')).map(l => l.id);
+  const remaining = (await executor('active_locations as locations').where({ client_id: clientId }).whereNotIn('id', removeLocationIds).select('id')).map(l => l.id);
   const keywordCounts = await executor('keywords').whereIn('location_id', remaining).groupBy('location_id').count('* as n');
   if (keywordCounts.some(r => Number(r.n) > target.keywords)) problem(`Remove extra keywords first. ${target.name} allows ${target.keywords} per retained location.`);
   const members = Number((await executor('team_members').where({ client_id: clientId }).where(q => q.whereNotNull('accepted_at').orWhere('invite_expires_at', '>', new Date())).count('* as n').first())?.n ?? 0);
@@ -80,6 +64,7 @@ export async function previewBillingChange(clientId: string, action: BillingActi
     problem('Finish your pending billing change before starting another.');
   const customerId = objectId(sub.customer)!;
   const p = await promotion(promoCode, customerId);
+  if (p && sub.discounts?.length) problem('This subscription already has a discount. Keep it by leaving the promo field blank; contact support to replace it.', 400);
   const details = subscriptionDetails(sub);
   if (client.pricing_version === 'legacy') problem('Your existing pricing is preserved. Contact support before changing your legacy plan.');
   const targetPlan = options.plan ?? details?.plan ?? 'pro';
@@ -88,7 +73,7 @@ export async function previewBillingChange(clientId: string, action: BillingActi
   const target = catalog.plans[targetPlan];
   const targetCapacity = action === 'add_location' ? (details?.capacity ?? 1) + 1 : options.capacity ?? target.includedLocations;
   if (!Number.isInteger(targetCapacity) || targetCapacity < target.includedLocations || targetCapacity > target.maxLocations) problem('Choose a valid number of locations for this plan.', 400);
-  const locations = await db('locations').where({ client_id: clientId }).orderBy('id').select('id', 'name');
+  const locations = await db('active_locations as locations').where({ client_id: clientId }).orderBy('id').select('id', 'name');
   const removeLocationIds = options.removeLocationIds ?? [];
   if (new Set(removeLocationIds).size !== removeLocationIds.length || removeLocationIds.some(id => !locations.some(l => l.id === id)) || removeLocationIds.length !== Math.max(0, locations.length - targetCapacity)) problem('Select exactly which locations to remove before reducing capacity.', 400);
   await assertPlanResources(db, clientId, targetPlan, targetCapacity, removeLocationIds);
@@ -144,7 +129,7 @@ export async function confirmBillingChange(clientId: string, quoteId: string) {
     const sub = await subscription(client);
     if (sub.pending_update || subscriptionFingerprint(sub) !== quote.fingerprint) problem('Your subscription changed. Request a new preview.');
     if (quote.locationFingerprint !== undefined) {
-      const locations = await trx('locations').where({ client_id: clientId }).orderBy('id').select('id');
+      const locations = await trx('active_locations as locations').where({ client_id: clientId }).orderBy('id').select('id');
       if (locations.map(l => l.id).join(',') !== quote.locationFingerprint) problem('Your locations changed. Request a new preview and choose locations again.');
     }
     if (quote.targetPlan && quote.targetCapacity) await assertPlanResources(trx, clientId, quote.targetPlan, quote.targetCapacity, quote.removeLocationIds ?? []);
@@ -164,7 +149,7 @@ export async function confirmBillingChange(clientId: string, quoteId: string) {
       if (Date.now() - new Date(row.confirmed_at).getTime() > 23 * 3600000) problem('This billing change needs review. Contact support before retrying.');
       const sub = await stripe.subscriptions.update(row.subscription_id, {
         items: quote.items, proration_date: quote.prorationDate, proration_behavior: 'always_invoice', payment_behavior: 'pending_if_incomplete',
-        ...(quote.promotionId ? { promotion_code: quote.promotionId } : {}), expand: ['latest_invoice.payment_intent'],
+        ...(quote.promotionId ? { discounts: [{ promotion_code: quote.promotionId }] } : {}), expand: ['latest_invoice.payment_intent'],
       }, { idempotencyKey: `billing-confirm-${row.id}` });
       const invoiceId = objectId(sub.latest_invoice);
       if (!invoiceId) problem('Stripe has not returned an invoice. Retry this confirmation.');

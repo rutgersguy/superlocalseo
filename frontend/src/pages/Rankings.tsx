@@ -492,9 +492,10 @@ function GeoGridPanel() {
             const avgRank = ranked.length > 0 ? (ranked.reduce((s, c) => s + (c.rank ?? 0), 0) / ranked.length).toFixed(1) : '—';
             return (
               <div className="grid grid-cols-3 gap-4">
+                <p className="col-span-3 text-sm text-slate-500">Found at {ranked.length} of {cells.length} checked points. Percentages use checked points; the average uses only points where your business was found.</p>
                 {unavailable > 0 && <p className="col-span-3 text-sm text-slate-500">{unavailable} point(s) could not be verified and are excluded from these percentages.</p>}
                 {[
-                  { label: 'Avg Grid Rank', value: avgRank },
+                  { label: 'Average rank · found points only', value: avgRank },
                   { label: '% in Top 3', value: `${cells.length > 0 ? Math.round(top3 / cells.length * 100) : 0}%` },
                   { label: '% in Top 10', value: `${cells.length > 0 ? Math.round(top10 / cells.length * 100) : 0}%` },
                 ].map((s) => (

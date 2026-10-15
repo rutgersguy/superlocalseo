@@ -50,6 +50,7 @@ export const locationSchema = z.object({
     .url('Enter a full website URL including https:// (e.g. https://yoursite.com) — this is used for citation matching and rank tracking')
     .optional()
     .or(z.literal('')),
+  googlePlaceId: z.string().regex(/^[A-Za-z0-9_-]{5,255}$/, 'Enter a Google place ID, not a URL').optional().or(z.literal('')),
   brightlocalCampaignId: z.string().max(100).optional().or(z.literal('')),
   serviceArea: z.array(
     z.string().min(1).max(100, 'City name is too long (max 100 characters)'),
@@ -85,7 +86,7 @@ function formatLocation(l: Record<string, unknown>) {
 
 export async function list(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const locations = await db('locations').where({ client_id: req.clientId }).orderBy('is_primary', 'desc').orderBy('created_at', 'asc');
+    const locations = await db('active_locations as locations').where({ client_id: req.clientId }).orderBy('is_primary', 'desc').orderBy('created_at', 'asc');
     ok(res, locations.map(formatLocation));
   } catch (e) {
     next(e);
@@ -102,7 +103,7 @@ export async function create(req: Request, res: Response, next: NextFunction): P
     const location = await db.transaction(async trx => {
       const current = await trx('clients').where({ id: req.clientId }).forUpdate().first();
       if (await trx('billing_changes').where({ client_id: req.clientId }).whereIn('status', ['confirming', 'payment_required']).first()) throw Object.assign(new Error('Finish the pending billing change before editing locations.'), { status: 409 });
-      const count = await trx('locations').where({ client_id: req.clientId }).count('id as cnt').first();
+      const count = await trx('active_locations as locations').where({ client_id: req.clientId }).count('id as cnt').first();
       const existingCount = Number(count?.cnt ?? 0);
       if (existingCount >= (current.locations_limit ?? 1)) {
         throw Object.assign(new Error(current.product_line === 'lite'
@@ -110,7 +111,7 @@ export async function create(req: Request, res: Response, next: NextFunction): P
           : 'Add location capacity in Settings > Billing before creating another location.'), { status: 409, code: 'LOCATION_LIMIT' });
       }
       const isPrimary = existingCount === 0;
-    const [location] = await trx('locations').insert({
+    const [location] = await trx('active_locations as locations').insert({
       client_id: req.clientId,
       name: body.name,
       address: body.address ?? null,
@@ -119,6 +120,7 @@ export async function create(req: Request, res: Response, next: NextFunction): P
       zip: body.zip ?? null,
       phone: body.phone ?? null,
       website: body.website ?? null,
+      google_place_id: body.googlePlaceId || null,
       brightlocal_campaign_id: body.brightlocalCampaignId || null,
       service_area: JSON.stringify(body.serviceArea ?? []),
       is_primary: isPrimary,
@@ -153,7 +155,7 @@ export async function update(req: Request, res: Response, next: NextFunction): P
     const { id } = req.params;
     const body = req.body as Partial<LocationBody>;
 
-    const location = await db('locations').where({ id, client_id: req.clientId }).first();
+    const location = await db('active_locations as locations').where({ id, client_id: req.clientId }).first();
     if (!location) { notFound(res, 'Location not found'); return; }
 
     const updates: Record<string, unknown> = { updated_at: new Date() };
@@ -164,13 +166,14 @@ export async function update(req: Request, res: Response, next: NextFunction): P
     if (body.zip !== undefined) updates.zip = body.zip;
     if (body.phone !== undefined) updates.phone = body.phone;
     if (body.website !== undefined) updates.website = body.website;
+    if (body.googlePlaceId !== undefined) updates.google_place_id = body.googlePlaceId || null;
     if (body.brightlocalCampaignId !== undefined) updates.brightlocal_campaign_id = body.brightlocalCampaignId || null;
     // Do not start a map at the previous address while re-geocoding the new one.
     if (['address', 'city', 'state', 'zip'].some(f => body[f as keyof typeof body] !== undefined)) { updates.lat = null; updates.lng = null; }
     const serviceAreaChanged = body.serviceArea !== undefined;
     if (serviceAreaChanged) updates.service_area = JSON.stringify(body.serviceArea);
 
-    const [updated] = await db('locations').where({ id }).update(updates).returning('*') as Array<Record<string, unknown>>;
+    const [updated] = await db('active_locations as locations').where({ id }).update(updates).returning('*') as Array<Record<string, unknown>>;
 
     // Re-geocode whenever lat/lng are missing or an address field changed.
     const addressChanged = ['address', 'city', 'state', 'zip'].some((f) => body[f as keyof typeof body] !== undefined);
@@ -219,7 +222,7 @@ export async function update(req: Request, res: Response, next: NextFunction): P
 export async function provision(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { id } = req.params;
-    const location = await db('locations').where({ id, client_id: req.clientId }).first();
+    const location = await db('active_locations as locations').where({ id, client_id: req.clientId }).first();
     if (!location) { notFound(res, 'Location not found'); return; }
 
     const countRow = await db('keywords').where({ location_id: id }).count('id as cnt').first();
@@ -252,7 +255,7 @@ async function geocodeAndSave(
   const coords = await geocodeAddress(address, city, state, zip);
   if (!coords) return;
   // A slow response for the old address must not overwrite a more recent edit.
-  const saved = await db('locations').where({ id: locationId })
+  const saved = await db('active_locations as locations').where({ id: locationId })
     .whereRaw("COALESCE(address, '') = ? AND COALESCE(city, '') = ? AND COALESCE(state, '') = ? AND COALESCE(zip, '') = ?", [address ?? '', city ?? '', state ?? '', zip ?? ''])
     .update({ lat: coords.lat, lng: coords.lng }).catch((e) =>
     logger.warn('Failed to save geocoded coordinates', { locationId, error: (e as Error).message }),
@@ -266,10 +269,10 @@ export async function remove(req: Request, res: Response, next: NextFunction): P
     const { id } = req.params;
     const client = req.client;
 
-    const location = await db('locations').where({ id, client_id: req.clientId }).first();
+    const location = await db('active_locations as locations').where({ id, client_id: req.clientId }).first();
     if (!location) { notFound(res, 'Location not found'); return; }
 
-    const totalCountRow = await db('locations').where({ client_id: req.clientId }).count('id as cnt').first();
+    const totalCountRow = await db('active_locations as locations').where({ client_id: req.clientId }).count('id as cnt').first();
     const totalCount = parseInt(String((totalCountRow as Record<string, unknown>)?.cnt ?? 0), 10);
 
     // Prevent deleting the primary location if it's the only one
@@ -281,15 +284,15 @@ export async function remove(req: Request, res: Response, next: NextFunction): P
     await db.transaction(async trx => {
       const current = await trx('clients').where({ id: req.clientId }).forUpdate().first();
       if (await trx('billing_changes').where({ client_id: req.clientId }).whereIn('status', ['confirming', 'payment_required']).first()) throw Object.assign(new Error('Finish the pending billing change before editing locations.'), { status: 409 });
-      const target = await trx('locations').where({ id, client_id: req.clientId }).first();
+      const target = await trx('active_locations as locations').where({ id, client_id: req.clientId }).first();
       if (!target) return;
-      const count = await trx('locations').where({ client_id: req.clientId }).count('id as cnt').first();
+      const count = await trx('active_locations as locations').where({ client_id: req.clientId }).count('id as cnt').first();
       if (Number(count?.cnt ?? 0) <= 1) throw Object.assign(new Error('Cannot delete the only location'), { status: 400 });
       if (current.stripe_subscription_id && current.product_line === 'pro' && current.locations_limit > 1) {
         await removeLocationFromSubscription(current.stripe_subscription_id, undefined, `remove-location-${id}`);
         await syncPaidSubscription(current.stripe_subscription_id, trx);
       }
-      await trx('locations').where({ id }).delete();
+      await trx('active_locations as locations').where({ id }).delete();
     });
 
     noContent(res);
@@ -300,7 +303,7 @@ export async function remove(req: Request, res: Response, next: NextFunction): P
 
 export async function initialScanStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const rows = await db('initial_scans').join('locations', 'locations.id', 'initial_scans.location_id')
+    const rows = await db('initial_scans').join('active_locations as locations', 'locations.id', 'initial_scans.location_id')
       .where({ 'initial_scans.client_id': req.clientId, 'locations.client_id': req.clientId })
       .select('initial_scans.location_id as locationId', 'locations.name as locationName', 'step', 'status', 'reason', 'started_at as startedAt', 'completed_at as completedAt', 'initial_scans.updated_at as updatedAt');
     ok(res, rows.map(r => r.status === 'running' && new Date(r.startedAt).getTime() < Date.now() - 20 * 60 * 1000

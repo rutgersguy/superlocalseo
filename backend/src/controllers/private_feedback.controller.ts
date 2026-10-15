@@ -6,7 +6,7 @@ import { feedbackFilter, feedbackUpdate, feedbackView, feedbackCsv, feedbackCove
 
 async function filtered(req: Request) {
   const filter = feedbackFilter.parse(req.query);
-  if (filter.locationId && !await db('locations').where({ id: filter.locationId, client_id: req.clientId }).first()) return null;
+  if (filter.locationId && !await db('active_locations as locations').where({ id: filter.locationId, client_id: req.clientId }).first()) return null;
   let query = db('private_feedback').where({ client_id: req.clientId });
   if (filter.locationId) query = query.where({ location_id: filter.locationId });
   if (filter.rating) query = query.where({ rating: filter.rating });

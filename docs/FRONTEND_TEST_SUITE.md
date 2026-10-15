@@ -1,3 +1,5 @@
+> Pricing note (October 2026): any older price or Lite/setup-fee references below are historical or legacy compatibility details. Current self-serve prices, limits and trial policy are in [PLANS-240.md](PLANS-240.md) and the runtime plan catalog.
+
 # SuperLocalSEO — Front-End Test Suite (agent-runnable)
 
 > **Purpose:** A thorough, click-by-click manual/agentic regression suite for the SuperLocalSEO web app, designed to be executed by **Claude Desktop** (or any agent) driving a real browser against the live site. Every test case is atomic: precondition → steps → expected result → record PASS / FAIL / BLOCKED.

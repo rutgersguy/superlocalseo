@@ -16,7 +16,7 @@ import { getRankForCoordinate } from './dataforseo.service';
 
 /** Enroll only the explicitly saved customer's locations. Never backfill all tenants. */
 export async function ensureInitialScans(clientId: string, locationId?: string): Promise<void> {
-  const locations = await db('locations').where({ client_id: clientId }).modify(q => { if (locationId) q.where({ id: locationId }); }).select('id');
+  const locations = await db('active_locations as locations').where({ client_id: clientId }).modify(q => { if (locationId) q.where({ id: locationId }); }).select('id');
   for (const loc of locations) {
     await db('initial_scans').insert(INITIAL_STEPS.map(step => ({ client_id: clientId, location_id: loc.id, step }))).onConflict(['location_id', 'step']).ignore();
     try {
@@ -49,7 +49,7 @@ async function hasEvidence(step: InitialStep, locationId: string): Promise<boole
 export async function processInitialScans(job: Job): Promise<void> {
   const { clientId, locationId } = job.data ?? {};
   if (!clientId || !locationId) throw new Error('Initial scans require an explicit client and location');
-  const loc = await db('locations').join('clients', 'clients.id', 'locations.client_id')
+  const loc = await db('active_locations as locations').join('clients', 'clients.id', 'locations.client_id')
     .where({ 'locations.id': locationId, 'locations.client_id': clientId })
     .select('locations.*', 'clients.subscription_status', 'clients.trial_ends_at', 'clients.product_line', 'clients.industry').first();
   if (!loc) return;
@@ -161,7 +161,7 @@ async function runInitialMap(clientId: string, loc: Record<string, any>, keyword
 
 /** Operator-only recovery after reviewing a failed first sample; preserve paid observations. */
 export async function resumeInitialMap(clientId: string, locationId: string, reportId: string): Promise<void> {
-  const loc = await db('locations').where({ id: locationId, client_id: clientId }).first();
+  const loc = await db('active_locations as locations').where({ id: locationId, client_id: clientId }).first();
   const report = await db('geo_grid_reports').where({ id: reportId, client_id: clientId, location_id: locationId, status: 'failed', grid_size: 3 }).first();
   if (!loc || !report || Number(loc.lat) !== Number(report.center_lat) || Number(loc.lng) !== Number(report.center_lng)) throw new Error('Failed first sample does not match the current location');
   const keyword = await db('keywords').where({ id: report.keyword_id, location_id: locationId }).first();

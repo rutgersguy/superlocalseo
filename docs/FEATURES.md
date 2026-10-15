@@ -1,3 +1,5 @@
+> Pricing note (October 2026): any older price or Lite/setup-fee references below are historical or legacy compatibility details. Current self-serve prices, limits and trial policy are in [PLANS-240.md](PLANS-240.md) and the runtime plan catalog.
+
 Expanded Website Audit: see [Website crawler](WEBSITE_CRAWLER.md) for the new page-level SEO findings and repair guidance. Lighthouse performance remains unchanged.
 
 # Current listing submission policy (2026-09-15)

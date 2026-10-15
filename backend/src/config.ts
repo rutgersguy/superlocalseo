@@ -45,9 +45,9 @@ export const config = {
       setup: optional('STRIPE_SETUP_PRICE_ID'),
       base: optional('STRIPE_BASE_PRICE_ID'),
       location: optional('STRIPE_LOCATION_PRICE_ID'),
-      liteBase: optional('STRIPE_LITE_BASE_PRICE_ID'), // $149/mo recurring, no setup fee
+      liteBase: optional('STRIPE_LITE_BASE_PRICE_ID'), // Legacy subscription reconciliation only
     },
-    // The $499 setup fee is WAIVED by default — the price object is kept in Stripe as
+    // The historical setup fee is WAIVED by default — the price object is kept in Stripe as
     // a pricing anchor but never charged on new subscriptions. Set STRIPE_SETUP_FEE_ENABLED=true
     // to reintroduce it.
     setupFeeEnabled: optional('STRIPE_SETUP_FEE_ENABLED') === 'true',

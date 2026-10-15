@@ -1,3 +1,5 @@
+> Pricing note (October 2026): any older price or Lite/setup-fee references below are historical or legacy compatibility details. Current self-serve prices, limits and trial policy are in [PLANS-240.md](PLANS-240.md) and the runtime plan catalog.
+
 # Homepage redesign — September 9, 2026
 
 The public homepage follows `sls_homepage.png`: cream canvas, forest-green editorial headings, orange actions, an illustrative monthly report, three monitoring steps, owner/office photo, compact Lite/Pro pricing, and landscape footer.

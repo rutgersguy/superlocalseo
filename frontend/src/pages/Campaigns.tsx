@@ -292,7 +292,7 @@ export default function Campaigns() {
         )}
       </div>
 
-      {!connectionRequired && <ReviewCollectionLinks />}
+      <ReviewCollectionLinks />
       {!connectionRequired && <CampaignInvitationHistory />}
 
       {isLoading && (

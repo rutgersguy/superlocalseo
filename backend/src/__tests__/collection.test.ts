@@ -21,13 +21,13 @@ describe('Native honest review collection', () => {
     const [l] = await db('locations').insert({ client_id: client, name: 'Trainer fixture', google_place_id: 'ChIJ-test-trainer' }).returning('*'); location = l.id;
   });
   afterAll(async () => { await db('users').whereIn('email', emails).del(); });
-  it('requires owner access and a verified mapping before creating a link', async () => {
+  it('requires ownership but can create a direct Google link without provider mapping', async () => {
     expect((await issue('create', other)).status).toBe(404);
-    expect((await issue('create')).status).toBe(409);
+    const direct = await issue('create'); expect(direct.status).toBe(200);
     const l = await db('locations').where({ id: location }).first();
     await db('provider_organization_owners').insert({ client_id: client, organization_id: '887700' });
     await db('provider_location_mappings').insert({ location_id: location, client_id: client, organization_id: '887700', provider_location_id: '887701', google_place_id: l.google_place_id, revision: 1, evidence: JSON.stringify({ localIdentity: mappingIdentity(l) }), note: 'Test only', verified_at: new Date() });
-    const result = await issue('create'); expect(result.status).toBe(200); token = result.body.data.url.split('/').pop(); expect(token).toMatch(/^[a-f0-9]{64}$/);
+    const result = await issue('rotate'); expect(result.status).toBe(200); token = result.body.data.url.split('/').pop(); expect(token).toMatch(/^[a-f0-9]{64}$/);
     const repeated = await Promise.all([issue('create'), issue('create')]); repeated.forEach(r => expect(r.body.data.url).toBe(result.body.data.url));
     expect((await request(app).get('/api/campaigns/collection').set('Authorization', `Bearer ${other}`)).body.data.locations).toEqual([]);
   });
@@ -88,7 +88,7 @@ describe('Native honest review collection', () => {
     token = (await issue('rotate')).body.data.url.split('/').pop();
     await db('locations').where({ id: location }).update({ name: 'Changed business' });
     expect((await request(app).get(`/api/collection/${token}`)).status).toBe(404);
-    expect((await issue('rotate')).status).toBe(409);
+    expect((await issue('rotate')).status).toBe(200);
     expect(await db('private_feedback').where({ client_id: client })).toHaveLength(6);
   });
 });

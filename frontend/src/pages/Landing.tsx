@@ -1,6 +1,6 @@
 import { PlanPicker } from '../components/PlanPicker';
 import { PlanKey, BillingInterval, usePlans, money } from '../hooks/usePlans';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, BarChart3, Fan, FileText, MapPin, Menu, MessageCircle, Plug, Search, Sparkles, Star, Wrench, X, Home } from 'lucide-react';
 import './Landing.css';
@@ -37,13 +37,14 @@ function SampleReport() {
   </article>;
 }
 
-export default function Landing() {
+export default function Landing({ initialSection }: { initialSection?: string }) {
   const { data: catalogData } = usePlans();
   const [plan, setPlan] = useState<PlanKey>('pro');
   const [interval, setInterval] = useState<BillingInterval>('month');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const reportDialog = useRef<HTMLDialogElement>(null);
   const plans = useRef<HTMLDetailsElement>(null);
+  useEffect(() => { if (initialSection === 'sample') reportDialog.current?.showModal(); if (initialSection === 'pricing') document.getElementById('pricing')?.scrollIntoView(); }, [initialSection]);
   const showReport = () => reportDialog.current?.showModal();
 
   return <div className="landing-page">

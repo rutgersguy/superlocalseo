@@ -1,3 +1,4 @@
+import { catalog } from '../config/plans';
 import { db } from '../db/connection';
 import { planFor } from '../config/plans';
 export type UsageMetric = 'gridScans' | 'reviewRequests' | 'aiChecks' | 'rankingRuns' | 'competitorChecks' | 'citationScans' | 'websiteAudits' | 'keywordDiscoveries';
@@ -8,7 +9,7 @@ export async function reserveUsage(clientId: string, scope: string, metric: Usag
   return db.transaction(async trx => {
     const client = await trx('clients').where({ id: clientId }).forUpdate().first();
     if (!client) throw limitError('Account not found.');
-    if (client.pricing_version !== '2026-10') return; // legacy account behavior is unchanged
+    if (client.pricing_version !== catalog.version) return; // legacy account behavior is unchanged
     if (client.subscription_status !== 'active' && !(client.subscription_status === 'trialing' && new Date(client.trial_ends_at).getTime() > Date.now())) throw limitError('Choose a paid plan to continue scanning.');
     const limit = metric === 'competitorChecks' ? planFor(client).competitors * (client.locations_limit ?? 1) * 35 : planFor(client)[metric];
     const period = new Date().toISOString().slice(0, 7);

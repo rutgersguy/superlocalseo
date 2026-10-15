@@ -74,6 +74,7 @@ function SubscriptionCheckout() {
   const [interval, setInterval] = useState<BillingInterval>(localStorage.getItem('selectedInterval') === 'year' ? 'year' : 'month');
   const [promo, setPromo] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const [intent, setIntent] = useState<{ clientSecret: string | null; publishableKey: string; amountDue: number } | null>(null);
+  const [quote, setQuote] = useState<{ amountDue: number; discount: string | null; promotionCodeId?: string; previewToken: string } | null>(null);
   const [success, setSuccess] = useState(false);
   const stripe = useMemo(() => intent?.publishableKey ? loadStripe(intent.publishableKey) : null, [intent?.publishableKey]);
   const definition = plans?.data.plans[plan];
@@ -81,13 +82,12 @@ function SubscriptionCheckout() {
   async function start() {
     if (busy) return; setBusy(true); setError('');
     try {
-      let promotionCodeId;
-      if (promo.trim()) {
-        const r = await apiFetch<{ success: boolean; data: { id: string }; error?: { message: string } }>('/billing/validate-promo', { method: 'POST', body: JSON.stringify({ code: promo.trim() }) });
-        if (!r.success) throw new Error(r.error?.message || 'Invalid promo code');
-        promotionCodeId = r.data.id;
+      if (!quote) {
+        const preview = await apiFetch<{ success: boolean; data: { amountDue: number; discount: string | null; promotionCodeId?: string; previewToken: string }; error?: { message: string } }>('/billing/subscription-preview', { method: 'POST', body: JSON.stringify({ plan, interval, extraLocations: 0, promoCode: promo.trim() }) });
+        if (!preview.success) throw new Error(preview.error?.message || 'Unable to preview checkout');
+        setQuote(preview.data); return;
       }
-      const r = await apiFetch<{ success: boolean; data: { clientSecret: string | null; publishableKey: string; paymentRequired: boolean; amountDue: number }; error?: { message: string } }>('/billing/subscription-intent', { method: 'POST', body: JSON.stringify({ plan, interval, extraLocations: 0, promotionCodeId }) });
+      const r = await apiFetch<{ success: boolean; data: { clientSecret: string | null; publishableKey: string; paymentRequired: boolean; amountDue: number }; error?: { message: string } }>('/billing/subscription-intent', { method: 'POST', body: JSON.stringify({ plan, interval, extraLocations: 0, promotionCodeId: quote.promotionCodeId, previewToken: quote.previewToken }) });
       if (!r.success) throw new Error(r.error?.message || 'Unable to begin checkout');
       if (!r.data.paymentRequired) { setSuccess(true); await mutate(); } else setIntent(r.data);
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
@@ -99,13 +99,14 @@ function SubscriptionCheckout() {
     <h1 className="text-3xl font-bold">Choose your plan</h1>
     {billing?.status === 'trialing' && <p>{billing.trialDaysLeft ?? 0} days left in your Pro trial. No card required during your trial; subscribing starts paid service now.</p>}
     {billing?.pricingVersion === 'legacy' ? <p>Your existing billing is preserved. Contact support to change it.</p> : <>
-    <PlanPicker plan={plan} interval={interval} onPlan={p => { setPlan(p); setIntent(null); }} onInterval={v => { setInterval(v); setIntent(null); }} disabled={busy} />
+    <PlanPicker plan={plan} interval={interval} onPlan={p => { setPlan(p); setIntent(null); setQuote(null); }} onInterval={v => { setInterval(v); setIntent(null); setQuote(null); }} disabled={busy} />
     {definition && <div className="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
       <h2 className="font-semibold">{definition.name} · {money(interval === 'year' ? definition.annual : definition.monthly)}/{interval === 'year' ? 'year' : 'month'} before discounts</h2>
       {interval === 'year' && <p>Two months free: pay for ten months and get twelve months of access. Billed annually upfront.</p>}
-      <label className="block">Promo code (optional)<input aria-label="Promo code" className="block border rounded-lg p-2 mt-2" value={promo} disabled={busy} onChange={e => { setPromo(e.target.value); setIntent(null); }} /></label>
-      {!intent && <button disabled={busy || !billing} onClick={() => void start()} className="rounded-lg bg-brand-500 text-white px-5 py-3 disabled:opacity-50">{busy ? 'Preparing checkout…' : 'Continue to payment'}</button>}
-      <p className="text-sm text-slate-500">Review the final discounted amount before paying. If your promo makes the first invoice $0, continuing activates the subscription without a card. Future renewals follow your plan and promo terms.</p>
+      <label className="block">Promo code (optional)<input aria-label="Promo code" className="block border rounded-lg p-2 mt-2" value={promo} disabled={busy} onChange={e => { setPromo(e.target.value); setIntent(null); setQuote(null); }} /></label>
+      {quote && <div role="status" className="rounded border p-4 space-y-2"><p className="font-semibold">Due today: {money(quote.amountDue)}</p><p>{quote.discount ?? 'No promo discount applied.'}</p><p>Plan renews at {money(interval === 'year' ? definition.annual : definition.monthly)}/{interval === 'year' ? 'year' : 'month'} before any ongoing discount.</p>{quote.amountDue === 0 && <p>Confirming activates your subscription without a card.</p>}</div>}
+      {!intent && <button disabled={busy || !billing} onClick={() => void start()} className="rounded-lg bg-brand-500 text-white px-5 py-3 disabled:opacity-50">{busy ? 'Preparing checkout…' : quote ? `Confirm subscription · ${money(quote.amountDue)} due today` : 'Review total'}</button>}
+      <p className="text-sm text-slate-500">Review the final discounted amount before paying. Your subscription starts only after you confirm the reviewed total, including when it is $0. Future renewals follow your plan and promo terms.</p>
       {intent && <><p className="font-semibold">Due today: {money(intent.amountDue)}</p><p>Renews at {money(interval === 'year' ? definition.annual : definition.monthly)}/{interval === 'year' ? 'year' : 'month'} before any ongoing discount.</p>{stripe && intent.clientSecret && <Elements stripe={stripe} options={{ clientSecret: intent.clientSecret }} key={intent.clientSecret}><CheckoutForm onSuccess={() => setSuccess(true)} /></Elements>}</>}
       {error && <p role="alert" className="text-red-700">{error}</p>}
     </div>}</>}

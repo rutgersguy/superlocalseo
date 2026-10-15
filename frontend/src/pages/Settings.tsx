@@ -849,6 +849,7 @@ function QRTab() {
 function TeamTab() {
   const { data, isLoading, mutate } = useSWR<{ success: boolean; data: TeamData }>('/team', fetcher);
   const team = data?.data;
+  const { data: teamBilling } = useSWR<BillingResponse>('/billing/status', fetcher);
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'viewer'>('viewer');
@@ -901,6 +902,7 @@ function TeamTab() {
             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-brand-100 text-brand-700">Owner</span>
           </div>
         )}
+        {teamBilling && <p className="text-sm text-slate-600">{1 + (team?.members.filter(m => m.accepted || (m.pending && !m.expired)).length ?? 0)} of {teamBilling.data.limits.teamSeats} team seats used, including the owner.</p>}
         {team?.members.map((m) => (
           <div key={m.id} className="flex items-center justify-between py-3 px-4 border border-slate-200 rounded-lg">
             <div>
@@ -1070,6 +1072,7 @@ interface Location {
   phone: string | null;
   website: string | null;
   isPrimary: boolean;
+  googlePlaceId: string | null;
   brightlocalCampaignId: string | null;
   serviceArea: string[];
   lat: number | null;
@@ -1077,6 +1080,7 @@ interface Location {
 }
 
 interface LocForm {
+  googlePlaceId: string;
   name: string;
   address: string;
   city: string;
@@ -1087,12 +1091,13 @@ interface LocForm {
   serviceArea: string[];
 }
 
-const EMPTY_LOC_FORM: LocForm = { name: '', address: '', city: '', state: '', zip: '', phone: '', website: '', serviceArea: [] };
+const EMPTY_LOC_FORM: LocForm = { googlePlaceId: '', name: '', address: '', city: '', state: '', zip: '', phone: '', website: '', serviceArea: [] };
 
 
 function locFormFromLocation(loc: Location): LocForm {
   return {
     name: loc.name,
+    googlePlaceId: loc.googlePlaceId ?? '',
     address: loc.address ?? '',
     city: loc.city ?? '',
     state: loc.state ?? '',
@@ -1225,6 +1230,7 @@ function LocationForm({
             className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
         <div className="col-span-2">
+          <label className="block text-xs text-slate-500 mb-1">Google place ID (for direct review links)<input aria-label="Google place ID" value={form.googlePlaceId} onChange={set('googlePlaceId')} placeholder="ChIJ…" className="block w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" /></label><p className="text-xs text-slate-500 mb-3">Use the ID for this business location. Save it, then open Campaigns to create and preview your Google review link. Contact support if you need help finding the ID.</p>
           <label className="block text-xs text-slate-500 mb-1">Service area cities <span className="text-slate-400">(used for search volume estimates)</span></label>
           {form.serviceArea.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-2">
@@ -1518,6 +1524,7 @@ function KeywordsTab({ isAdmin, onGoToLocations }: { isAdmin: boolean; onGoToLoc
   const kwUrl = activeLocationId ? `/keywords?locationId=${activeLocationId}` : null;
   const { data: kwData, mutate: mutateKw } = useSWR<{ success: boolean; data: Keyword[] }>(kwUrl, fetcher);
   const keywords = kwData?.data ?? [];
+  const { data: keywordBilling } = useSWR<BillingResponse>('/billing/status', fetcher);
 
   const [newKeyword, setNewKeyword] = useState('');
   const [adding, setAdding] = useState(false);
@@ -1605,6 +1612,7 @@ function KeywordsTab({ isAdmin, onGoToLocations }: { isAdmin: boolean; onGoToLoc
 
       {/* Keyword list */}
       <div className="border border-slate-200 rounded-xl overflow-hidden">
+        {keywordBilling && <p className="p-4 text-sm text-slate-600">{keywords.length} of {keywordBilling.data.limits.keywords} keywords used for this location.</p>}
         {keywords.length === 0 ? (
           <p className="px-4 py-6 text-sm text-slate-400 text-center">No keywords yet — add one below.</p>
         ) : (
@@ -1669,6 +1677,7 @@ function KeywordsTab({ isAdmin, onGoToLocations }: { isAdmin: boolean; onGoToLoc
 
 interface BillingStatus {
   planKey: PlanKey; interval: BillingInterval; pricingVersion: string; limits: PlanDefinition;
+  discount?: string | null; lastInvoiceDiscount?: string | null;
   usage: Array<{scope: string; metric: string; used: number}>;
   currentPrice: { amount: number; interval: string; currency: string } | null;
   canManageBilling: boolean;
@@ -1821,7 +1830,7 @@ function BillingTab({ onGoToLocations, isPlatformAdmin }: { onGoToLocations: () 
       {trial ? <p>{billing.trialDaysLeft} days remaining. No card required during your trial.</p> : current && <p>{money(current.amount, current.currency)}/{current.interval === 'year' ? 'year' : 'month'} before discounts</p>}
       {legacy && <p>Your existing pricing and billing state are preserved.</p>}
       {billing.interval === 'year' && !legacy && <p>Annual billing includes two months free: twelve months for the price of ten.</p>}
-      <p>{billing.locationCount} locations used / {billing.locationsLimit} available</p>
+      <p>{billing.locationCount} {billing.locationCount === 1 ? 'location' : 'locations'} used / {billing.locationsLimit} available</p>{billing.discount && <p>Active discount: {billing.discount}</p>}{!billing.discount && billing.lastInvoiceDiscount && <p>Last invoice discount: {billing.lastInvoiceDiscount}. No ongoing discount.</p>}
       <button onClick={onGoToLocations} className="text-brand-700 underline">Manage location details</button>
       {billing.currentPeriodEnd && <p>Current period ends {new Date(billing.currentPeriodEnd).toLocaleDateString()}</p>}
       {billing.canManageBilling && <button className="block text-brand-700 underline" onClick={async () => { try { const r = await apiFetch<{ success: boolean; data: { url: string }; error?: { message: string } }>('/billing/portal', { method: 'POST' }); if (!r.success) throw new Error(r.error?.message || 'Unable to open billing portal'); window.location.href = r.data.url; } catch(e) { setPortalError((e as Error).message); } }}>Manage payment, invoices &amp; cancellation</button>}
@@ -1829,8 +1838,8 @@ function BillingTab({ onGoToLocations, isPlatformAdmin }: { onGoToLocations: () 
     </section>
     {active && billing.canManageBilling && !legacy && <BillingChanges currentPlan={billing.planKey} currentInterval={billing.interval} capacity={billing.locationsLimit} locations={locData?.data ?? []} publishableKey={billing.publishableKey} onLocations={onGoToLocations} />}
     {!active && !legacy && <><PlanPicker plan={plan} interval={interval} onPlan={setPlan} onInterval={setInterval} /><a href="/billing?subscribe=1" onClick={() => { localStorage.setItem('selectedPlan', plan); localStorage.setItem('selectedInterval', interval); }} className="inline-block rounded-lg bg-brand-500 text-white px-4 py-3">Continue with {plan}</a></>}
-    {!legacy && <section className="rounded-xl border p-5 text-sm space-y-2"><h3 className="font-semibold">Your usage limits</h3><p>Per location: {billing.limits.keywords} keywords, {billing.limits.competitors} competitors, {billing.limits.gridScans} geo-grid scans, {billing.limits.reviewRequests} email review requests and {billing.limits.aiChecks} AI checks per calendar month. Keyword and competitor counts are stored-item limits; the others reset monthly (UTC).</p><p>{billing.limits.teamSeats} team seats per account, including the owner. SMS is not enabled. Provider failures may consume scan allowance; no automatic overage charges.</p>
-      {billing.usage?.length > 0 && <ul>{billing.usage.map(u => <li key={`${u.scope}-${u.metric}`}>{locData?.data.find(l => l.id === u.scope)?.name ?? 'Account'} · {u.metric.replace(/([A-Z])/g, ' $1')}: {u.used} used this month</li>)}</ul>}
+    {!legacy && <section className="rounded-xl border p-5 text-sm space-y-2"><h3 className="font-semibold">Your usage limits</h3>{billing.status === 'trialing' && <p>These are your current Pro trial limits. Starter has lower limits after you choose that paid plan.</p>}<p>Per location: {billing.limits.keywords} keywords, {billing.limits.competitors} competitors, {billing.limits.gridScans} geo-grid scans, {billing.limits.reviewRequests} email review requests and {billing.limits.aiChecks} AI checks per calendar month. Keyword and competitor counts are stored-item limits; the others reset monthly (UTC).</p><p>{billing.limits.teamSeats} team seats per account, including the owner. SMS is not enabled. Provider failures may consume scan allowance; no automatic overage charges.</p>
+      {billing.usage?.length > 0 && <ul>{billing.usage.map(u => <li key={`${u.scope}-${u.metric}`}>{locData?.data.find(l => l.id === u.scope)?.name ?? 'Account'} · {u.metric.replace(/([A-Z])/g, ' $1').toLowerCase()}: {u.used} used this month</li>)}</ul>}
       </section>}
     {(isPlatformAdmin || (billing.canManageBilling && billing.limits.whiteLabel)) && <WhiteLabelSection />}
   </div>;

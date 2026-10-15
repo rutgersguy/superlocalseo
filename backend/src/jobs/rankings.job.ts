@@ -1,3 +1,4 @@
+import { catalog } from '../config/plans';
 import { planFor } from '../config/plans';
 import { reserveUsage } from '../services/plan-usage';
 import { Job } from 'bullmq';
@@ -36,7 +37,7 @@ export async function syncRankingsForClient(clientId: string, locationId?: strin
     .whereNotNull('website')
     .select('id', 'name', 'website') as Array<{ id: string; name: string; website: string }>;
 
-  const locations = await db('locations')
+  const locations = await db('active_locations as locations')
     .where({ client_id: clientId })
     .modify(q => { if (locationId) q.where({ id: locationId }); })
     .select('id', 'name', 'city', 'state', 'zip', 'phone', 'website', 'service_area');
@@ -46,7 +47,7 @@ export async function syncRankingsForClient(clientId: string, locationId?: strin
     const keywords: Array<{ id: string; keyword: string; monthly_search_volume: number | null }> = await db('keywords')
       .where({ location_id: location.id })
       .select('id', 'keyword', 'monthly_search_volume').orderBy('created_at', 'asc')
-      .modify(q => { if (clientRow.pricing_version === '2026-10') q.limit(planFor(clientRow).keywords); });
+      .modify(q => { if (clientRow.pricing_version === catalog.version) q.limit(planFor(clientRow).keywords); });
 
     if (keywords.length === 0) continue;
     result.locationsWithKeywords++;

@@ -29,7 +29,7 @@ export async function rankingsHistory(req: Request, res: Response, next: NextFun
 
     let query = db('ranking_snapshots')
       .join('keywords', 'ranking_snapshots.keyword_id', 'keywords.id')
-      .join('locations', 'ranking_snapshots.location_id', 'locations.id')
+      .join('active_locations as locations', 'ranking_snapshots.location_id', 'locations.id')
       .where('locations.client_id', req.clientId)
       .where('ranking_snapshots.pulled_at', '<=', to)
       .select(
@@ -56,7 +56,7 @@ export async function rankingsHistory(req: Request, res: Response, next: NextFun
     } else {
       const minRow = await db('ranking_snapshots')
         .where('ranking_snapshots.keyword_id', q.keywordId ?? db.raw('ranking_snapshots.keyword_id'))
-        .join('locations', 'ranking_snapshots.location_id', 'locations.id')
+        .join('active_locations as locations', 'ranking_snapshots.location_id', 'locations.id')
         .where('locations.client_id', req.clientId)
         .min('ranking_snapshots.pulled_at as min_pulled')
         .first() as { min_pulled: Date | null } | undefined;
@@ -175,7 +175,7 @@ export async function exportCsv(req: Request, res: Response, next: NextFunction)
     if (type === 'rankings') {
       const rows = await db('ranking_snapshots')
         .join('keywords', 'ranking_snapshots.keyword_id', 'keywords.id')
-        .join('locations', 'ranking_snapshots.location_id', 'locations.id')
+        .join('active_locations as locations', 'ranking_snapshots.location_id', 'locations.id')
         .where('locations.client_id', req.clientId)
         .select(
           'keywords.keyword',

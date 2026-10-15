@@ -62,7 +62,7 @@ async function provisionTenancyLocked(clientId: string, force: boolean, query: (
     if (!route) throw needsCheck();
     return Number(route.providerLocationId);
   }
-  const locationCount = Number((await query('locations').where({ client_id: clientId }).count('* as n').first())?.n ?? 0);
+  const locationCount = Number((await query('active_locations as locations').where({ client_id: clientId }).count('* as n').first())?.n ?? 0);
   if (locationCount > 1) throw needsCheck();
   if (!force && orgId && locationId) {
     await resolveProviderRoute(clientId);

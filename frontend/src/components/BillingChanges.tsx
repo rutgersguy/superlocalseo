@@ -85,10 +85,11 @@ export function BillingChanges({ currentPlan, currentInterval, capacity, locatio
         {action !== 'add_location' && <PlanPicker plan={targetPlan} interval={interval} disabled={busy} onPlan={p => { setTargetPlan(p); setTargetCapacity(catalog.plans[p].includedLocations); setRemoveIds([]); setQuote(null); }} onInterval={v => { setInterval(v); setQuote(null); }} />}
         <label className="block text-sm">Total location capacity<input aria-label="Total location capacity" type="number" min={catalog.plans[targetPlan].includedLocations} max={catalog.plans[targetPlan].maxLocations} value={targetCapacity} disabled={busy || action === 'add_location'} onChange={e => { setTargetCapacity(Number(e.target.value)); setRemoveIds([]); setQuote(null); }} className="block border rounded-lg p-2 mt-1" /></label>
         {removalCount > 0 && <fieldset className="rounded-lg border border-amber-300 p-4 space-y-2"><legend>Choose {removalCount} location{removalCount > 1 ? 's' : ''} to remove</legend>
-          <p className="text-sm text-amber-800">These locations and their stored location data will be permanently deleted only after you confirm and the billing change succeeds. Export any data you need first. We never choose locations for you.</p>
+          <p className="text-sm text-amber-800">These locations and their stored location data will be archived only after you confirm and the billing change succeeds. Export any data you need first. We never choose locations for you.</p>
           {locations.map(l => <label key={l.id} className="flex gap-2"><input type="checkbox" checked={removeIds.includes(l.id)} onChange={e => { setRemoveIds(e.target.checked ? [...removeIds, l.id] : removeIds.filter(id => id !== l.id)); setQuote(null); }} />{l.name}</label>)}
         </fieldset>}
       </div>}
+      {!pending && <p className="text-sm text-slate-600">First-invoice-only promos do not carry over to later location charges or renewals. An ongoing subscription discount is retained when you leave the promo field blank.</p>}
       {!pending && <div className="flex flex-wrap items-end gap-3">
         <label className="text-sm text-slate-700">Promo code (optional)
           <input aria-label="Promo code" value={promo} onChange={e => { setPromo(e.target.value); setQuote(null); setSetupSecret(null); setCardSaved(false); }} disabled={busy} className="block rounded-lg border border-slate-300 px-3 py-2 mt-1" />
@@ -105,7 +106,7 @@ export function BillingChanges({ currentPlan, currentInterval, capacity, locatio
         </dl>
         {quote.interval === 'year' && <p className="text-sm text-brand-700">Two months free: twelve months for the price of ten, billed annually upfront. Includes extra locations.</p>}
         {quote.creditAmount > 0 && <p className="text-sm">Prorated credit: {money(quote.creditAmount, quote.currency)}. Credits are applied by Stripe to invoices, not automatically refunded to your card.</p>}
-        {!!quote.removeLocationIds?.length && <p className="text-sm text-red-700">Confirming permanently removes: {locations.filter(l => quote.removeLocationIds.includes(l.id)).map(l => l.name).join(', ')}.</p>}
+        {!!quote.removeLocationIds?.length && <p className="text-sm text-red-700">Confirming archives: {locations.filter(l => quote.removeLocationIds.includes(l.id)).map(l => l.name).join(', ')}.</p>}
         {quote.discount && <p className="text-sm text-green-700">{quote.discount}</p>}
         {quote.amountDue === 0 && <p className="text-sm text-green-700">No payment or card is needed today.</p>}
         {!pending && <p className="text-xs text-slate-500">This preview is valid for 15 minutes. Your subscription changes only when you confirm. Future invoices follow your plan and discount terms.</p>}

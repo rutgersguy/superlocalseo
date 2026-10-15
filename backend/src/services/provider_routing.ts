@@ -4,7 +4,7 @@ import { mappingIdentity, mappingError } from './provider_mapping.service';
 
 export interface ProviderRoute { clientId: string; localLocationId: string | null; organizationId: string; providerLocationId: string; mode: 'explicit' | 'legacy'; revision: number | null }
 export async function resolveProviderRoute(clientId: string, localLocationId?: string, query: Knex | Knex.Transaction = db): Promise<ProviderRoute | null> {
-  const locations = await query('locations').where({ client_id: clientId });
+  const locations = await query('active_locations as locations').where({ client_id: clientId });
   const location = localLocationId ? locations.find(l => l.id === localLocationId) : locations.length === 1 ? locations[0] : null;
   if (localLocationId && !location) throw mappingError('Location not found', 404);
   if (!localLocationId && locations.length > 1) throw mappingError('Select a business location before continuing.');
@@ -41,7 +41,7 @@ export async function withProviderRoute<T>(route: ProviderRoute, fn: (trx: Knex.
   return db.transaction(async trx => {
     await trx.raw("SELECT pg_advisory_xact_lock(hashtext('provider-location-mapping-v1'))");
     await trx('clients').where({ id: route.clientId }).forShare();
-    await trx('locations').where({ client_id: route.clientId }).orderBy('id').forShare();
+    await trx('active_locations as locations').where({ client_id: route.clientId }).orderBy('id').forShare();
     const current = await resolveProviderRoute(route.clientId, route.localLocationId ?? undefined, trx);
     if (JSON.stringify(current) !== JSON.stringify(route)) throw mappingError('Provider mapping changed. Refresh and retry.');
     return fn(trx);

@@ -10,7 +10,7 @@ export async function visibilityScore(req: Request, res: Response, next: NextFun
     const end = new Date();
     const start = new Date(end.getTime() - 30 * 86400000);
     const loc = req.query.locationId as string | undefined;
-    const daily = db('ranking_snapshots as rs').join('locations as l', 'rs.location_id', 'l.id')
+    const daily = db('ranking_snapshots as rs').join('active_locations as l', 'rs.location_id', 'l.id')
       .where('l.client_id', req.clientId).whereBetween('rs.pulled_at', [start, end])
       .modify(q => { if (loc) q.where('l.id', loc); })
       .select(db.raw("DISTINCT ON ((rs.pulled_at AT TIME ZONE 'UTC')::date, rs.keyword_id, rs.location_id, rs.search_engine, rs.geo_location) rs.id"))
@@ -33,8 +33,8 @@ export async function get(req: Request, res: Response, next: NextFunction): Prom
     const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     const [rankRows, citations, locations, keywords, reviews, newReviews] = await Promise.all([
       latestRanks(req.clientId, now), latestCitations(req.clientId, now),
-      db('locations').where('client_id', req.clientId).count('id as n').first(),
-      db('keywords as k').join('locations as l', 'k.location_id', 'l.id').where('l.client_id', req.clientId).count('k.id as n').first(),
+      db('active_locations as locations').where('client_id', req.clientId).count('id as n').first(),
+      db('keywords as k').join('active_locations as l', 'k.location_id', 'l.id').where('l.client_id', req.clientId).count('k.id as n').first(),
       db('reviews').where('client_id', req.clientId).where('review_date', '<=', now).count('id as n').avg('rating as rating').first(),
       db('reviews').where('client_id', req.clientId).whereBetween('review_date', [start, now]).count('id as n').first(),
     ]);

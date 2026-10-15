@@ -64,7 +64,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
           .andOn(db.raw('latest.rank_type IS NOT DISTINCT FROM previous.rank_type'));
       })
       .join('keywords', 'latest.keyword_id', 'keywords.id')
-      .join('locations', 'latest.location_id', 'locations.id')
+      .join('active_locations as locations', 'latest.location_id', 'locations.id')
       .where('locations.client_id', req.clientId)
       .select(
         'latest.keyword_id as keywordId',
@@ -116,7 +116,7 @@ export async function trend(req: Request, res: Response, next: NextFunction): Pr
     since.setDate(since.getDate() - (days ?? 30));
 
     let baseQuery = db('ranking_snapshots')
-      .join('locations', 'ranking_snapshots.location_id', 'locations.id')
+      .join('active_locations as locations', 'ranking_snapshots.location_id', 'locations.id')
       .where('locations.client_id', req.clientId)
       .where('ranking_snapshots.keyword_id', keywordId)
       .where('ranking_snapshots.pulled_at', '<=', new Date())

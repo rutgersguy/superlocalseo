@@ -1,3 +1,5 @@
+> Pricing note (October 2026): any older price or Lite/setup-fee references below are historical or legacy compatibility details. Current self-serve prices, limits and trial policy are in [PLANS-240.md](PLANS-240.md) and the runtime plan catalog.
+
 # Stripe live billing
 
 ## Live status — September 26, 2026

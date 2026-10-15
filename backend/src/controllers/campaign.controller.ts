@@ -11,7 +11,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
     const selected = z.string().uuid().optional().parse(req.query.locationId);
     // No provider account is an onboarding state, not a failed campaign fetch.
     // Check local ownership before allowing that empty-state response.
-    if (selected && !await db('locations').where({ id: selected, client_id: req.clientId }).first()) {
+    if (selected && !await db('active_locations as locations').where({ id: selected, client_id: req.clientId }).first()) {
       err(res, 'Location not found', 404, 'NOT_FOUND'); return;
     }
     const client = await db('clients').where({ id: req.clientId }).first();

@@ -49,7 +49,7 @@ interface LocationRow {
 export async function processCitations(job: Job): Promise<void> {
   const clientId: string | undefined = job.data?.clientId;
 
-  let q = db('locations')
+  let q = db('active_locations as locations')
     .join('clients', 'locations.client_id', 'clients.id')
     .whereNotIn('clients.subscription_status', ['canceled', 'past_due'])
     .select(

@@ -29,11 +29,12 @@ async function locked<T>(fn: (trx: Knex.Transaction) => Promise<T>): Promise<T> 
   });
 }
 async function verified(trx: Knex.Transaction, clientId: string, locationId: string) {
-  const location = await trx('locations').where({ id: locationId, client_id: clientId }).forShare().first();
+  const location = await trx('active_locations as locations').where({ id: locationId, client_id: clientId }).forShare().first();
   if (!location) throw mappingError('Location not found', 404);
-  const route = await resolveProviderRoute(clientId, locationId, trx);
-  if (route?.mode !== 'explicit' || !location.google_place_id) throw mappingError('Ask support to verify this location in Provider mappings before issuing a review link.');
-  return { location, revision: route.revision!, identity: mappingIdentity(location) };
+  if (!location.google_place_id || !/^[A-Za-z0-9_-]{5,255}$/.test(location.google_place_id)) throw mappingError('Add a valid Google place ID in Settings > Locations to create a review link.');
+  const mapping = await trx('provider_location_mappings').where({ location_id: locationId, client_id: clientId }).first();
+  return { location, revision: mapping?.revision ?? 0, identity: mappingIdentity(location) };
+
 }
 async function publicLink(trx: Knex.Transaction, token: string) {
   if (!tokenSchema.safeParse(token).success) throw mappingError('This review link is unavailable.', 404);
@@ -47,14 +48,14 @@ async function publicLink(trx: Knex.Transaction, token: string) {
 }
 export async function status(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const locations = await db('locations').where({ client_id: req.clientId }).orderBy('name');
+    const locations = await db('active_locations as locations').where({ client_id: req.clientId }).orderBy('name');
     const result = [];
     for (const l of locations) {
       const link = await db('review_collection_links').where({ location_id: l.id, client_id: req.clientId }).first();
       let ready = false;
       try { await locked(trx => verified(trx, req.clientId, l.id)); ready = true; } catch { /* Fail closed */ }
       const mapping = await db('provider_location_mappings').where({ location_id: l.id, client_id: req.clientId }).first();
-      const active = ready && link && !link.revoked_at && link.identity === mappingIdentity(l) && link.mapping_revision === mapping?.revision;
+      const active = ready && link && !link.revoked_at && link.identity === mappingIdentity(l) && link.mapping_revision === (mapping?.revision ?? 0);
       result.push({ locationId: l.id, name: l.name, ready, state: active ? 'active' : link?.revoked_at ? 'revoked' : link ? 'needs_verification' : 'not_created', url: active ? linkUrl(link.token) : null, googleUrl: ready ? googleUrl(l.google_place_id) : null });
     }
     res.setHeader('Cache-Control', 'no-store');
@@ -66,7 +67,7 @@ export async function issue(req: Request, res: Response, next: NextFunction): Pr
     const locationId = locationSchema.parse(req.params.locationId);
     const { action } = z.object({ action: z.enum(['create', 'rotate', 'revoke']) }).strict().parse(req.body);
     const result = await locked(async trx => {
-      const location = await trx('locations').where({ id: locationId, client_id: req.clientId }).forShare().first();
+      const location = await trx('active_locations as locations').where({ id: locationId, client_id: req.clientId }).forShare().first();
       if (!location) throw mappingError('Location not found', 404);
       const existing = await trx('review_collection_links').where({ location_id: locationId, client_id: req.clientId }).forUpdate().first();
       if (action === 'revoke') {

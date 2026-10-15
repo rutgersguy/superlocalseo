@@ -46,41 +46,6 @@ export async function getOrCreateStripeCustomer(userId: string, email: string, e
   return customer.id;
 }
 
-export async function createCheckoutSession(
-  customerId: string,
-  extraLocations: number,
-  successUrl: string,
-  cancelUrl: string,
-  userId: string,
-  plan: 'lite' | 'pro' = 'pro',
-): Promise<Stripe.Checkout.Session> {
-  // Lite: single $149/mo recurring item, no setup fee, no extra locations.
-  // Pro: $349/mo base. The $499 setup fee is waived unless STRIPE_SETUP_FEE_ENABLED=true.
-  const chargeSetupFee = config.stripe.setupFeeEnabled && !!config.stripe.prices.setup;
-  const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = plan === 'lite'
-    ? [{ price: config.stripe.prices.liteBase!, quantity: 1 }]
-    : [
-      ...(chargeSetupFee ? [{ price: config.stripe.prices.setup!, quantity: 1 }] : []),
-      { price: config.stripe.prices.base!, quantity: 1 },
-    ];
-  const extra = plan === 'lite' ? 0 : extraLocations;
-  if (extra > 0) {
-    lineItems.push({ price: config.stripe.prices.location!, quantity: extra });
-  }
-
-  // subscription_data.metadata carries the plan onto the SUBSCRIPTION so later
-  // customer.subscription.updated / invoice.payment_succeeded events can read it.
-  return stripe.checkout.sessions.create({
-    mode: 'subscription',
-    customer: customerId,
-    line_items: lineItems,
-    subscription_data: { metadata: { userId, extraLocations: String(extra), plan } },
-    metadata: { userId, extraLocations: String(extra), plan },
-    success_url: successUrl,
-    cancel_url: cancelUrl,
-  });
-}
-
 // ─── Promo codes ─────────────────────────────────────────────────────────────
 
 export async function listPromoCodes(): Promise<Array<{
@@ -215,7 +180,7 @@ export async function createSubscriptionIntent(
     payment_settings: { save_default_payment_method: 'on_subscription' },
     expand: ['latest_invoice.payment_intent'],
     metadata: { userId, extraLocations: String(extraLocations), plan, catalogVersion: catalog.version },
-    ...(promotionCodeId ? { promotion_code: promotionCodeId } : {}),
+    discounts: promotionCodeId ? [{ promotion_code: promotionCodeId }] : [],
   }, idempotencyKey ? { idempotencyKey } : undefined);
   return subscriptionIntentResult(sub);
 }
@@ -247,10 +212,10 @@ export async function syncPaidSubscription(subscriptionId: string, executor: typ
   const change = details ? await executor('billing_changes').where({ subscription_id: sub.id }).whereIn('status', ['confirming', 'payment_required']).whereNotNull('confirmed_at').orderBy('created_at', 'desc').first() : null;
   if (change && details && change.quote.targetPriceId === details.base.price.id && details.capacity === change.quote.targetCapacity && (!change.invoice_id || change.invoice_id === invoice.id)) {
     if (change.quote.removeLocationIds?.length) {
-      await executor('locations').where({ client_id: change.client_id }).whereIn('id', change.quote.removeLocationIds).delete();
-      if (!await executor('locations').where({ client_id: change.client_id, is_primary: true }).first()) {
-        const first = await executor('locations').where({ client_id: change.client_id }).orderBy('created_at').first();
-        if (first) await executor('locations').where({ id: first.id }).update({ is_primary: true });
+      await executor('active_locations as locations').where({ client_id: change.client_id }).whereIn('id', change.quote.removeLocationIds).update({ archived_at: new Date(), is_primary: false, updated_at: new Date() });
+      if (!await executor('active_locations as locations').where({ client_id: change.client_id, is_primary: true }).first()) {
+        const first = await executor('active_locations as locations').where({ client_id: change.client_id }).orderBy('created_at').first();
+        if (first) await executor('active_locations as locations').where({ id: first.id }).update({ is_primary: true });
       }
     }
     await executor('billing_changes').where({ id: change.id }).update({ status: 'succeeded', invoice_id: invoice.id, updated_at: new Date() });
@@ -270,17 +235,14 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
       if (session.mode !== 'subscription' || !session.subscription || !session.customer) break;
       const userId = session.metadata?.userId;
       if (!userId) break;
-      const plan = (session.metadata?.plan ?? 'pro') as 'lite' | 'pro';
-      const extra = plan === 'lite' ? 0 : parseInt(session.metadata?.extraLocations ?? '0', 10);
-      await db('clients')
-        .where({ user_id: userId })
-        .update({
-          stripe_subscription_id: session.subscription as string,
-          subscription_status: 'active',
-          locations_limit: plan === 'lite' ? 1 : 1 + extra,
-          product_line: plan,
-          updated_at: new Date(),
-        });
+      const subId = typeof session.subscription === 'string' ? session.subscription : session.subscription.id;
+      const sub = await stripe.subscriptions.retrieve(subId);
+      const user = await db('users').where({ id: userId }).first();
+      const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer.id;
+      if (!user || user.stripe_customer_id !== customerId || sub.metadata.userId !== userId) break;
+      // Never replace a subscription selected by another checkout or trust session metadata for access.
+      await db('clients').where({ user_id: userId }).where(q => q.whereNull('stripe_subscription_id').orWhere('stripe_subscription_id', subId)).update({ stripe_subscription_id: subId, updated_at: new Date() });
+      await syncPaidSubscription(subId);
       break;
     }
 
@@ -292,9 +254,7 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
       const sub = await stripe.subscriptions.retrieve(eventSub.id);
       const userId = sub.metadata?.userId;
       if (!userId) break;
-      const status = sub.status === 'active' ? 'active'
-        : sub.status === 'past_due' ? 'past_due'
-        : sub.status === 'canceled' ? 'canceled' : 'trialing';
+      const status = sub.status; // Nonpaying statuses must never become a fresh trial.
       // NOTE: product_line is intentionally NOT set here. This event fires on the
       // Lite→Pro price swap BEFORE the upgrade invoice is paid; flipping here would
       // grant Pro on an unpaid upgrade. The flip happens only in invoice.payment_succeeded.

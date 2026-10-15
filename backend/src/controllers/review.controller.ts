@@ -51,7 +51,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
     let baseQuery = db('reviews').where({ client_id: req.clientId });
 
     if (query.locationId) {
-      const owned = await db('locations').where({ id: query.locationId, client_id: req.clientId }).first();
+      const owned = await db('active_locations as locations').where({ id: query.locationId, client_id: req.clientId }).first();
       if (!owned) { err(res, 'Location not found', 404); return; }
       baseQuery = baseQuery.where({ location_id: query.locationId });
     }

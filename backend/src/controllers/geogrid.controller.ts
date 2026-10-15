@@ -1,3 +1,5 @@
+import { completeGrid, GridPoint } from '../services/grid-observations';
+import { catalog } from '../config/plans';
 import { planFor } from '../config/plans';
 import { reserveUsage, limitError } from '../services/plan-usage';
 import { Request, Response, NextFunction } from 'express';
@@ -24,9 +26,9 @@ export async function trigger(req: Request, res: Response, next: NextFunction): 
     if (!parsed.success) { err(res, parsed.error.errors[0]?.message ?? 'Validation error', 400, 'VALIDATION_ERROR'); return; }
 
     const { locationId, keywordId, gridSize } = parsed.data;
-    if (req.client.pricing_version === '2026-10' && gridSize > planFor(req.client).gridSize) throw limitError('Starter includes a 3×3 map. Upgrade for a larger geo-grid.');
+    if (req.client.pricing_version === catalog.version && gridSize > planFor(req.client).gridSize) throw limitError('Starter includes a 3×3 map. Upgrade for a larger geo-grid.');
 
-    const location = await db('locations')
+    const location = await db('active_locations as locations')
       .where({ id: locationId, client_id: req.clientId })
       .first() as { id: string; lat?: number | null; lng?: number | null; city?: string | null; state?: string | null; name: string; website?: string | null; phone?: string | null; zip?: string | null } | undefined;
     if (!location) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
@@ -81,12 +83,12 @@ async function runGeoGrid(
           gridRow: row,
           gridCol: col,
           lat: centerLat + row * DEGREE_PER_MILE,
-          lng: centerLng + col * DEGREE_PER_MILE,
+          lng: centerLng + col * DEGREE_PER_MILE / Math.max(0.1, Math.cos(centerLat * Math.PI / 180)),
         });
       }
     }
 
-    type GridResult = typeof points[0] & { rank: number | null; url: string | null };
+    type GridResult = typeof points[0] & { rank: number | null; url: string | null; observationStatus: 'observed' | 'unverified' };
     const results: GridResult[] = [];
 
     // Attempt BrightLocal for all points; fall back to DataForSEO per point on any error.
@@ -127,7 +129,7 @@ async function runGeoGrid(
             websiteUrl: locationMeta.website,
             phone: locationMeta.phone,
           });
-          results.push({ gridRow: pt.gridRow, gridCol: pt.gridCol, lat: pt.lat, lng: pt.lng, rank: r.rank, url: r.url });
+          results.push({ gridRow: pt.gridRow, gridCol: pt.gridCol, lat: pt.lat, lng: pt.lng, rank: r.rank, url: r.url, observationStatus: 'observed' });
         }),
       );
       for (const r of dfsResults) {
@@ -147,7 +149,7 @@ async function runGeoGrid(
             const result = await fetchRankingResult(p.requestId);
             if (!result.ready) return;
             done.add(p.requestId);
-            results.push({ gridRow: p.gridRow, gridCol: p.gridCol, lat: p.lat, lng: p.lng, rank: result.rank, url: result.url });
+            results.push({ gridRow: p.gridRow, gridCol: p.gridCol, lat: p.lat, lng: p.lng, rank: result.success ? result.rank : null, url: result.success ? result.url : null, observationStatus: result.success ? 'observed' : 'unverified' });
           }),
       );
     }
@@ -155,12 +157,14 @@ async function runGeoGrid(
     // BrightLocal points that timed out — mark as null
     for (const p of fired) {
       if (!done.has(p.requestId)) {
-        results.push({ gridRow: p.gridRow, gridCol: p.gridCol, lat: p.lat, lng: p.lng, rank: null, url: null });
+        results.push({ gridRow: p.gridRow, gridCol: p.gridCol, lat: p.lat, lng: p.lng, rank: null, url: null, observationStatus: 'unverified' });
       }
     }
 
+    // Keep failed provider calls in the grid as unknown, never silently omit them.
+    for (const pt of points) if (!results.some(r => r.gridRow === pt.gridRow && r.gridCol === pt.gridCol)) results.push({ ...pt, rank: null, url: null, observationStatus: 'unverified' });
     await db('geo_grid_reports').where({ id: reportId }).update({
-      status: 'complete',
+      status: results.every(r => r.observationStatus === 'unverified') ? 'failed' : 'complete',
       grid_data: JSON.stringify(results),
       completed_at: new Date(),
     });
@@ -214,7 +218,7 @@ function formatReport(row: Record<string, unknown>) {
     gridSize: row.grid_size,
     centerLat: row.center_lat,
     centerLng: row.center_lng,
-    gridData: row.grid_data ?? null,
+    gridData: row.grid_data ? completeGrid(row.grid_data as GridPoint[], Number(row.grid_size), Number(row.center_lat), Number(row.center_lng)) : null,
     completedAt: row.completed_at,
     createdAt: row.created_at,
   };

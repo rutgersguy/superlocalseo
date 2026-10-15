@@ -1,3 +1,4 @@
+import { catalog } from '../config/plans';
 import fs from 'fs';
 import path from 'path';
 import puppeteer from 'puppeteer';
@@ -159,7 +160,7 @@ export async function gatherReportData(
   if (!client) throw new Error(`Client not found: ${clientId}`);
 
   // Locations
-  const locationRows = await db('locations')
+  const locationRows = await db('active_locations as locations')
     .where('client_id', clientId)
     .select('id', 'name') as Array<{ id: string; name: string }>;
 
@@ -355,7 +356,7 @@ export async function gatherReportData(
   const roiData: ReportData['roi'] = null;
 
   const whiteLabel: WhiteLabel | undefined =
-    (client.pricing_version === '2026-10' ? client.plan_key === 'multi' : plan === 'pro') &&
+    (client.pricing_version === catalog.version ? client.plan_key === 'multi' : plan === 'pro') &&
     (client.white_label_company_name || client.white_label_logo_url || client.white_label_color)
       ? {
           companyName: client.white_label_company_name ?? undefined,

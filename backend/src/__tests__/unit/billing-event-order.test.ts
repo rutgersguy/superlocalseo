@@ -99,3 +99,9 @@ describe('pending upgrade does not revoke the existing paid plan', () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 });
+
+it.each(['incomplete', 'unpaid', 'paused', 'incomplete_expired'])('does not turn %s into a trial', async status => {
+  mockRetrieve.mockResolvedValue({ ...subscription(status), metadata: { userId: 'user_qa' } });
+  await handleWebhookEvent({ type: 'customer.subscription.updated', data: { object: { id: 'sub_qa' } } } as unknown as Stripe.Event);
+  expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ subscription_status: status }));
+});

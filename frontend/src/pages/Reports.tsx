@@ -145,7 +145,7 @@ function GenerateModal({ onClose, onSuccess, initialMonth, initialYear }: Genera
               onChange={(e) => setMonth(Number(e.target.value))}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
-              {MONTH_NAMES.map((name, i) => (
+              {MONTH_NAMES.map((name, i) => ({ name, i })).filter(({ i }) => year < currentYear || i < now.getUTCMonth()).map(({ name, i }) => (
                 <option key={name} value={i + 1} disabled={year === currentYear && i >= now.getUTCMonth()}>{name}</option>
               ))}
             </select>
@@ -158,7 +158,7 @@ function GenerateModal({ onClose, onSuccess, initialMonth, initialYear }: Genera
             <select
               id="modal-year"
               value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
+              onChange={(e) => { const y = Number(e.target.value); setYear(y); if (y === currentYear && month > now.getUTCMonth()) setMonth(Math.max(1, now.getUTCMonth())); }}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
               {years.map((y) => (

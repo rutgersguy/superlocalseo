@@ -6,7 +6,7 @@ import {ok,err} from '../utils/response';
 export async function status(req:Request,res:Response,next:NextFunction) {
   try {
     const locationId=z.string().uuid().optional().parse(req.query.locationId);
-    const locations=await db('locations').where({client_id:req.clientId}).modify(q=>{if(locationId)q.where({id:locationId});});
+    const locations=await db('active_locations as locations').where({client_id:req.clientId}).modify(q=>{if(locationId)q.where({id:locationId});});
     if(locationId&&!locations.length){err(res,'Location not found',404);return;}
     const states=[];
     for(const location of locations) {

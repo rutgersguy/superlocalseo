@@ -1,3 +1,4 @@
+jest.mock('../../services/checkout-preview', () => ({ checkoutSelection: (b: any) => b, verifyCheckoutPreview: jest.fn().mockReturnValue(0), previewCheckout: jest.fn().mockResolvedValue({ amountDue: 0 }) }));
 const mockIntent = jest.fn();
 const mockUpdate = jest.fn().mockResolvedValue(1);
 const mockClient = { id: 'client_qa', user_id: 'user_qa', stripe_subscription_id: null, pending_checkout: null as any };
@@ -6,12 +7,12 @@ const mockDb = jest.fn((table: string) => {
   query.where.mockReturnValue(query);
   query.forUpdate.mockReturnValue(query);
   query.count.mockReturnValue(query);
-  query.first.mockResolvedValue(table === 'locations' ? { n: 0 } : table === 'users' ? { id: 'user_qa', email: 'qa@example.invalid' } : mockClient);
+  query.first.mockResolvedValue(table === 'active_locations as locations' ? { n: 0 } : table === 'users' ? { id: 'user_qa', email: 'qa@example.invalid' } : mockClient);
   return query;
 });
 jest.mock('../../db/connection', () => ({ db: Object.assign(mockDb, { transaction: (fn: Function) => fn(mockDb) }) }));
 jest.mock('../../services/stripe.service', () => ({
-  stripe: {}, getOrCreateStripeCustomer: jest.fn().mockResolvedValue('cus_qa'),
+  stripe: { subscriptions: { list: jest.fn().mockResolvedValue({ data: [], has_more: false }) } }, getOrCreateStripeCustomer: jest.fn().mockResolvedValue('cus_qa'),
   createSubscriptionIntent: mockIntent,
 }));
 import { subscriptionIntent } from '../../controllers/billing.controller';
@@ -51,4 +52,12 @@ it('retains one idempotency key after an ambiguous Stripe response', async () =>
   await subscriptionIntent(req, res as unknown as Response, jest.fn());
   expect(mockIntent.mock.calls[1][6]).toBe(key);
   expect(mockClient.pending_checkout).toBeNull();
+});
+
+it('blocks a second live subscription found on the customer even if the local pointer is missing', async () => {
+  const { stripe } = await import('../../services/stripe.service');
+  (stripe.subscriptions.list as jest.Mock).mockResolvedValueOnce({ data: [{ id: 'sub_untracked', status: 'active', metadata: { userId: 'someone_else' } }], has_more: false });
+  const next = jest.fn(); const res = { json: jest.fn(), status: jest.fn().mockReturnThis() };
+  await subscriptionIntent({ body: { plan: 'pro' }, userId: 'user_qa' } as Request, res as unknown as Response, next);
+  expect(mockIntent).not.toHaveBeenCalled(); expect(next).toHaveBeenCalledWith(expect.objectContaining({ status: 409 }));
 });

@@ -15,7 +15,7 @@ export async function processAudits(job: Job): Promise<void> {
 
   if (!job.data.locationId) {
     // Monthly fan-out: all active locations, regardless of BL campaign status.
-    const locations = await db('locations')
+    const locations = await db('active_locations as locations')
       .join('clients', 'locations.client_id', 'clients.id')
       .whereNotIn('clients.subscription_status', ['canceled', 'past_due'])
       .select(

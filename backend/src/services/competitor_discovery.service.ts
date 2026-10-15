@@ -110,7 +110,7 @@ interface ClientRankRow {
 
 /** Domain and name of the client itself, so they are never listed as their own competitor. */
 async function clientIdentity(locationId: string): Promise<{ domains: Set<string>; names: Set<string> }> {
-  const loc = await db('locations').where({ id: locationId }).first('name', 'website');
+  const loc = await db('active_locations as locations').where({ id: locationId }).first('name', 'website');
   const domains = new Set<string>();
   const names = new Set<string>();
   if (loc?.website) {

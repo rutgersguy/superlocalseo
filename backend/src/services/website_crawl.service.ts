@@ -68,7 +68,7 @@ export async function pollWebsiteCrawls(): Promise<void> {
     if (!claimed) continue;
     let dispatched = false;
     try {
-      const location = await db('locations').where({ id: audit.location_id, client_id: audit.client_id }).first();
+      const location = await db('active_locations as locations').where({ id: audit.location_id, client_id: audit.client_id }).first();
       const client = await db('clients').where({ id: audit.client_id }).first();
       if (!location?.website || !['active', 'trialing'].includes(client?.subscription_status) || client.product_line !== 'pro' || (client.subscription_status === 'trialing' && client.trial_ends_at && new Date(client.trial_ends_at) < new Date())) {
         await db('location_audits').where({ id: audit.id }).update({ crawl_status: 'unavailable', crawl_data: JSON.stringify({ message: 'A saved website and eligible Pro account are required for the expanded crawl.' }) }); continue;
@@ -84,7 +84,7 @@ export async function pollWebsiteCrawls(): Promise<void> {
       if (url.hostname.replace(/^www\./, '') !== initial.hostname.replace(/^www\./, '') || !isCrawlPageAllowed(redirectTarget.href, input, policy)) throw new Error('Website redirect leaves crawl scope');
       const options = crawlTaskOptions(url.href, await checked.text(), policy);
       const reuse = await db.transaction(async trx => {
-        await trx('locations').where({ id: audit.location_id }).forUpdate().first();
+        await trx('active_locations as locations').where({ id: audit.location_id }).forUpdate().first();
         const prior = await trx('location_audits').where({ location_id: audit.location_id, client_id: audit.client_id })
           .whereRaw("split_part(split_part(crawl_url, ?, 1), '#', 1) = ?", ['?', url.href])
           .whereNot('id', audit.id).whereIn('crawl_status', ['submitting', 'running', 'complete', 'needs_review'])

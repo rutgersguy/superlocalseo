@@ -1,3 +1,4 @@
+import { catalog } from '../config/plans';
 import { planFor } from '../config/plans';
 import { limitError } from '../services/plan-usage';
 import { Request, Response, NextFunction } from 'express';
@@ -86,7 +87,7 @@ function formatClient(
 export async function getClient(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const [locations, user, integrations] = await Promise.all([
-      db('locations').where({ client_id: req.clientId }).orderBy('is_primary', 'desc').orderBy('created_at', 'asc'),
+      db('active_locations as locations').where({ client_id: req.clientId }).orderBy('is_primary', 'desc').orderBy('created_at', 'asc'),
       db('users').where({ id: req.client.user_id }).first(),
       db('integrations').where({ client_id: req.clientId }),
     ]);
@@ -99,7 +100,7 @@ export async function getClient(req: Request, res: Response, next: NextFunction)
 export async function updateClient(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const body = req.body as PatchBody;
-    if (req.client.pricing_version === '2026-10' && !planFor(req.client).whiteLabel && [body.whiteLabelCompanyName, body.whiteLabelLogoUrl, body.whiteLabelColor].some(v => v !== undefined)) throw limitError('White-label report branding is included with Multi.');
+    if (req.client.pricing_version === catalog.version && !planFor(req.client).whiteLabel && [body.whiteLabelCompanyName, body.whiteLabelLogoUrl, body.whiteLabelColor].some(v => v !== undefined)) throw limitError('White-label report branding is included with Multi.');
     const updates: Record<string, unknown> = { updated_at: new Date() };
 
     if (body.businessName !== undefined) updates.business_name = body.businessName;
@@ -113,7 +114,7 @@ export async function updateClient(req: Request, res: Response, next: NextFuncti
     if (body.businessName !== undefined || body.industry !== undefined) await ensureInitialScans(req.clientId);
 
     const [locations, user, integrations] = await Promise.all([
-      db('locations').where({ client_id: req.clientId }).orderBy('is_primary', 'desc').orderBy('created_at', 'asc'),
+      db('active_locations as locations').where({ client_id: req.clientId }).orderBy('is_primary', 'desc').orderBy('created_at', 'asc'),
       db('users').where({ id: req.client.user_id }).first(),
       db('integrations').where({ client_id: req.clientId }),
     ]);

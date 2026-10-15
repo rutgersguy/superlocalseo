@@ -189,7 +189,7 @@ export async function exportRankings(req: Request, res: Response, next: NextFunc
   try {
     const rows = await db('ranking_snapshots')
       .join('keywords', 'ranking_snapshots.keyword_id', 'keywords.id')
-      .join('locations', 'ranking_snapshots.location_id', 'locations.id')
+      .join('active_locations as locations', 'ranking_snapshots.location_id', 'locations.id')
       .where('locations.client_id', req.clientId)
       .select(
         'keywords.keyword',
@@ -227,7 +227,7 @@ export async function exportRankings(req: Request, res: Response, next: NextFunc
 export async function exportKeywords(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const rows = await db('keywords')
-      .join('locations', 'keywords.location_id', 'locations.id')
+      .join('active_locations as locations', 'keywords.location_id', 'locations.id')
       .leftJoin(
         db('ranking_snapshots')
           .select('keyword_id', 'location_id', 'rank', 'url_ranked', 'pulled_at')
@@ -280,7 +280,7 @@ export async function exportKeywords(req: Request, res: Response, next: NextFunc
 export async function exportReviews(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const rows = await db('reviews')
-      .leftJoin('locations', 'reviews.location_id', 'locations.id')
+      .leftJoin('active_locations as locations', 'reviews.location_id', 'locations.id')
       .where('reviews.client_id', req.clientId)
       .select(
         'reviews.review_date',
@@ -327,7 +327,7 @@ export async function exportReviews(req: Request, res: Response, next: NextFunct
 export async function exportCitations(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const rows = await db('citation_snapshots')
-      .join('locations', 'citation_snapshots.location_id', 'locations.id')
+      .join('active_locations as locations', 'citation_snapshots.location_id', 'locations.id')
       .where('locations.client_id', req.clientId)
       .distinctOn(['citation_snapshots.location_id', 'citation_snapshots.directory'])
       .orderBy([

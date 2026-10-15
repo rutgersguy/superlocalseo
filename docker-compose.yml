@@ -69,7 +69,7 @@ services:
     restart: unless-stopped
     logging: *default-logging
     ports:
-      - "3000:3000"
+      - "172.19.0.1:3000:3000"
     volumes:
       - reports_data:/app/data/reports
     env_file:

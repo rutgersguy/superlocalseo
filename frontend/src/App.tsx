@@ -45,6 +45,8 @@ function App() {
           {/* Public routes */}
           <Route path="/review/:token" element={<ReviewCollection />} />
           <Route path="/" element={<Landing />} />
+          <Route path="/pricing" element={<Landing initialSection="pricing" />} />
+          <Route path="/sample-report" element={<Landing initialSection="sample" />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/registered" element={<RegisterSuccess />} />

@@ -1,3 +1,4 @@
+import { catalog } from '../config/plans';
 import { planFor } from '../config/plans';
 import { assertResourcesMutable, limitError, reserveUsage } from '../services/plan-usage';
 import { Request, Response, NextFunction } from 'express';
@@ -145,7 +146,7 @@ export async function create(req: Request, res: Response, next: NextFunction): P
       await assertResourcesMutable(trx, req.clientId);
       const count = Number((await trx('competitors').where({ client_id: req.clientId }).count('* as n').first())?.n ?? 0);
       const limit = planFor(client).competitors * (client.locations_limit ?? 1);
-      if (client.pricing_version === '2026-10' && count >= limit) throw limitError(`Your plan includes ${limit} competitors. Remove one or upgrade to add more.`);
+      if (client.pricing_version === catalog.version && count >= limit) throw limitError(`Your plan includes ${limit} competitors. Remove one or upgrade to add more.`);
       const [competitor] = await trx('competitors')
       .insert({
         client_id: req.clientId,
@@ -235,7 +236,7 @@ export async function search(req: Request, res: Response, next: NextFunction): P
     }
 
     // Bias results toward the client's primary location
-    const primaryLoc = await db('locations')
+    const primaryLoc = await db('active_locations as locations')
       .where({ client_id: req.clientId })
       .select('city', 'state')
       .first() as { city: string | null; state: string | null } | undefined;
@@ -285,7 +286,7 @@ export async function placeDetails(req: Request, res: Response, next: NextFuncti
 export async function gap(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const locationRows = (
-      await db('locations').where({ client_id: req.clientId }).select('id', 'name', 'city', 'state')
+      await db('active_locations as locations').where({ client_id: req.clientId }).select('id', 'name', 'city', 'state')
     ) as Array<{ id: string; name: string; city: string | null; state: string | null }>;
 
     if (locationRows.length === 0) {
@@ -398,7 +399,7 @@ export async function gap(req: Request, res: Response, next: NextFunction): Prom
 
 export async function headToHead(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const locationRows = await db('locations')
+    const locationRows = await db('active_locations as locations')
       .where({ client_id: req.clientId })
       .select('id', 'name') as Array<{ id: string; name: string }>;
 
@@ -486,14 +487,14 @@ export async function discoverKeywords(req: Request, res: Response, next: NextFu
 
     // Find keywords the client already tracks (any location)
     const trackedRows = await db('keywords')
-      .join('locations', 'keywords.location_id', 'locations.id')
+      .join('active_locations as locations', 'keywords.location_id', 'locations.id')
       .where('locations.client_id', req.clientId)
       .select('keywords.keyword') as Array<{ keyword: string }>;
 
     const trackedSet = new Set(trackedRows.map((r) => r.keyword.toLowerCase()));
 
     // Get client's locations for the "add to location" picker
-    const locations = await db('locations')
+    const locations = await db('active_locations as locations')
       .where({ client_id: req.clientId })
       .select('id', 'name', 'city', 'state') as Array<{ id: string; name: string; city: string | null; state: string | null }>;
 
@@ -642,7 +643,7 @@ export async function outranking(req: Request, res: Response, next: NextFunction
     const { locationId, windowDays } = parsed.data;
 
     // Never trust a client-supplied id: confirm the location belongs to them.
-    const owned = await db('locations').where({ id: locationId, client_id: req.clientId }).first('id');
+    const owned = await db('active_locations as locations').where({ id: locationId, client_id: req.clientId }).first('id');
     if (!owned) { err(res, 'Location not found', 404, 'NOT_FOUND'); return; }
 
     ok(res, await getOutrankingCompetitors(locationId, windowDays ?? 7));

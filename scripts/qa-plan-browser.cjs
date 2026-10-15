@@ -66,7 +66,7 @@ const assert = require('assert/strict');
     await section.getByRole('checkbox', { name: 'Browser chosen removal' }).check();
     await section.getByRole('textbox', { name: 'Promo code', exact: true }).fill(a.promo);
     await section.getByRole('button', { name: 'Preview change', exact: true }).click();
-    await expect(section.getByText('Confirming permanently removes: Browser chosen removal.')).toBeVisible();
+    await expect(section.getByText('Confirming archives: Browser chosen removal.')).toBeVisible();
     await page.screenshot({ path: '/tmp/sls240-qa/downgrade-selection.png', fullPage: true });
     await confirmButton(/Confirm plan change/);
     await expect(section.getByRole('status')).toContainText('updated');

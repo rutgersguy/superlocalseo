@@ -10,6 +10,7 @@ const { subscriptionDetails } = require('/app/dist/services/stripe-catalog');
 const tag = 'sls240-qa';
 let fixtures = [];
 async function api(path, token, body, method = 'POST') {
+  if (path === '/billing/subscription-intent') { const preview = await api('/billing/subscription-preview', token, body); assert(preview.success, JSON.stringify(preview)); body = { ...body, previewToken: preview.data.previewToken }; }
   const r = await fetch(`http://localhost:3000/api${path}`, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   return { status: r.status, ...await r.json() };
 }
@@ -72,7 +73,7 @@ async function main() {
   assert.equal((await api('/billing/changes/preview', a.token, { ...downgrade, removeLocationIds: [extras[0].id, fixtures[1].locationId] })).status, 400);
   q = await request('/billing/changes/preview', a, { ...downgrade, removeLocationIds: extras.map(l => l.id) });
   await confirm(a, q);
-  assert.deepEqual((await db('locations').where({ client_id: a.clientId }).select('id')).map(l => l.id), [a.locationId]);
+  assert.deepEqual((await db('active_locations').where({ client_id: a.clientId }).select('id')).map(l => l.id), [a.locationId]);
   assert.equal((await db('clients').where({ id: a.clientId }).first()).plan_key, 'starter');
   assert.equal((await stripe.subscriptions.list({ customer: a.customerId, status: 'all' })).data.length, 1);
   console.log(JSON.stringify({ intervalSwitch: 'passed', annualAddon: 'passed', retry: 'same invoice', downgrade: 'only selected locations removed', foreignLocation: 'blocked', invoiceAmounts: 'match previews' }));

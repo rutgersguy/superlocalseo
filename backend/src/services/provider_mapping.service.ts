@@ -11,7 +11,7 @@ export function mappingIdentity(location: Record<string, unknown>): string {
 
 export async function saveProviderMapping(locationId: string, input: MappingInput, actorId: string) {
   // Membership is checked live; the separate Google identity inspection is operator-attested.
-  const initial = await db('locations').where({ id: locationId }).first();
+  const initial = await db('active_locations as locations').where({ id: locationId }).first();
   if (!initial) throw mappingError('Location not found', 404);
   if ((initial.google_place_id ?? null) !== input.expectedGooglePlaceId || (initial.google_place_id && initial.google_place_id !== input.googlePlaceId))
     throw mappingError('The saved business Google place ID must match the requested mapping.');
@@ -23,7 +23,7 @@ export async function saveProviderMapping(locationId: string, input: MappingInpu
     // Serializes first inserts as well as edits. Constraints independently enforce both tenancy boundaries.
     await trx.raw("SELECT pg_advisory_xact_lock(hashtext('provider-location-mapping-v1'))");
     const clients = await trx('clients').orderBy('id').forUpdate();
-    const location = await trx('locations').where({ id: locationId }).forUpdate().first();
+    const location = await trx('active_locations as locations').where({ id: locationId }).forUpdate().first();
     if (!location || location.client_id !== initial.client_id || (location.google_place_id ?? null) !== input.expectedGooglePlaceId || mappingIdentity(location) !== initialIdentity)
       throw mappingError('Business identity changed during verification. Refresh and try again.');
     const evidenceAge = Date.now() - Date.parse(evidence.verifiedAt);
@@ -40,7 +40,7 @@ export async function saveProviderMapping(locationId: string, input: MappingInpu
     if (duplicate) throw mappingError('Provider location is already assigned to another business location.');
     if (!owner) await trx('provider_organization_owners').insert({ organization_id: input.organizationId, client_id: location.client_id });
     if (!location.google_place_id) {
-      await trx('locations').where({ id: locationId }).update({ google_place_id: input.googlePlaceId, updated_at: new Date() });
+      await trx('active_locations as locations').where({ id: locationId }).update({ google_place_id: input.googlePlaceId, updated_at: new Date() });
     }
     evidence.previousGooglePlaceId = location.google_place_id ?? null;
     evidence.localIdentity = mappingIdentity({ ...location, google_place_id: input.googlePlaceId });

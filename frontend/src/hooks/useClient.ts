@@ -50,7 +50,7 @@ export function useClient(): UseClientResult {
   );
 
   const client = data?.data ?? null;
-  const productLine: Plan = client?.pricingVersion === '2026-10' && client.limits ? (client.limits.proFeatures ? 'pro' : 'lite') : (client?.productLine ?? 'pro') as Plan;
+  const productLine: Plan = client && client.pricingVersion !== 'legacy' && client.limits ? (client.limits.proFeatures ? 'pro' : 'lite') : (client?.productLine ?? 'pro') as Plan;
 
   return {
     client,

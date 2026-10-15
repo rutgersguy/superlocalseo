@@ -1,3 +1,5 @@
+> Pricing note (October 2026): any older price or Lite/setup-fee references below are historical or legacy compatibility details. Current self-serve prices, limits and trial policy are in [PLANS-240.md](PLANS-240.md) and the runtime plan catalog.
+
 # Release rehearsal — 2026-09-09
 
 > Historical evidence. See [current release status](RELEASE_STATUS.md) for what is live and outstanding. Native reports and the September 9 legacy redirects supersede the vendor acquisition flow described here; earlier unresolved vendor calculations were not repaired upstream.

@@ -5,7 +5,7 @@ import { ok } from '../utils/response';
 async function history(req: Request, res: Response, next: NextFunction, admin: boolean) {
   try {
     const q=z.object({page:z.coerce.number().int().min(1).max(100000).default(1),status:z.enum(['submitting','accepted','uncertain','rejected','duplicate_blocked']).optional()}).parse(req.query);
-    const query=db('campaign_invitation_attempts as a').leftJoin('locations as l','l.id','a.location_id').leftJoin('clients as c','c.id','a.client_id');
+    const query=db('campaign_invitation_attempts as a').leftJoin('active_locations as l','l.id','a.location_id').leftJoin('clients as c','c.id','a.client_id');
     if(!admin)query.where('a.client_id',req.clientId);
     if(q.status)query.where('a.status',q.status);
     const total=Number((await query.clone().count('a.id as n').first())?.n??0);

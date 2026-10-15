@@ -22,11 +22,11 @@ export async function listProviderMappings(req: Request, res: Response, next: Ne
   try {
     res.setHeader('Cache-Control', 'no-store');
     const page = z.coerce.number().int().min(1).max(1000000).default(1).parse(req.query.page);
-    const rows = await db('locations as l').join('clients as c', 'c.id', 'l.client_id')
+    const rows = await db('active_locations as l').join('clients as c', 'c.id', 'l.client_id')
       .select('l.id as locationId', 'l.client_id as clientId', 'c.business_name as businessName', 'l.name as locationName', 'l.city',
         'l.address', 'l.state', 'l.zip', 'l.google_place_id as googlePlaceId', 'c.emr_organization_id as legacyOrganizationId', 'c.emr_location_id as legacyProviderLocationId')
       .orderBy('c.business_name').orderBy('l.id').limit(50).offset((page - 1) * 50);
-    const total = Number((await db('locations').count('* as n').first())?.n ?? 0);
+    const total = Number((await db('active_locations as locations').count('* as n').first())?.n ?? 0);
     const ids = rows.map(r => r.locationId);
     const mappings = ids.length ? await db('provider_location_mappings').whereIn('location_id', ids) : [];
     const events = ids.length ? await db('provider_mapping_events').whereIn('location_id', ids).orderBy('revision', 'desc') : [];

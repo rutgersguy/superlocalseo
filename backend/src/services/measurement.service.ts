@@ -21,7 +21,7 @@ export function rankKey(r: Pick<RankObservation, 'keywordId' | 'locationId' | 's
 export function latestRanks(clientId: string, end: Date, start?: Date, locationId?: string) {
   return db('ranking_snapshots as rs')
     .join('keywords as k', 'rs.keyword_id', 'k.id')
-    .join('locations as l', 'rs.location_id', 'l.id')
+    .join('active_locations as l', 'rs.location_id', 'l.id')
     .where('l.client_id', clientId)
     .where('rs.pulled_at', '<', end)
     .modify(q => { if (start) q.where('rs.pulled_at', '>=', start); if (locationId) q.where('l.id', locationId); })
@@ -54,7 +54,7 @@ export interface CitationObservation {
 }
 
 export function latestCitations(clientId: string, end: Date, locationId?: string) {
-  return db('citation_snapshots as cs').join('locations as l', 'cs.location_id', 'l.id')
+  return db('citation_snapshots as cs').join('active_locations as l', 'cs.location_id', 'l.id')
     .where('l.client_id', clientId).where('cs.pulled_at', '<', end)
     .modify(q => { if (locationId) q.where('l.id', locationId); })
     .distinctOn('cs.location_id', 'cs.directory').select('cs.*')
@@ -130,7 +130,7 @@ export function estimateTraffic(rows: RankObservation[], cfg: { avgCustomerValue
 export async function citationHistory(clientId: string, days: number, locationId?: string) {
   const end = new Date();
   const start = new Date(end.getTime() - days * 86400000);
-  const rows = await db('citation_snapshots as cs').join('locations as l', 'cs.location_id', 'l.id')
+  const rows = await db('citation_snapshots as cs').join('active_locations as l', 'cs.location_id', 'l.id')
     .where('l.client_id', clientId).whereBetween('cs.pulled_at', [start, end])
     .modify(q => { if (locationId) q.where('l.id', locationId); })
     .select(db.raw("DISTINCT ON ((cs.pulled_at AT TIME ZONE 'UTC')::date, cs.location_id, cs.directory) cs.*"))

@@ -1,3 +1,4 @@
+import { catalog } from '../config/plans';
 import { planFor } from '../config/plans';
 import { assertResourcesMutable, limitError } from '../services/plan-usage';
 import { Request, Response, NextFunction } from 'express';
@@ -33,7 +34,7 @@ export async function list(req: Request, res: Response, next: NextFunction): Pro
     const { locationId } = req.query as { locationId?: string };
 
     let query = db('keywords')
-      .join('locations', 'keywords.location_id', 'locations.id')
+      .join('active_locations as locations', 'keywords.location_id', 'locations.id')
       .where('locations.client_id', req.clientId)
       .select('keywords.*');
 
@@ -53,7 +54,7 @@ export async function create(req: Request, res: Response, next: NextFunction): P
     const body = req.body as KeywordBody;
 
     // Verify the location belongs to this client
-    const location = await db('locations').where({ id: body.locationId, client_id: req.clientId }).first();
+    const location = await db('active_locations as locations').where({ id: body.locationId, client_id: req.clientId }).first();
     if (!location) {
       notFound(res, 'Location not found');
       return;
@@ -69,7 +70,7 @@ export async function create(req: Request, res: Response, next: NextFunction): P
       const existing = await trx('keywords').where({ location_id: body.locationId, keyword: body.keyword }).first();
       if (existing) return { keyword: existing, inserted: false };
       const count = Number((await trx('keywords').where({ location_id: body.locationId }).count('* as n').first())?.n ?? 0);
-      if (client.pricing_version === '2026-10' && count >= planFor(client).keywords) throw limitError(`Your plan includes ${planFor(client).keywords} keywords per location. Remove a keyword or upgrade to add more.`);
+      if (client.pricing_version === catalog.version && count >= planFor(client).keywords) throw limitError(`Your plan includes ${planFor(client).keywords} keywords per location. Remove a keyword or upgrade to add more.`);
       const [keyword] = await trx('keywords').insert({ location_id: body.locationId, keyword: body.keyword }).returning('*');
       return { keyword, inserted: true };
     });
@@ -101,7 +102,7 @@ export async function updateVolume(req: Request, res: Response, next: NextFuncti
     }).parse(req.body);
 
     const keyword = await db('keywords')
-      .join('locations', 'keywords.location_id', 'locations.id')
+      .join('active_locations as locations', 'keywords.location_id', 'locations.id')
       .where('keywords.id', id)
       .where('locations.client_id', req.clientId)
       .select('keywords.*')
@@ -132,7 +133,7 @@ export async function remove(req: Request, res: Response, next: NextFunction): P
 
     // Verify ownership via join
     const keyword = await db('keywords')
-      .join('locations', 'keywords.location_id', 'locations.id')
+      .join('active_locations as locations', 'keywords.location_id', 'locations.id')
       .where('keywords.id', id)
       .where('locations.client_id', req.clientId)
       .select('keywords.*')
