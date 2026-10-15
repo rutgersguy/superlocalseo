@@ -42,4 +42,13 @@ it('deduplicates verified events and returns retryable processing errors',async(
   } finally {Object.assign(config.stripe, {webhookSecret:prior});}
 });
 
+it.each(['incomplete', 'unpaid', 'paused', 'incomplete_expired'])('blocks feature access for %s while preserving billing recovery', async status => {
+  await db('clients').where({id:clientId}).update({subscription_status:status});
+  try {
+    const denied=await request(app).get('/api/locations').set('Authorization',`Bearer ${token}`);
+    expect(denied.status).toBe(402);expect(denied.body.code).toBe('SUBSCRIPTION_INACTIVE');
+    const billing=await request(app).get('/api/billing/status').set('Authorization',`Bearer ${token}`);expect(billing.status).toBe(200);
+  } finally {await db('clients').where({id:clientId}).update({subscription_status:'trialing'});}
+});
+
 });

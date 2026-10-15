@@ -16,7 +16,7 @@ function client(responses) {
   vm.runInNewContext(source, context);
   return context;
 }
-for (const code of ['TRIAL_EXPIRED', 'PAYMENT_OVERDUE', 'PAYMENT_FAILED', 'SUBSCRIPTION_CANCELED', 'SUBSCRIPTION_CANCELLED']) {
+for (const code of ['TRIAL_EXPIRED', 'PAYMENT_OVERDUE', 'PAYMENT_FAILED', 'SUBSCRIPTION_CANCELED', 'SUBSCRIPTION_CANCELLED', 'SUBSCRIPTION_INACTIVE']) {
   for (const nested of [false, true]) {
     test(`402 ${code}, ${nested ? 'nested' : 'flat'} error never becomes empty data`, async () => {
       const body = nested ? { success: false, error: { code, message: 'Access restricted' } }

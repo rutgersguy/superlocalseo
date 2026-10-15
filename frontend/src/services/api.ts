@@ -56,7 +56,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}, rawRespo
     const body = await res.json() as ApiFailure;
     const code = typeof body.error === 'object' ? body.error?.code : body.code;
     if (code && ['TRIAL_EXPIRED', 'PAYMENT_FAILED', 'PAYMENT_OVERDUE',
-      'SUBSCRIPTION_CANCELED', 'SUBSCRIPTION_CANCELLED'].includes(code)) {
+      'SUBSCRIPTION_CANCELED', 'SUBSCRIPTION_CANCELLED', 'SUBSCRIPTION_INACTIVE'].includes(code)) {
       window.location.href = '/billing';
     }
     throw new Error(failureMessage(body, 'Subscription access is restricted.'));

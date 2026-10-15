@@ -35,6 +35,11 @@ function checkBillingAccess(req: Request, res: Response, client: Record<string, 
     }
   }
 
+  if (status && !['active', 'trialing', 'past_due', 'canceled'].includes(status)) {
+    res.status(402).json({ success: false, error: 'Your subscription is not active. Open billing to resolve payment or choose a plan.', code: 'SUBSCRIPTION_INACTIVE' });
+    return false;
+  }
+
   if (status === 'canceled') {
     res.status(402).json({ success: false, error: 'Your subscription has been canceled. Resubscribe to continue.', code: 'SUBSCRIPTION_CANCELED' });
     return false;
