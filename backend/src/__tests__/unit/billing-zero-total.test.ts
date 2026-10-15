@@ -1,12 +1,13 @@
+jest.mock('../../services/stripe-catalog', () => ({ catalogPrice: jest.fn().mockResolvedValue({ id: 'price_catalog' }) }));
 const mockCreate = jest.fn();
-jest.mock('stripe', () => ({ __esModule: true, default: jest.fn(() => ({ subscriptions: { create: mockCreate } })) }));
+jest.mock('stripe', () => ({ __esModule: true, default: jest.fn(() => ({ subscriptions: { create: mockCreate }, promotionCodes: { retrieve: jest.fn().mockResolvedValue({ coupon: { metadata: {} } }) } })) }));
 jest.mock('../../db/connection', () => ({ db: jest.fn() }));
 jest.mock('../../services/email.service', () => ({ sendPaymentFailedEmail: jest.fn() }));
 jest.mock('../../services/emr_provisioning', () => ({ deprovisionClient: jest.fn() }));
 import { createSubscriptionIntent } from '../../services/stripe.service';
 
 beforeEach(() => jest.clearAllMocks());
-describe.each(['lite', 'pro'] as const)('%s checkout', plan => {
+describe.each(['starter', 'pro', 'multi'] as const)('%s checkout', plan => {
   const subscription = (invoice: object, status = 'active') => ({
     id: 'sub_qa', status, current_period_end: 1800000000, latest_invoice: invoice,
   });

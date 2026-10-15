@@ -1,10 +1,12 @@
+import { catalog, PlanKey, BillingInterval, isPlanKey, recurringAmount } from '../config/plans';
+import { catalogPrice, subscriptionDetails } from './stripe-catalog';
 import Stripe from 'stripe';
 import { randomUUID } from 'crypto';
 import { db } from '../db/connection';
 import { config } from '../config';
 import { stripe, syncPaidSubscription } from './stripe.service';
 
-export type BillingAction = 'upgrade' | 'add_location';
+export type BillingAction = 'upgrade' | 'add_location' | 'change_plan';
 function problem(message: string, status = 409): never { throw Object.assign(new Error(message), { status, code: 'BILLING_CHANGE' }); }
 const objectId = (value: string | { id: string } | null): string | null => typeof value === 'string' ? value : value?.id ?? null;
 export function subscriptionFingerprint(sub: Stripe.Subscription): string {
@@ -47,6 +49,8 @@ interface Quote {
   items: Stripe.SubscriptionUpdateParams.Item[]; promoCode: string; promotionId?: string;
   amountDue: number; currency: string; monthlyAmount: number; needsCard: boolean;
   discount: string | null;
+  targetPlan?: PlanKey; interval?: BillingInterval; recurringAmount?: number; targetCapacity?: number;
+  targetPriceId?: string; removeLocationIds?: string[]; locationFingerprint?: string; creditAmount?: number;
 }
 async function invoicePreview(sub: Stripe.Subscription, q: Pick<Quote, 'items' | 'prorationDate' | 'promotionId'>): Promise<Stripe.Invoice> {
   return stripe.invoices.createPreview({ customer: objectId(sub.customer)!, subscription: sub.id,
@@ -54,7 +58,21 @@ async function invoicePreview(sub: Stripe.Subscription, q: Pick<Quote, 'items' |
     ...(q.promotionId ? { discounts: [{ promotion_code: q.promotionId }] } : {}),
   });
 }
-export async function previewBillingChange(clientId: string, action: BillingAction, promoCode: string) {
+async function assertPlanResources(executor: typeof db, clientId: string, plan: PlanKey, targetCapacity: number, removeLocationIds: string[]) {
+  const target = catalog.plans[plan];
+  // Keep historical data on inaccessible features; require explicit cleanup for
+  // resources that remain usable but would exceed the destination plan's limits.
+  const remaining = (await executor('locations').where({ client_id: clientId }).whereNotIn('id', removeLocationIds).select('id')).map(l => l.id);
+  const keywordCounts = await executor('keywords').whereIn('location_id', remaining).groupBy('location_id').count('* as n');
+  if (keywordCounts.some(r => Number(r.n) > target.keywords)) problem(`Remove extra keywords first. ${target.name} allows ${target.keywords} per retained location.`);
+  const members = Number((await executor('team_members').where({ client_id: clientId }).where(q => q.whereNotNull('accepted_at').orWhere('invite_expires_at', '>', new Date())).count('* as n').first())?.n ?? 0);
+  if (members + 1 > target.teamSeats) problem(`Remove extra team members first. ${target.name} includes ${target.teamSeats} seats including the owner.`);
+  if (target.competitors > 0) {
+    const count = Number((await executor('competitors').where({ client_id: clientId }).count('* as n').first())?.n ?? 0);
+    if (count > target.competitors * targetCapacity) problem(`Remove extra competitors first. This capacity allows ${target.competitors * targetCapacity}.`);
+  }
+}
+export async function previewBillingChange(clientId: string, action: BillingAction, promoCode: string, options: { plan?: PlanKey; interval?: BillingInterval; capacity?: number; removeLocationIds?: string[] } = {}) {
   const client = await db('clients').where({ id: clientId }).first();
   if (!client) problem('Account not found.', 404);
   const sub = await subscription(client);
@@ -62,21 +80,40 @@ export async function previewBillingChange(clientId: string, action: BillingActi
     problem('Finish your pending billing change before starting another.');
   const customerId = objectId(sub.customer)!;
   const p = await promotion(promoCode, customerId);
-  const items = changeItems(sub, action);
+  const details = subscriptionDetails(sub);
+  if (client.pricing_version === 'legacy') problem('Your existing pricing is preserved. Contact support before changing your legacy plan.');
+  const targetPlan = options.plan ?? details?.plan ?? 'pro';
+  const interval = options.interval ?? details?.interval ?? 'month';
+  if (!isPlanKey(targetPlan) || !['month', 'year'].includes(interval)) problem('Choose a valid plan and billing interval.', 400);
+  const target = catalog.plans[targetPlan];
+  const targetCapacity = action === 'add_location' ? (details?.capacity ?? 1) + 1 : options.capacity ?? target.includedLocations;
+  if (!Number.isInteger(targetCapacity) || targetCapacity < target.includedLocations || targetCapacity > target.maxLocations) problem('Choose a valid number of locations for this plan.', 400);
+  const locations = await db('locations').where({ client_id: clientId }).orderBy('id').select('id', 'name');
+  const removeLocationIds = options.removeLocationIds ?? [];
+  if (new Set(removeLocationIds).size !== removeLocationIds.length || removeLocationIds.some(id => !locations.some(l => l.id === id)) || removeLocationIds.length !== Math.max(0, locations.length - targetCapacity)) problem('Select exactly which locations to remove before reducing capacity.', 400);
+  await assertPlanResources(db, clientId, targetPlan, targetCapacity, removeLocationIds);
+  const base = await catalogPrice(targetPlan, interval);
+  const oldBase = details?.base;
+  if (!oldBase) problem('This subscription uses legacy pricing. Contact support before changing it.');
+  const items: Stripe.SubscriptionUpdateParams.Item[] = [{ id: oldBase.id, price: base.id, quantity: 1 }];
+  const extras = targetCapacity - target.includedLocations;
+  const oldExtras = sub.items.data.filter(i => i.id !== oldBase.id);
+  items.push(...oldExtras.map(i => ({ id: i.id, deleted: true })));
+  if (extras) items.push({ price: (await catalogPrice(targetPlan, interval, true)).id, quantity: extras });
   const prorationDate = Math.floor(Date.now() / 1000);
   const preview = await invoicePreview(sub, { items, prorationDate, promotionId: p?.id });
-  const prices = await Promise.all([stripe.prices.retrieve(config.stripe.prices.base), stripe.prices.retrieve(config.stripe.prices.location)]);
-  const extras = (sub.items.data.find(i => i.price.id === config.stripe.prices.location)?.quantity ?? 0) + (action === 'add_location' ? 1 : 0);
   const quote: Quote = { action, fingerprint: subscriptionFingerprint(sub), customerId, items, prorationDate,
     promoCode: p?.code ?? '', promotionId: p?.id, amountDue: preview.amount_due, currency: preview.currency,
-    monthlyAmount: (prices[0].unit_amount ?? 0) + extras * (prices[1].unit_amount ?? 0), needsCard: preview.amount_due > 0 && !hasCard(sub),
+    targetPlan, interval, targetCapacity, targetPriceId: base.id, removeLocationIds, locationFingerprint: locations.map(l => l.id).join(','),
+    recurringAmount: recurringAmount(targetPlan, interval, extras), creditAmount: Math.max(0, -preview.total),
+    monthlyAmount: recurringAmount(targetPlan, 'month', extras), needsCard: preview.amount_due > 0 && !hasCard(sub),
     discount: p ? `${p.coupon.percent_off ? `${p.coupon.percent_off}% off` : 'Discount applied'} · ${p.coupon.duration === 'once' ? 'first invoice only' : p.coupon.duration === 'forever' ? 'ongoing' : `${p.coupon.duration_in_months} months`}` : null,
   };
   const id = randomUUID(); const expiresAt = new Date(Date.now() + 15 * 60000);
   await db('billing_changes').insert({ id, client_id: clientId, subscription_id: sub.id, quote: JSON.stringify(quote), expires_at: expiresAt });
   return { id, ...publicQuote(quote), expiresAt };
 }
-function publicQuote(q: Quote) { return { action: q.action, amountDue: q.amountDue, currency: q.currency, monthlyAmount: q.monthlyAmount, needsCard: q.needsCard, discount: q.discount }; }
+function publicQuote(q: Quote) { return { action: q.action, amountDue: q.amountDue, currency: q.currency, monthlyAmount: q.monthlyAmount, needsCard: q.needsCard, discount: q.discount, targetPlan: q.targetPlan, interval: q.interval, recurringAmount: q.recurringAmount, targetCapacity: q.targetCapacity, removeLocationIds: q.removeLocationIds, creditAmount: q.creditAmount }; }
 async function lockedQuote(trx: typeof db, clientId: string, quoteId: string) {
   const client = await trx('clients').where({ id: clientId }).forUpdate().first();
   const row = await trx('billing_changes').where({ id: quoteId, client_id: clientId }).forUpdate().first();
@@ -106,6 +143,11 @@ export async function confirmBillingChange(clientId: string, quoteId: string) {
     if (other) problem('Another billing change is in progress. Finish it first.');
     const sub = await subscription(client);
     if (sub.pending_update || subscriptionFingerprint(sub) !== quote.fingerprint) problem('Your subscription changed. Request a new preview.');
+    if (quote.locationFingerprint !== undefined) {
+      const locations = await trx('locations').where({ client_id: clientId }).orderBy('id').select('id');
+      if (locations.map(l => l.id).join(',') !== quote.locationFingerprint) problem('Your locations changed. Request a new preview and choose locations again.');
+    }
+    if (quote.targetPlan && quote.targetCapacity) await assertPlanResources(trx, clientId, quote.targetPlan, quote.targetCapacity, quote.removeLocationIds ?? []);
     await promotion(quote.promoCode, quote.customerId);
     const preview = await invoicePreview(sub, quote);
     if (preview.amount_due !== quote.amountDue || preview.currency !== quote.currency) problem('The amount changed. Request a new preview before confirming.');

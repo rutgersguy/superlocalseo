@@ -371,6 +371,7 @@ function rankColor(rank: number | null): string {
 }
 
 function GeoGridPanel() {
+  const { client } = useClient();
   const [selectedLocationId, setSelectedLocationId] = useState('');
   const [selectedKeywordId, setSelectedKeywordId] = useState('');
   const [triggering, setTriggering] = useState(false);
@@ -413,7 +414,7 @@ function GeoGridPanel() {
     try {
       const res = await apiFetch('/geo-grid', {
         method: 'POST',
-        body: JSON.stringify({ locationId: selectedLocationId, keywordId: selectedKeywordId }),
+        body: JSON.stringify({ locationId: selectedLocationId, keywordId: selectedKeywordId, gridSize: client?.limits?.gridSize ?? 7 }),
       }) as { success?: boolean; data?: { report?: GeoReport }; error?: { message?: string } };
       if (!res.success) {
         setTriggerError(res.error?.message ?? 'Failed to start scan');
@@ -532,7 +533,7 @@ function GeoGridPanel() {
 
 export default function Rankings() {
   const { isLite, client, loading: planLoading, mutate: mutateClient } = useClient();
-  // Lite gets a single manual scan so a new client isn't stuck waiting for the nightly
+  // Starter gets a single manual scan so a new client isn't stuck waiting for the nightly
   // job; once spent, the button goes away and only the nightly scan applies.
   const liteScanAvailable = isLite && client?.manualScanUsed === false;
   const [searchParams] = useSearchParams();
@@ -560,8 +561,8 @@ export default function Rankings() {
       if (result.data.length < 200) return { success: true, data: all };
     }
   });
-  // ROI is a Pro feature (backend gates /analytics/roi) — don't fetch it for Lite.
-  // Wait for the plan to load so a Lite user doesn't fire a transient 403.
+  // ROI is a Pro feature (backend gates /analytics/roi) — don't fetch it for Starter.
+  // Wait for the plan to load so a Starter user doesn't fire a transient 403.
   const { data: roiData, mutate: roiMutate } = useSWR<{ success: boolean; data: RoiData }>(planLoading || isLite ? null : '/analytics/roi', fetcher);
   const { data: allKwData, mutate: mutateAllKw } = useSWR<KeywordsListResponse>('/keywords', fetcher);
   const { data: locData, isLoading: locLoading } = useSWR<LocationsResponse>('/locations', fetcher);
@@ -621,7 +622,7 @@ export default function Rankings() {
       if (isOk) {
         await mutateRankings();
         await mutateAllKw();
-        // Lite's single scan may now be spent — refetch so the button reflects that.
+        // Starter's single scan may now be spent — refetch so the button reflects that.
         if (isLite) mutateClient();
       }
     } catch (e) {
@@ -682,6 +683,7 @@ export default function Rankings() {
           >
             Keywords
           </button>
+          {isLite && <a href="/dashboard/settings?tab=billing&upgrade=1" className="text-xs text-brand-700 underline">🔒 ROI and CSV exports · upgrade</a>}
           {!isLite && (
             <button
               onClick={() => setShowRoi((v) => !v)}
@@ -779,8 +781,8 @@ export default function Rankings() {
             Rankings Table
           </span>
         </button>
-        {/* Visibility Map (geo-grid) is Pro-only */}
-        {!isLite && (
+        {/* Starter has a small map; legacy Starter keeps its existing gate. */}
+        {(!isLite || client?.pricingVersion === '2026-10') && (
           <button onClick={() => setMainTab('map')}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${mainTab === 'map' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
             <span className="flex items-center gap-1.5">

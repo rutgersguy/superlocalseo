@@ -1,3 +1,4 @@
+import { reserveUsage } from '../services/plan-usage';
 import { pollWebsiteCrawls } from '../services/website_crawl.service';
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
@@ -71,6 +72,7 @@ export async function trigger(req: Request, res: Response, next: NextFunction): 
       }
     }
 
+    await reserveUsage(req.clientId, location.id as string, 'websiteAudits');
     // BrightLocal NAP/citation audit — only runs if location has a campaign ID (Management API, paid plan).
     let reportId: string | null = null;
     if (location.brightlocal_campaign_id) {

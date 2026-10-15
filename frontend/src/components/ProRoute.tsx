@@ -3,8 +3,8 @@ import { useClient } from '../hooks/useClient';
 import { ProGate } from './ProGate';
 
 /**
- * Route guard for Pro-only dashboard pages. The nav already hides these for Lite,
- * but a Lite user can still reach them by typing the URL — without this they'd see
+ * Route guard for Pro-only dashboard pages. The nav already hides these for Starter,
+ * but a Starter user can still reach them by typing the URL — without this they'd see
  * the full page with 403'd data. Renders the ProGate upgrade prompt instead.
  * Admins (productLine resolves to 'pro') pass through.
  */

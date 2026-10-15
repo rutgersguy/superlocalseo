@@ -1,11 +1,13 @@
+import { PlanPicker } from './PlanPicker';
+import { usePlans, PlanKey, BillingInterval } from '../hooks/usePlans';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
 import { useSWRConfig } from 'swr';
 import { apiFetch } from '../services/api';
 
-type Action = 'upgrade' | 'add_location';
-interface Preview { id: string; action: Action; amountDue: number; currency: string; monthlyAmount: number; needsCard: boolean; discount: string | null }
+type Action = 'upgrade' | 'add_location' | 'change_plan';
+interface Preview { id: string; action: Action; amountDue: number; currency: string; monthlyAmount: number; needsCard: boolean; discount: string | null; targetPlan: PlanKey; interval: BillingInterval; recurringAmount: number; targetCapacity: number; removeLocationIds: string[]; creditAmount: number }
 interface Result { status: string; clientSecret: string | null; publishableKey?: string }
 const money = (cents: number, currency: string) => new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(cents / 100);
 async function request<T>(url: string, method = 'GET', body?: unknown): Promise<T> {
@@ -34,9 +36,15 @@ function CardForm({ mode, onDone }: { mode: 'setup' | 'payment'; onDone: () => P
     </button>
   </form>;
 }
-export function BillingChanges({ isLite, publishableKey, onLocations }: { isLite: boolean; publishableKey: string | null; onLocations: () => void }) {
+export function BillingChanges({ currentPlan, currentInterval, capacity, locations, publishableKey, onLocations }: { currentPlan: PlanKey; currentInterval: BillingInterval; capacity: number; locations: Array<{id: string; name: string}>; publishableKey: string | null; onLocations: () => void }) {
+  const { data: catalogData } = usePlans(); const catalog = catalogData?.data;
+  const [targetPlan, setTargetPlan] = useState<PlanKey>(currentPlan);
+  const [interval, setInterval] = useState<BillingInterval>(currentInterval);
+  const [targetCapacity, setTargetCapacity] = useState(capacity);
+  const [removeIds, setRemoveIds] = useState<string[]>([]);
+  const removalCount = Math.max(0, locations.length - targetCapacity);
   const { mutate } = useSWRConfig();
-  const [action, setAction] = useState<Action | null>(() => new URLSearchParams(location.search).has('upgrade') ? 'upgrade' : null);
+  const [action, setAction] = useState<Action | null>(() => new URLSearchParams(location.search).has('upgrade') ? 'change_plan' : null);
   const [promo, setPromo] = useState(''); const [quote, setQuote] = useState<Preview | null>(null);
   const [result, setResult] = useState<Result | null>(null); const [setupSecret, setSetupSecret] = useState<string | null>(null);
   const [cardSaved, setCardSaved] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
@@ -65,34 +73,39 @@ export function BillingChanges({ isLite, publishableKey, onLocations }: { isLite
   }
   const pending = result?.status === 'payment_required' || result?.status === 'confirming';
   return <section aria-label="Change subscription" className="rounded-xl border border-brand-200 bg-brand-50/30 p-5 space-y-4">
-    <div>
-      <h3 className="font-semibold text-slate-900">{isLite ? 'Upgrade to Pro' : 'Additional locations'}</h3>
-      <p className="text-sm text-slate-600 mt-1">{isLite
-        ? 'Pro is $349/mo and adds competitor analysis, listings, geo-grid, audits, QR codes, and team access. No setup fee.'
-        : 'Each additional location is $125/mo. Preview the prorated charge before adding capacity, then enter the location details.'}</p>
-    </div>
+    <div><h3 className="font-semibold text-slate-900">Change plan or locations</h3><p className="text-sm text-slate-600">Choose a plan and interval, then review the exact prorated amount before confirming.</p></div>
     {success && <div role="status" className="rounded-lg bg-green-50 p-3 text-green-800 text-sm">
-      {success === 'upgrade' ? 'You’re on Pro. Your new features are available now.' : 'Location capacity added. You can now enter the new location details.'}
+      Your subscription has been updated. Your plan features and location capacity are available now.
       {success === 'add_location' && <button onClick={onLocations} className="block underline mt-2">Add location details</button>}
     </div>}
-    {!action && <button onClick={() => { setAction(isLite ? 'upgrade' : 'add_location'); setSuccess(null); }} className="rounded-lg bg-brand-500 text-white px-4 py-2 text-sm font-semibold">
-      {isLite ? 'Upgrade to Pro' : 'Add location ($125/mo)'}
-    </button>}
+    {!action && <div className="flex gap-3"><button onClick={() => { setAction('change_plan'); setSuccess(null); setTargetPlan(currentPlan); setInterval(currentInterval); setTargetCapacity(capacity); setRemoveIds([]); }} className="rounded-lg bg-brand-500 text-white px-4 py-2">Change plan or billing interval</button>
+      {currentPlan !== 'starter' && <button onClick={() => { setAction('add_location'); setSuccess(null); setTargetPlan(currentPlan); setInterval(currentInterval); setTargetCapacity(capacity + 1); setRemoveIds([]); }} className="rounded-lg border border-brand-400 px-4 py-2">Add location</button>}</div>}
     {action && <div className="space-y-4">
+      {!pending && catalog && <div className="space-y-4">
+        {action !== 'add_location' && <PlanPicker plan={targetPlan} interval={interval} disabled={busy} onPlan={p => { setTargetPlan(p); setTargetCapacity(catalog.plans[p].includedLocations); setRemoveIds([]); setQuote(null); }} onInterval={v => { setInterval(v); setQuote(null); }} />}
+        <label className="block text-sm">Total location capacity<input aria-label="Total location capacity" type="number" min={catalog.plans[targetPlan].includedLocations} max={catalog.plans[targetPlan].maxLocations} value={targetCapacity} disabled={busy || action === 'add_location'} onChange={e => { setTargetCapacity(Number(e.target.value)); setRemoveIds([]); setQuote(null); }} className="block border rounded-lg p-2 mt-1" /></label>
+        {removalCount > 0 && <fieldset className="rounded-lg border border-amber-300 p-4 space-y-2"><legend>Choose {removalCount} location{removalCount > 1 ? 's' : ''} to remove</legend>
+          <p className="text-sm text-amber-800">These locations and their stored location data will be permanently deleted only after you confirm and the billing change succeeds. Export any data you need first. We never choose locations for you.</p>
+          {locations.map(l => <label key={l.id} className="flex gap-2"><input type="checkbox" checked={removeIds.includes(l.id)} onChange={e => { setRemoveIds(e.target.checked ? [...removeIds, l.id] : removeIds.filter(id => id !== l.id)); setQuote(null); }} />{l.name}</label>)}
+        </fieldset>}
+      </div>}
       {!pending && <div className="flex flex-wrap items-end gap-3">
         <label className="text-sm text-slate-700">Promo code (optional)
           <input aria-label="Promo code" value={promo} onChange={e => { setPromo(e.target.value); setQuote(null); setSetupSecret(null); setCardSaved(false); }} disabled={busy} className="block rounded-lg border border-slate-300 px-3 py-2 mt-1" />
         </label>
-        <button disabled={busy} onClick={() => void run(async () => {
-          const next = await request<Preview>('/billing/changes/preview', 'POST', { action, promoCode: promo });
+        <button disabled={busy || removeIds.length !== removalCount} onClick={() => void run(async () => {
+          const next = await request<Preview>('/billing/changes/preview', 'POST', { action, promoCode: promo, plan: targetPlan, interval, capacity: targetCapacity, removeLocationIds: removeIds });
           setQuote(next); setResult(null); setSetupSecret(null); setCardSaved(false);
         })} className="rounded-lg border border-brand-400 px-4 py-2 text-brand-700 disabled:opacity-50">{busy ? 'Loading…' : 'Preview change'}</button>
       </div>}
       {quote && <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
         <dl className="space-y-2 text-sm">
           <div className="flex justify-between gap-4"><dt>Prorated amount due today</dt><dd data-testid="change-due-today" className="font-semibold">{money(quote.amountDue, quote.currency)}</dd></div>
-          <div className="flex justify-between gap-4"><dt>New monthly price before discounts</dt><dd className="font-semibold">{money(quote.monthlyAmount, quote.currency)}/mo</dd></div>
+          <div className="flex justify-between gap-4"><dt>New recurring price before discounts</dt><dd className="font-semibold">{money(quote.recurringAmount, quote.currency)}/{quote.interval === 'year' ? 'year' : 'month'}</dd></div>
         </dl>
+        {quote.interval === 'year' && <p className="text-sm text-brand-700">Two months free: twelve months for the price of ten, billed annually upfront. Includes extra locations.</p>}
+        {quote.creditAmount > 0 && <p className="text-sm">Prorated credit: {money(quote.creditAmount, quote.currency)}. Credits are applied by Stripe to invoices, not automatically refunded to your card.</p>}
+        {!!quote.removeLocationIds?.length && <p className="text-sm text-red-700">Confirming permanently removes: {locations.filter(l => quote.removeLocationIds.includes(l.id)).map(l => l.name).join(', ')}.</p>}
         {quote.discount && <p className="text-sm text-green-700">{quote.discount}</p>}
         {quote.amountDue === 0 && <p className="text-sm text-green-700">No payment or card is needed today.</p>}
         {!pending && <p className="text-xs text-slate-500">This preview is valid for 15 minutes. Your subscription changes only when you confirm. Future invoices follow your plan and discount terms.</p>}
@@ -108,7 +121,7 @@ export function BillingChanges({ isLite, publishableKey, onLocations }: { isLite
         {cardSaved && <p className="text-sm text-green-700">Card saved. Review the amount and confirm below.</p>}
         {(!pending || result?.status === 'confirming') && <button disabled={busy || (!pending && quote.needsCard && !cardSaved)} className="rounded-lg bg-brand-500 px-4 py-2 text-white disabled:opacity-50" onClick={() => void run(async () => {
           await completed(await request<Result>(`/billing/changes/${quote.id}/confirm`, 'POST'));
-        })}>{busy ? 'Confirming…' : result?.status === 'confirming' ? 'Retry confirmation' : `Confirm ${action === 'upgrade' ? 'upgrade' : 'additional location'} · ${money(quote.amountDue, quote.currency)} today`}</button>}
+        })}>{busy ? 'Confirming…' : result?.status === 'confirming' ? 'Retry confirmation' : `Confirm ${action === 'add_location' ? 'additional location' : 'plan change'} · ${money(quote.amountDue, quote.currency)} today`}</button>}
         {result?.status === 'payment_required' && <div className="space-y-3">
           <p className="text-sm text-slate-600">Complete payment to apply this change. Your current plan remains available.</p>
           {result.clientSecret && stripePromise && <Elements stripe={stripePromise} options={{ clientSecret: result.clientSecret }} key={result.clientSecret}>

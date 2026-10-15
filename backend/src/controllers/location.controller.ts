@@ -101,6 +101,7 @@ export async function create(req: Request, res: Response, next: NextFunction): P
     // Lock the client so two requests cannot both consume the last paid slot.
     const location = await db.transaction(async trx => {
       const current = await trx('clients').where({ id: req.clientId }).forUpdate().first();
+      if (await trx('billing_changes').where({ client_id: req.clientId }).whereIn('status', ['confirming', 'payment_required']).first()) throw Object.assign(new Error('Finish the pending billing change before editing locations.'), { status: 409 });
       const count = await trx('locations').where({ client_id: req.clientId }).count('id as cnt').first();
       const existingCount = Number(count?.cnt ?? 0);
       if (existingCount >= (current.locations_limit ?? 1)) {
@@ -279,6 +280,7 @@ export async function remove(req: Request, res: Response, next: NextFunction): P
 
     await db.transaction(async trx => {
       const current = await trx('clients').where({ id: req.clientId }).forUpdate().first();
+      if (await trx('billing_changes').where({ client_id: req.clientId }).whereIn('status', ['confirming', 'payment_required']).first()) throw Object.assign(new Error('Finish the pending billing change before editing locations.'), { status: 409 });
       const target = await trx('locations').where({ id, client_id: req.clientId }).first();
       if (!target) return;
       const count = await trx('locations').where({ client_id: req.clientId }).count('id as cnt').first();

@@ -53,11 +53,11 @@ describe('private feedback management authorization and recovery', () => {
     expect(JSON.stringify(result.body)).not.toContain('secret@example.com');
   });
   it('blocks Lite CSV export while keeping the feedback inbox available', async () => {
-    await db('clients').where({ id: clientId }).update({ product_line: 'lite' });
+    await db('clients').where({ id: clientId }).update({ product_line: 'lite', plan_key: 'starter', subscription_status: 'active' });
     try {
       expect((await request(app).get('/api/reviews/feedback/export').set('Authorization', `Bearer ${token}`)).status).toBe(403);
       expect((await request(app).get('/api/reviews/feedback').set('Authorization', `Bearer ${token}`)).status).toBe(200);
-    } finally { await db('clients').where({ id: clientId }).update({ product_line: 'pro' }); }
+    } finally { await db('clients').where({ id: clientId }).update({ product_line: 'pro', plan_key: 'pro', subscription_status: 'trialing' }); }
   });
   it('exports only tenant rows with masked contacts and no internal notes', async () => {
     const result = await request(app).get('/api/reviews/feedback/export?status=in_progress').set('Authorization', `Bearer ${token}`);

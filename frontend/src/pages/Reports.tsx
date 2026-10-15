@@ -379,7 +379,7 @@ function DataExports() {
   const { productLine } = useClient();
 
   // CSV exports are Pro (PRICING.md and the landing page both say so). The
-  // backend gates /reports/export/* — this stops Lite being offered four
+  // backend gates /reports/export/* — this stops Starter being offered four
   // buttons that 403. Hiding the card rather than disabling it: an upsell for a
   // feature they did not know existed reads as a nag.
   if (!canUseFeature(productLine, 'csvExport')) return null;

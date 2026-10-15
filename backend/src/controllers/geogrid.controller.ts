@@ -1,3 +1,5 @@
+import { planFor } from '../config/plans';
+import { reserveUsage, limitError } from '../services/plan-usage';
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
@@ -13,7 +15,7 @@ const POLL_INTERVAL_MS = 5000;
 const triggerSchema = z.object({
   locationId: z.string().uuid(),
   keywordId: z.string().uuid(),
-  gridSize: z.union([z.literal(7), z.literal(13)]).optional().default(7),
+  gridSize: z.union([z.literal(3), z.literal(7), z.literal(13)]).optional().default(7),
 });
 
 export async function trigger(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -22,6 +24,7 @@ export async function trigger(req: Request, res: Response, next: NextFunction): 
     if (!parsed.success) { err(res, parsed.error.errors[0]?.message ?? 'Validation error', 400, 'VALIDATION_ERROR'); return; }
 
     const { locationId, keywordId, gridSize } = parsed.data;
+    if (req.client.pricing_version === '2026-10' && gridSize > planFor(req.client).gridSize) throw limitError('Starter includes a 3×3 map. Upgrade for a larger geo-grid.');
 
     const location = await db('locations')
       .where({ id: locationId, client_id: req.clientId })
@@ -30,10 +33,11 @@ export async function trigger(req: Request, res: Response, next: NextFunction): 
     if (!location.lat || !location.lng) { err(res, 'Location has no coordinates — add lat/lng in Locations settings', 422, 'NO_COORDINATES'); return; }
 
     const keyword = await db('keywords')
-      .where({ id: keywordId })
+      .where({ id: keywordId, location_id: locationId })
       .first() as { id: string; keyword: string } | undefined;
     if (!keyword) { err(res, 'Keyword not found', 404, 'NOT_FOUND'); return; }
 
+    await reserveUsage(req.clientId, locationId, 'gridScans');
     const [row] = await db('geo_grid_reports').insert({
       client_id: req.clientId,
       location_id: locationId,
@@ -64,7 +68,7 @@ async function runGeoGrid(
   keyword: string,
   centerLat: number,
   centerLng: number,
-  gridSize: 7 | 13,
+  gridSize: 3 | 7 | 13,
   locationMeta: { name: string; website?: string | null; phone?: string | null; zip?: string | null; city?: string | null; state?: string | null },
 ): Promise<void> {
   try {

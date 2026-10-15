@@ -1,3 +1,5 @@
+import { catalog, PlanKey, BillingInterval } from '../config/plans';
+import { catalogPrice, subscriptionDetails } from './stripe-catalog';
 import Stripe from 'stripe';
 import { config } from '../config';
 import { db } from '../db/connection';
@@ -15,7 +17,7 @@ export async function createCustomer(email: string, _name?: string): Promise<str
 export async function addLocationToSubscription(subscriptionId: string, _tier?: number): Promise<void> {
   if (!subscriptionId || !config.stripe.prices.location) return;
   const sub = await stripe.subscriptions.retrieve(subscriptionId, { expand: ['items'] });
-  const existing = sub.items.data.find((i) => i.price.id === config.stripe.prices.location);
+  const existing = sub.items.data.find((i) => i.price.metadata?.kind === 'location' || i.price.id === config.stripe.prices.location);
   if (existing) {
     await stripe.subscriptionItems.update(existing.id, { quantity: (existing.quantity ?? 0) + 1, proration_behavior: 'create_prorations' });
   } else {
@@ -27,7 +29,7 @@ export async function removeLocationFromSubscription(subscriptionId: string, _ti
   if (!subscriptionId || !config.stripe.prices.location) return;
   const sub = await stripe.subscriptions.retrieve(subscriptionId, { expand: ['items'] });
   if (sub.pending_update) throw Object.assign(new Error('Finish the pending billing change before removing a location.'), { status: 409 });
-  const existing = sub.items.data.find((i) => i.price.id === config.stripe.prices.location);
+  const existing = sub.items.data.find((i) => i.price.metadata?.kind === 'location' || i.price.id === config.stripe.prices.location);
   if (!existing) return;
   if ((existing.quantity ?? 1) <= 1) {
     await stripe.subscriptionItems.del(existing.id, { proration_behavior: 'create_prorations' }, { idempotencyKey });
@@ -39,7 +41,7 @@ export async function removeLocationFromSubscription(subscriptionId: string, _ti
 export async function getOrCreateStripeCustomer(userId: string, email: string, executor: typeof db = db): Promise<string> {
   const user = await executor('users').where({ id: userId }).first();
   if (user?.stripe_customer_id) return user.stripe_customer_id as string;
-  const customer = await stripe.customers.create({ email, metadata: { userId } });
+  const customer = await stripe.customers.create({ email, metadata: { userId } }, { idempotencyKey: `customer-${userId}` });
   await executor('users').where({ id: userId }).update({ stripe_customer_id: customer.id });
   return customer.id;
 }
@@ -124,7 +126,8 @@ export async function createPromoCode(params: CreatePromoParams): Promise<{ id: 
   if (params.applyTo === 'monthly' && config.stripe.prices.base) {
     const basePrice = await stripe.prices.retrieve(config.stripe.prices.base);
     const productId = typeof basePrice.product === 'string' ? basePrice.product : basePrice.product.id;
-    appliesTo = { products: [productId] };
+    const currentProducts = await Promise.all((Object.keys(catalog.plans) as PlanKey[]).map(async plan => { const price = await catalogPrice(plan, 'month'); return typeof price.product === 'string' ? price.product : price.product.id; }));
+    appliesTo = { products: [...new Set([productId, ...currentProducts])] };
   }
 
   const couponParams: Stripe.CouponCreateParams = {
@@ -169,6 +172,7 @@ interface SubscriptionIntentResult {
   subscriptionId: string;
   paymentRequired: boolean;
   currentPeriodEnd: number;
+  amountDue: number;
 }
 
 function subscriptionIntentResult(sub: Stripe.Subscription): SubscriptionIntentResult {
@@ -186,6 +190,7 @@ function subscriptionIntentResult(sub: Stripe.Subscription): SubscriptionIntentR
     subscriptionId: sub.id,
     paymentRequired: !noPaymentRequired,
     currentPeriodEnd: sub.current_period_end,
+    amountDue: invoice?.amount_due ?? 0,
   };
 }
 
@@ -194,86 +199,24 @@ export async function createSubscriptionIntent(
   extraLocations: number,
   userId: string,
   promotionCodeId?: string,
-  plan: 'lite' | 'pro' = 'pro',
+  plan: PlanKey | 'lite' = 'pro',
+  interval: BillingInterval = 'month',
+  idempotencyKey?: string,
 ): Promise<SubscriptionIntentResult> {
-  if (plan === 'lite') {
-    // Lite: single recurring item, no setup fee, no extra locations.
-    const sub = await stripe.subscriptions.create({
-      customer: customerId,
-      items: [{ price: config.stripe.prices.liteBase! }],
-      payment_behavior: 'default_incomplete',
-      payment_settings: { save_default_payment_method: 'on_subscription' },
-      expand: ['latest_invoice.payment_intent'],
-      metadata: { userId, extraLocations: '0', plan: 'lite' },
-      ...(promotionCodeId ? { promotion_code: promotionCodeId } : {}),
-    });
-    return subscriptionIntentResult(sub);
+  if (promotionCodeId) {
+    const promo = await stripe.promotionCodes.retrieve(promotionCodeId);
+    if (promo.coupon.metadata?.applyTo === 'setup') throw Object.assign(new Error('This promo only applies to setup fees. These plans have no setup fee.'), { status: 400, type: 'StripeInvalidRequestError' });
   }
-
-  const items: Stripe.SubscriptionCreateParams.Item[] = [
-    { price: config.stripe.prices.base! },
-  ];
-  if (extraLocations > 0 && config.stripe.prices.location) {
-    items.push({ price: config.stripe.prices.location, quantity: extraLocations });
-  }
-
-  // The $499 setup fee is waived by default. The whole setup-fee block (including the
-  // setup-fee-only promo handling) only runs when STRIPE_SETUP_FEE_ENABLED=true.
-  const chargeSetupFee = config.stripe.setupFeeEnabled && !!config.stripe.prices.setup;
-
-  // Determine if this promo is setup-fee-only, which requires special handling:
-  // - Do NOT apply promotion_code to the subscription (that would discount monthly charges)
-  // - Instead, compute the discounted setup fee and inject it inline
-  let setupOnlyDiscount = false;
-  let setupInvoiceItems: Stripe.SubscriptionCreateParams.AddInvoiceItem[] = [];
-
-  if (chargeSetupFee && promotionCodeId && config.stripe.prices.setup) {
-    const promoCode = await stripe.promotionCodes.retrieve(promotionCodeId, { expand: ['coupon'] });
-    const coupon = promoCode.coupon as Stripe.Coupon;
-    const applyTo = (coupon.metadata?.applyTo as string | undefined) ?? 'all';
-
-    if (applyTo === 'setup') {
-      setupOnlyDiscount = true;
-      const setupPrice = await stripe.prices.retrieve(config.stripe.prices.setup);
-      const unitAmount = setupPrice.unit_amount ?? 0;
-      let discountedAmount = unitAmount;
-      if (coupon.percent_off) {
-        discountedAmount = Math.round(unitAmount * (1 - coupon.percent_off / 100));
-      } else if (coupon.amount_off) {
-        discountedAmount = Math.max(0, unitAmount - coupon.amount_off);
-      }
-      if (discountedAmount > 0) {
-        setupInvoiceItems = [{
-          price_data: {
-            currency: setupPrice.currency,
-            product: typeof setupPrice.product === 'string' ? setupPrice.product : setupPrice.product.id,
-            unit_amount: discountedAmount,
-          },
-        }];
-      }
-      // discountedAmount === 0 means free setup — omit the item entirely
-    } else {
-      setupInvoiceItems = config.stripe.prices.setup
-        ? [{ price: config.stripe.prices.setup }]
-        : [];
-    }
-  } else if (chargeSetupFee) {
-    setupInvoiceItems = config.stripe.prices.setup
-      ? [{ price: config.stripe.prices.setup }]
-      : [];
-  }
-
+  const base = await catalogPrice(plan === 'lite' ? 'starter' : plan, interval);
+  const items: Stripe.SubscriptionCreateParams.Item[] = [{ price: base.id }];
+  if (extraLocations > 0) items.push({ price: (await catalogPrice(plan as PlanKey, interval, true)).id, quantity: extraLocations });
   const sub = await stripe.subscriptions.create({
-    customer: customerId,
-    items,
-    add_invoice_items: setupInvoiceItems,
-    payment_behavior: 'default_incomplete',
+    customer: customerId, items, payment_behavior: 'default_incomplete',
     payment_settings: { save_default_payment_method: 'on_subscription' },
     expand: ['latest_invoice.payment_intent'],
-    metadata: { userId, extraLocations: String(extraLocations), plan: 'pro' },
-    ...(!setupOnlyDiscount && promotionCodeId ? { promotion_code: promotionCodeId } : {}),
-  });
-
+    metadata: { userId, extraLocations: String(extraLocations), plan, catalogVersion: catalog.version },
+    ...(promotionCodeId ? { promotion_code: promotionCodeId } : {}),
+  }, idempotencyKey ? { idempotencyKey } : undefined);
   return subscriptionIntentResult(sub);
 }
 
@@ -283,6 +226,8 @@ export async function getBillingPortalUrl(customerId: string, returnUrl: string)
 }
 
 function subscriptionPlan(sub: Stripe.Subscription): 'lite' | 'pro' | undefined {
+  const current = subscriptionDetails(sub);
+  if (current) return current.plan === 'starter' ? 'lite' : 'pro';
   if (sub.items.data.some(i => i.price.id === config.stripe.prices.base)) return 'pro';
   if (sub.items.data.some(i => i.price.id === config.stripe.prices.liteBase)) return 'lite';
   return sub.metadata?.plan === 'lite' || sub.metadata?.plan === 'pro' ? sub.metadata.plan : undefined;
@@ -296,8 +241,23 @@ export async function syncPaidSubscription(subscriptionId: string, executor: typ
   const plan = subscriptionPlan(sub);
   if (!plan) return false;
   const extra = sub.items.data.find(i => i.price.id === config.stripe.prices.location)?.quantity ?? 0;
+  const details = subscriptionDetails(sub);
+  if (details && executor === db) return db.transaction(trx => syncPaidSubscription(subscriptionId, trx));
+  if (details) await executor('clients').where({ stripe_subscription_id: sub.id }).forUpdate().first();
+  const change = details ? await executor('billing_changes').where({ subscription_id: sub.id }).whereIn('status', ['confirming', 'payment_required']).whereNotNull('confirmed_at').orderBy('created_at', 'desc').first() : null;
+  if (change && details && change.quote.targetPriceId === details.base.price.id && details.capacity === change.quote.targetCapacity && (!change.invoice_id || change.invoice_id === invoice.id)) {
+    if (change.quote.removeLocationIds?.length) {
+      await executor('locations').where({ client_id: change.client_id }).whereIn('id', change.quote.removeLocationIds).delete();
+      if (!await executor('locations').where({ client_id: change.client_id, is_primary: true }).first()) {
+        const first = await executor('locations').where({ client_id: change.client_id }).orderBy('created_at').first();
+        if (first) await executor('locations').where({ id: first.id }).update({ is_primary: true });
+      }
+    }
+    await executor('billing_changes').where({ id: change.id }).update({ status: 'succeeded', invoice_id: invoice.id, updated_at: new Date() });
+  }
   await executor('clients').where({ stripe_subscription_id: sub.id }).update({
-    subscription_status: 'active', product_line: plan, locations_limit: plan === 'lite' ? 1 : 1 + extra,
+    subscription_status: 'active', product_line: plan, locations_limit: details?.capacity ?? (plan === 'lite' ? 1 : 1 + extra),
+    ...(details ? { plan_key: details.plan, pricing_version: catalog.version, billing_interval: details.interval } : {}),
     subscription_current_period_end: new Date(sub.current_period_end * 1000), payment_failed_at: null, updated_at: new Date(),
   });
   return true;
@@ -390,20 +350,7 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
         ? sub.latest_invoice : sub.latest_invoice?.id;
       if (sub.status !== 'active' || sub.pending_update || latestInvoiceId !== inv.id) break;
 
-      let planUpdate: { product_line?: 'lite' | 'pro'; locations_limit?: number } = {};
-      const plan = subscriptionPlan(sub);
-      if (plan === 'lite' || plan === 'pro') {
-        const locationItem = sub.items.data.find((i) => i.price.id === config.stripe.prices.location);
-        const extra = locationItem?.quantity ?? 0;
-        planUpdate = { product_line: plan, locations_limit: plan === 'lite' ? 1 : 1 + extra };
-      }
-
-      await db('clients').where({ stripe_subscription_id: subId }).update({
-        subscription_status: 'active',
-        payment_failed_at: null,
-        ...planUpdate,
-        updated_at: new Date(),
-      });
+      await syncPaidSubscription(subId);
       break;
     }
 

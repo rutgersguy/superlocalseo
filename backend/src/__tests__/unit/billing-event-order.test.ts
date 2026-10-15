@@ -29,7 +29,7 @@ describe('paid invoice event ordering', () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
   it.each(['invoice.payment_succeeded', 'invoice.paid'])('grants the paid plan for the current active invoice (%s)', async type => {
-    mockRetrieve.mockResolvedValue(subscription('active', { id: 'in_paid' }));
+    mockRetrieve.mockResolvedValue(subscription('active', { id: 'in_paid', paid: true }));
     await handleWebhookEvent(paid(type));
     expect(mockWhere).toHaveBeenCalledWith({ stripe_subscription_id: 'sub_qa' });
     expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ subscription_status: 'active', product_line: 'pro', payment_failed_at: null, locations_limit: 1 }));

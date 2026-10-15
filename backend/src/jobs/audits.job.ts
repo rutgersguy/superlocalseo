@@ -1,3 +1,4 @@
+import { reserveUsage } from '../services/plan-usage';
 import { Job } from 'bullmq';
 import { db } from '../db/connection';
 import { createAuditReport } from '../services/brightlocal.service';
@@ -45,6 +46,7 @@ export async function processAudits(job: Job): Promise<void> {
           .first();
         if (recent) continue;
 
+        await reserveUsage(loc.clientId, loc.locationId, 'websiteAudits');
         const reportId: string | null = null;
         {
         }

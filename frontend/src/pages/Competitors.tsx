@@ -846,9 +846,9 @@ function formatNextScanTime(retryAfterSeconds: number): string {
 type Tab = 'overview' | 'outranking' | 'rankings' | 'discover';
 
 /**
- * Lite teaser — a blurred preview of the competitor intelligence behind a frosted
+ * Starter teaser — a blurred preview of the competitor intelligence behind a frosted
  * overlay with an upgrade CTA. Deliberately self-contained so it never fires the
- * Pro-only sub-fetches (gap / head-to-head / discover) that would 403 for Lite.
+ * Pro-only sub-fetches (gap / head-to-head / discover) that would 403 for Starter.
  */
 function CompetitorsTeaser() {
   return <div><PageHeader title="Competitors" description="Compare your visibility with other businesses in your area." /><ProGate feature="Competitor insights" description="Pro adds keyword comparisons, competitor tracking and opportunities based on observed results. Upgrade to see this data for your business." /></div>;
@@ -860,12 +860,12 @@ export default function Competitors() {
   const [showAdd, setShowAdd] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanQueued, setScanQueued] = useState(false);
-  // Lite users only get the base /competitors list; show the upgrade teaser instead.
-  // Wait for the plan to load before fetching so Lite never kicks off the Pro suite's calls.
+  // Starter users only get the base /competitors list; show the upgrade teaser instead.
+  // Wait for the plan to load before fetching so Starter never kicks off the Pro suite's calls.
   const { data, isLoading, error } = useSWR<CompetitorsResponse>(planLoading || isLite ? null : '/competitors', fetcher);
   const { data: scanStatusData, mutate: mutateScanStatus } = useSWR<ScanStatusResponse>(planLoading || isLite ? null : '/competitors/scan-status', fetcher, { refreshInterval: 60000 });
 
-  // Lite: render the upgrade teaser instead of the full Pro competitor suite.
+  // Starter: render the upgrade teaser instead of the full Pro competitor suite.
   if (isLite) return <CompetitorsTeaser />;
 
   const competitors = data?.data?.competitors ?? [];

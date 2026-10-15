@@ -1,3 +1,5 @@
+import { planFor } from '../config/plans';
+import { limitError } from '../services/plan-usage';
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
@@ -43,6 +45,9 @@ function formatClient(
     emailVerified,
     businessName: client.business_name,
     industry: client.industry,
+    planKey: planFor(client).key,
+    pricingVersion: client.pricing_version,
+    limits: planFor(client),
     productLine: (client.product_line as string | null) ?? 'pro',
     // Lite gets one manual rankings scan; Pro refreshes on a 24h cooldown instead.
     manualScanUsed: client.manual_scan_used_at != null,
@@ -94,6 +99,7 @@ export async function getClient(req: Request, res: Response, next: NextFunction)
 export async function updateClient(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const body = req.body as PatchBody;
+    if (req.client.pricing_version === '2026-10' && !planFor(req.client).whiteLabel && [body.whiteLabelCompanyName, body.whiteLabelLogoUrl, body.whiteLabelColor].some(v => v !== undefined)) throw limitError('White-label report branding is included with Multi.');
     const updates: Record<string, unknown> = { updated_at: new Date() };
 
     if (body.businessName !== undefined) updates.business_name = body.businessName;

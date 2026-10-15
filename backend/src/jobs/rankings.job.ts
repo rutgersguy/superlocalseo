@@ -1,3 +1,5 @@
+import { planFor } from '../config/plans';
+import { reserveUsage } from '../services/plan-usage';
 import { Job } from 'bullmq';
 import { db } from '../db/connection';
 import { getSerpRanks, getAggregatedSearchVolumes, buildLocationName } from '../services/dataforseo.service';
@@ -24,7 +26,7 @@ export async function syncRankingsForClient(clientId: string, locationId?: strin
     notConfigured: false,
   };
 
-  const clientRow = await db('clients').where({ id: clientId }).select('business_name').first();
+  const clientRow = await db('clients').where({ id: clientId }).first();
   const businessName = (clientRow as Record<string, unknown> | undefined)?.business_name as string | undefined;
   if (!businessName) return result;
 
@@ -41,12 +43,14 @@ export async function syncRankingsForClient(clientId: string, locationId?: strin
   result.locationsFound = locations.length;
 
   for (const location of locations) {
-    const keywords = await db('keywords')
+    const keywords: Array<{ id: string; keyword: string; monthly_search_volume: number | null }> = await db('keywords')
       .where({ location_id: location.id })
-      .select('id', 'keyword', 'monthly_search_volume');
+      .select('id', 'keyword', 'monthly_search_volume').orderBy('created_at', 'asc')
+      .modify(q => { if (clientRow.pricing_version === '2026-10') q.limit(planFor(clientRow).keywords); });
 
     if (keywords.length === 0) continue;
     result.locationsWithKeywords++;
+    try { await reserveUsage(clientId, location.id, 'rankingRuns'); } catch (e) { result.errors.push({ locationId: location.id, message: (e as Error).message }); continue; }
 
     // Backfill missing search volumes
     const missingVolume = keywords.filter((k) => k.monthly_search_volume == null);

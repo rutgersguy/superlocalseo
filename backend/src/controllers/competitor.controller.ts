@@ -1,3 +1,5 @@
+import { planFor } from '../config/plans';
+import { assertResourcesMutable, limitError, reserveUsage } from '../services/plan-usage';
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { optionalWebsiteSchema } from '../utils/website';
@@ -138,7 +140,13 @@ export async function create(req: Request, res: Response, next: NextFunction): P
 
     const { name, website, googlePlaceId } = parsed.data;
 
-    const [competitor] = await db('competitors')
+    const competitor = await db.transaction(async trx => {
+      const client = await trx('clients').where({ id: req.clientId }).forUpdate().first();
+      await assertResourcesMutable(trx, req.clientId);
+      const count = Number((await trx('competitors').where({ client_id: req.clientId }).count('* as n').first())?.n ?? 0);
+      const limit = planFor(client).competitors * (client.locations_limit ?? 1);
+      if (client.pricing_version === '2026-10' && count >= limit) throw limitError(`Your plan includes ${limit} competitors. Remove one or upgrade to add more.`);
+      const [competitor] = await trx('competitors')
       .insert({
         client_id: req.clientId,
         name,
@@ -146,6 +154,8 @@ export async function create(req: Request, res: Response, next: NextFunction): P
         google_place_id: googlePlaceId || null,
       })
       .returning('*');
+      return competitor;
+    });
 
     // Immediately sync if we have a place_id
     if (googlePlaceId && config.googlePlacesApiKey) {
@@ -465,6 +475,7 @@ export async function discoverKeywords(req: Request, res: Response, next: NextFu
       return;
     }
 
+    await reserveUsage(req.clientId, 'account', 'keywordDiscoveries');
     // DataForSEO Labs ranked_keywords only accepts country-level codes (2840 = US national).
     // DMA and state codes are rejected by this endpoint.
     const discovered = await getCompetitorRankedKeywords({
@@ -544,6 +555,9 @@ export async function syncRankings(req: Request, res: Response, next: NextFuncti
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 export async function syncCompetitorPlaces(competitorId: string, placeId: string): Promise<void> {
+  const owner = await db('competitors').where({ id: competitorId }).select('client_id').first();
+  if (!owner) return;
+  await reserveUsage(owner.client_id, 'account', 'competitorChecks');
   const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&fields=rating,user_ratings_total&key=${config.googlePlacesApiKey}`;
   const res = await fetch(url);
   const data = await res.json() as {

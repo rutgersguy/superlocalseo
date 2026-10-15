@@ -6,7 +6,7 @@ interface ProGateProps {
   description: string;
 }
 
-/** Locked-feature placeholder shown to Lite users on Pro-only pages. */
+/** Locked-feature placeholder shown to Starter users on Pro-only pages. */
 export function ProGate({ feature, description }: ProGateProps) {
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 p-10 text-center max-w-md mx-auto mt-12">

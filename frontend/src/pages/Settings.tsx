@@ -1,3 +1,6 @@
+import { ProGate } from '../components/ProGate';
+import { PlanPicker } from '../components/PlanPicker';
+import { usePlans, money, PlanKey, BillingInterval, PlanDefinition } from '../hooks/usePlans';
 import { BillingChanges } from '../components/BillingChanges';
 import GoogleConnectCard from '../components/GoogleReviewConnection';
 import { useState, useRef, useEffect, type ChangeEvent } from 'react';
@@ -69,9 +72,9 @@ function TabBar({ active, onChange, isOwner }: { active: Tab; onChange: (t: Tab)
     { key: 'keywords', label: 'Keywords' },
     { key: 'integrations', label: 'Integrations' },
     { key: 'billing', label: 'Billing' },
-    ...(isOwner && !isLite ? [{ key: 'team' as Tab, label: 'Team' }] : []),
+    ...(isOwner ? [{ key: 'team' as Tab, label: isLite ? 'Team · Pro 🔒' : 'Team' }] : []),
     { key: 'widgets' as Tab, label: 'Widgets' },
-    ...(isLite ? [] : [{ key: 'qrcodes' as Tab, label: 'QR Codes' }]),
+    { key: 'qrcodes' as Tab, label: isLite ? 'QR Codes · Pro 🔒' : 'QR Codes' },
   ];
   return (
     <>
@@ -965,7 +968,7 @@ interface RoiConfig {
 }
 
 function RoiSettingsSection() {
-  // ROI is Pro — /analytics/roi is gated, so for Lite this section rendered a
+  // ROI is Pro — /analytics/roi is gated, so for Starter this section rendered a
   // form whose save 403'd, and its SWR fetch 403'd on mount too (#157).
   const { productLine } = useClient();
   const gated = !canUseFeature(productLine, 'roiSettings');
@@ -1085,7 +1088,7 @@ interface LocForm {
 }
 
 const EMPTY_LOC_FORM: LocForm = { name: '', address: '', city: '', state: '', zip: '', phone: '', website: '', serviceArea: [] };
-const EXTRA_LOCATION_PRICE = 125;
+
 
 function locFormFromLocation(loc: Location): LocForm {
   return {
@@ -1295,7 +1298,8 @@ function LocationsTab({ isAdmin }: { isAdmin: boolean }) {
 
   const locations = data?.data ?? [];
   const included = billingData?.data?.locationsLimit ?? 1;
-  const extraPrice = EXTRA_LOCATION_PRICE;
+  const { data: plans } = usePlans();
+  const extraPrice = (plans?.data.plans[billingData?.data.planKey ?? 'pro'].extraMonthly ?? 0) / 100;
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editSaving, setEditSaving] = useState(false);
@@ -1664,6 +1668,9 @@ function KeywordsTab({ isAdmin, onGoToLocations }: { isAdmin: boolean; onGoToLoc
 // ─── Billing tab ─────────────────────────────────────────────────────────────
 
 interface BillingStatus {
+  planKey: PlanKey; interval: BillingInterval; pricingVersion: string; limits: PlanDefinition;
+  usage: Array<{scope: string; metric: string; used: number}>;
+  currentPrice: { amount: number; interval: string; currency: string } | null;
   canManageBilling: boolean;
   status: string;
   trialDaysLeft: number | null;
@@ -1797,290 +1804,36 @@ function WhiteLabelSection() {
 }
 
 function BillingTab({ onGoToLocations, isPlatformAdmin }: { onGoToLocations: () => void; isPlatformAdmin: boolean }) {
-  const { data, isLoading, mutate: mutateBilling } = useSWR<BillingResponse>('/billing/status', fetcher, { refreshInterval: 30000 });
-  const { data: locData, mutate: mutateLocs } = useSWR<{ success: boolean; data: Location[] }>('/locations', fetcher);
+  const { data, error } = useSWR<BillingResponse>('/billing/status', fetcher, { refreshInterval: 30000 });
+  const { data: locData } = useSWR<{ data: Location[] }>('/locations', fetcher);
+  const [plan, setPlan] = useState<PlanKey>('pro');
+  const [interval, setInterval] = useState<BillingInterval>('month');
+  const [portalError, setPortalError] = useState('');
   const billing = data?.data;
-  const locations = locData?.data ?? [];
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [portalLoading, setPortalLoading] = useState(false);
-  const [actionError, setActionError] = useState('');
-  const [showAddLoc, setShowAddLoc] = useState(false);
-  const [addLocSaving, setAddLocSaving] = useState(false);
-  const [addLocError, setAddLocError] = useState<string | null>(null);
-
-  async function handleAddLocation(form: LocForm) {
-    setAddLocSaving(true);
-    setAddLocError(null);
-    try {
-      const res = await apiFetch<{ success: boolean; error?: { message: string } }>('/locations', {
-        method: 'POST',
-        body: JSON.stringify(form),
-      });
-      if (!res.success) { setAddLocError(res.error?.message ?? 'Failed to add location'); return; }
-      await Promise.all([mutateLocs(), mutateBilling()]);
-      setShowAddLoc(false);
-    } catch {
-      setAddLocError('Network error');
-    } finally {
-      setAddLocSaving(false);
-    }
-  }
-
-  const startCheckout = async () => {
-    setCheckoutLoading(true);
-    setActionError('');
-    try {
-      const res = await apiFetch<{ success: boolean; data: { url: string }; error?: { message: string } }>('/billing/checkout', {
-        method: 'POST',
-        body: JSON.stringify({ extraLocations: 0 }),
-      });
-      if (res.success && res.data?.url) {
-        window.location.href = res.data.url;
-      } else {
-        setActionError(res.error?.message ?? 'Failed to start checkout');
-        setCheckoutLoading(false);
-      }
-    } catch {
-      setActionError('Network error');
-      setCheckoutLoading(false);
-    }
-  };
-
-  const openPortal = async () => {
-    setPortalLoading(true);
-    setActionError('');
-    try {
-      const res = await apiFetch<{ success: boolean; data: { url: string } }>('/billing/portal', { method: 'POST' });
-      if (res.success && res.data?.url) window.location.href = res.data.url;
-    } catch {
-      setActionError('Network error');
-    } finally {
-      setPortalLoading(false);
-    }
-  };
-
-  if (isLoading || !billing) {
-    return (
-      <div className="space-y-4 animate-pulse">
-        <div className="h-24 bg-slate-100 rounded-xl" />
-        <div className="h-32 bg-slate-100 rounded-xl" />
-      </div>
-    );
-  }
-
-  const isTrialing = billing.status === 'trialing';
-  const isActive = billing.status === 'active';
-  const isPastDue = billing.status === 'past_due';
-  const isCanceled = billing.status === 'canceled';
-  const needsSubscription = !isActive && !isTrialing;
-  const extraLocations = isActive && billing.productLine === 'pro' ? Math.max(0, billing.locationsLimit - 1) : 0;
-  const isLitePlan = billing.productLine === 'lite';
-
-  const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
-    active:    { label: 'Active', cls: 'bg-green-100 text-green-700' },
-    trialing:  { label: 'Trial', cls: 'bg-blue-100 text-blue-700' },
-    past_due:  { label: 'Past due', cls: 'bg-amber-100 text-amber-700' },
-    canceled:  { label: 'Canceled', cls: 'bg-gray-100 text-gray-500' },
-  };
-  const statusInfo = STATUS_LABELS[billing.status] ?? { label: billing.status, cls: 'bg-gray-100 text-gray-500' };
-
-  return (
-    <div className="space-y-5">
-      {actionError && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{actionError}</div>
-      )}
-
-      {/* Current plan card */}
-      <div className="border border-slate-200 rounded-xl p-5 space-y-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-1">
-              {isTrialing ? 'Your trial' : 'Current plan'}
-            </p>
-            {isTrialing ? (
-              // Trials run as Pro (product_line defaults to 'pro'); the plan is only chosen at
-              // checkout. Showing a price here would be quoting a plan they haven't picked.
-              <>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold text-slate-900">Free with full Pro Access</span>
-                </div>
-                <p className="text-xs text-slate-400 mt-0.5">No card required · subscribe whenever you're ready</p>
-              </>
-            ) : (
-              <>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-3xl font-bold text-slate-900">{isLitePlan ? '$149' : '$349'}</span>
-                  <span className="text-slate-500 text-sm">/mo</span>
-                </div>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {isLitePlan ? 'Lite · 1 location · no setup fee' : 'Pro · no setup fee · $125/mo per extra location'}
-                </p>
-              </>
-            )}
-          </div>
-          <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusInfo.cls}`}>
-            {statusInfo.label}
-          </span>
-        </div>
-
-        {/* Trials run with full Pro access; Lite is cheaper but gives features up. Show the
-            tradeoff as two comparable cards rather than a paragraph. */}
-        {isTrialing && (
-          <div>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <div className="relative rounded-xl border-2 border-brand-500 bg-brand-50/50 p-4">
-                <span className="absolute top-3 right-3 text-[10px] font-semibold uppercase tracking-wide text-brand-700 bg-brand-100 px-2 py-0.5 rounded-full">
-                  Your trial
-                </span>
-                <p className="text-sm font-semibold text-slate-900">Pro</p>
-                <div className="flex items-baseline gap-1 mt-1">
-                  <span className="text-2xl font-bold text-slate-900">$349</span>
-                  <span className="text-xs text-slate-500">/mo</span>
-                </div>
-                <p className="text-xs text-slate-600 mt-2 leading-relaxed">Keeps everything you have today, unchanged.</p>
-                <p className="text-xs text-slate-500 mt-1 leading-relaxed">Extra locations $125/mo each.</p>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 p-4">
-                <p className="text-sm font-semibold text-slate-900">Lite</p>
-                <div className="flex items-baseline gap-1 mt-1">
-                  <span className="text-2xl font-bold text-slate-900">$149</span>
-                  <span className="text-xs text-slate-500">/mo</span>
-                </div>
-                <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-                  Rank tracking, review monitoring with AI replies, review campaigns, monthly reports.
-                </p>
-                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  One location. No citations, geo-grid, audits, competitors, reputation tools, team, QR codes or exports.
-                </p>
-              </div>
-            </div>
-            <p className="text-xs text-slate-400 mt-2">No setup fee on either plan · upgrade from Lite to Pro anytime</p>
-          </div>
-        )}
-
-        {/* The day-count banner was redundant with the plan cards above and the Dashboard
-            banner, so it's gone. An EXPIRED trial is not redundant — it's the only thing
-            here telling them why the app stopped working. */}
-        {isTrialing && billing.trialDaysLeft === 0 && (
-          <div className="rounded-lg px-4 py-3 text-sm bg-red-50 text-red-800 border border-red-200">
-            Your trial has expired. Choose a plan below to continue using SuperLocalSEO.
-          </div>
-        )}
-
-        {/* Past due warning */}
-        {isPastDue && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
-            <strong>Payment overdue.</strong> Update your payment method to restore full access.
-          </div>
-        )}
-
-        {/* Locations section */}
-        <div className="pt-1 border-t border-slate-100 space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-slate-700">Locations</p>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {billing.locationCount} / {billing.locationsLimit} available
-                {extraLocations > 0 && <span className="text-amber-600 ml-1"> · {extraLocations} extra (+${extraLocations * 125}/mo)</span>}
-              </p>
-            </div>
-            {billing.canManageBilling && !showAddLoc && billing.locationCount < billing.locationsLimit && (
-              <button
-                onClick={() => setShowAddLoc(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
-              >
-                <Plus size={13} /> Add location
-              </button>
-            )}
-          </div>
-
-          {/* Current locations list */}
-          {locations.length > 0 && (
-            <div className="space-y-1.5">
-              {locations.map((loc) => (
-                <div key={loc.id} className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium text-slate-700">{loc.name}</p>
-                    {loc.address && <p className="text-xs text-slate-400">{[loc.address, loc.city, loc.state].filter(Boolean).join(', ')}</p>}
-                  </div>
-                  <button
-                    onClick={() => onGoToLocations()}
-                    className="text-xs text-brand-500 hover:underline shrink-0 ml-3"
-                  >
-                    Manage →
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Add location inline form */}
-          {showAddLoc && billing.canManageBilling && (
-            <div className="border border-brand-200 bg-brand-50/30 rounded-xl p-4 space-y-3">
-              {billing.locationCount >= billing.locationsLimit && (
-                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
-                  <AlertCircle size={13} className="mt-0.5 shrink-0" />
-                  <span>
-                    You've used all {billing.locationsLimit} included location{billing.locationsLimit !== 1 ? 's' : ''}. Adding another will be billed at an additional <strong>$125/mo</strong>, charged immediately on a prorated basis.
-                  </span>
-                </div>
-              )}
-              <p className="text-sm font-medium text-slate-700">New location</p>
-              <LocationForm
-                initial={EMPTY_LOC_FORM}
-                onSave={(form) => void handleAddLocation(form)}
-                onCancel={() => { setShowAddLoc(false); setAddLocError(null); }}
-                saving={addLocSaving}
-                error={addLocError}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Action buttons */}
-        {isTrialing ? (
-          // A trialing client has no Stripe subscription yet, so the billing portal is
-          // useless to them. Send them to the plan picker so they can end the trial and
-          // start paying whenever they want — they don't have to wait it out.
-          <a
-            href="/billing?subscribe=1"
-            className="w-full py-2.5 rounded-lg text-sm font-semibold bg-brand-500 text-white hover:bg-brand-600 flex items-center justify-center gap-2 transition-colors"
-          >
-            Choose your plan &amp; subscribe now →
-          </a>
-        ) : needsSubscription ? (
-          <button
-            onClick={() => void startCheckout()}
-            disabled={checkoutLoading}
-            className="w-full py-2.5 rounded-lg text-sm font-semibold bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
-          >
-            {checkoutLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-            {isCanceled ? 'Reactivate subscription' : 'Subscribe now'}
-          </button>
-        ) : (
-          <button
-            onClick={() => void openPortal()}
-            disabled={portalLoading || !billing.canManageBilling}
-            className="text-sm font-medium text-brand-500 hover:text-brand-700 disabled:opacity-50"
-          >
-            {portalLoading ? 'Redirecting…' : 'Manage payment & invoices →'}
-          </button>
-        )}
-
-        {billing.currentPeriodEnd && isActive && (
-          <p className="text-xs text-slate-400">
-            Next billing date: {new Date(billing.currentPeriodEnd).toLocaleDateString()}
-          </p>
-        )}
-      </div>
-
-      {isActive && billing.canManageBilling && <BillingChanges isLite={isLitePlan} publishableKey={billing.publishableKey} onLocations={onGoToLocations} />}
-
-      {/* White-label report branding — operator admin only */}
-      {isPlatformAdmin && <WhiteLabelSection />}
-    </div>
-  );
+  if (!billing) return <p role={error ? 'alert' : 'status'}>{error ? 'Billing could not be loaded. Please refresh.' : 'Loading billing…'}</p>;
+  const legacy = billing.pricingVersion === 'legacy';
+  const active = billing.status === 'active';
+  const trial = billing.status === 'trialing';
+  const current = billing.currentPrice;
+  return <div className="space-y-6">
+    <section className="rounded-xl border border-slate-200 p-5 space-y-3">
+      <h2 className="font-semibold text-lg">{trial ? 'Your Pro trial' : `${billing.limits.name} plan`} · {billing.status}</h2>
+      {trial ? <p>{billing.trialDaysLeft} days remaining. No card required during your trial.</p> : current && <p>{money(current.amount, current.currency)}/{current.interval === 'year' ? 'year' : 'month'} before discounts</p>}
+      {legacy && <p>Your existing pricing and billing state are preserved.</p>}
+      {billing.interval === 'year' && !legacy && <p>Annual billing includes two months free: twelve months for the price of ten.</p>}
+      <p>{billing.locationCount} locations used / {billing.locationsLimit} available</p>
+      <button onClick={onGoToLocations} className="text-brand-700 underline">Manage location details</button>
+      {billing.currentPeriodEnd && <p>Current period ends {new Date(billing.currentPeriodEnd).toLocaleDateString()}</p>}
+      {billing.canManageBilling && <button className="block text-brand-700 underline" onClick={async () => { try { const r = await apiFetch<{ success: boolean; data: { url: string }; error?: { message: string } }>('/billing/portal', { method: 'POST' }); if (!r.success) throw new Error(r.error?.message || 'Unable to open billing portal'); window.location.href = r.data.url; } catch(e) { setPortalError((e as Error).message); } }}>Manage payment, invoices &amp; cancellation</button>}
+      {portalError && <p role="alert" className="text-red-700">{portalError}</p>}
+    </section>
+    {active && billing.canManageBilling && !legacy && <BillingChanges currentPlan={billing.planKey} currentInterval={billing.interval} capacity={billing.locationsLimit} locations={locData?.data ?? []} publishableKey={billing.publishableKey} onLocations={onGoToLocations} />}
+    {!active && !legacy && <><PlanPicker plan={plan} interval={interval} onPlan={setPlan} onInterval={setInterval} /><a href="/billing?subscribe=1" onClick={() => { localStorage.setItem('selectedPlan', plan); localStorage.setItem('selectedInterval', interval); }} className="inline-block rounded-lg bg-brand-500 text-white px-4 py-3">Continue with {plan}</a></>}
+    {!legacy && <section className="rounded-xl border p-5 text-sm space-y-2"><h3 className="font-semibold">Your usage limits</h3><p>Per location: {billing.limits.keywords} keywords, {billing.limits.competitors} competitors, {billing.limits.gridScans} geo-grid scans, {billing.limits.reviewRequests} email review requests and {billing.limits.aiChecks} AI checks per calendar month. Keyword and competitor counts are stored-item limits; the others reset monthly (UTC).</p><p>{billing.limits.teamSeats} team seats per account, including the owner. SMS is not enabled. Provider failures may consume scan allowance; no automatic overage charges.</p>
+      {billing.usage?.length > 0 && <ul>{billing.usage.map(u => <li key={`${u.scope}-${u.metric}`}>{locData?.data.find(l => l.id === u.scope)?.name ?? 'Account'} · {u.metric.replace(/([A-Z])/g, ' $1')}: {u.used} used this month</li>)}</ul>}
+      </section>}
+    {(isPlatformAdmin || (billing.canManageBilling && billing.limits.whiteLabel)) && <WhiteLabelSection />}
+  </div>;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -2256,10 +2009,10 @@ export default function Settings() {
         {activeTab === 'widgets' && <WidgetTab />}
 
         {/* QR Codes tab */}
-        {activeTab === 'qrcodes' && <QRTab />}
+        {activeTab === 'qrcodes' && (client?.productLine === 'lite' ? <ProGate feature="QR codes" description="Upgrade to Pro or Multi to create QR codes." /> : <QRTab />)}
 
         {/* Team tab */}
-        {activeTab === 'team' && <TeamTab />}
+        {activeTab === 'team' && (client?.productLine === 'lite' ? <ProGate feature="Team access" description="Upgrade to Pro or Multi for team seats." /> : <TeamTab />)}
 
         {/* Billing tab */}
         {activeTab === 'billing' && <BillingTab onGoToLocations={() => setActiveTab('locations')} isPlatformAdmin={isPlatformAdmin} />}

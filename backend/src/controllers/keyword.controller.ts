@@ -1,3 +1,5 @@
+import { planFor } from '../config/plans';
+import { assertResourcesMutable, limitError } from '../services/plan-usage';
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { db } from '../db/connection';
@@ -61,20 +63,16 @@ export async function create(req: Request, res: Response, next: NextFunction): P
     // duplicate a harmless no-op instead of a race-prone SELECT-then-INSERT: a rapid
     // double-submit (the reported "input didn't clear + 'already exists'" bug) now
     // returns the existing keyword as success rather than a misleading 409.
-    const [inserted] = await db('keywords')
-      .insert({
-        location_id: body.locationId,
-        keyword: body.keyword,
-        created_at: new Date(),
-        updated_at: new Date(),
-      })
-      .onConflict(['location_id', 'keyword'])
-      .ignore()
-      .returning('*');
-
-    // onConflict().ignore() returns no row when the keyword already existed — re-select it.
-    const keyword = inserted
-      ?? await db('keywords').where({ location_id: body.locationId, keyword: body.keyword }).first();
+    const { keyword, inserted } = await db.transaction(async trx => {
+      const client = await trx('clients').where({ id: req.clientId }).forUpdate().first();
+      await assertResourcesMutable(trx, req.clientId);
+      const existing = await trx('keywords').where({ location_id: body.locationId, keyword: body.keyword }).first();
+      if (existing) return { keyword: existing, inserted: false };
+      const count = Number((await trx('keywords').where({ location_id: body.locationId }).count('* as n').first())?.n ?? 0);
+      if (client.pricing_version === '2026-10' && count >= planFor(client).keywords) throw limitError(`Your plan includes ${planFor(client).keywords} keywords per location. Remove a keyword or upgrade to add more.`);
+      const [keyword] = await trx('keywords').insert({ location_id: body.locationId, keyword: body.keyword }).returning('*');
+      return { keyword, inserted: true };
+    });
 
     // Only fetch search volume for a genuinely new keyword (skip on duplicate no-op).
     if (inserted) {

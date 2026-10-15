@@ -9,12 +9,12 @@ import { useAiVisibility, StatusPill, fmtDate, type PromptResult } from '../comp
 /**
  * AI assistant visibility, in full (#191).
  *
- * The page is Lite-inclusive by design: the verdict is what the marketing site
- * converts on, so paywalling it would sell Lite a promise it cannot open. The
+ * The page is Starter-inclusive by design: the verdict is what the marketing site
+ * converts on, so paywalling it would sell Starter a promise it cannot open. The
  * DEPTH is Pro — the competitors each assistant named instead, the sources it
  * cited, the history, and the stored answer behind each verdict.
  *
- * Lite-ness is detected from the payload itself (`plan`), and the Pro fields are
+ * Starter-ness is detected from the payload itself (`plan`), and the Pro fields are
  * genuinely absent rather than hidden, so this page cannot leak them by mistake.
  */
 

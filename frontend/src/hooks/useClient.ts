@@ -1,3 +1,4 @@
+import type { PlanKey, PlanDefinition } from './usePlans';
 import useSWR from 'swr';
 import { fetcher } from '../services/api';
 import { useAuth } from './useAuth';
@@ -9,6 +10,7 @@ export interface ClientData {
   emailVerified: boolean;
   businessName: string;
   industry: string | null;
+  planKey?: PlanKey; pricingVersion?: string; limits?: PlanDefinition;
   productLine: Plan;
   manualScanUsed: boolean;
   onboardingStep: number;
@@ -48,7 +50,7 @@ export function useClient(): UseClientResult {
   );
 
   const client = data?.data ?? null;
-  const productLine: Plan = (client?.productLine ?? 'pro') as Plan;
+  const productLine: Plan = client?.pricingVersion === '2026-10' && client.limits ? (client.limits.proFeatures ? 'pro' : 'lite') : (client?.productLine ?? 'pro') as Plan;
 
   return {
     client,

@@ -1,3 +1,4 @@
+import { reserveUsage } from './plan-usage';
 import { createHash, randomUUID } from 'crypto';
 import { z } from 'zod';
 import { db } from '../db/connection';
@@ -37,6 +38,10 @@ export async function dispatchInvitations(clientId: string, actorId: string, cam
     });
     let row=prepared.row;
     if(prepared.send) {
+      try { await reserveUsage(clientId, route.localLocationId ?? 'account', 'reviewRequests'); } catch(e) {
+        await db('campaign_invitation_attempts').where({id:row.id}).update({status:'rejected',detail:(e as Error).message});
+        throw e;
+      }
       let attempted=false;
       try {
         await withProviderRoute(route, async trx => {

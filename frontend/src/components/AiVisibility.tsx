@@ -35,7 +35,7 @@ export interface PromptResult {
   position: number | null;
   unverifiedReason: string | null;
   locationName: string;
-  /** Pro only — absent from the payload on Lite. */
+  /** Pro only — absent from the payload on Starter. */
   businessesNamed?: string[];
   citations?: string[];
 }

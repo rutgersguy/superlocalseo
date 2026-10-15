@@ -525,7 +525,7 @@ const STATUSES = ['All', 'New', 'Responded'];
 type ActiveTab = 'reviews' | 'feedback';
 
 export default function Reviews() {
-  // CSV export is Pro (#157). The button used to render for Lite and 403.
+  // CSV export is Pro (#157). The button used to render for Starter and 403.
   const { productLine } = useClient();
   const [activeTab, setActiveTab] = useState<ActiveTab>('reviews');
   const [locationId, setLocationId] = useState('');

@@ -1,3 +1,7 @@
+# Current pricing rollout (#240)
+
+See [Self-serve plan catalog and limits](PLANS-240.md) for the new Starter / Pro / Multi rollout, annual pricing and QA status. The material below is historical pricing and must not be used for new-plan UI values.
+
 # Current listing submission policy (2026-09-15)
 
 See [Paid listing submissions](LISTING_SUBMISSION_POLICY.md): Pro only, after a verified non-zero subscription payment; one initial campaign per location, up to 15 credits. No trial submissions or included aggregator extras. Older broad-package and paid-BrightLocal-plan prerequisites below are superseded. BrightLocal Management API access was verified with 30 Citation Builder credits available before any submissions.

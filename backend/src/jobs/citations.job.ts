@@ -1,3 +1,4 @@
+import { reserveUsage } from '../services/plan-usage';
 import { getDirectoriesForIndustry } from '../config/industry.config';
 import { auditableDirectories } from '../config/directories.config';
 import { Job } from 'bullmq';
@@ -116,6 +117,7 @@ async function syncCitationsForLocation(loc: LocationRow): Promise<void> {
     phone: loc.telephone,
   };
 
+  await reserveUsage(loc.clientId, loc.locationId, 'citationScans');
   const results = await scanLocation(nap, dirs);
   const now = new Date();
 

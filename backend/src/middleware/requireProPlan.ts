@@ -1,3 +1,4 @@
+import { planFor } from '../config/plans';
 import { Request, Response, NextFunction } from 'express';
 import { isPlanAllowed, Plan } from '../config/planFeatures';
 import { requireClient } from './requireClient';
@@ -13,7 +14,7 @@ export function requireProPlan(req: Request, res: Response, next: NextFunction):
   // Admins always bypass (requireAuth sets req.userRole, NOT req.user.role)
   if (req.userRole === 'admin') { next(); return; }
 
-  const productLine = ((req.client?.product_line as string | null) ?? 'pro') as Plan;
+  const productLine = (req.client?.pricing_version === '2026-10' ? (planFor(req.client).proFeatures ? 'pro' : 'lite') : ((req.client?.product_line as string | null) ?? 'pro')) as Plan;
   if (productLine === 'pro') { next(); return; }
 
   // req.baseUrl carries the mount prefix (e.g. "/api/citations"); req.path is mount-relative.
@@ -27,6 +28,7 @@ export function requireProPlan(req: Request, res: Response, next: NextFunction):
     ? 'competitors/__create__'
     : apiPath;
 
+  if (req.client?.pricing_version === '2026-10' && /^geo-grid(?:\/|$)/.test(normalizedPath)) { next(); return; }
   if (isPlanAllowed(normalizedPath, productLine)) { next(); return; }
 
   res.status(403).json({
@@ -93,7 +95,7 @@ export function requireSourceAccess(sourcePrefix: string) {
 
     // Default to 'pro' to match requireProPlan: an unpopulated client must not
     // become an accidental denial for legitimate Pro traffic.
-    const productLine = ((req.client?.product_line as string | null) ?? 'pro') as Plan;
+    const productLine = (req.client?.pricing_version === '2026-10' ? (planFor(req.client).proFeatures ? 'pro' : 'lite') : ((req.client?.product_line as string | null) ?? 'pro')) as Plan;
     if (isPlanAllowed(sourcePrefix, productLine)) { next(); return; }
 
     res.status(403).json({

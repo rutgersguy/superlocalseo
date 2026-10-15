@@ -1,3 +1,4 @@
+import { reserveUsage } from './plan-usage';
 import { Job } from 'bullmq';
 import { config } from '../config';
 import { connectionState } from './emr_connection_state';
@@ -121,6 +122,7 @@ export async function processInitialScans(job: Job): Promise<void> {
 }
 
 async function runInitialAudit(clientId: string, loc: Record<string, any>): Promise<void> {
+  await reserveUsage(clientId, loc.id, 'websiteAudits');
   const scores = await computeAuditScores(loc.id, loc.industry ?? null);
   await db('location_audits').insert({ client_id: clientId, location_id: loc.id, status: 'complete',
     nap_score: scores.napScore, citation_score: scores.citationScore, composite_score: scores.compositeScore,
@@ -130,6 +132,7 @@ async function runInitialAudit(clientId: string, loc: Record<string, any>): Prom
 }
 
 async function runInitialMap(clientId: string, loc: Record<string, any>, keyword: Record<string, any>, resume?: Record<string, any>): Promise<void> {
+  await reserveUsage(clientId, loc.id, 'gridScans');
   const report = resume ?? (await db('geo_grid_reports').insert({ client_id: clientId, location_id: loc.id, keyword_id: keyword.id, status: 'processing', grid_size: 3, center_lat: loc.lat, center_lng: loc.lng }).returning('id'))[0];
   const points: Array<{ gridRow: number; gridCol: number; lat: number; lng: number; rank: number | null; url: string | null; observationStatus?: string }> = resume?.grid_data ?? [];
   try {

@@ -1,3 +1,4 @@
+import { reserveUsage } from '../services/plan-usage';
 import { Job } from 'bullmq';
 import { db } from '../db/connection';
 import { ENABLED_AI_ENGINES, AI_PROMPTS, buildPrompt } from '../config/ai_engines.config';
@@ -114,6 +115,7 @@ async function scanLocation(loc: LocationRow): Promise<boolean> {
     return true; // not a failure — there is nothing to ask
   }
 
+  await reserveUsage(loc.clientId, loc.locationId, 'aiChecks', prompts.length * ENABLED_AI_ENGINES.length);
   const checks: AiVisibilityCheck[] = [];
 
   for (const prompt of prompts) {

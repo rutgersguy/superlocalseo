@@ -143,14 +143,14 @@ export async function gatherReportData(
       'clients.white_label_company_name',
       'clients.white_label_logo_url',
       'clients.white_label_color',
-      'clients.product_line',
+      'clients.product_line', 'clients.plan_key', 'clients.pricing_version',
       'users.email',
     )
     .first() as {
       business_name: string;
       email: string;
       subscription_tier: number;
-      product_line: 'lite' | 'pro' | null;
+      product_line: 'lite' | 'pro' | null; plan_key: string | null; pricing_version: string;
       white_label_company_name: string | null;
       white_label_logo_url: string | null;
       white_label_color: string | null;
@@ -355,7 +355,7 @@ export async function gatherReportData(
   const roiData: ReportData['roi'] = null;
 
   const whiteLabel: WhiteLabel | undefined =
-    plan === 'pro' &&
+    (client.pricing_version === '2026-10' ? client.plan_key === 'multi' : plan === 'pro') &&
     (client.white_label_company_name || client.white_label_logo_url || client.white_label_color)
       ? {
           companyName: client.white_label_company_name ?? undefined,

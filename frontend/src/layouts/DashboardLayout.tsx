@@ -29,7 +29,7 @@ function OnboardingRedirect() {
   useEffect(() => {
     if (role !== 'client' || !data?.data) return;
     if (data.data.onboardingStep === 0) {
-      // Lite uses the same Onboarding page in a 2-step mode via ?lite=1
+      // Starter uses the same Onboarding page in a 2-step mode via ?lite=1
       const dest = data.data.productLine === 'lite' ? '/onboarding?lite=1' : '/onboarding';
       navigate(dest, { replace: true });
     }
@@ -91,9 +91,7 @@ function SidebarNav({ onNav }: { onNav?: () => void }) {
   // planFeatures.ts is the source of truth for which tiers see each nav item.
   // Admins always see everything.
   const plansFor = (to: string) => PLAN_NAV.find((n) => n.to === to)?.plans ?? ['lite', 'pro'];
-  const visibleNavItems = role === 'admin'
-    ? navItems
-    : navItems.filter((item) => plansFor(item.to).includes(productLine));
+  const visibleNavItems = navItems;
 
   return (
     <>
@@ -115,7 +113,7 @@ function SidebarNav({ onNav }: { onNav?: () => void }) {
             {({ isActive }) => (
               <>
                 <span className={`shrink-0 ${isActive ? 'text-white' : ''}`}>{item.icon}</span>
-                {item.label}
+                {item.label}{role !== 'admin' && !plansFor(item.to).includes(productLine) && <span className="ml-auto text-xs" aria-label="Requires upgrade">🔒 Pro</span>}
               </>
             )}
           </NavLink>

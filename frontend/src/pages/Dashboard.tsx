@@ -1,3 +1,4 @@
+import { usePlans, money } from '../hooks/usePlans';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import useSWR, { mutate } from 'swr';
@@ -182,6 +183,7 @@ function PastDueBanner({ billing }: { billing: BillingStatusResponse['data'] | u
 }
 
 function SubscribeCTA({ billing }: { billing: BillingStatusResponse['data'] | undefined }) {
+  const { data: plans } = usePlans();
   if (!billing || (billing.status !== 'trialing' && billing.status !== 'canceled')) return null;
 
   const days = billing.trialDaysLeft;
@@ -222,13 +224,13 @@ function SubscribeCTA({ billing }: { billing: BillingStatusResponse['data'] | un
                   : { background: 'rgba(99,102,241,0.25)', border: '1px solid rgba(99,102,241,0.4)', color: '#a5b4fc' }}
               >
                 <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: urgent ? '#fbbf24' : '#818cf8' }} />
-                {days === 1 ? '1 day left in trial' : `${days ?? '7'} days left in trial`}
+                {days === 1 ? '1 day left in trial' : `${days ?? '14'} days left in trial`}
               </div>
               <h2 className="text-xl sm:text-2xl font-bold leading-snug text-white">
                 Turn your trial into results.<br className="hidden sm:block" /> Subscribe today.
               </h2>
               <p className="text-sm leading-relaxed" style={{ color: '#cbd5e1' }}>
-                Lock in your rankings tracker and review monitoring — all in one platform built to get you found locally. Pick Lite or Pro at checkout.
+                Lock in your rankings tracker and review monitoring — all in one platform built to get you found locally. Pick Starter, Pro or Multi at checkout.
               </p>
             </>
           )}
@@ -248,7 +250,7 @@ function SubscribeCTA({ billing }: { billing: BillingStatusResponse['data'] | un
           <div>
             <p className="text-xs" style={{ color: '#94a3b8' }}>from</p>
             <div className="flex items-baseline gap-1 sm:justify-end">
-              <span className="text-4xl font-bold text-white">$149</span>
+              <span className="text-4xl font-bold text-white">{plans ? money(plans.data.plans.starter.monthly) : '—'}</span>
               <span className="text-sm" style={{ color: '#94a3b8' }}>/mo</span>
             </div>
             <p className="text-xs mt-0.5" style={{ color: '#64748b' }}>No setup fee · cancel anytime</p>
@@ -381,8 +383,8 @@ export default function Dashboard() {
   const { data: rankingsData, isLoading: rankingsLoading, error: rankingsError } =
     useSWR<RankingsResponse>('/rankings?limit=10', fetcher);
 
-  // ROI and SEO Audit are Pro features — skip those fetches for Lite (would 403).
-  // Wait until the plan is known (planLoading) so a Lite user doesn't fire a transient 403.
+  // ROI and SEO Audit are Pro features — skip those fetches for Starter (would 403).
+  // Wait until the plan is known (planLoading) so a Starter user doesn't fire a transient 403.
   const { data: roiData } = useSWR<RoiResponse>(planLoading || isLite ? null : '/analytics/roi', fetcher);
 
   const { data: visData } = useSWR<{ success: boolean; data: { current: number | null; delta: number | null; series: Array<{ date: string; score: number }> } }>('/metrics/visibility', fetcher);

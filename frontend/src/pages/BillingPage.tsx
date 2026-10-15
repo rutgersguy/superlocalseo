@@ -1,39 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { CheckCircle2, ShieldCheck, Lock, Tag, X } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import useSWR from 'swr';
 import { fetcher, apiFetch } from '../services/api';
-import { useAuth } from '../hooks/useAuth';
-import { BrandWordmark } from '../components/BrandWordmark';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface BillingStatus {
-  status: string;
-  trialDaysLeft: number | null;
-  locationsLimit: number;
-  locationCount: number;
-  currentPeriodEnd: string | null;
-  publishableKey: string | null;
-  productLine: 'lite' | 'pro';
-}
-
-interface IntentResponse {
-  success: boolean;
-  data: { clientSecret: string | null; paymentRequired: boolean; subscriptionId: string; publishableKey: string };
-  error?: { message: string };
-}
-
-interface PromoResponse {
-  success: boolean;
-  data: { id: string; discount: string; duration: string; applyTo: string };
-  error?: { message: string };
-}
-
-// ─── Checkout form (inside Elements context) ─────────────────────────────────
-
+import { PlanPicker } from '../components/PlanPicker';
+import { usePlans, money, PlanKey, BillingInterval } from '../hooks/usePlans';
 function CheckoutForm({ onSuccess: _onSuccess }: { onSuccess: () => void }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -92,455 +65,53 @@ function CheckoutForm({ onSuccess: _onSuccess }: { onSuccess: () => void }) {
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
-
-const FEATURES = [
-  'Daily rank tracking across all keywords',
-  'Review Monitoring + AI Replies',
-  'Competitor benchmarking & analysis',
-  'Citation health monitoring & builder',
-  'Automated monthly PDF reports',
-  'Review request campaigns via email & SMS',
-  'ROI scenarios based on your assumptions',
-  'Unlimited team members & roles',
-];
-
-// Plan-specific checkout summary. Pricing must mirror what the backend actually
-// bills: Lite = $149/mo single location, Pro = $349/mo + $125/mo per extra location.
-// The $499 setup fee is WAIVED by default (backend requires STRIPE_SETUP_FEE_ENABLED;
-// it's kept only as a struck-through anchor on Pro). Keep these in sync with
-// stripe.service.ts and the Landing/Register pricing copy.
-const PLAN_DETAILS = {
-  lite: {
-    name: 'Lite',
-    monthly: 149,
-    locationNote: '1 location · cancel anytime',
-    perLocationNote: '',
-    features: [
-      'Daily rank tracking across all keywords',
-      'Review Monitoring + AI Replies',
-      'Review request campaigns via email & SMS',
-      'Automated monthly PDF reports',
-    ],
-  },
-  pro: {
-    name: 'Pro',
-    monthly: 349,
-    locationNote: '1 location · cancel anytime',
-    perLocationNote: ' +$125/mo per additional location.',
-    features: FEATURES,
-  },
-} as const;
 
 function SubscriptionCheckout() {
-  const { logout } = useAuth();
-  const { data: statusData, error: statusError, mutate: refreshBilling } = useSWR<{ success: boolean; data: BillingStatus }>('/billing/status', fetcher);
-  const billing = statusData?.data;
-
-  const [chosenPlan, setChosenPlan] = useState<'lite' | 'pro' | null>(null);
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [publishableKey, setPubKey] = useState<string | null>(null);
-  const [intentError, setIntentError] = useState('');
-  const [loadingIntent, setLoadingIntent] = useState(false);
+  const { data, mutate } = useSWR<{ data: { status: string; trialDaysLeft: number | null; pricingVersion: string } }>('/billing/status', fetcher, { refreshInterval: value => new URLSearchParams(location.search).get('redirect_status') === 'succeeded' && value?.data.status !== 'active' ? 2000 : 0 });
+  const { data: plans } = usePlans();
+  const stored = localStorage.getItem('selectedPlan');
+  const [plan, setPlan] = useState<PlanKey>(stored === 'multi' ? 'multi' : stored === 'starter' || stored === 'lite' ? 'starter' : 'pro');
+  const [interval, setInterval] = useState<BillingInterval>(localStorage.getItem('selectedInterval') === 'year' ? 'year' : 'month');
+  const [promo, setPromo] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
+  const [intent, setIntent] = useState<{ clientSecret: string | null; publishableKey: string; amountDue: number } | null>(null);
   const [success, setSuccess] = useState(false);
-  const [noPaymentRequired, setNoPaymentRequired] = useState(false);
-  // ?subscribe=1 means the user explicitly clicked "subscribe now" (e.g. from Settings →
-  // Billing). Skip the early-trial soft landing — telling someone who just asked to pay
-  // that "no payment is needed yet" is a dead end.
-  const [proceedEarly, setProceedEarly] = useState(
-    () => new URLSearchParams(window.location.search).get('subscribe') === '1',
-  );
-
-  const [promoInput, setPromoInput] = useState('');
-  const [promoLoading, setPromoLoading] = useState(false);
-  const [promoApplied, setPromoApplied] = useState<{ id: string; discount: string; duration: string; applyTo: string } | null>(null);
-  const [promoError, setPromoError] = useState('');
-
-  // Check for success return from Stripe
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('payment_intent') && params.get('redirect_status') === 'succeeded') {
-      setSuccess(true);
-    }
-  }, []);
-
-  // Determine if user is in early trial (show soft landing instead of payment form).
-  // Trial is 7 days; show the soft landing for the first few days, then the payment form
-  // once 3 or fewer days remain.
-  const isEarlyTrial = billing?.status === 'trialing' && billing.trialDaysLeft !== null && billing.trialDaysLeft > 3;
-  // Plan chosen at registration (Option B: trials run as Pro; the plan applies at checkout).
-  // Fall back to the client's CURRENT plan (not Lite) when no choice is stored, so existing
-  // trial users mid-funnel at deploy aren't silently checked out on the cheaper Lite price.
-  const storedPlan = localStorage.getItem('selectedPlan');
-  const planForCheckout: 'lite' | 'pro' =
-    chosenPlan ?? (storedPlan === 'lite' || storedPlan === 'pro' ? storedPlan : (billing?.productLine ?? 'pro'));
-  const isUpgrade = new URLSearchParams(window.location.search).get('upgrade') === '1';
-
-  // Checkout summary reflects the plan actually being charged (planForCheckout is what
-  // we POST to /billing/subscription-intent). An upgrade always lands on Pro.
-  const summaryPlan: 'lite' | 'pro' = isUpgrade ? 'pro' : planForCheckout;
-  const details = PLAN_DETAILS[summaryPlan];
-  const dueToday = details.monthly; // setup fee is waived; first charge is one month
-
-  // Fetch subscription intent when status is known and user needs to subscribe
-  useEffect(() => {
-    if (success) return;
-    if (!billing) return;
-    if (billing.status === 'active') return;
-    if (isEarlyTrial && !proceedEarly) return; // don't create intent until user opts in
-    if (clientSecret) return;
-
-    let ignore = false;
-    setIntentError('');
-    setLoadingIntent(true);
-    apiFetch<IntentResponse>('/billing/subscription-intent', {
-      method: 'POST',
-      body: JSON.stringify({ plan: planForCheckout, extraLocations: 0, promotionCodeId: promoApplied?.id }),
-    })
-      .then((res) => {
-        if (ignore) return;
-        if (res.success && res.data?.paymentRequired === false) {
-          setNoPaymentRequired(true);
-          setSuccess(true);
-          return;
-        }
-        if (!res.success || !res.data?.clientSecret) {
-          setIntentError(res.error?.message ?? 'Could not initialize payment');
-          return;
-        }
-        setClientSecret(res.data.clientSecret);
-        setPubKey(res.data.publishableKey ?? billing.publishableKey);
-      })
-      .catch(() => { if (!ignore) setIntentError('Network error — please refresh'); })
-      .finally(() => { if (!ignore) setLoadingIntent(false); });
-    return () => { ignore = true; };
-  }, [billing, clientSecret, isEarlyTrial, proceedEarly, planForCheckout, promoApplied, success]);
-
-  const applyPromo = async () => {
-    const code = promoInput.trim();
-    if (!code) return;
-    setPromoLoading(true);
-    setPromoError('');
+  const stripe = useMemo(() => intent?.publishableKey ? loadStripe(intent.publishableKey) : null, [intent?.publishableKey]);
+  const definition = plans?.data.plans[plan];
+  const billing = data?.data;
+  async function start() {
+    if (busy) return; setBusy(true); setError('');
     try {
-      const res = await apiFetch<PromoResponse>('/billing/validate-promo', {
-        method: 'POST',
-        body: JSON.stringify({ code }),
-      });
-      if (!res.success || !res.data) {
-        setPromoError(res.error?.message ?? 'Invalid or expired promo code');
-        return;
+      let promotionCodeId;
+      if (promo.trim()) {
+        const r = await apiFetch<{ success: boolean; data: { id: string }; error?: { message: string } }>('/billing/validate-promo', { method: 'POST', body: JSON.stringify({ code: promo.trim() }) });
+        if (!r.success) throw new Error(r.error?.message || 'Invalid promo code');
+        promotionCodeId = r.data.id;
       }
-      setPromoApplied(res.data);
-      // Reset intent so it recreates with promo applied
-      setClientSecret(null);
-    } catch {
-      setPromoError('Network error — please try again');
-    } finally {
-      setPromoLoading(false);
-    }
-  };
-
-  const removePromo = () => {
-    setPromoApplied(null);
-    setPromoInput('');
-    setPromoError('');
-    setClientSecret(null);
-  };
-
-  const stripePromise = useMemo(() => publishableKey ? loadStripe(publishableKey) : null, [publishableKey]);
-
-  const stripeAppearance = {
-    theme: 'stripe' as const,
-    variables: {
-      colorPrimary: '#6366f1',
-      colorBackground: '#ffffff',
-      colorText: '#0f172a',
-      colorDanger: '#ef4444',
-      fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
-      borderRadius: '8px',
-      spacingUnit: '4px',
-    },
-    rules: {
-      '.Input': { border: '1px solid #e2e8f0', boxShadow: 'none', padding: '10px 12px' },
-      '.Input:focus': { border: '1px solid #6366f1', boxShadow: '0 0 0 3px rgba(99,102,241,0.15)' },
-      '.Label': { fontWeight: '500', color: '#475569', marginBottom: '6px' },
-      '.Tab': { border: '1px solid #e2e8f0' },
-      '.Tab--selected': { borderColor: '#6366f1', backgroundColor: '#eef2ff' },
-    },
-  };
-
-  // Hold the page until /billing/status resolves. Without this, `billing` is undefined on
-  // the first paint, every branch below falls through, and the Stripe payment form flashes
-  // up for a moment before being replaced by the trial soft landing. (On error we fall
-  // through rather than spin forever — an unauthenticated hit still gets a usable page.)
-  if (!billing && !statusError) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <span className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+      const r = await apiFetch<{ success: boolean; data: { clientSecret: string | null; publishableKey: string; paymentRequired: boolean; amountDue: number }; error?: { message: string } }>('/billing/subscription-intent', { method: 'POST', body: JSON.stringify({ plan, interval, extraLocations: 0, promotionCodeId }) });
+      if (!r.success) throw new Error(r.error?.message || 'Unable to begin checkout');
+      if (!r.data.paymentRequired) { setSuccess(true); await mutate(); } else setIntent(r.data);
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
-
-  // Already subscribed — but let an active Lite subscriber who chose to upgrade
-  // (?upgrade=1) fall through to the upgrade payment form below.
-  if (!success && billing?.status === 'active' && !(isUpgrade && billing.productLine === 'lite')) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 max-w-sm w-full text-center space-y-4">
-          <CheckCircle2 size={40} className="text-green-500 mx-auto" />
-          <h1 className="text-lg font-bold text-slate-900">You're already subscribed</h1>
-          <p className="text-sm text-slate-500">Manage your plan, payment method, or invoices below.</p>
-          <a href="/dashboard/settings?tab=billing"
-            className="block w-full py-2.5 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 transition-colors">
-            Go to billing settings
-          </a>
-          <Link to="/dashboard" className="block text-sm text-slate-400 hover:text-slate-600">← Back to dashboard</Link>
-        </div>
-      </div>
-    );
-  }
-
-  // Early trial soft landing — don't show payment form unless they opt in
-  if (isEarlyTrial && !proceedEarly) {
-    const days = billing!.trialDaysLeft!;
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 max-w-sm w-full text-center space-y-5">
-          <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto">
-            <ShieldCheck size={28} className="text-blue-500" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">You're on a free trial</h1>
-            <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-              You have <strong className="text-slate-700">{days} day{days === 1 ? '' : 's'}</strong> left — no payment needed yet.
-              Keep exploring the platform and subscribe when you're ready.
-            </p>
-          </div>
-          <Link
-            to="/dashboard"
-            className="block w-full py-2.5 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 transition-colors"
-          >
-            Back to dashboard
-          </Link>
-          <button
-            onClick={() => setProceedEarly(true)}
-            className="block w-full text-sm text-slate-400 hover:text-slate-600 transition-colors py-1"
-          >
-            Subscribe early anyway →
-          </button>
-          <button onClick={() => void logout()} className="block w-full text-xs text-slate-300 hover:text-slate-500 transition-colors">
-            Sign out
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Success state (returned from Stripe)
-  if (success) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 max-w-sm w-full text-center space-y-4">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-            <CheckCircle2 size={32} className="text-green-500" />
-          </div>
-          <h1 className="text-xl font-bold text-slate-900">{noPaymentRequired ? 'Subscription activated' : 'Payment confirmation'}</h1>
-          <p className="text-sm text-slate-500">{noPaymentRequired
-            ? 'Your invoice is $0. No payment is needed today. Future invoices follow your plan and discount terms. Manage your payment method or cancel in billing settings before renewal.'
-            : 'Your plan activates after payment confirmation reaches us. Check your billing status before continuing.'}</p>
-          <button onClick={() => void refreshBilling()} className="text-brand-600 underline">Check billing status</button>
-          <Link to="/dashboard"
-            className="block w-full py-3 rounded-xl bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 transition-colors">
-            Go to dashboard →
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  const days = billing?.trialDaysLeft;
-  const trialExpired = billing?.status === 'canceled' || (days !== null && days !== undefined && days <= 0);
-
-  return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Top nav strip */}
-      <div className="bg-white border-b border-slate-100 px-6 py-3 flex items-center justify-between">
-        <Link to="/dashboard" aria-label="SuperLocalSEO dashboard" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-          <BrandWordmark />
-        </Link>
-        <button onClick={() => void logout()} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
-          Sign out
-        </button>
-      </div>
-
-      <div className="max-w-5xl mx-auto px-4 py-10 sm:py-16 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-14 items-start">
-
-        {/* ── Left: Plan Summary ─────────────────────────────────────── */}
-        <div className="space-y-6">
-          <div>
-            {trialExpired ? (
-              <div className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-red-50 text-red-600 border border-red-200 mb-3">
-                Trial ended
-              </div>
-            ) : days !== null && days !== undefined ? (
-              <div className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-200 mb-3">
-                {days === 1 ? '1 day left in trial' : `${days} days left in trial`}
-              </div>
-            ) : null}
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 leading-snug">
-              {trialExpired ? 'Reactivate your account' : 'Subscribe to SuperLocalSEO'}
-            </h1>
-            <p className="text-slate-500 mt-2 text-sm leading-relaxed">
-              {trialExpired
-                ? 'Your data is saved. Subscribe to pick up exactly where you left off.'
-                : 'Lock in your rankings, reviews, and citation data for the long haul.'}
-            </p>
-          </div>
-
-          {!isUpgrade && (
-            <label className="block text-sm font-medium text-slate-700">
-              Choose your plan
-              <select aria-label="Choose your plan" value={planForCheckout} disabled={loadingIntent}
-                onChange={e => {
-                  const plan = e.target.value as 'lite' | 'pro';
-                  setChosenPlan(plan); localStorage.setItem('selectedPlan', plan);
-                  setClientSecret(null); setIntentError('');
-                }} className="block w-full mt-2 p-3 border border-slate-300 rounded-lg">
-                <option value="lite">Lite — $149/month</option>
-                <option value="pro">Pro — $349/month</option>
-              </select>
-            </label>
-          )}
-          {/* Pricing breakdown */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">What you're subscribing to</p>
-            <div className="flex items-center justify-between py-2 border-b border-slate-100">
-              <div>
-                <p className="text-sm font-medium text-slate-800">{details.name} monthly subscription</p>
-                <p className="text-xs text-slate-400 mt-0.5">{details.locationNote}</p>
-              </div>
-              <span className="text-sm font-semibold text-slate-900">${details.monthly}/mo</span>
-            </div>
-            <div className="flex items-center justify-between py-2 border-b border-slate-100">
-              <div>
-                <p className="text-sm font-medium text-slate-800">One-time setup fee</p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {summaryPlan === 'pro' ? 'Onboarding & citation audit — waived' : 'No setup fee on Lite'}
-                </p>
-              </div>
-              <span className="text-sm font-semibold text-slate-900">
-                {summaryPlan === 'pro' && <span className="line-through text-slate-400 mr-1">$499</span>}$0
-              </span>
-            </div>
-            <div className="flex items-center justify-between pt-1">
-              <p className="text-sm font-semibold text-slate-900">Due today</p>
-              <p className="text-lg font-bold text-slate-900">{isUpgrade ? 'Prorated' : `$${dueToday}`}</p>
-            </div>
-            <p className="text-xs text-slate-400">Then ${details.monthly}/mo.{details.perLocationNote} Cancel anytime.</p>
-          </div>
-
-          {/* Feature list */}
-          <ul className="space-y-2.5">
-            {details.features.map((f) => (
-              <li key={f} className="flex items-start gap-3 text-sm text-slate-700">
-                <span className="mt-0.5 w-4 h-4 rounded-full shrink-0 flex items-center justify-center text-xs font-bold"
-                  style={{ background: 'rgba(99,102,241,0.12)', color: '#6366f1' }}>✓</span>
-                {f}
-              </li>
-            ))}
-          </ul>
-
-          {/* Trust strip */}
-          <div className="flex items-center gap-5 pt-2 text-xs text-slate-400">
-            <span className="flex items-center gap-1.5"><ShieldCheck size={14} className="text-slate-400" /> 256-bit encryption</span>
-            <span className="flex items-center gap-1.5"><Lock size={14} className="text-slate-400" /> Powered by Stripe</span>
-          </div>
-        </div>
-
-        {/* ── Right: Payment Form ────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8">
-          <h2 className="text-base font-semibold text-slate-900 mb-1">Payment details</h2>
-          <p className="text-xs text-slate-400 mb-5">
-            {isUpgrade
-              ? 'Your card will be charged the prorated upgrade amount today.'
-              : `Your card will be charged $${dueToday} today, then $${details.monthly}/mo.`}
-          </p>
-
-          {/* Promo code */}
-          {!promoApplied ? (
-            <div className="mb-6">
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Tag size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={promoInput}
-                    onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void applyPromo(); } }}
-                    placeholder="Promo code"
-                    className="w-full pl-8 pr-3 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-300 tracking-wide"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void applyPromo()}
-                  disabled={!promoInput.trim() || promoLoading}
-                  className="px-4 py-2.5 text-sm font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 disabled:opacity-50 whitespace-nowrap transition-colors"
-                >
-                  {promoLoading ? '…' : 'Apply'}
-                </button>
-              </div>
-              {promoError && <p className="mt-1.5 text-xs text-red-600">{promoError}</p>}
-            </div>
-          ) : (
-            <div className="mb-6 flex items-center justify-between px-3 py-2.5 bg-green-50 border border-green-200 rounded-lg">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 size={14} className="text-green-500 shrink-0" />
-                <div>
-                  <span className="text-sm font-medium text-green-800">{promoInput} applied</span>
-                  <span className="ml-2 text-xs text-green-600">
-                    {promoApplied.discount} · {promoApplied.duration}
-                    {promoApplied.applyTo === 'setup' ? ' · setup fee only' : promoApplied.applyTo === 'monthly' ? ' · monthly only' : ''}
-                  </span>
-                </div>
-              </div>
-              <button type="button" onClick={removePromo} className="text-green-500 hover:text-green-700 ml-2">
-                <X size={14} />
-              </button>
-            </div>
-          )}
-
-          {loadingIntent && (
-            <div className="space-y-3 animate-pulse">
-              {[80, 60, 80, 100].map((w, i) => (
-                <div key={i} className="h-10 bg-slate-100 rounded-lg" style={{ width: `${w}%` }} />
-              ))}
-            </div>
-          )}
-
-          {intentError && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 text-center space-y-2">
-              <p>{intentError}</p>
-              <button onClick={() => window.location.reload()}
-                className="text-xs underline hover:no-underline">Try again</button>
-            </div>
-          )}
-
-          {clientSecret && stripePromise && (
-            <Elements key={clientSecret} stripe={stripePromise} options={{ clientSecret, appearance: stripeAppearance }}>
-              <CheckoutForm onSuccess={() => setSuccess(true)} />
-            </Elements>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  if (success || billing?.status === 'active') return <div className="p-10 space-y-4"><h1 className="text-2xl font-bold">Your subscription is active</h1><Link className="underline text-brand-700" to="/dashboard/settings?tab=billing">Manage billing</Link><Link className="block underline" to="/dashboard">Go to dashboard</Link></div>;
+  if (new URLSearchParams(location.search).get('redirect_status') === 'succeeded') return <div className="p-10 space-y-4"><h1 className="text-2xl font-bold">Confirming your subscription</h1><p>Your payment was submitted. We are waiting for billing confirmation before enabling your paid plan.</p><Link className="underline" to="/dashboard/settings?tab=billing">Open billing settings</Link></div>;
+  return <main className="min-h-screen bg-slate-50 p-6 sm:p-10"><div className="mx-auto max-w-6xl space-y-6">
+    <Link to="/dashboard"><img src="/sls_logo_wide_color.png" alt="SuperLocalSEO" className="h-10" /></Link>
+    <h1 className="text-3xl font-bold">Choose your plan</h1>
+    {billing?.status === 'trialing' && <p>{billing.trialDaysLeft ?? 0} days left in your Pro trial. No card required during your trial; subscribing starts paid service now.</p>}
+    {billing?.pricingVersion === 'legacy' ? <p>Your existing billing is preserved. Contact support to change it.</p> : <>
+    <PlanPicker plan={plan} interval={interval} onPlan={p => { setPlan(p); setIntent(null); }} onInterval={v => { setInterval(v); setIntent(null); }} disabled={busy} />
+    {definition && <div className="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+      <h2 className="font-semibold">{definition.name} · {money(interval === 'year' ? definition.annual : definition.monthly)}/{interval === 'year' ? 'year' : 'month'} before discounts</h2>
+      {interval === 'year' && <p>Two months free: pay for ten months and get twelve months of access. Billed annually upfront.</p>}
+      <label className="block">Promo code (optional)<input aria-label="Promo code" className="block border rounded-lg p-2 mt-2" value={promo} disabled={busy} onChange={e => { setPromo(e.target.value); setIntent(null); }} /></label>
+      {!intent && <button disabled={busy || !billing} onClick={() => void start()} className="rounded-lg bg-brand-500 text-white px-5 py-3 disabled:opacity-50">{busy ? 'Preparing checkout…' : 'Continue to payment'}</button>}
+      <p className="text-sm text-slate-500">Review the final discounted amount before paying. If your promo makes the first invoice $0, continuing activates the subscription without a card. Future renewals follow your plan and promo terms.</p>
+      {intent && <><p className="font-semibold">Due today: {money(intent.amountDue)}</p><p>Renews at {money(interval === 'year' ? definition.annual : definition.monthly)}/{interval === 'year' ? 'year' : 'month'} before any ongoing discount.</p>{stripe && intent.clientSecret && <Elements stripe={stripe} options={{ clientSecret: intent.clientSecret }} key={intent.clientSecret}><CheckoutForm onSuccess={() => setSuccess(true)} /></Elements>}</>}
+      {error && <p role="alert" className="text-red-700">{error}</p>}
+    </div>}</>}
+  </div></main>;
 }
-
-// Upgrade links are navigation only. The billing settings flow previews first.
 export default function BillingPage() {
-  if (new URLSearchParams(window.location.search).get('upgrade') === '1') {
-    return <Navigate to="/dashboard/settings?tab=billing&upgrade=1" replace />;
-  }
+  if (new URLSearchParams(location.search).get('upgrade') === '1') return <Navigate to="/dashboard/settings?tab=billing&upgrade=1" replace />;
   return <SubscriptionCheckout />;
 }

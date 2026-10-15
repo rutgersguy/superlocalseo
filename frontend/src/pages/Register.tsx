@@ -1,3 +1,5 @@
+import { PlanPicker } from '../components/PlanPicker';
+import { PlanKey, BillingInterval } from '../hooks/usePlans';
 import { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -21,10 +23,9 @@ export default function Register() {
   const [searchParams] = useSearchParams();
   const [apiError, setApiError] = useState('');
   const [emailTakenHint, setEmailTakenHint] = useState<'google' | 'password' | null>(null);
-  const [selectedPlan, setSelectedPlan] = useState<'lite' | 'pro'>(
-    searchParams.get('plan') === 'pro' ? 'pro' : 'lite',
-  );
+  const [selectedPlan, setSelectedPlan] = useState<PlanKey>(searchParams.get('plan') === 'multi' ? 'multi' : searchParams.get('plan') === 'pro' ? 'pro' : 'starter');
 
+  const [interval, setInterval] = useState<BillingInterval>(searchParams.get('interval') === 'year' ? 'year' : 'month');
   const {
     register,
     handleSubmit,
@@ -44,6 +45,7 @@ export default function Register() {
       await registerUser(data.email, data.password, data.businessName);
       // Carry the chosen plan to the billing step after email verification.
       localStorage.setItem('selectedPlan', selectedPlan);
+      localStorage.setItem('selectedInterval', interval);
       navigate('/registered', { state: { email: data.email } });
     } catch (err) {
       const e = err as Error & { code?: string; hint?: string };
@@ -58,11 +60,11 @@ export default function Register() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-4xl">
         <div className="text-center mb-8">
           <Link to="/"><img src="/sls_logo_wide_color.png" alt="SuperLocalSEO" className="h-10 w-auto mx-auto" /></Link>
           <h1 className="mt-4 text-2xl font-bold text-gray-900">Create your account</h1>
-          <p className="mt-1 text-sm text-gray-600">Start your free 7-day trial</p>
+          <p className="mt-1 text-sm text-gray-600">Start your free 14-day trial</p>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
           {emailTakenHint === 'google' && (
@@ -95,6 +97,7 @@ export default function Register() {
           {/* Google OAuth */}
           <a
             href={GOOGLE_AUTH_URL}
+            onClick={() => { localStorage.setItem('selectedPlan', selectedPlan); localStorage.setItem('selectedInterval', interval); }}
             className="flex items-center justify-center gap-3 w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors mb-6"
           >
             <GoogleIcon />
@@ -111,26 +114,7 @@ export default function Register() {
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            <div>
-              <span className="block text-sm font-medium text-gray-700 mb-1.5">Choose your plan</span>
-              <div className="grid grid-cols-2 gap-3">
-                {(['lite', 'pro'] as const).map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setSelectedPlan(p)}
-                    className={`rounded-xl border-2 p-3 text-left transition-colors ${
-                      selectedPlan === p ? 'border-brand-500 bg-brand-50' : 'border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <p className="font-semibold text-sm text-slate-900 capitalize">{p}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {p === 'lite' ? '$149/mo · 1 location · No setup fee' : '$349/mo · No setup fee'}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            </div>
+            <PlanPicker plan={selectedPlan} interval={interval} onPlan={setSelectedPlan} onInterval={setInterval} />
             <div>
               <label htmlFor="reg-businessName" className="block text-sm font-medium text-gray-700 mb-1">Business Name</label>
               <input

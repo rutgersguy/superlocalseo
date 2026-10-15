@@ -1,3 +1,4 @@
+import { catalog } from '../config/plans';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection';
@@ -26,12 +27,12 @@ export async function register(email: string, password: string, businessName: st
   // Stripe was the one external dependency that could take signup down.
   //
   // The customer is created lazily at checkout instead, which is the only place
-  // it is needed — trials run 7 days with no card. billing.controller already
+  // it is needed — trials run 14 days with no card. billing.controller already
   // calls getOrCreateStripeCustomer() on both checkout paths, so nothing else
   // has to change.
   const [user] = await db('users').insert({ email, password_hash: passwordHash, role: 'client' }).returning('*');
-  const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  const [client] = await db('clients').insert({ user_id: user.id, business_name: businessName, subscription_tier: 1, subscription_status: 'trialing', trial_ends_at: trialEndsAt }).returning('*');
+  const trialEndsAt = new Date(Date.now() + catalog.trialDays * 24 * 60 * 60 * 1000);
+  const [client] = await db('clients').insert({ user_id: user.id, business_name: businessName, subscription_tier: 1, subscription_status: 'trialing', pricing_version: catalog.version, plan_key: 'pro', trial_ends_at: trialEndsAt }).returning('*');
 
   // Send verification + welcome emails
   const verifyToken = uuidv4();
@@ -149,8 +150,8 @@ export async function googleSignIn(googleId: string, email: string, displayName:
         user_id: newUser.id,
         business_name: displayName,
         subscription_tier: 1,
-        subscription_status: 'trialing',
-        trial_ends_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        subscription_status: 'trialing', pricing_version: catalog.version, plan_key: 'pro',
+        trial_ends_at: new Date(Date.now() + catalog.trialDays * 24 * 60 * 60 * 1000),
       });
       user = newUser;
       status = 'new';

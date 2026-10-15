@@ -19,7 +19,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { ENABLED_AI_ENGINES } from '../../config/ai_engines.config';
 
-const EXPECTED = { lite: 149, pro: 349, extraLocation: 125 };
+
 
 const root = join(__dirname, '../../../..');
 const landingSource = readFileSync(join(root, 'frontend/src/pages/Landing.tsx'), 'utf8');
@@ -38,15 +38,9 @@ const landing = landingSource
 const indexHtml = readFileSync(join(root, 'frontend/index.html'), 'utf8');
 
 describe('landing page pricing parity', () => {
-  it('declares the prices in one constant rather than scattered through the markup', () => {
-    // The retired $499 setup fee survived in three separate places after it was
-    // waived, because each was written out by hand.
-    const block = landingSource.match(/const PRICING = \{[\s\S]*?\} as const;/);
-    expect(block).not.toBeNull();
-
-    for (const [key, value] of Object.entries(EXPECTED)) {
-      expect(block![0]).toContain(`${key}: ${value}`);
-    }
+  it('loads public prices from the shared catalog rather than a separate price table', () => {
+    expect(landingSource).toContain('<PlanPicker');
+    expect(landingSource).not.toMatch(/const PRICING/);
   });
 
   it('does not hardcode a dollar figure outside that constant', () => {
@@ -68,8 +62,7 @@ describe('landing page pricing parity', () => {
     // whole structured-data blob, so parse it rather than regexing the numbers.
     const ld = JSON.parse(raw![1]) as { offers?: { lowPrice?: string; highPrice?: string } };
 
-    expect(ld.offers?.lowPrice).toBe(String(EXPECTED.lite));
-    expect(ld.offers?.highPrice).toBe(String(EXPECTED.pro));
+    expect(ld.offers).toBeUndefined(); // no independently maintained SEO prices
   });
 });
 

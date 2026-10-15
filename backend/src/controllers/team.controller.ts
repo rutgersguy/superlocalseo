@@ -1,3 +1,5 @@
+import { planFor } from '../config/plans';
+import { assertResourcesMutable, limitError } from '../services/plan-usage';
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
@@ -78,13 +80,18 @@ export async function invite(req: Request, res: Response, next: NextFunction): P
     const token = uuidv4();
     const expiresAt = new Date(Date.now() + INVITE_TTL_HOURS * 60 * 60 * 1000);
 
+    const member = await db.transaction(async trx => {
+      const client = await trx('clients').where({ id: req.clientId }).forUpdate().first();
+      await assertResourcesMutable(trx, req.clientId);
+      const count = Number((await trx('team_members').where({ client_id: req.clientId }).whereNot({ email: email.toLowerCase() }).where(q => q.whereNotNull('accepted_at').orWhere('invite_expires_at', '>', new Date())).count('* as n').first())?.n ?? 0);
+      if (client.pricing_version === '2026-10' && count + 1 >= planFor(client).teamSeats) throw limitError(`Your plan includes ${planFor(client).teamSeats} team seats including the owner. Remove a member or upgrade.`);
     // Upsert — replace any existing pending invite for this email+client
-    await db('team_members')
+    await trx('team_members')
       .where({ client_id: req.clientId, email: email.toLowerCase() })
       .whereNull('accepted_at')
       .delete();
 
-    const [member] = await db('team_members').insert({
+    const [member] = await trx('team_members').insert({
       client_id: req.clientId,
       email: email.toLowerCase(),
       role,
@@ -92,6 +99,9 @@ export async function invite(req: Request, res: Response, next: NextFunction): P
       invite_token: token,
       invite_expires_at: expiresAt,
     }).returning('*');
+
+      return member;
+    });
 
     const businessName = req.client.business_name as string;
     await sendTeamInviteEmail(email, token, businessName, role).catch(() => {});
