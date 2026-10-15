@@ -243,3 +243,8 @@ methods or cancel through billing settings.
 Regression checks: `billing-zero-total.test.ts` and
 `billing-zero-total-controller.test.ts` in the backend unit suite cover Lite/Pro,
 normal payments, incomplete/unpaid invoices, and atomic activation.
+
+Live browser QA also exposed delayed `customer.subscription.updated` events from
+superseded unpaid checkouts overwriting the replacement's active status. Those
+events now retrieve current Stripe state and update only the matching subscription
+ID. Regression coverage lives in `billing-event-order.test.ts`.

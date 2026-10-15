@@ -50,6 +50,13 @@ const assert = require('node:assert/strict');
       assert.equal(status.data.status, 'active');
       assert.equal(status.data.productLine, account.plan);
       assert(status.data.currentPeriodEnd);
+      // Delayed webhooks from the superseded unpaid checkout must not revoke access.
+      for (let sample = 0; sample < 6; sample++) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const current = await (await context.request.get('/api/billing/status', { headers })).json();
+        assert.equal(current.data.status, 'active');
+        assert.equal(current.data.productLine, account.plan);
+      }
       const repeat = await context.request.post('/api/billing/subscription-intent', { headers, data: { plan: account.plan } });
       assert.equal(repeat.status(), 409);
       if (process.env.QA_SCREENSHOT_DIR) {

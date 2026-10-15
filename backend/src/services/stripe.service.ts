@@ -342,7 +342,11 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
     }
 
     case 'customer.subscription.updated': {
-      const sub = event.data.object as Stripe.Subscription;
+      const eventSub = event.data.object as Stripe.Subscription;
+      // A canceled/superseded incomplete checkout can emit updates after its
+      // replacement is active. Never apply that event to another subscription,
+      // and reconcile delayed events against Stripe's current status.
+      const sub = await stripe.subscriptions.retrieve(eventSub.id);
       const userId = sub.metadata?.userId;
       if (!userId) break;
       const status = sub.status === 'active' ? 'active'
@@ -355,7 +359,7 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
       // Lite→Pro price swap BEFORE the upgrade invoice is paid; flipping here would
       // grant Pro on an unpaid upgrade. The flip happens only in invoice.payment_succeeded.
       await db('clients')
-        .where({ user_id: userId })
+        .where({ user_id: userId, stripe_subscription_id: sub.id })
         .update({
           subscription_status: status,
           subscription_current_period_end: new Date(sub.current_period_end * 1000),

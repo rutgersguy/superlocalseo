@@ -71,3 +71,17 @@ describe('failed invoice event ordering', () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 });
+
+describe('subscription update event ordering', () => {
+  it('scopes a superseded unpaid checkout event to its own subscription', async () => {
+    mockRetrieve.mockResolvedValue({ ...subscription('incomplete_expired'), id: 'sub_superseded', metadata: { userId: 'user_qa', plan: 'lite' } });
+    await handleWebhookEvent({ type: 'customer.subscription.updated', data: { object: { id: 'sub_superseded', metadata: { userId: 'user_qa' } } } } as unknown as Stripe.Event);
+    expect(mockWhere).toHaveBeenCalledWith({ user_id: 'user_qa', stripe_subscription_id: 'sub_superseded' });
+    expect(mockWhere).not.toHaveBeenCalledWith({ user_id: 'user_qa' });
+  });
+  it('uses current Stripe state instead of an older subscription status', async () => {
+    mockRetrieve.mockResolvedValue({ ...subscription('active'), metadata: { userId: 'user_qa', plan: 'lite' } });
+    await handleWebhookEvent({ type: 'customer.subscription.updated', data: { object: { id: 'sub_qa', status: 'past_due', metadata: { userId: 'user_qa' } } } } as unknown as Stripe.Event);
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ subscription_status: 'active' }));
+  });
+});
