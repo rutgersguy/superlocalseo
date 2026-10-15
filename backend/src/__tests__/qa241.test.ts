@@ -4,8 +4,10 @@ import { db } from '../db/connection';
 import { config } from '../config';
 import { stripe, handleWebhookEvent } from '../services/stripe.service';
 import { webhook } from '../controllers/billing.controller';
+describe('QA 241 regression paths', () => {
 let userId: string, clientId: string, locationId: string, token: string;
 beforeAll(async () => {
+  await db('stripe_webhook_events').whereLike('id', 'evt_241_%').delete();
   const email = `archive-${Date.now()}@example.invalid`;
   await request(app).post('/api/auth/register').send({ email, password: 'Password123!', businessName: 'Archive QA' });
   const u = await db('users').where({email}).first(); userId=u.id;
@@ -38,4 +40,6 @@ it('deduplicates verified events and returns retryable processing errors',async(
     await webhook(req,res,jest.fn());expect(await db('stripe_webhook_events').where({id:'evt_241_retry'}).first()).toBeTruthy();
     Object.assign(config.stripe, {webhookSecret:''});await webhook(req,res,jest.fn());expect(res.status).toHaveBeenLastCalledWith(503);
   } finally {Object.assign(config.stripe, {webhookSecret:prior});}
+});
+
 });
