@@ -126,6 +126,7 @@ export async function createRankingRequest(params: {
   const res = await blDataFetch('/data/v1/rankings/search', {
     method: 'POST',
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15000),
   });
 
   if (!res.ok) {
@@ -149,7 +150,7 @@ export interface RankingRequestResult {
 }
 
 export async function fetchRankingResult(requestId: string): Promise<RankingRequestResult> {
-  const res = await blDataFetch(`/data/v1/rankings/results/${encodeURIComponent(requestId)}`);
+  const res = await blDataFetch(`/data/v1/rankings/results/${encodeURIComponent(requestId)}`, { signal: AbortSignal.timeout(15000) });
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');

@@ -21,4 +21,13 @@ describe('initial map source validity', () => {
     response({ status_code: 20000, result: [{ items_count: 0, items: null }] });
     expect(await getRankForCoordinate(params)).toMatchObject({ rank: null });
   });
+
+it('uses provider precision and an explicit neighborhood zoom instead of the empty-result default', async () => {
+  response({ status_code: 20000, result: [{ items_count: 0, items: [] }] });
+  await getRankForCoordinate({ keyword: 'hvac company Tulsa', lat: 36.0216747, lng: -96.00849750569192, businessName: 'QA' });
+  const body = JSON.parse((global.fetch as jest.Mock).mock.calls.at(-1)[1].body);
+  expect(body[0].location_coordinate).toBe('36.0216747,-96.0084975,15z');
+  expect(body[0].depth).toBe(50);
+});
+
 });

@@ -65,15 +65,16 @@ export async function sendTrialEndingSoonEmail(to: string, businessName: string,
   }).catch((e) => logger.error('Failed to send trial ending soon email', { error: e, to }));
 }
 
-export async function sendPaymentFailedEmail(to: string, businessName: string): Promise<void> {
+export async function sendPaymentFailedEmail(to: string, businessName: string, idempotencyKey?: string): Promise<void> {
   const url = `${config.publicUrl}/dashboard/settings?tab=billing`;
-  await resend.emails.send({
-    from,
-    to,
-    subject: `Action required: Payment failed for ${businessName}`,
-    html: `<p>Your recent payment for SuperLocalSEO failed. Please update your payment method within 3 days to avoid losing access.</p>
-<p><a href="${url}">Update payment method</a></p>`,
-  }).catch((e) => logger.error('Failed to send payment failed email', { error: e, to }));
+  // The installed SDK predates idempotency headers; use the documented HTTP API.
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST', headers: { Authorization: `Bearer ${config.resend.apiKey}`, 'Content-Type': 'application/json', ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
+    signal: AbortSignal.timeout(10000),
+    body: JSON.stringify({ from, to, subject: `Action required: Payment failed for ${businessName}`,
+      html: `<p>Your recent payment for SuperLocalSEO failed. Please update your payment method within 3 days to avoid losing access.</p><p><a href="${url}">Update payment method</a></p>` }),
+  });
+  if (!response.ok) throw new Error(`Payment notification failed (${response.status})`);
 }
 
 export async function sendTeamInviteEmail(

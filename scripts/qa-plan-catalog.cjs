@@ -10,7 +10,7 @@ const { subscriptionDetails } = require('/app/dist/services/stripe-catalog');
 const tag = 'sls240-qa';
 let fixtures = [];
 async function api(path, token, body, method = 'POST') {
-  if (path === '/billing/subscription-intent') { const preview = await api('/billing/subscription-preview', token, body); assert(preview.success, JSON.stringify(preview)); body = { ...body, previewToken: preview.data.previewToken }; }
+  if (path === '/billing/subscription-intent' && !body.previewToken) { const preview = await api('/billing/subscription-preview', token, body); assert(preview.success, JSON.stringify(preview)); body = { ...body, previewToken: preview.data.previewToken }; }
   const r = await fetch(`http://localhost:3000/api${path}`, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   return { status: r.status, ...await r.json() };
 }
@@ -36,6 +36,8 @@ async function main() {
   }
   const coupon = await stripe.coupons.create({ percent_off: 100, duration: 'once', metadata: { qa: tag } });
   const promo = await stripe.promotionCodes.create({ coupon: coupon.id, code: `QA240${Date.now()}` });
+  const changePromos = [];
+  for (let i = 0; i < 3; i++) changePromos.push((await stripe.promotionCodes.create({ coupon: coupon.id, code: `QA240CHANGE${i}${Date.now()}` })).code);
   for (const plan of ['starter', 'pro', 'multi']) for (const interval of ['month', 'year']) {
     const email = `${tag}-${plan}-${interval}-${Date.now()}@example.invalid`;
     const password = crypto.randomBytes(16).toString('hex');
@@ -43,8 +45,9 @@ async function main() {
     const [client] = await db('clients').insert({ user_id: user.id, business_name: 'Disposable plan QA', subscription_status: 'trialing', product_line: 'pro', plan_key: 'pro', pricing_version: catalog.version, trial_ends_at: new Date(Date.now() + 14 * 86400000), onboarding_step: 5 }).returning('*');
     const [location] = await db('locations').insert({ client_id: client.id, name: 'Keep this location', is_primary: true }).returning('*');
     const auth = await request('/auth/login', null, { email, password });
-    const a = { email, password, token: auth.accessToken, clientId: client.id, locationId: location.id, plan, interval, promo: promo.code };
-    const intent = await request('/billing/subscription-intent', a, { plan, interval, promotionCodeId: promo.id });
+    const a = { email, password, token: auth.accessToken, clientId: client.id, locationId: location.id, plan, interval, promo: promo.code, changePromos };
+    const reviewed = await request('/billing/subscription-preview', a, { plan, interval, promotionCodeId: promo.id });
+    const intent = await request('/billing/subscription-intent', a, { plan, interval, promotionCodeId: promo.id, previewToken: reviewed.previewToken });
     assert.equal(intent.paymentRequired, false);
     a.subscriptionId = intent.subscriptionId;
     const sub = await stripe.subscriptions.retrieve(intent.subscriptionId);
@@ -52,7 +55,7 @@ async function main() {
     const details = subscriptionDetails(sub);
     assert.equal(details.plan, plan); assert.equal(details.interval, interval); assert.equal(details.capacity, catalog.plans[plan].includedLocations);
     const row = await db('clients').where({ id: client.id }).first(); assert.equal(row.plan_key, plan); assert.equal(row.billing_interval, interval);
-    const retry = await api('/billing/subscription-intent', a.token, { plan, interval, promotionCodeId: promo.id }); assert.equal(retry.status, 409);
+    const retry = await api('/billing/subscription-intent', a.token, { plan, interval, promotionCodeId: promo.id, previewToken: reviewed.previewToken }); assert.equal(retry.status, 409);
     assert.equal((await stripe.subscriptions.list({ customer: sub.customer, status: 'all' })).data.length, 1);
     fixtures.push(a);
     console.log(JSON.stringify({ signup: `${plan}/${interval}`, due: 0, capacity: details.capacity, repeatBlocked: true }));

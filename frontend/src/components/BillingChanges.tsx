@@ -7,7 +7,7 @@ import { useSWRConfig } from 'swr';
 import { apiFetch } from '../services/api';
 
 type Action = 'upgrade' | 'add_location' | 'change_plan';
-interface Preview { id: string; action: Action; amountDue: number; currency: string; monthlyAmount: number; needsCard: boolean; discount: string | null; targetPlan: PlanKey; interval: BillingInterval; recurringAmount: number; targetCapacity: number; removeLocationIds: string[]; creditAmount: number }
+interface Preview { renewalAmount?: number; renewalDiscount?: string | null; id: string; action: Action; amountDue: number; currency: string; monthlyAmount: number; needsCard: boolean; discount: string | null; targetPlan: PlanKey; interval: BillingInterval; recurringAmount: number; targetCapacity: number; removeLocationIds: string[]; creditAmount: number }
 interface Result { status: string; clientSecret: string | null; publishableKey?: string }
 const money = (cents: number, currency: string) => new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(cents / 100);
 async function request<T>(url: string, method = 'GET', body?: unknown): Promise<T> {
@@ -102,7 +102,7 @@ export function BillingChanges({ currentPlan, currentInterval, capacity, locatio
       {quote && <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
         <dl className="space-y-2 text-sm">
           <div className="flex justify-between gap-4"><dt>Prorated amount due today</dt><dd data-testid="change-due-today" className="font-semibold">{money(quote.amountDue, quote.currency)}</dd></div>
-          <div className="flex justify-between gap-4"><dt>New recurring price before discounts</dt><dd className="font-semibold">{money(quote.recurringAmount, quote.currency)}/{quote.interval === 'year' ? 'year' : 'month'}</dd></div>
+          <div className="flex justify-between gap-4"><dt>Expected next renewal</dt><dd className="font-semibold">{money(quote.renewalAmount ?? quote.recurringAmount, quote.currency)}/{quote.interval === 'year' ? 'year' : 'month'}</dd></div>
         </dl>
         {quote.interval === 'year' && <p className="text-sm text-brand-700">Two months free: twelve months for the price of ten, billed annually upfront. Includes extra locations.</p>}
         {quote.creditAmount > 0 && <p className="text-sm">Prorated credit: {money(quote.creditAmount, quote.currency)}. Credits are applied by Stripe to invoices, not automatically refunded to your card.</p>}

@@ -1,3 +1,4 @@
+import { resolveLocationPlace } from '../services/location-place';
 import { ensureInitialScans } from '../services/initial_scans';
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
@@ -143,6 +144,7 @@ export async function create(req: Request, res: Response, next: NextFunction): P
     // Auto-geocode in background — non-fatal if it fails.
     void geocodeAndSave((location as Record<string, unknown>).id as string, body.address, body.city, body.state, body.zip);
 
+    if (!location.google_place_id) location.google_place_id = await resolveLocationPlace(location.id as string);
     await ensureInitialScans(req.clientId, location.id as string);
     created(res, formatLocation(location as Record<string, unknown>));
   } catch (e) {
@@ -167,6 +169,7 @@ export async function update(req: Request, res: Response, next: NextFunction): P
     if (body.phone !== undefined) updates.phone = body.phone;
     if (body.website !== undefined) updates.website = body.website;
     if (body.googlePlaceId !== undefined) updates.google_place_id = body.googlePlaceId || null;
+    else if (['name', 'address', 'city', 'state', 'zip', 'phone', 'website'].some(f => body[f as keyof typeof body] !== undefined && body[f as keyof typeof body] !== location[f])) updates.google_place_id = null;
     if (body.brightlocalCampaignId !== undefined) updates.brightlocal_campaign_id = body.brightlocalCampaignId || null;
     // Do not start a map at the previous address while re-geocoding the new one.
     if (['address', 'city', 'state', 'zip'].some(f => body[f as keyof typeof body] !== undefined)) { updates.lat = null; updates.lng = null; }
@@ -210,6 +213,7 @@ export async function update(req: Request, res: Response, next: NextFunction): P
       })();
     }
 
+    if (!updated.google_place_id && body.googlePlaceId !== '') updated.google_place_id = await resolveLocationPlace(id);
     await ensureInitialScans(req.clientId, id);
     ok(res, formatLocation(updated));
   } catch (e) {

@@ -1678,6 +1678,7 @@ function KeywordsTab({ isAdmin, onGoToLocations }: { isAdmin: boolean; onGoToLoc
 interface BillingStatus {
   planKey: PlanKey; interval: BillingInterval; pricingVersion: string; limits: PlanDefinition;
   discount?: string | null; lastInvoiceDiscount?: string | null;
+  resourceUsage?: { keywords: Array<{locationId: string; name: string; used: number}>; seats: number };
   usage: Array<{scope: string; metric: string; used: number}>;
   currentPrice: { amount: number; interval: string; currency: string } | null;
   canManageBilling: boolean;
@@ -1839,6 +1840,7 @@ function BillingTab({ onGoToLocations, isPlatformAdmin }: { onGoToLocations: () 
     {active && billing.canManageBilling && !legacy && <BillingChanges currentPlan={billing.planKey} currentInterval={billing.interval} capacity={billing.locationsLimit} locations={locData?.data ?? []} publishableKey={billing.publishableKey} onLocations={onGoToLocations} />}
     {!active && !legacy && <><PlanPicker plan={plan} interval={interval} onPlan={setPlan} onInterval={setInterval} /><a href="/billing?subscribe=1" onClick={() => { localStorage.setItem('selectedPlan', plan); localStorage.setItem('selectedInterval', interval); }} className="inline-block rounded-lg bg-brand-500 text-white px-4 py-3">Continue with {plan}</a></>}
     {!legacy && <section className="rounded-xl border p-5 text-sm space-y-2"><h3 className="font-semibold">Your usage limits</h3>{billing.status === 'trialing' && <p>These are your current Pro trial limits. Starter has lower limits after you choose that paid plan.</p>}<p>Per location: {billing.limits.keywords} keywords, {billing.limits.competitors} competitors, {billing.limits.gridScans} geo-grid scans, {billing.limits.reviewRequests} email review requests and {billing.limits.aiChecks} AI checks per calendar month. Keyword and competitor counts are stored-item limits; the others reset monthly (UTC).</p><p>{billing.limits.teamSeats} team seats per account, including the owner. SMS is not enabled. Provider failures may consume scan allowance; no automatic overage charges.</p>
+      {billing.resourceUsage && <div><p>{billing.resourceUsage.seats} of {billing.limits.teamSeats} team seats used, including the owner.</p>{billing.resourceUsage.keywords.map(k => <p key={k.locationId}>{k.name}: {k.used} of {billing.limits.keywords} keywords used.</p>)}</div>}
       {billing.usage?.length > 0 && <ul>{billing.usage.map(u => <li key={`${u.scope}-${u.metric}`}>{locData?.data.find(l => l.id === u.scope)?.name ?? 'Account'} · {u.metric.replace(/([A-Z])/g, ' $1').toLowerCase()}: {u.used} used this month</li>)}</ul>}
       </section>}
     {(isPlatformAdmin || (billing.canManageBilling && billing.limits.whiteLabel)) && <WhiteLabelSection />}

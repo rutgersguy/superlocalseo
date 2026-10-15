@@ -31,7 +31,11 @@ export async function status(req: Request, res: Response, next: NextFunction): P
       if (latest?.discount) lastInvoiceDiscount = discountLabel(latest.discount.coupon);
       currentPrice = { amount: sub.items.data.reduce((sum, i) => sum + (i.price.unit_amount ?? 0) * (i.quantity ?? 1), 0), interval: sub.items.data[0]?.price.recurring?.interval ?? 'month', currency: sub.currency };
     }
+    const keywordCounts = await db('active_locations as locations').leftJoin('keywords', 'keywords.location_id', 'locations.id')
+      .where('locations.client_id', req.clientId).groupBy('locations.id', 'locations.name').select('locations.id as locationId', 'locations.name').count('keywords.id as used');
+    const seats = Number((await db('team_members').where({ client_id: req.clientId }).where(q => q.whereNotNull('accepted_at').orWhere('invite_expires_at', '>', new Date())).count('* as n').first())?.n ?? 0) + 1;
     ok(res, {
+      resourceUsage: { keywords: keywordCounts.map(k => ({ ...k, used: Number(k.used) })), seats },
       planKey: planFor(client).key,
       pricingVersion: client.pricing_version,
       interval: client.billing_interval ?? 'month',
@@ -186,7 +190,7 @@ export async function webhook(req: Request, res: Response, _next: NextFunction):
       const lock = await trx.raw('SELECT pg_try_advisory_xact_lock(hashtext(?)) AS acquired', [`stripe-event:${event.id}`]);
       if (!lock.rows[0].acquired) throw new Error('Webhook is already processing; retry');
       if (await trx('stripe_webhook_events').where({ id: event.id }).first()) return;
-      await handleWebhookEvent(event);
+      await handleWebhookEvent(event, trx);
       await trx('stripe_webhook_events').insert({ id: event.id, type: event.type });
     });
     res.json({ received: true });

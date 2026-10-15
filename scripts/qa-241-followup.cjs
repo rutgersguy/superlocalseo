@@ -1,0 +1,15 @@
+const assert=require('assert/strict'),fs=require('fs');const{db}=require('/app/dist/db/connection');const{stripe}=require('/app/dist/services/stripe.service');const{config}=require('/app/dist/config');
+async function api(path,token,body){const r=await fetch('http://localhost:3000/api'+path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(body?{body:JSON.stringify(body)}:{})});return{status:r.status,...await r.json()};}
+(async()=>{assert(config.stripe.secretKey.startsWith('sk_test_'));const a=JSON.parse(fs.readFileSync('/tmp/sls241-browser.json'));assert(a.email.startsWith('sls241-browser-'));const auth=await api('/auth/login',null,{email:a.email,password:a.password});const token=auth.data.accessToken;const c=await db('clients').where({id:a.clientId}).first();assert.equal(c.subscription_status,'active');
+const reused=await api('/billing/changes/preview',token,{action:'add_location',promoCode:a.promo});assert.equal(reused.status,400,JSON.stringify(reused));assert.match(reused.error.message,/already redeemed/);
+const p=(await stripe.promotionCodes.list({code:a.promo,active:true})).data[0];const bypass=await api('/billing/subscription-preview',token,{plan:'pro',promotionCodeId:p.id});assert.equal(bypass.status,400);assert.match(bypass.error.message,/already redeemed/);
+const normal=await api('/billing/changes/preview',token,{action:'add_location'});assert(normal.data.amountDue>0);assert.equal(normal.data.renewalAmount,27800);
+// A different legitimate offer remains usable; use Stripe TEST mode only.
+const coupon=await stripe.coupons.create({percent_off:100,duration:'forever',metadata:{qa:'241-followup'}});const promo=await stripe.promotionCodes.create({coupon:coupon.id,code:`QA241ONGOING${Date.now()}`});
+const q=await api('/billing/changes/preview',token,{action:'add_location',promoCode:promo.code});assert(q.success,JSON.stringify(q));assert.equal(q.data.amountDue,0);assert.equal(q.data.renewalAmount,0);const result=await api(`/billing/changes/${q.data.id}/confirm`,token,{});assert(result.success,JSON.stringify(result));assert.equal(result.data.status,'succeeded');
+const next=await api('/billing/changes/preview',token,{action:'add_location'});assert(next.success,JSON.stringify(next));assert.equal(next.data.amountDue,0);assert.equal(next.data.renewalAmount,0);
+const invoice=await stripe.invoices.retrieve(result.data.invoiceId,{expand:['discounts']});assert.equal(invoice.amount_due,0);assert.equal(invoice.paid,true);assert(invoice.discounts.some(d=>typeof d!=='string'&&d.promotion_code===promo.id));
+const status=await api('/billing/status',token);assert.equal(status.data.resourceUsage.seats,1);assert.equal(status.data.resourceUsage.keywords[0].used,0);
+await stripe.promotionCodes.update(promo.id,{active:false});
+console.log(JSON.stringify({reusedCode:reused.error.message,directIdBypass:'blocked',blankPromo:'paid add-on',ongoingPromo:'$0 due and renewal',ongoingOnLaterAddon:'preserved',invoiceMatches:true,billingCounters:'1 seat; 0 keywords'}));
+})().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>db.destroy());

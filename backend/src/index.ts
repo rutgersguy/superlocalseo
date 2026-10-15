@@ -4,6 +4,7 @@ import { logger } from './utils/logger';
 import { db } from './db/connection';
 import { redis } from './db/redis';
 import { startWorkers } from './jobs/queue';
+import { processBillingEffects } from './services/billing-effects';
 
 process.on('unhandledRejection', (reason, promise) => {
   process.stderr.write(`UNHANDLED REJECTION at ${String(promise)}: ${String(reason)}\n`);
@@ -43,6 +44,9 @@ async function start() {
   if (process.env.NODE_ENV !== 'test' && !process.env.DISABLE_WORKERS) {
     try {
       await startWorkers();
+      const drainBillingEffects = () => processBillingEffects().catch(e => logger.error('Billing effects worker failed', { error: e.message }));
+      void drainBillingEffects();
+      setInterval(() => void drainBillingEffects(), 60000).unref();
       logger.info('Background workers started');
     } catch (e) {
       logger.warn('Failed to start background workers', { error: (e as Error).message });

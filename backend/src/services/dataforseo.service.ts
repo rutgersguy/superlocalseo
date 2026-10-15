@@ -141,31 +141,13 @@ function authHeader(): string {
 }
 
 /**
- * DataForSEO rate-limits per endpoint, and signals it in TWO different places:
- * HTTP 429, and — more awkwardly — a 200 response whose per-task status_code is
- * 40102 with an empty result.
- *
- * The second form is the dangerous one. Measured directly: of 12 concurrent
- * calls to my_business_info, ONE succeeded and eleven came back 200/40102. Read
- * naively that is "no listing found", so a throttled scan would tell 11 of 12
- * customers their Google Business Profile does not exist. Rate limiting must
- * never be mistaken for absence, so it retries and then throws.
+ * A task can fail inside HTTP 200. 40102 means "No Search Results", not
+ * necessarily rate limiting: an overly narrow Maps viewport also triggers it.
+ * Retry briefly, then keep it unverified; only a valid result can prove absence.
+ * 40101 is a search-engine error, 40209 a concurrency limit, and 50301/50401
+ * indicate transient provider failure/timeout. Never retry malformed requests.
  */
-/**
- * Task-level codes that are worth retrying, all of which arrive as HTTP 200.
- *
- *   40102  rate limited — 12 concurrent my_business_info calls returned 1 success
- *          and 11 of these.
- *   40101  "Internal SE Server Error" — transient upstream failure. Confirmed by
- *          repeating one identical SERP query: it returned 0 items, then 33, 34
- *          and 13 items on the next three attempts.
- *
- * 40101 matters more than it looks. An empty SERP result means no client match,
- * which the ranking job writes as `rank: null` — telling a customer they dropped
- * out of the results because DataForSEO hiccupped. Retrying, then THROWING, is
- * the difference between a missing data point and a fabricated one.
- */
-const RETRYABLE_TASK_CODES = new Set([40101, 40102]);
+const RETRYABLE_TASK_CODES = new Set([40101, 40102, 40209, 50301, 50401]);
 const MAX_ATTEMPTS = 4;
 
 function taskRetryable(json: unknown): number | null {
@@ -178,10 +160,10 @@ function taskRetryable(json: unknown): number | null {
   return null;
 }
 
-async function dfsPost(path: string, body: unknown): Promise<unknown> {
+async function dfsPost(path: string, body: unknown, maxAttempts = MAX_ATTEMPTS, timeoutMs = 120000): Promise<unknown> {
   let lastError = '';
 
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     if (attempt > 1) {
       // Exponential backoff with a little jitter so parallel callers do not
       // retry in lockstep and re-create the burst that throttled them.
@@ -190,6 +172,7 @@ async function dfsPost(path: string, body: unknown): Promise<unknown> {
     }
 
     const res = await fetch(`${BASE_URL}${path}`, {
+      signal: AbortSignal.timeout(timeoutMs),
       method: 'POST',
       headers: {
         Authorization: authHeader(),
@@ -220,7 +203,7 @@ async function dfsPost(path: string, body: unknown): Promise<unknown> {
 
   // Deliberately throws rather than returning an empty result: callers turn an
   // exception into `unverified`, but an empty result into `not_found`.
-  throw new Error(`DataForSEO ${path} failed after ${MAX_ATTEMPTS} attempts: ${lastError}`);
+  throw new Error(`DataForSEO ${path} failed after ${maxAttempts} attempts: ${lastError}`);
 }
 
 // ─── SERP rank lookup ─────────────────────────────────────────────────────────
@@ -338,10 +321,11 @@ export async function getRankForCoordinate(params: {
 
   const data = await dfsPost('/serp/google/maps/live/advanced', [{
     keyword: params.keyword,
-    location_coordinate: `${params.lat},${params.lng}`,
+    location_coordinate: `${params.lat.toFixed(7)},${params.lng.toFixed(7)},15z`,
     language_name: 'English',
     device: 'desktop',
-  }]) as {
+    depth: 50,
+  }], 2, 30000) as {
     tasks?: Array<{
       status_code?: number;
       result?: Array<{

@@ -90,7 +90,7 @@ function GenerateModal({ onClose, onSuccess, initialMonth, initialYear }: Genera
 
   const currentYear = now.getUTCFullYear();
   const years: number[] = [];
-  for (let y = currentYear; y >= currentYear - 3; y--) years.push(y);
+  for (let y = currentYear - (now.getUTCMonth() === 0 ? 1 : 0); y >= currentYear - 3; y--) years.push(y);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

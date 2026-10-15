@@ -466,7 +466,9 @@ function GeoGridPanel() {
         </div>
       )}
 
-      {latestReport?.status === 'complete' && latestReport.gridData && (
+      {latestReport?.status === 'failed' && <p role="alert" className="text-sm text-amber-800">This scan could not verify enough points to measure visibility reliably. Provider results were unavailable. Gray points are unknown, not evidence that your business is absent. Try again later or contact support.</p>}
+
+      {latestReport && ['complete', 'failed'].includes(latestReport.status) && latestReport.gridData && (
         <>
           <div className="h-96 rounded-xl overflow-hidden border border-slate-200">
             <MapContainer center={[effectiveLat, effectiveLng]} zoom={12} style={{ height: '100%', width: '100%' }} scrollWheelZoom={false}>
@@ -486,6 +488,7 @@ function GeoGridPanel() {
           {(() => {
             const unavailable = latestReport.gridData.filter(c => c.observationStatus === 'unverified').length;
             const cells = latestReport.gridData.filter(c => c.observationStatus !== 'unverified');
+            if (cells.length / latestReport.gridData.length < 0.8) return <p className="text-sm text-amber-800">Only {cells.length} of {latestReport.gridData.length} points could be verified. Visibility percentages are unavailable until at least 80% of points are verified.</p>;
             const ranked = cells.filter((c) => c.rank != null);
             const top3 = cells.filter((c) => c.rank != null && c.rank <= 3).length;
             const top10 = cells.filter((c) => c.rank != null && c.rank <= 10).length;
@@ -783,7 +786,7 @@ export default function Rankings() {
           </span>
         </button>
         {/* Starter has a small map; legacy Starter keeps its existing gate. */}
-        {(!isLite || client?.pricingVersion === '2026-10') && (
+        {(!isLite || (client?.pricingVersion != null && client.pricingVersion !== 'legacy')) && (
           <button onClick={() => setMainTab('map')}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${mainTab === 'map' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
             <span className="flex items-center gap-1.5">

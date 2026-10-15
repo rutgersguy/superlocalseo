@@ -28,7 +28,7 @@ export default function ReviewCollectionLinks() {
     {data?.data.locations.length === 0 && <p>Add a business location in Settings to get started.</p>}
     {data?.data.locations.map(l => <div key={l.locationId} className="border-t border-slate-200 pt-4 space-y-2">
       <h3 className="font-medium">{l.name}</h3>
-      {!l.ready && <p className="text-sm text-amber-800">Add your Google place ID in Settings → Locations, then create your review link. Contact support if you cannot find your business.</p>}
+      {!l.ready && <p className="text-sm text-amber-800">We could not automatically confirm a unique Google business match. Check your business name and address in Settings → Locations, or add your Google place ID there. Contact support if you need help finding the right listing.</p>}
       {l.state === 'needs_verification' && <p className="text-sm text-amber-800">Business details changed. The old link is unavailable. Verify the destination and create a replacement.</p>}
       {l.state === 'revoked' && <p className="text-sm text-slate-600">This link is disabled. Previous QR codes no longer work.</p>}
       {l.googleUrl && <a href={l.googleUrl} target="_blank" rel="noopener noreferrer" className="block text-sm underline">Check Google destination</a>}

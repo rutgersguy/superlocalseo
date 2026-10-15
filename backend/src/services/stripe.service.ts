@@ -4,8 +4,8 @@ import Stripe from 'stripe';
 import { config } from '../config';
 import { db } from '../db/connection';
 import { logger } from '../utils/logger';
-import { sendPaymentFailedEmail } from './email.service';
-import { deprovisionClient } from './emr_provisioning';
+
+
 
 export const stripe = new Stripe(config.stripe.secretKey);
 
@@ -228,7 +228,7 @@ export async function syncPaidSubscription(subscriptionId: string, executor: typ
   return true;
 }
 
-export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
+export async function handleWebhookEvent(event: Stripe.Event, executor: typeof db = db): Promise<void> {
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session;
@@ -237,12 +237,12 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
       if (!userId) break;
       const subId = typeof session.subscription === 'string' ? session.subscription : session.subscription.id;
       const sub = await stripe.subscriptions.retrieve(subId);
-      const user = await db('users').where({ id: userId }).first();
+      const user = await executor('users').where({ id: userId }).first();
       const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer.id;
       if (!user || user.stripe_customer_id !== customerId || sub.metadata.userId !== userId) break;
       // Never replace a subscription selected by another checkout or trust session metadata for access.
-      await db('clients').where({ user_id: userId }).where(q => q.whereNull('stripe_subscription_id').orWhere('stripe_subscription_id', subId)).update({ stripe_subscription_id: subId, updated_at: new Date() });
-      await syncPaidSubscription(subId);
+      await executor('clients').where({ user_id: userId }).where(q => q.whereNull('stripe_subscription_id').orWhere('stripe_subscription_id', subId)).update({ stripe_subscription_id: subId, updated_at: new Date() });
+      await syncPaidSubscription(subId, executor);
       break;
     }
 
@@ -258,37 +258,26 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
       // NOTE: product_line is intentionally NOT set here. This event fires on the
       // Lite→Pro price swap BEFORE the upgrade invoice is paid; flipping here would
       // grant Pro on an unpaid upgrade. The flip happens only in invoice.payment_succeeded.
-      await db('clients')
+      await executor('clients')
         .where({ user_id: userId, stripe_subscription_id: sub.id })
         .update({
           subscription_status: status,
           subscription_current_period_end: new Date(sub.current_period_end * 1000),
           updated_at: new Date(),
         });
-      await syncPaidSubscription(sub.id);
+      await syncPaidSubscription(sub.id, executor);
       break;
     }
 
     case 'customer.subscription.deleted': {
       const sub = event.data.object as Stripe.Subscription;
-      const canceled = await db('clients')
+      const canceled = await executor('clients')
         .where({ stripe_subscription_id: sub.id })
         .update({ subscription_status: 'canceled', updated_at: new Date() })
         .returning('id') as Array<{ id: string }>;
 
-      // Pause the EMR sub-account too. Nothing used to call this, so canceled clients kept
-      // live EMR accounts forever — they had to be cleaned up by hand. Non-fatal: a failure
-      // here must not break Stripe webhook processing (Stripe would retry the whole event),
-      // but it is logged at error level and is reconcilable via `npm run emr:reconcile`.
       for (const { id } of canceled) {
-        try {
-          await deprovisionClient(id);
-        } catch (e) {
-          logger.error('EMR deprovision on subscription cancel failed', {
-            clientId: id,
-            error: (e as Error).message,
-          });
-        }
+        await executor('billing_effects').insert({ id: `cancel:${sub.id}:${id}`, kind: 'deprovision', payload: JSON.stringify({ clientId: id, subscriptionId: sub.id }) }).onConflict('id').ignore();
       }
       break;
     }
@@ -310,7 +299,7 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
         ? sub.latest_invoice : sub.latest_invoice?.id;
       if (sub.status !== 'active' || sub.pending_update || latestInvoiceId !== inv.id) break;
 
-      await syncPaidSubscription(subId);
+      await syncPaidSubscription(subId, executor);
       break;
     }
 
@@ -327,15 +316,15 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
       if (latestInvoiceId !== inv.id || ['canceled', 'incomplete_expired'].includes(currentSub.status)) break;
       const currentInvoice = await stripe.invoices.retrieve(inv.id);
       if (currentInvoice.paid || currentInvoice.status !== 'open') break;
-      await db('clients').where({ stripe_subscription_id: subId }).update({
+      await executor('clients').where({ stripe_subscription_id: subId }).update({
         subscription_status: 'past_due',
         payment_failed_at: new Date(),
         updated_at: new Date(),
       });
-      const failedClient = await db('clients').where({ stripe_subscription_id: subId }).first();
+      const failedClient = await executor('clients').where({ stripe_subscription_id: subId }).first();
       if (failedClient) {
-        const failedUser = await db('users').where({ id: failedClient.user_id }).first();
-        if (failedUser) void sendPaymentFailedEmail(failedUser.email as string, failedClient.business_name as string);
+        const failedUser = await executor('users').where({ id: failedClient.user_id }).first();
+        if (failedUser) await executor('billing_effects').insert({ id: `payment-failed:${inv.id}`, kind: 'payment_failed', payload: JSON.stringify({ clientId: failedClient.id, subscriptionId: subId, email: failedUser.email, businessName: failedClient.business_name }) }).onConflict('id').ignore();
       }
       logger.warn('Payment failed', { subscriptionId: subId });
       break;

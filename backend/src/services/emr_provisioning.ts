@@ -194,17 +194,17 @@ export async function provisionClient(clientId: string): Promise<void> {
  * only syncs `status = 'connected'` rows, so this genuinely stops the pull. Legacy clients
  * that still carry an emr_customer_id also get their sub-account paused, for tidiness.
  */
-export async function deprovisionClient(clientId: string): Promise<void> {
-  const client = await db('clients').where({ id: clientId }).first();
+export async function deprovisionClient(clientId: string, executor: typeof db = db): Promise<void> {
+  const client = await executor('clients').where({ id: clientId }).first();
   if (!client) return;
 
   const now = new Date();
 
-  await db('integrations')
+  await executor('integrations')
     .where({ client_id: clientId, provider: 'embedmyreviews' })
     .update({ status: 'disconnected', updated_at: now });
 
-  await db('clients').where({ id: clientId }).update({
+  await executor('clients').where({ id: clientId }).update({
     emr_provisioning_status: 'deprovisioned',
     updated_at: now,
   });

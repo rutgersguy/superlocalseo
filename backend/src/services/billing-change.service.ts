@@ -1,4 +1,4 @@
-import { resolvePromotion, discountLabel } from './checkout-preview';
+import { resolvePromotion, discountLabel, previewRenewal } from './checkout-preview';
 import { catalog, PlanKey, BillingInterval, isPlanKey, recurringAmount } from '../config/plans';
 import { catalogPrice, subscriptionDetails } from './stripe-catalog';
 import Stripe from 'stripe';
@@ -16,7 +16,7 @@ export function subscriptionFingerprint(sub: Stripe.Subscription): string {
 }
 async function subscription(client: Record<string, any>): Promise<Stripe.Subscription> {
   if (!client.stripe_subscription_id) problem('An active subscription is required.');
-  const sub = await stripe.subscriptions.retrieve(client.stripe_subscription_id, { expand: ['customer', 'latest_invoice.payment_intent'] });
+  const sub = await stripe.subscriptions.retrieve(client.stripe_subscription_id, { expand: ['customer', 'latest_invoice.payment_intent', 'discounts'] });
   if (sub.status !== 'active' || sub.cancel_at_period_end) problem('Resume or resolve your subscription in the billing portal before changing it.');
   return sub;
 }
@@ -32,7 +32,7 @@ interface Quote {
   action: BillingAction; fingerprint: string; customerId: string; prorationDate: number;
   items: Stripe.SubscriptionUpdateParams.Item[]; promoCode: string; promotionId?: string;
   amountDue: number; currency: string; monthlyAmount: number; needsCard: boolean;
-  discount: string | null;
+  discount: string | null; renewalAmount?: number; renewalDiscount?: string | null;
   targetPlan?: PlanKey; interval?: BillingInterval; recurringAmount?: number; targetCapacity?: number;
   targetPriceId?: string; removeLocationIds?: string[]; locationFingerprint?: string; creditAmount?: number;
 }
@@ -87,7 +87,11 @@ export async function previewBillingChange(clientId: string, action: BillingActi
   if (extras) items.push({ price: (await catalogPrice(targetPlan, interval, true)).id, quantity: extras });
   const prorationDate = Math.floor(Date.now() / 1000);
   const preview = await invoicePreview(sub, { items, prorationDate, promotionId: p?.id });
-  const quote: Quote = { action, fingerprint: subscriptionFingerprint(sub), customerId, items, prorationDate,
+  const renewalItems = [{ price: base.id, quantity: 1 }];
+  if (extras) renewalItems.push({ price: (await catalogPrice(targetPlan, interval, true)).id, quantity: extras });
+  const discounts = p ? [{ coupon: p.coupon }] : sub.discounts.filter((d): d is Stripe.Discount => typeof d !== 'string');
+  const renewal = await previewRenewal(customerId, renewalItems, discounts, interval, interval === details?.interval ? sub.current_period_end : undefined);
+  const quote: Quote = { ...renewal, action, fingerprint: subscriptionFingerprint(sub), customerId, items, prorationDate,
     promoCode: p?.code ?? '', promotionId: p?.id, amountDue: preview.amount_due, currency: preview.currency,
     targetPlan, interval, targetCapacity, targetPriceId: base.id, removeLocationIds, locationFingerprint: locations.map(l => l.id).join(','),
     recurringAmount: recurringAmount(targetPlan, interval, extras), creditAmount: Math.max(0, -preview.total),
@@ -98,7 +102,7 @@ export async function previewBillingChange(clientId: string, action: BillingActi
   await db('billing_changes').insert({ id, client_id: clientId, subscription_id: sub.id, quote: JSON.stringify(quote), expires_at: expiresAt });
   return { id, ...publicQuote(quote), expiresAt };
 }
-function publicQuote(q: Quote) { return { action: q.action, amountDue: q.amountDue, currency: q.currency, monthlyAmount: q.monthlyAmount, needsCard: q.needsCard, discount: q.discount, targetPlan: q.targetPlan, interval: q.interval, recurringAmount: q.recurringAmount, targetCapacity: q.targetCapacity, removeLocationIds: q.removeLocationIds, creditAmount: q.creditAmount }; }
+function publicQuote(q: Quote) { return { renewalAmount: q.renewalAmount, renewalDiscount: q.renewalDiscount, action: q.action, amountDue: q.amountDue, currency: q.currency, monthlyAmount: q.monthlyAmount, needsCard: q.needsCard, discount: q.discount, targetPlan: q.targetPlan, interval: q.interval, recurringAmount: q.recurringAmount, targetCapacity: q.targetCapacity, removeLocationIds: q.removeLocationIds, creditAmount: q.creditAmount }; }
 async function lockedQuote(trx: typeof db, clientId: string, quoteId: string) {
   const client = await trx('clients').where({ id: clientId }).forUpdate().first();
   const row = await trx('billing_changes').where({ id: quoteId, client_id: clientId }).forUpdate().first();
