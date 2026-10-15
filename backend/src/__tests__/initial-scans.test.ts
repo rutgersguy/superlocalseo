@@ -25,7 +25,7 @@ describe('durable scoped initial scans', () => {
     const user = await db('users').where({ email }).first();
     clientId = (await db('clients').where({ user_id: user.id }).first()).id;
     token = (await request(app).post('/api/auth/login').send({ email, password: 'Password123!' })).body.data.accessToken;
-    await db('clients').where({ id: clientId }).update({ subscription_status: 'trialing', product_line: 'pro' });
+    await db('clients').where({ id: clientId }).update({ subscription_status: 'trialing', product_line: 'pro', locations_limit: 3 });
     locationId = (await db('locations').insert({ client_id: clientId, name: 'Initial scan fixture', city: 'Tulsa', state: 'Oklahoma' }).returning('id'))[0].id;
     otherLocation = (await db('locations').insert({ client_id: clientId, name: 'Other location' }).returning('id'))[0].id;
     await db('keywords').insert({ location_id: locationId, keyword: 'personal trainer Tulsa' });
@@ -60,6 +60,23 @@ describe('durable scoped initial scans', () => {
     expect(response.status).toBe(201);
     expect(await db('initial_scans').where({ location_id: response.body.data.id })).toHaveLength(6);
     await db('locations').where({ id: response.body.data.id }).delete();
+  });
+  it('rejects location creation beyond confirmed capacity without enrolling scans', async () => {
+    await db('clients').where({ id: clientId }).update({ locations_limit: 2 });
+    try {
+      const response = await request(app).post('/api/locations').set('Authorization', `Bearer ${token}`).send({ name: 'Unpaid overflow' });
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('LOCATION_LIMIT');
+      expect(initialScansQueue.add).not.toHaveBeenCalled();
+      expect(await db('locations').where({ client_id: clientId })).toHaveLength(2);
+    } finally { await db('clients').where({ id: clientId }).update({ locations_limit: 3 }); }
+  });
+  it('serializes concurrent requests for the last available location slot', async () => {
+    const responses = await Promise.all(['Concurrent A', 'Concurrent B'].map(name =>
+      request(app).post('/api/locations').set('Authorization', `Bearer ${token}`).send({ name })));
+    expect(responses.map(r => r.status).sort()).toEqual([201, 409]);
+    expect(await db('locations').where({ client_id: clientId })).toHaveLength(3);
+    await db('locations').where({ id: responses.find(r => r.status === 201)!.body.data.id }).delete();
   });
   it('reuses existing observations instead of repurchasing them', async () => {
     const keyword = await db('keywords').where({ location_id: locationId }).first();

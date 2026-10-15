@@ -285,6 +285,8 @@ cancellation and payment-method settings. Stripe's hosted portal may not permit
 plan changes on subscriptions with multiple items; extra locations use the app flow.
 
 QA commands/artifacts:
+- Full backend suite: `npm test -- --runInBand --forceExit` (636 passing tests,
+  66 suites), including concurrent requests for the final location slot.
 - Unit suite: `npm test -- --selectProjects unit --runInBand` (417 passing tests).
 - Browser scenarios: `scripts/qa-billing-changes.cjs` with explicit disposable
   `QA_CREDENTIALS_FILE`; saved card, free promo, no card, declined card, and extra
@@ -303,7 +305,8 @@ removes their accounts. Never run the isolated Stripe script with live credentia
 Deployment verification: live browser upgrades and extra-location confirmations
 both succeeded with $0 previews/invoices, on one disposable subscription. The
 live default portal configuration now enables Lite/Pro switching and retains
-cancellation. Test customer cleanup runs after verification.
+cancellation. Final deployed capacity display passed; disposable live and test
+customers/subscriptions were removed after verification. No live charges occurred.
 
 Fixture setup/cleanup is available in `scripts/qa-billing-fixtures.cjs` (execute
 through `docker exec -i slseo-test-api node - create|cleanup`). It refuses live
