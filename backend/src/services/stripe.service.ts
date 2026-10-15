@@ -163,13 +163,38 @@ export async function validatePromoCode(code: string): Promise<{ id: string; dis
   return { id: p.id, discount, duration, applyTo };
 }
 
+interface SubscriptionIntentResult {
+  clientSecret: string | null;
+  subscriptionId: string;
+  paymentRequired: boolean;
+  currentPeriodEnd: number;
+}
+
+function subscriptionIntentResult(sub: Stripe.Subscription): SubscriptionIntentResult {
+  const invoice = typeof sub.latest_invoice === 'object' ? sub.latest_invoice : null;
+  const pi = typeof invoice?.payment_intent === 'object' ? invoice.payment_intent : null;
+  // A missing PaymentIntent alone is not proof of payment. Stripe must confirm
+  // both the active subscription and a paid invoice with nothing due.
+  const noPaymentRequired = sub.status === 'active' && invoice?.paid === true
+    && invoice.status === 'paid' && invoice.amount_due === 0;
+  if (!noPaymentRequired && !pi?.client_secret) {
+    throw new Error('Subscription requires payment but no payment confirmation is available');
+  }
+  return {
+    clientSecret: noPaymentRequired ? null : pi!.client_secret,
+    subscriptionId: sub.id,
+    paymentRequired: !noPaymentRequired,
+    currentPeriodEnd: sub.current_period_end,
+  };
+}
+
 export async function createSubscriptionIntent(
   customerId: string,
   extraLocations: number,
   userId: string,
   promotionCodeId?: string,
   plan: 'lite' | 'pro' = 'pro',
-): Promise<{ clientSecret: string; subscriptionId: string }> {
+): Promise<SubscriptionIntentResult> {
   if (plan === 'lite') {
     // Lite: single recurring item, no setup fee, no extra locations.
     const sub = await stripe.subscriptions.create({
@@ -181,9 +206,7 @@ export async function createSubscriptionIntent(
       metadata: { userId, extraLocations: '0', plan: 'lite' },
       ...(promotionCodeId ? { promotion_code: promotionCodeId } : {}),
     });
-    const liteInvoice = sub.latest_invoice as Stripe.Invoice;
-    const litePi = liteInvoice.payment_intent as Stripe.PaymentIntent;
-    return { clientSecret: litePi.client_secret!, subscriptionId: sub.id };
+    return subscriptionIntentResult(sub);
   }
 
   const items: Stripe.SubscriptionCreateParams.Item[] = [
@@ -250,10 +273,7 @@ export async function createSubscriptionIntent(
     ...(!setupOnlyDiscount && promotionCodeId ? { promotion_code: promotionCodeId } : {}),
   });
 
-  const invoice = sub.latest_invoice as Stripe.Invoice;
-  const pi = invoice.payment_intent as Stripe.PaymentIntent;
-
-  return { clientSecret: pi.client_secret!, subscriptionId: sub.id };
+  return subscriptionIntentResult(sub);
 }
 
 /**

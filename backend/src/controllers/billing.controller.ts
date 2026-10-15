@@ -67,7 +67,19 @@ export async function subscriptionIntent(req: Request, res: Response, next: Next
       }
       const customerId = await getOrCreateStripeCustomer(req.userId!, user.email as string, trx);
       const intent = await createSubscriptionIntent(customerId, extraLocations, req.userId!, promotionCodeId, plan);
-      await trx('clients').where({ id: client.id }).update({ stripe_subscription_id: intent.subscriptionId });
+      await trx('clients').where({ id: client.id }).update({
+        stripe_subscription_id: intent.subscriptionId,
+        // The $0 invoice can be paid before its webhook can find this row.
+        // Persist only the activation verified by the Stripe create response.
+        ...(!intent.paymentRequired ? {
+          subscription_status: 'active',
+          product_line: plan,
+          locations_limit: 1 + extraLocations,
+          subscription_current_period_end: new Date(intent.currentPeriodEnd * 1000),
+          payment_failed_at: null,
+        } : {}),
+        updated_at: new Date(),
+      });
       return { ...intent, existing: false as const };
     });
     if (!result) { err(res, 'Client not found', 404, 'NOT_FOUND'); return; }
@@ -75,7 +87,7 @@ export async function subscriptionIntent(req: Request, res: Response, next: Next
       err(res, 'A subscription already exists. Open billing settings to manage your payment method or plan.', 409, 'SUBSCRIPTION_EXISTS');
       return;
     }
-    ok(res, { clientSecret: result.clientSecret, subscriptionId: result.subscriptionId, publishableKey: config.stripe.publishableKey });
+    ok(res, { clientSecret: result.clientSecret, paymentRequired: result.paymentRequired, subscriptionId: result.subscriptionId, publishableKey: config.stripe.publishableKey });
   } catch (e) { next(e); }
 }
 

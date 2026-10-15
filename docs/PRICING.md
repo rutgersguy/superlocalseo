@@ -223,3 +223,23 @@ Product: Additional Location — Tier 3
 
 ### Grace Period
 On `invoice.payment_failed`: set `subscription_status = 'past_due'`, send email, start 3-day timer. After 3 days without payment, set `subscription_status = 'suspended'`, block dashboard access but preserve data.
+
+### Zero-dollar subscription checkout (2026-10-15)
+
+A fully discounted first invoice has no Stripe PaymentIntent. Both Lite and Pro
+return `clientSecret: null, paymentRequired: false` only when Stripe returns an
+active subscription and a paid invoice with `amount_due: 0`. The checkout transaction
+stores the subscription ID, active status, selected plan, location allowance and
+period end together, so an invoice webhook arriving before the subscription ID is
+saved cannot leave the customer on the trial plan. Nonzero invoices still require
+Stripe payment confirmation and webhook activation.
+
+The billing page handles this explicit result with “Subscription activated” and
+$0 due today, without rendering Payment Elements or confirming a nonexistent
+payment. Future billing follows the coupon terms; a once-only coupon does not
+cancel renewals or collect a payment method. Customers can manage renewal payment
+methods or cancel through billing settings.
+
+Regression checks: `billing-zero-total.test.ts` and
+`billing-zero-total-controller.test.ts` in the backend unit suite cover Lite/Pro,
+normal payments, incomplete/unpaid invoices, and atomic activation.

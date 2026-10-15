@@ -22,7 +22,7 @@ interface BillingStatus {
 
 interface IntentResponse {
   success: boolean;
-  data: { clientSecret: string; subscriptionId: string; publishableKey: string };
+  data: { clientSecret: string | null; paymentRequired: boolean; subscriptionId: string; publishableKey: string };
   error?: { message: string };
 }
 
@@ -143,6 +143,7 @@ export default function BillingPage() {
   const [intentError, setIntentError] = useState('');
   const [loadingIntent, setLoadingIntent] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [noPaymentRequired, setNoPaymentRequired] = useState(false);
   // ?subscribe=1 means the user explicitly clicked "subscribe now" (e.g. from Settings →
   // Billing). Skip the early-trial soft landing — telling someone who just asked to pay
   // that "no payment is needed yet" is a dead end.
@@ -198,6 +199,11 @@ export default function BillingPage() {
     })
       .then((res) => {
         if (ignore) return;
+        if (res.success && res.data?.paymentRequired === false) {
+          setNoPaymentRequired(true);
+          setSuccess(true);
+          return;
+        }
         if (!res.success || !res.data?.clientSecret) {
           setIntentError(res.error?.message ?? 'Could not initialize payment');
           return;
@@ -301,7 +307,7 @@ export default function BillingPage() {
 
   // Already subscribed — but let an active Lite subscriber who chose to upgrade
   // (?upgrade=1) fall through to the upgrade payment form below.
-  if (billing?.status === 'active' && !(isUpgrade && billing.productLine === 'lite')) {
+  if (!success && billing?.status === 'active' && !(isUpgrade && billing.productLine === 'lite')) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 max-w-sm w-full text-center space-y-4">
@@ -362,8 +368,10 @@ export default function BillingPage() {
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
             <CheckCircle2 size={32} className="text-green-500" />
           </div>
-          <h1 className="text-xl font-bold text-slate-900">Payment confirmation</h1>
-          <p className="text-sm text-slate-500">Your plan activates after payment confirmation reaches us. Check your billing status before continuing.</p>
+          <h1 className="text-xl font-bold text-slate-900">{noPaymentRequired ? 'Subscription activated' : 'Payment confirmation'}</h1>
+          <p className="text-sm text-slate-500">{noPaymentRequired
+            ? 'Your invoice is $0. No payment is needed today. Future invoices follow your plan and discount terms. Manage your payment method or cancel in billing settings before renewal.'
+            : 'Your plan activates after payment confirmation reaches us. Check your billing status before continuing.'}</p>
           <button onClick={() => void refreshBilling()} className="text-brand-600 underline">Check billing status</button>
           <Link to="/dashboard"
             className="block w-full py-3 rounded-xl bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 transition-colors">
