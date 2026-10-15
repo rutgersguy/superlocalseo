@@ -1,6 +1,7 @@
 # Self-serve plans — October 2026
 
-Implementation tested locally and in the isolated Stripe test stack. Production deployment verification is recorded below when complete.
+Deployed October 15, 2026. Verified locally, in the isolated Stripe test stack,
+and against production after rebuilding both services.
 
 `backend/src/config/plan-catalog.json` is the source of truth for new-plan prices,
 limits, names and marketing features. The public `/api/billing/catalog` endpoint
@@ -114,6 +115,27 @@ Reproducible runners: `scripts/qa-plan-catalog.cjs`,
 The API runners require the isolated container and refuse live Stripe keys.
 Credentials stay in private mode-600 files. Cleanup with
 `docker exec -i slseo-test-api node - --cleanup < scripts/qa-plan-catalog.cjs`.
+
+## Production verification — October 15, 2026
+
+Runtime commit: `198d7f4` (implementation `513d1ac`). Both migrations applied via
+`./scripts/deploy.sh --migrate`; database backup verified before migration.
+Deployment output: `site HTTP 200`, `api HTTP 422`, `api errors since restart: 0`,
+`Deploy OK`.
+
+- [Build/preflight CI](https://github.com/rutgersguy/superlocalseo/actions/runs/38730578586)
+  and [backend/frontend tests](https://github.com/rutgersguy/superlocalseo/actions/runs/38730578619) passed.
+- Live disposable-account API QA: Starter annual signup → Multi annual → annual
+  extra location → Starter monthly with two explicitly selected removals. One
+  subscription, four paid $0 invoices, zero charges; retained location unchanged.
+  The subscription/customer/account were cleaned up afterwards.
+- Stephen's billing status, plan, location capacity, trial end, subscription ID,
+  Stripe price and quantity were checked before and after and remained unchanged.
+- Live browser: all three annual prices and two-months-free copy, 390px mobile
+  without overflow, annual registration preselection, zero JavaScript errors.
+- All isolated Stripe QA accounts/subscriptions were cleaned up. The temporary
+  `SLSTEST100OCT16` first-invoice promo remains available until October 16,
+  2026 at 23:59:59 UTC, as requested.
 
 ## Review and rollback
 
